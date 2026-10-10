@@ -1,8 +1,7 @@
 module CrystalClick
-  # Reads one inline Object child from the parent Data callback tape. This
-  # Inline Object child prefixes are parsed once, without statistics, then
-  # reused by the paired ordinary/advanced body decoders.
-  # the ordinary recursive Dynamic-prefix and Object plan owners.
+  # Reads one inline Object child from the parent Data callback tape. Its
+  # prefix is parsed once, without statistics, then reused by the paired
+  # ordinary/advanced body decoders and recursive Dynamic-prefix owners.
   module ObjectDocumentInlinePlanReader
     def self.read_json_leaf_prefix(
       tape : ObjectSharedPathTapeReader,
@@ -14,6 +13,7 @@ module CrystalClick
       array_level : UInt64,
       nested_context : ObjectSharedNestedSerializationContext,
       budget : BinaryCodecBudget,
+      bare_inferred_root_json : Bool = false,
     ) : ObjectDocumentInlinePrefix
       unless descriptor.tag == BinaryDataType::TAG_JSON
         raise ArgumentError.new("inline Object prefix reader requires a JSON descriptor")
@@ -59,11 +59,16 @@ module CrystalClick
       unless object.shared_data_version == nested_context.shared_data_version
         raise CorruptPartError.new("inline Object shared-data version differs from its inherited context")
       end
-      inferred_actual_root_depth = checked_depth_add(
-        json_descriptor_depth,
-        object.dynamic_path_count == 0 ? 1 : 2,
-        budget,
-      )
+      inferred_actual_root_depth = if bare_inferred_root_json
+                                     checked_depth_add(json_descriptor_depth, 1, budget)
+                                   else
+                                     checked_depth_add(
+                                       json_descriptor_depth,
+                                       object.dynamic_path_count == 0 ? 1 : 2,
+                                       budget,
+                                     )
+                                   end
+      root_dynamic_descriptor_depth = checked_depth_subtract(inferred_actual_root_depth, 1, budget)
       ensure_object_paths_sorted!(object)
 
       object_paths = snapshot_object_paths(object, budget)
@@ -73,6 +78,7 @@ module CrystalClick
       retain_prefix_callback!(prefix_callbacks, structure_name, structure_bytes, budget)
       typed_dynamic_sites = Hash(String, Hash(String, DynamicStructure)).new
       root_dynamic_sites = Hash(String, Hash(String, DynamicStructure)).new
+      root_dynamic_json_prefixes = Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap).new
 
       typed_path_entries.each do |field, type|
         physical_field_prefix = PhysicalStreamName.append_escaped_component(physical_prefix, field)
@@ -134,6 +140,7 @@ module CrystalClick
         observer = ->(site_path : String, _raw : Bytes, site : DynamicStructure) do
           retain_site!(local_sites, site_path, site, budget)
         end
+        nested_json_prefixes = ObjectSharedPathJsonTapeCodec::PrefixMap.new
         capture = ->(name : String, bytes : Bytes) do
           retain_prefix_callback!(prefix_callbacks, name, bytes, budget)
           nil
@@ -144,16 +151,20 @@ module CrystalClick
           physical_dynamic_prefix,
           callback_dynamic_prefix,
           array_level,
-          typed_descriptor_root_depth,
+          root_dynamic_descriptor_depth,
           tape,
           budget,
           observer,
-          true,
+          false,
           capture,
           false,
+          nil,
+          nested_context,
+          nested_json_prefixes,
+          virtual_root_dynamic: true,
         )
-        reject_json_actuals!(local_sites)
         root_dynamic_sites[path] = local_sites
+        root_dynamic_json_prefixes[path] = nested_json_prefixes
       end
 
       root_structures = Hash(String, DynamicStructure).new(initial_capacity: object.dynamic_path_count)
@@ -163,12 +174,14 @@ module CrystalClick
         root_structure = local_sites["root"]? || raise(CorruptPartError.new("inline Object Dynamic prefix is missing its root site"))
         root_structures[path] = root_structure
         dynamic_type = BinaryDataType.dynamic(json_type.max_dynamic_types)
+        nested_json_bindings = json_leaf_bindings(root_dynamic_json_prefixes[path], budget)
         root_dynamic_plans[path] = decode_dynamic_plan(
           dynamic_type,
           local_sites,
           nested_context.profile,
-          typed_descriptor_root_depth,
+          root_dynamic_descriptor_depth,
           budget,
+          nested_json_bindings,
         )
       end
       preflight_plan_copy_work(typed_paths, typed_dynamic_sites, root_structures, budget)
@@ -194,6 +207,14 @@ module CrystalClick
         end
       end
 
+      root_dynamic_json_leaf_plans = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new(
+        initial_capacity: root_dynamic_json_prefixes.size,
+      )
+      root_dynamic_json_prefixes.each do |path, prefixes|
+        bindings = json_leaf_bindings(prefixes, budget)
+        root_dynamic_json_leaf_plans[path] = bindings unless bindings.empty?
+      end
+
       plan = begin
         ObjectDocumentPlan.new(
           structure_set,
@@ -201,7 +222,7 @@ module CrystalClick
           Hash(String, DynamicStructure).new,
           typed_dynamic_sites,
           Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
-          Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+          root_dynamic_json_leaf_plans,
           budget,
           inferred_actual_root_depth,
         )
@@ -227,6 +248,7 @@ module CrystalClick
         root_dynamic_sites,
         typed_dynamic_plans,
         root_dynamic_plans,
+        root_dynamic_json_prefixes,
       )
     end
 
@@ -236,6 +258,7 @@ module CrystalClick
       profile : BinaryBulkProfile,
       depth : Int32,
       budget : BinaryCodecBudget,
+      json_object_leaf_plans : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)) = [] of Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan),
     ) : BinaryDynamicBulkPlan
       BinaryDynamicBulkPlan.decode_structure_prefixes_without_statistics_from_structures(
         type,
@@ -243,15 +266,43 @@ module CrystalClick
         budget,
         profile,
         depth,
+        json_object_leaf_plans,
       )
     rescue ex : UnsupportedFormatError
       raise CorruptPartError.new("inline Object Dynamic prefix plan is invalid: #{ex.message}")
+    end
+
+    private def self.json_leaf_bindings(
+      prefixes : ObjectSharedPathJsonTapeCodec::PrefixMap,
+      budget : BinaryCodecBudget,
+    ) : Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))
+      count = prefixes.size.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      budget.ensure_future_elements(count)
+      count.times { budget.charge_node }
+      budget.charge_elements(count) if count > 0_u64
+      bindings = Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan)).new(prefixes.size)
+      prefixes.each do |key, prefix|
+        unless prefix.key == key
+          raise CorruptPartError.new("inline nested JSON prefix key differs from its local owner map")
+        end
+        bindings << {key, prefix.plan}
+      end
+      bindings
     end
 
     private def self.checked_depth_add(depth : Int32, increment : Int32, budget : BinaryCodecBudget) : Int32
       depth64 = depth.to_i64 + increment.to_i64
       unless depth64 > 0 && depth64 <= Int32::MAX.to_i64 && depth64 <= budget.limits.max_depth.to_i64
         raise CorruptPartError.new("inline child Object descriptor depth exceeds the configured limit")
+      end
+      depth64.to_i32
+    end
+
+    private def self.checked_depth_subtract(depth : Int32, decrement : Int32, budget : BinaryCodecBudget) : Int32
+      depth64 = depth.to_i64 - decrement.to_i64
+      unless depth64 > 0 && depth64 <= Int32::MAX.to_i64 && depth64 <= budget.limits.max_depth.to_i64
+        raise CorruptPartError.new("inline child Object descriptor depth underflows the configured bound")
       end
       depth64.to_i32
     end

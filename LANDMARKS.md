@@ -1,5 +1,54 @@
 # Crystal Click landmarks
 
+## Recursive child Object ownership — W243
+
+- Status: VERIFIED within the finite prepared shared-path
+  `Tuple(JSON, Array(Dynamic(max_types=1)))` child-ownership fixture. Root
+  adversary verdict ROBUST within scope. Qualification is library-write ->
+  stock-read only; overall types/MV/projections remains ACTIVE, memory/performance
+  is deferred, and broad class-facade decomposition remains open.
+- The unit fixture includes a deeper legal `next_field` Array(JSON) descendant
+  with a String leaf; the native fixture remains shallower (child/grandchild).
+  Raw paths remain simple ASCII components; no dotted expansion, full-layout,
+  all-types, reverse-write or performance claim is made.
+- All 102 selected files pass in DEBUG and RELEASE: 649 examples per mode
+  (512 main + 115 isolated + 22 focused), zero failures/errors/pending; the six
+  W216 persisted-reader regressions pass both modes and are included. Both
+  corrected helper builds exit 0.
+- Four DEBUG/RELEASE x frame32/frame64 native capture/coordinator points and
+  four separately executed raw-capture audits exit 0; each audit passes
+  11 self-test controls.
+  Per point: 16 fresh parts, 18 native calls, 128 direct, 96 nested, 64 child
+  and 128 full rows, plus 128 physical windows across middle/last/empty-interior/
+  zero-count-end positions with four real marks + EOF. Totals: 64 parts, 72
+  native calls, 512 direct, 384 nested, 256 child and 512 full rows.
+- On the pinned DEBUG/frame32 capture, the exact raw `pk1/item1` child type-only
+  UInt8-for-Int64 mutation preserves scalar/JSON values and rejects with exact
+  leaf-path type mismatch. Canonical
+  table and attached paths are unique; a swapped summary `data_path` rejects
+  against exact native `system.tables` binding. The auditor authenticates
+  checksum-v4 bytes without decoding their records; the pinned native CHECK
+  validates semantics. Atomic UUID paths bind to `system.tables`. DEBUG/RELEASE
+  generated files are byte-identical per frame: 456 files / 535,956 bytes at
+  frame32 and
+  456 files / 427,056 bytes at frame64.
+- The universal child-depth `+2` hypothesis was refuted (focused22 passed, but
+  W216 persisted6 had one error). Keep persisted bare actual `+1`, typed-scope
+  conditional `+2` when child Dynamic paths exist, and synthetic inline seed
+  `inferred_actual_root_depth - 1` for the generic Dynamic visitor's nominal
+  child edge distinct; resetting at a real nested Dynamic is another origin
+  rule. The prepared-writer typed-metadata Dynamic guard is not a global
+  persisted-reader refusal. The erroneous helper wrapper around the intended
+  bare Tuple was removed without relaxing exact Tuple/full-document or cap254
+  selected-carrier assertions.
+- Return pointers: [W243 frontier](docs/OBJECT_SHARED_JSON_FRONTIER.md) and
+  [evidence index](.landmark/evidence/object-descendant-json-w243.json).
+  Next falsifier before widening: same prepared ownership with a non-empty real
+  nested Dynamic/another legal wrapper product, or reciprocal stock-authored
+  W243, with exact native types. Refresh if source, runtime, helper, fixture,
+  auditor, oracle or capture changes or a capture is lost; infrastructure
+  failures are inconclusive.
+
 ## Recursive Dynamic site ownership — W242
 
 - Active goal: legal ClickHouse-compatible read/write types and MV/projection

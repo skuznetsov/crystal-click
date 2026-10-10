@@ -12,6 +12,25 @@ module CrystalClick
     @name_context : PhysicalStreamPlanContext
     @canonical_arms : Array(Tuple(String, BinaryDataType))
 
+    def self.for_write(
+      escaped_object_path_prefix : String,
+      structure : DynamicStructure,
+      budget : BinaryCodecBudget,
+      name_context : PhysicalStreamPlanContext,
+      initial_array_level : UInt64 = 0_u64,
+      inferred_actual_root_depth : Int32 = 1_i32,
+    ) : ObjectRootDynamicJsonSiteResolver
+      new(
+        escaped_object_path_prefix,
+        structure,
+        budget,
+        name_context,
+        initial_array_level,
+        inferred_actual_root_depth,
+        true,
+      )
+    end
+
     def initialize(
       escaped_object_path_prefix : String,
       @structure : DynamicStructure,
@@ -19,9 +38,11 @@ module CrystalClick
       @name_context : PhysicalStreamPlanContext,
       initial_array_level : UInt64 = 0_u64,
       inferred_actual_root_depth : Int32 = 1_i32,
+      writing_plan : Bool = false,
     )
-      unless !@budget.writing?
-        raise ArgumentError.new("inferred Object Dynamic JSON resolver requires a read-direction budget")
+      unless @budget.writing? == writing_plan
+        direction = writing_plan ? "write" : "read"
+        raise ArgumentError.new("inferred Object Dynamic JSON resolver requires a #{direction}-direction budget")
       end
       unless same_limits?(@budget.limits, @name_context.limits)
         raise ArgumentError.new("inferred Object Dynamic JSON resolver budgets differ")

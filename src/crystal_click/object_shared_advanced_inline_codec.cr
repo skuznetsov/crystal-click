@@ -18,6 +18,8 @@ module CrystalClick
       callback_root_prefix : String,
       codec_budget : BinaryCodecBudget,
       shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      event_context : ObjectDocumentInlineCallbackOrder::EventScheduleContext? = nil,
+      local_only : Bool = false,
     ) : ObjectSharedAdvancedInlineRawLayout
       unless codec_budget.writing?
         raise ArgumentError.new("advanced inline callback materialization requires a write-direction budget")
@@ -74,6 +76,8 @@ module CrystalClick
         plan,
         profile,
         codec_budget,
+        event_context,
+        local_only,
       )
       callback_pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
         physical_plan,
@@ -82,6 +86,9 @@ module CrystalClick
         callback_root_prefix,
         codec_budget,
         true,
+        true,
+        event_context,
+        local_only,
       )
       callback_names = Hash(String, String).new(initial_capacity: callback_pairs.size)
       callback_pairs.each do |pair|

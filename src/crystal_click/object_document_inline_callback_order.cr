@@ -4,6 +4,11 @@ module CrystalClick
   # enumeration order is intentionally not used as callback order.
   class ObjectDocumentInlineCallbackOrder
     alias CallbackPair = Tuple(String, String)
+    alias CallbackOwner = Tuple(String, String, ObjectDocumentPhysicalPlan, ObjectDocumentPlan)
+    alias CallbackEvent = Tuple(String, String, String)
+    alias EventScheduleContext = Tuple(ObjectDocumentInlineCallbackEvents, String)
+    alias JsonLeafContext = Tuple(Symbol, String, String, Int32, Array(Int32))
+    alias TraversalContext = Tuple(EventScheduleContext?, Symbol, String, JsonLeafContext?, Bool, Bool, Bool)
 
     # One source-exact body callback mapped back to the normalized lane role
     # and owning Object site. `owner_path` is a typed/Object path for those
@@ -15,13 +20,31 @@ module CrystalClick
       plan : ObjectDocumentPlan,
       budget : BinaryCodecBudget,
       allow_advanced : Bool = false,
+      event_context : EventScheduleContext? = nil,
+      local_only : Bool = false,
     ) : Array(String)
-      if allow_advanced
+      if local_only
+        unless event_context
+          raise UnsupportedFormatError.new("local inline callback schedules require a validated owner context")
+        end
+        if !allow_advanced && plan.structures.object.shared_data_version >= 2_u64
+          raise UnsupportedFormatError.new("advanced inline child Object shared layouts require Compact mark-coordinate relocation")
+        end
+      elsif event_context
+        if !allow_advanced && plan.structures.object.shared_data_version >= 2_u64
+          raise UnsupportedFormatError.new("advanced inline child Object shared layouts require Compact mark-coordinate relocation")
+        end
+      elsif allow_advanced
         reject_nested_json_layout!(plan, budget)
       else
         reject_advanced_shared_layout!(plan, budget)
       end
-      maximum_callbacks = callback_count_limit(physical_plan, plan, allow_advanced, budget)
+      descendant_roles = if local_only
+                           0_u64
+                         else
+                           event_context.try { |context| context[0].descendant_advanced_bucket_roles(context[1], allow_advanced, budget) } || 0_u64
+                         end
+      maximum_callbacks = callback_count_limit(physical_plan, plan, allow_advanced, budget, descendant_roles)
       names = [] of String
       append_name!(names, physical_plan.object_structure_stream, maximum_callbacks, budget)
 
@@ -40,6 +63,7 @@ module CrystalClick
             physical_plan.typed_descriptor_root_depth,
             maximum_callbacks,
             budget,
+            traversal_context(event_context, :typed_dynamic, path, nil, local_only, allow_advanced),
           )
         else
           append_static_prefixes(
@@ -51,6 +75,7 @@ module CrystalClick
             physical_plan.typed_descriptor_root_depth,
             maximum_callbacks,
             budget,
+            traversal_context(event_context, :typed, path, nil, local_only, allow_advanced),
           )
         end
       end
@@ -62,7 +87,7 @@ module CrystalClick
         append_name!(names, physical_plan.dynamic_structure_stream(path), maximum_callbacks, budget)
         discriminator = physical_plan.discriminator_stream(path)
         append_name!(names, prefix_name(discriminator, ".variant_discr", budget), maximum_callbacks, budget)
-        canonical_arm_pairs(structure, budget).each do |arm_name, arm|
+        canonical_arm_pairs(structure, budget).each_with_index do |(arm_name, arm), arm_index|
           arm_physical = physical_plan.dynamic_arm(path, arm_name)
           append_static_prefixes(
             names,
@@ -73,6 +98,14 @@ module CrystalClick
             physical_plan.inferred_actual_root_depth,
             maximum_callbacks,
             budget,
+            traversal_context(
+              event_context,
+              :root_dynamic,
+              path,
+              {:root_dynamic, path, "root", arm_index.to_i32, [] of Int32},
+              local_only,
+              allow_advanced,
+            ),
           )
         end
       end
@@ -87,13 +120,31 @@ module CrystalClick
       budget : BinaryCodecBudget,
       allow_advanced : Bool = false,
       include_advanced_shared : Bool = true,
+      event_context : EventScheduleContext? = nil,
+      local_only : Bool = false,
     ) : Array(String)
-      if allow_advanced
+      if local_only
+        unless event_context
+          raise UnsupportedFormatError.new("local inline callback schedules require a validated owner context")
+        end
+        if !allow_advanced && plan.structures.object.shared_data_version >= 2_u64
+          raise UnsupportedFormatError.new("advanced inline child Object shared layouts require Compact mark-coordinate relocation")
+        end
+      elsif event_context
+        if !allow_advanced && plan.structures.object.shared_data_version >= 2_u64
+          raise UnsupportedFormatError.new("advanced inline child Object shared layouts require Compact mark-coordinate relocation")
+        end
+      elsif allow_advanced
         reject_nested_json_layout!(plan, budget)
       else
         reject_advanced_shared_layout!(plan, budget)
       end
-      maximum_callbacks = callback_count_limit(physical_plan, plan, allow_advanced, budget)
+      descendant_roles = if local_only
+                           0_u64
+                         else
+                           event_context.try { |context| context[0].descendant_advanced_bucket_roles(context[1], allow_advanced, budget) } || 0_u64
+                         end
+      maximum_callbacks = callback_count_limit(physical_plan, plan, allow_advanced, budget, descendant_roles)
       names = [] of String
 
       # Nested Object's callback body is descriptor order, not sorted physical
@@ -114,6 +165,7 @@ module CrystalClick
             profile,
             maximum_callbacks,
             budget,
+            traversal_context(event_context, :typed_dynamic, path, nil, local_only, allow_advanced, include_advanced_shared),
           )
         else
           append_static_bodies(
@@ -126,6 +178,7 @@ module CrystalClick
             profile,
             maximum_callbacks,
             budget,
+            traversal_context(event_context, :typed, path, nil, local_only, allow_advanced, include_advanced_shared),
           )
         end
       end
@@ -136,7 +189,7 @@ module CrystalClick
         structure = plan.structures.dynamic_for(path)
         discriminator = physical_plan.discriminator_stream(path)
         append_name!(names, discriminator, maximum_callbacks, budget)
-        canonical_arm_pairs(structure, budget).each do |arm_name, arm|
+        canonical_arm_pairs(structure, budget).each_with_index do |(arm_name, arm), arm_index|
           arm_physical = physical_plan.dynamic_arm(path, arm_name)
           append_static_bodies(
             names,
@@ -148,6 +201,15 @@ module CrystalClick
             profile,
             maximum_callbacks,
             budget,
+            traversal_context(
+              event_context,
+              :root_dynamic,
+              path,
+              {:root_dynamic, path, "root", arm_index.to_i32, [] of Int32},
+              local_only,
+              allow_advanced,
+              include_advanced_shared,
+            ),
           )
         end
       end
@@ -202,8 +264,10 @@ module CrystalClick
       callback_root_prefix : String,
       budget : BinaryCodecBudget,
       allow_advanced : Bool = false,
+      event_context : EventScheduleContext? = nil,
+      local_only : Bool = false,
     ) : Array(CallbackPair)
-      names = prefix_names(physical_plan, plan, budget, allow_advanced)
+      names = prefix_names(physical_plan, plan, budget, allow_advanced, event_context, local_only)
       mapping = callback_prefix_mapping(physical_plan, plan, callback_root_prefix, budget)
       map_callback_names(names, mapping, budget)
     end
@@ -216,10 +280,59 @@ module CrystalClick
       budget : BinaryCodecBudget,
       allow_advanced : Bool = false,
       include_advanced_shared : Bool = true,
+      event_context : EventScheduleContext? = nil,
+      local_only : Bool = false,
     ) : Array(CallbackPair)
-      names = body_names(physical_plan, plan, profile, budget, allow_advanced, include_advanced_shared)
+      names = body_names(physical_plan, plan, profile, budget, allow_advanced, include_advanced_shared, event_context, local_only)
       mapping = callback_prefix_mapping(physical_plan, plan, callback_root_prefix, budget)
       map_callback_names(names, mapping, budget)
+    end
+
+    # Flatten the callback prefix phase for one Object subtree. Descendant
+    # owners are resolved by exact Dynamic JSON leaf identity, while returned
+    # events retain canonical and raw callback names separately.
+    def self.prefix_callback_events(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      callback_root_prefix : String,
+      budget : BinaryCodecBudget,
+      allow_advanced : Bool = false,
+      descendants : Array(CallbackOwner) = [] of CallbackOwner,
+    ) : Array(CallbackEvent)
+      root = {canonical_root_prefix(physical_plan), callback_root_prefix, physical_plan, plan}
+      events = ObjectDocumentInlineCallbackEvents.new(root, descendants, budget)
+      root_context = {events, root[0]}
+      names = prefix_names(physical_plan, plan, budget, allow_advanced, root_context)
+      eventize_names(names, events, allow_advanced, nil, true, budget)
+    end
+
+    # Flatten the callback body phase in source descriptor order. Ownership
+    # comes from each owner's own schedule, not from prefix matching; this is
+    # important when a parent wrapper lane shares a physical prefix with its
+    # JSON child Object.
+    def self.body_callback_events(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      profile : BinaryBulkProfile,
+      callback_root_prefix : String,
+      budget : BinaryCodecBudget,
+      allow_advanced : Bool = false,
+      include_advanced_shared : Bool = true,
+      descendants : Array(CallbackOwner) = [] of CallbackOwner,
+    ) : Array(CallbackEvent)
+      root = {canonical_root_prefix(physical_plan), callback_root_prefix, physical_plan, plan}
+      events = ObjectDocumentInlineCallbackEvents.new(root, descendants, budget)
+      root_context = {events, root[0]}
+      names = body_names(
+        physical_plan,
+        plan,
+        profile,
+        budget,
+        allow_advanced,
+        include_advanced_shared,
+        root_context,
+      )
+      eventize_names(names, events, allow_advanced, profile, false, budget, include_advanced_shared)
     end
 
     # The canonical child root is recoverable from the object-structure lane;
@@ -233,11 +346,31 @@ module CrystalClick
       name.byte_slice(0, name.bytesize - suffix.bytesize) || ""
     end
 
+    # Resolve one physically bound child prefix through the exact canonical
+    # to callback mapping for this owner. This deliberately does not select a
+    # longest matching prefix: the supplied key must be an admitted descriptor
+    # boundary in this owner's own plan.
+    def self.callback_prefix_for_exact_site(
+      physical_plan : ObjectDocumentPhysicalPlan,
+      plan : ObjectDocumentPlan,
+      callback_root_prefix : String,
+      canonical_site_prefix : String,
+      budget : BinaryCodecBudget,
+    ) : String
+      mapping = callback_prefix_mapping(physical_plan, plan, callback_root_prefix, budget)
+      callback_prefix = mapping[canonical_site_prefix]? ||
+                        raise(UnsupportedFormatError.new("inline child site has no exact Compact callback prefix"))
+      budget.ensure_wire_bytes(callback_prefix.bytesize.to_u64)
+      budget.charge_wire_bytes(callback_prefix.bytesize.to_u64)
+      String.new(callback_prefix.to_slice)
+    end
+
     private def self.callback_count_limit(
       physical_plan : ObjectDocumentPhysicalPlan,
       plan : ObjectDocumentPlan,
       allow_advanced : Bool,
       budget : BinaryCodecBudget,
+      descendant_roles : UInt64 = 0_u64,
     ) : Int32
       extra_bucket_roles = if allow_advanced && plan.structures.object.shared_data_version >= 2_u64
                              physical_plan.shared_bucket_count.to_u64
@@ -245,12 +378,76 @@ module CrystalClick
                              0_u64
                            end
       base = physical_plan.stream_count.to_u64
+      extra_bucket_roles = checked_add(extra_bucket_roles, descendant_roles)
       if extra_bucket_roles > UInt64::MAX - base || base + extra_bucket_roles > Int32::MAX.to_u64
         raise UnsupportedFormatError.new("Compact inline callback roster exceeds the supported domain")
       end
       count = base + extra_bucket_roles
       budget.ensure_future_elements(count)
       count.to_i32
+    end
+
+    private def self.eventize_names(
+      names : Array(String),
+      events : ObjectDocumentInlineCallbackEvents,
+      allow_advanced : Bool,
+      profile : BinaryBulkProfile?,
+      prefix_phase : Bool,
+      budget : BinaryCodecBudget,
+      include_advanced_shared : Bool = true,
+    ) : Array(CallbackEvent)
+      owner_by_name = Hash(String, Tuple(String, String)).new
+      owners_with_prefix = Hash(String, Bool).new
+
+      events.owner_count.times do |index|
+        owner = events.owner_at(index, budget)
+        owner_context = {events, owner[0]}
+        local_names = if prefix_phase
+                        prefix_names(owner[2], owner[3], budget, allow_advanced, owner_context, true)
+                      else
+                        body_names(
+                          owner[2],
+                          owner[3],
+                          profile || raise(ArgumentError.new("body callback events require a String profile")),
+                          budget,
+                          allow_advanced,
+                          include_advanced_shared,
+                          owner_context,
+                          true,
+                        )
+                      end
+        mapping = callback_prefix_mapping(owner[2], owner[3], owner[1], budget)
+        pairs = map_callback_names(local_names, mapping, budget)
+        pairs.each do |pair|
+          canonical = pair[0]
+          if owner_by_name.has_key?(canonical)
+            raise UnsupportedFormatError.new("inline callback canonical name has multiple descriptor owners")
+          end
+          # `canonical` is already a privately owned, charged schedule name.
+          # Reuse it as the lookup key rather than allocating an uncharged copy.
+          owner_by_name[canonical] = {owner[0], pair[1]}
+        end
+        owners_with_prefix[owner[0]] = true unless local_names.empty?
+      end
+
+      unless owner_by_name.size == names.size
+        raise UnsupportedFormatError.new("recursive inline callback names do not match their owner-local schedules")
+      end
+      if prefix_phase && owners_with_prefix.size != events.owner_count
+        raise UnsupportedFormatError.new("recursive inline callback prefix schedule omits an Object owner")
+      end
+
+      count = names.size.to_u64
+      budget.ensure_future_nodes(count)
+      budget.ensure_future_elements(count)
+      count.times { budget.charge_node }
+      budget.charge_elements(count) if count > 0_u64
+      result = Array(CallbackEvent).new(names.size)
+      names.each do |canonical|
+        owner = owner_by_name[canonical]? || raise(UnsupportedFormatError.new("recursive inline callback has no exact owner-local binding"))
+        result << {owner[0], canonical, owner[1]}
+      end
+      result
     end
 
     # Compact nested Object callbacks have seven bucket roles while the Wide
@@ -600,8 +797,10 @@ module CrystalClick
       plan : ObjectDocumentPlan,
       profile : BinaryBulkProfile,
       budget : BinaryCodecBudget,
+      event_context : EventScheduleContext? = nil,
+      local_only : Bool = false,
     ) : Array(BodyLaneBinding)
-      names = body_names(physical_plan, plan, profile, budget)
+      names = body_names(physical_plan, plan, profile, budget, false, true, event_context, local_only)
       binding_count = names.size.to_u64
       budget.ensure_future_nodes(binding_count)
       budget.ensure_future_elements(binding_count)
@@ -673,11 +872,13 @@ module CrystalClick
       plan : ObjectDocumentPlan,
       profile : BinaryBulkProfile,
       budget : BinaryCodecBudget,
+      event_context : EventScheduleContext? = nil,
+      local_only : Bool = false,
     ) : Array(BodyLaneBinding)
       unless plan.structures.object.shared_data_version >= 2_u64
         raise ArgumentError.new("advanced inline callback bindings require SharedData v2 or v3")
       end
-      names = body_names(physical_plan, plan, profile, budget, true)
+      names = body_names(physical_plan, plan, profile, budget, true, true, event_context, local_only)
       binding_count = names.size.to_u64
       budget.ensure_future_nodes(binding_count)
       budget.ensure_future_elements(binding_count)
@@ -814,6 +1015,110 @@ module CrystalClick
       digits
     end
 
+    private def self.traversal_context(
+      event_context : EventScheduleContext?,
+      scope_kind : Symbol,
+      scope_path : String,
+      leaf : JsonLeafContext?,
+      local_only : Bool,
+      allow_advanced : Bool,
+      include_advanced_shared : Bool = true,
+    ) : TraversalContext
+      {event_context, scope_kind, scope_path, leaf, local_only, allow_advanced, include_advanced_shared}
+    end
+
+    # Extend the JSON descriptor path while staying in the same dynamic site.
+    # Array/Nested/Nullable/Custom use child 0; Tuple uses its field index;
+    # Map uses key=0/value=1; Variant uses its canonical arm index.
+    private def self.traversal_child(
+      traversal : TraversalContext?,
+      child_index : Int32,
+      budget : BinaryCodecBudget,
+    ) : TraversalContext?
+      return nil unless traversal
+      leaf = traversal[3]
+      return traversal unless leaf
+      unless child_index >= 0
+        raise UnsupportedFormatError.new("inline JSON descriptor child index is negative")
+      end
+      old_path = leaf[4]
+      new_count = old_path.size.to_u64 + 1_u64
+      budget.ensure_future_elements(new_count)
+      copied_bytes = checked_multiply(new_count, 4_u64)
+      budget.ensure_wire_bytes(copied_bytes)
+      budget.charge_elements(new_count)
+      budget.charge_wire_bytes(copied_bytes) if copied_bytes > 0_u64
+      new_path = Array(Int32).new(old_path.size + 1)
+      old_path.each { |index| new_path << index }
+      new_path << child_index
+      next_leaf : JsonLeafContext = {leaf[0], leaf[1], leaf[2], leaf[3], new_path}
+      {traversal[0], traversal[1], traversal[2], next_leaf, traversal[4], traversal[5], traversal[6]}
+    end
+
+    # A nested Dynamic descriptor starts a fresh owner-local leaf key at its
+    # canonical arm index. The outer scope remains part of EventScheduleContext.
+    private def self.traversal_dynamic_arm(
+      traversal : TraversalContext?,
+      dynamic_site : String,
+      canonical_arm_index : Int32,
+      budget : BinaryCodecBudget,
+    ) : TraversalContext?
+      return nil unless traversal
+      unless canonical_arm_index >= 0
+        raise UnsupportedFormatError.new("inline JSON Dynamic arm index is negative")
+      end
+      size = dynamic_site.bytesize.to_u64
+      budget.ensure_wire_bytes(size)
+      budget.charge_wire_bytes(size) if size > 0_u64
+      leaf : JsonLeafContext = {
+        traversal[1],
+        traversal[2],
+        String.new(dynamic_site.to_slice),
+        canonical_arm_index,
+        [] of Int32,
+      }
+      {traversal[0], traversal[1], traversal[2], leaf, traversal[4], traversal[5], traversal[6]}
+    end
+
+    private def self.append_json_prefix_names!(
+      names : Array(String),
+      maximum_lanes : Int32,
+      budget : BinaryCodecBudget,
+      traversal : TraversalContext?,
+    ) : Nil
+      context = traversal || raise(UnsupportedFormatError.new("inline JSON descriptor has no prepared Dynamic leaf context"))
+      schedule = context[0] || raise(UnsupportedFormatError.new("inline JSON prefix schedule has no validated callback owner tree"))
+      leaf = context[3] || raise(UnsupportedFormatError.new("inline JSON prefix schedule has no exact Dynamic leaf key"))
+      key = BinaryDynamicJsonLeafKey.new(leaf[2], leaf[3], leaf[4])
+      child = schedule[0].child_owner(schedule[1], context[1], context[2], key, budget)
+      return nil if context[4]
+
+      child_context : EventScheduleContext = {schedule[0], child[0]}
+      child_names = prefix_names(child[2], child[3], budget, context[5], child_context)
+      child_names.each { |name| append_name!(names, name, maximum_lanes, budget) }
+      nil
+    end
+
+    private def self.append_json_body_names!(
+      names : Array(String),
+      profile : BinaryBulkProfile,
+      maximum_lanes : Int32,
+      budget : BinaryCodecBudget,
+      traversal : TraversalContext?,
+    ) : Nil
+      context = traversal || raise(UnsupportedFormatError.new("inline JSON descriptor has no prepared Dynamic leaf context"))
+      schedule = context[0] || raise(UnsupportedFormatError.new("inline JSON body schedule has no validated callback owner tree"))
+      leaf = context[3] || raise(UnsupportedFormatError.new("inline JSON body schedule has no exact Dynamic leaf key"))
+      key = BinaryDynamicJsonLeafKey.new(leaf[2], leaf[3], leaf[4])
+      child = schedule[0].child_owner(schedule[1], context[1], context[2], key, budget)
+      return nil if context[4]
+
+      child_context : EventScheduleContext = {schedule[0], child[0]}
+      child_names = body_names(child[2], child[3], profile, budget, context[5], context[6], child_context)
+      child_names.each { |name| append_name!(names, name, maximum_lanes, budget) }
+      nil
+    end
+
     private def self.checked_add(left : UInt64, right : UInt64) : UInt64
       if left > UInt64::MAX - right
         raise UnsupportedFormatError.new("inline callback lane-owner work size overflows UInt64")
@@ -837,28 +1142,29 @@ module CrystalClick
       depth : Int32,
       maximum_lanes : Int32,
       budget : BinaryCodecBudget,
+      traversal : TraversalContext? = nil,
     ) : Nil
       budget.visit_node(depth)
       case type.tag
       when BinaryDataType::TAG_CUSTOM, BinaryDataType::TAG_SIMPLE_AGGREGATE
-        append_static_prefixes(names, type.child_at(0), path, physical, array_level, depth + 1, maximum_lanes, budget)
+        append_static_prefixes(names, type.child_at(0), path, physical, array_level, depth + 1, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        append_static_prefixes(names, type.child_at(0), child_path(path, ".elements", budget), physical, array_level + 1_u64, depth + 1, maximum_lanes, budget)
+        append_static_prefixes(names, type.child_at(0), child_path(path, ".elements", budget), physical, array_level + 1_u64, depth + 1, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_NULLABLE
-        append_static_prefixes(names, type.child_at(0), child_path(path, ".nested", budget), physical, array_level, depth + 1, maximum_lanes, budget)
+        append_static_prefixes(names, type.child_at(0), child_path(path, ".nested", budget), physical, array_level, depth + 1, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
-          append_static_prefixes(names, type.child_at(index), child_path(path, ".field.#{index}", budget), physical, array_level, depth + 1, maximum_lanes, budget)
+          append_static_prefixes(names, type.child_at(index), child_path(path, ".field.#{index}", budget), physical, array_level, depth + 1, maximum_lanes, budget, traversal_child(traversal, index.to_i32, budget))
         end
       when BinaryDataType::TAG_MAP
-        append_static_prefixes(names, type.child_at(0), child_path(path, ".elements.field.0", budget), physical, array_level + 1_u64, depth + 1, maximum_lanes, budget)
-        append_static_prefixes(names, type.child_at(1), child_path(path, ".elements.field.1", budget), physical, array_level + 1_u64, depth + 1, maximum_lanes, budget)
+        append_static_prefixes(names, type.child_at(0), child_path(path, ".elements.field.0", budget), physical, array_level + 1_u64, depth + 1, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
+        append_static_prefixes(names, type.child_at(1), child_path(path, ".elements.field.1", budget), physical, array_level + 1_u64, depth + 1, maximum_lanes, budget, traversal_child(traversal, 1_i32, budget))
       when BinaryDataType::TAG_VARIANT
         role = child_path(path, ".discriminators", budget)
         body_name = physical.stream_name_for(role)
         append_name!(names, prefix_name(body_name, ".variant_discr", budget), maximum_lanes, budget)
         type.child_count.times do |index|
-          append_static_prefixes(names, type.child_at(index), child_path(path, ".arm.#{index}", budget), physical, array_level, depth + 1, maximum_lanes, budget)
+          append_static_prefixes(names, type.child_at(index), child_path(path, ".arm.#{index}", budget), physical, array_level, depth + 1, maximum_lanes, budget, traversal_child(traversal, index.to_i32, budget))
         end
       when BinaryDataType::TAG_LOW_CARDINALITY
         role = child_path(path, ".dictionary", budget)
@@ -866,7 +1172,7 @@ module CrystalClick
       when BinaryDataType::TAG_DYNAMIC
         raise UnsupportedFormatError.new("nested Dynamic typed descriptor lacks its prepared Dynamic physical plan")
       when BinaryDataType::TAG_JSON
-        raise UnsupportedFormatError.new("nested JSON child plans are outside this inline callback frontier")
+        append_json_prefix_names!(names, maximum_lanes, budget, traversal)
       end
       nil
     end
@@ -881,6 +1187,7 @@ module CrystalClick
       depth : Int32,
       maximum_lanes : Int32,
       budget : BinaryCodecBudget,
+      traversal : TraversalContext? = nil,
     ) : Nil
       budget.visit_node(depth)
       case type.tag
@@ -890,32 +1197,43 @@ module CrystalClick
         discriminator = physical.stream_name_for(child_path(path, ".discriminators", budget))
         append_name!(names, prefix_name(discriminator, ".variant_discr", budget), maximum_lanes, budget)
         canonical_arm_pairs(structure, budget).each_with_index do |pair, index|
-          append_dynamic_prefixes(names, pair[1], child_path(path, ".arm.#{index}", budget), physical, structures, array_level, depth + 1, maximum_lanes, budget)
+          append_dynamic_prefixes(
+            names,
+            pair[1],
+            child_path(path, ".arm.#{index}", budget),
+            physical,
+            structures,
+            array_level,
+            depth + 1,
+            maximum_lanes,
+            budget,
+            traversal_dynamic_arm(traversal, path, index.to_i32, budget),
+          )
         end
       when BinaryDataType::TAG_VARIANT
         role = child_path(path, ".discriminators", budget)
         append_name!(names, prefix_name(physical.stream_name_for(role), ".variant_discr", budget), maximum_lanes, budget)
         type.child_count.times do |index|
-          append_dynamic_prefixes(names, type.child_at(index), child_path(path, ".arm.#{index}", budget), physical, structures, array_level, depth + 1, maximum_lanes, budget)
+          append_dynamic_prefixes(names, type.child_at(index), child_path(path, ".arm.#{index}", budget), physical, structures, array_level, depth + 1, maximum_lanes, budget, traversal_child(traversal, index.to_i32, budget))
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        append_dynamic_prefixes(names, type.child_at(0), child_path(path, ".elements", budget), physical, structures, array_level + 1_u64, depth + 1, maximum_lanes, budget)
+        append_dynamic_prefixes(names, type.child_at(0), child_path(path, ".elements", budget), physical, structures, array_level + 1_u64, depth + 1, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_NULLABLE
-        append_dynamic_prefixes(names, type.child_at(0), child_path(path, ".nested", budget), physical, structures, array_level, depth + 1, maximum_lanes, budget)
+        append_dynamic_prefixes(names, type.child_at(0), child_path(path, ".nested", budget), physical, structures, array_level, depth + 1, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_CUSTOM, BinaryDataType::TAG_SIMPLE_AGGREGATE
-        append_dynamic_prefixes(names, type.child_at(0), path, physical, structures, array_level, depth + 1, maximum_lanes, budget)
+        append_dynamic_prefixes(names, type.child_at(0), path, physical, structures, array_level, depth + 1, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
-          append_dynamic_prefixes(names, type.child_at(index), child_path(path, ".field.#{index}", budget), physical, structures, array_level, depth + 1, maximum_lanes, budget)
+          append_dynamic_prefixes(names, type.child_at(index), child_path(path, ".field.#{index}", budget), physical, structures, array_level, depth + 1, maximum_lanes, budget, traversal_child(traversal, index.to_i32, budget))
         end
       when BinaryDataType::TAG_MAP
-        append_dynamic_prefixes(names, type.child_at(0), child_path(path, ".elements.field.0", budget), physical, structures, array_level + 1_u64, depth + 1, maximum_lanes, budget)
-        append_dynamic_prefixes(names, type.child_at(1), child_path(path, ".elements.field.1", budget), physical, structures, array_level + 1_u64, depth + 1, maximum_lanes, budget)
+        append_dynamic_prefixes(names, type.child_at(0), child_path(path, ".elements.field.0", budget), physical, structures, array_level + 1_u64, depth + 1, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
+        append_dynamic_prefixes(names, type.child_at(1), child_path(path, ".elements.field.1", budget), physical, structures, array_level + 1_u64, depth + 1, maximum_lanes, budget, traversal_child(traversal, 1_i32, budget))
       when BinaryDataType::TAG_LOW_CARDINALITY
         role = child_path(path, ".dictionary", budget)
         append_name!(names, prefix_name(physical.stream_name_for(role), ".dict", budget), maximum_lanes, budget)
       when BinaryDataType::TAG_JSON
-        raise UnsupportedFormatError.new("nested JSON child plans are outside this inline callback frontier")
+        append_json_prefix_names!(names, maximum_lanes, budget, traversal)
       end
       nil
     end
@@ -930,39 +1248,40 @@ module CrystalClick
       profile : BinaryBulkProfile,
       maximum_lanes : Int32,
       budget : BinaryCodecBudget,
+      traversal : TraversalContext? = nil,
     ) : Nil
       budget.visit_node(depth)
       case type.tag
       when BinaryDataType::TAG_CUSTOM, BinaryDataType::TAG_SIMPLE_AGGREGATE
-        append_static_bodies(names, type.child_at(0), path, physical, array_level, depth + 1, profile, maximum_lanes, budget)
+        append_static_bodies(names, type.child_at(0), path, physical, array_level, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_STRING
         append_name!(names, physical.stream_name_for(child_path(path, ".string_sizes", budget)), maximum_lanes, budget) if profile.with_size_stream?
         append_name!(names, physical.stream_name_for(child_path(path, ".data", budget)), maximum_lanes, budget)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         append_name!(names, physical.stream_name_for(child_path(path, ".sizes", budget)), maximum_lanes, budget)
-        append_static_bodies(names, type.child_at(0), child_path(path, ".elements", budget), physical, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget)
+        append_static_bodies(names, type.child_at(0), child_path(path, ".elements", budget), physical, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_NULLABLE
         append_name!(names, physical.stream_name_for(child_path(path, ".nulls", budget)), maximum_lanes, budget)
-        append_static_bodies(names, type.child_at(0), child_path(path, ".nested", budget), physical, array_level, depth + 1, profile, maximum_lanes, budget)
+        append_static_bodies(names, type.child_at(0), child_path(path, ".nested", budget), physical, array_level, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           append_name!(names, physical.stream_name_for(child_path(path, ".data", budget)), maximum_lanes, budget)
         else
           type.child_count.times do |index|
-            append_static_bodies(names, type.child_at(index), child_path(path, ".field.#{index}", budget), physical, array_level, depth + 1, profile, maximum_lanes, budget)
+            append_static_bodies(names, type.child_at(index), child_path(path, ".field.#{index}", budget), physical, array_level, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, index.to_i32, budget))
           end
         end
       when BinaryDataType::TAG_MAP
         append_name!(names, physical.stream_name_for(child_path(path, ".sizes", budget)), maximum_lanes, budget)
-        append_static_bodies(names, type.child_at(0), child_path(path, ".elements.field.0", budget), physical, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget)
-        append_static_bodies(names, type.child_at(1), child_path(path, ".elements.field.1", budget), physical, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget)
+        append_static_bodies(names, type.child_at(0), child_path(path, ".elements.field.0", budget), physical, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
+        append_static_bodies(names, type.child_at(1), child_path(path, ".elements.field.1", budget), physical, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 1_i32, budget))
       when BinaryDataType::TAG_LOW_CARDINALITY
         append_name!(names, physical.stream_name_for(child_path(path, ".dictionary", budget)), maximum_lanes, budget)
         append_name!(names, physical.stream_name_for(child_path(path, ".indexes", budget)), maximum_lanes, budget)
       when BinaryDataType::TAG_VARIANT
         append_name!(names, physical.stream_name_for(child_path(path, ".discriminators", budget)), maximum_lanes, budget)
         type.child_count.times do |index|
-          append_static_bodies(names, type.child_at(index), child_path(path, ".arm.#{index}", budget), physical, array_level, depth + 1, profile, maximum_lanes, budget)
+          append_static_bodies(names, type.child_at(index), child_path(path, ".arm.#{index}", budget), physical, array_level, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, index.to_i32, budget))
         end
       when BinaryDataType::TAG_QBIT
         qbit = type.qbit_type || raise(UnsupportedFormatError.new("inline QBit descriptor is missing its nominal type"))
@@ -972,7 +1291,7 @@ module CrystalClick
       when BinaryDataType::TAG_DYNAMIC
         raise UnsupportedFormatError.new("nested Dynamic typed descriptor lacks its prepared Dynamic physical plan")
       when BinaryDataType::TAG_JSON
-        raise UnsupportedFormatError.new("nested JSON child plans are outside this inline callback frontier")
+        append_json_body_names!(names, profile, maximum_lanes, budget, traversal)
       else
         append_name!(names, physical.stream_name_for(child_path(path, ".data", budget)), maximum_lanes, budget)
       end
@@ -990,6 +1309,7 @@ module CrystalClick
       profile : BinaryBulkProfile,
       maximum_lanes : Int32,
       budget : BinaryCodecBudget,
+      traversal : TraversalContext? = nil,
     ) : Nil
       budget.visit_node(depth)
       case type.tag
@@ -997,36 +1317,48 @@ module CrystalClick
         structure = structures[path]? || raise(UnsupportedFormatError.new("inline typed Dynamic body structure is missing"))
         append_name!(names, physical.stream_name_for(child_path(path, ".discriminators", budget)), maximum_lanes, budget)
         canonical_arm_pairs(structure, budget).each_with_index do |pair, index|
-          append_dynamic_bodies(names, pair[1], child_path(path, ".arm.#{index}", budget), physical, structures, array_level, depth + 1, profile, maximum_lanes, budget)
+          append_dynamic_bodies(
+            names,
+            pair[1],
+            child_path(path, ".arm.#{index}", budget),
+            physical,
+            structures,
+            array_level,
+            depth + 1,
+            profile,
+            maximum_lanes,
+            budget,
+            traversal_dynamic_arm(traversal, path, index.to_i32, budget),
+          )
         end
       when BinaryDataType::TAG_VARIANT
         append_name!(names, physical.stream_name_for(child_path(path, ".discriminators", budget)), maximum_lanes, budget)
         type.child_count.times do |index|
-          append_dynamic_bodies(names, type.child_at(index), child_path(path, ".arm.#{index}", budget), physical, structures, array_level, depth + 1, profile, maximum_lanes, budget)
+          append_dynamic_bodies(names, type.child_at(index), child_path(path, ".arm.#{index}", budget), physical, structures, array_level, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, index.to_i32, budget))
         end
       when BinaryDataType::TAG_STRING
         append_name!(names, physical.stream_name_for(child_path(path, ".string_sizes", budget)), maximum_lanes, budget) if profile.with_size_stream?
         append_name!(names, physical.stream_name_for(child_path(path, ".data", budget)), maximum_lanes, budget)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         append_name!(names, physical.stream_name_for(child_path(path, ".sizes", budget)), maximum_lanes, budget)
-        append_dynamic_bodies(names, type.child_at(0), child_path(path, ".elements", budget), physical, structures, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget)
+        append_dynamic_bodies(names, type.child_at(0), child_path(path, ".elements", budget), physical, structures, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_NULLABLE
         append_name!(names, physical.stream_name_for(child_path(path, ".nulls", budget)), maximum_lanes, budget)
-        append_dynamic_bodies(names, type.child_at(0), child_path(path, ".nested", budget), physical, structures, array_level, depth + 1, profile, maximum_lanes, budget)
+        append_dynamic_bodies(names, type.child_at(0), child_path(path, ".nested", budget), physical, structures, array_level, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_CUSTOM, BinaryDataType::TAG_SIMPLE_AGGREGATE
-        append_dynamic_bodies(names, type.child_at(0), path, physical, structures, array_level, depth + 1, profile, maximum_lanes, budget)
+        append_dynamic_bodies(names, type.child_at(0), path, physical, structures, array_level, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
           append_name!(names, physical.stream_name_for(child_path(path, ".data", budget)), maximum_lanes, budget)
         else
           type.child_count.times do |index|
-            append_dynamic_bodies(names, type.child_at(index), child_path(path, ".field.#{index}", budget), physical, structures, array_level, depth + 1, profile, maximum_lanes, budget)
+            append_dynamic_bodies(names, type.child_at(index), child_path(path, ".field.#{index}", budget), physical, structures, array_level, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, index.to_i32, budget))
           end
         end
       when BinaryDataType::TAG_MAP
         append_name!(names, physical.stream_name_for(child_path(path, ".sizes", budget)), maximum_lanes, budget)
-        append_dynamic_bodies(names, type.child_at(0), child_path(path, ".elements.field.0", budget), physical, structures, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget)
-        append_dynamic_bodies(names, type.child_at(1), child_path(path, ".elements.field.1", budget), physical, structures, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget)
+        append_dynamic_bodies(names, type.child_at(0), child_path(path, ".elements.field.0", budget), physical, structures, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 0_i32, budget))
+        append_dynamic_bodies(names, type.child_at(1), child_path(path, ".elements.field.1", budget), physical, structures, array_level + 1_u64, depth + 1, profile, maximum_lanes, budget, traversal_child(traversal, 1_i32, budget))
       when BinaryDataType::TAG_LOW_CARDINALITY
         append_name!(names, physical.stream_name_for(child_path(path, ".dictionary", budget)), maximum_lanes, budget)
         append_name!(names, physical.stream_name_for(child_path(path, ".indexes", budget)), maximum_lanes, budget)
@@ -1036,7 +1368,7 @@ module CrystalClick
           append_name!(names, physical.stream_name_for(BinaryQBitBulkCodec.plane_role(path, plane)), maximum_lanes, budget)
         end
       when BinaryDataType::TAG_JSON
-        raise UnsupportedFormatError.new("nested JSON child plans are outside this inline callback frontier")
+        append_json_body_names!(names, profile, maximum_lanes, budget, traversal)
       else
         append_name!(names, physical.stream_name_for(child_path(path, ".data", budget)), maximum_lanes, budget)
       end

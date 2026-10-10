@@ -384,50 +384,155 @@ module CrystalClick
       unless nested_context.shared_data_version == version && version <= 3_u64
         raise UnsupportedFormatError.new("inline child Object raw export context differs from its prepared layout")
       end
-      root = callback_root_prefix || ObjectDocumentInlineCallbackOrder.canonical_root_prefix(physical_plan)
-      prefixes, ordinary_bodies = inline_fragments_for_child_site_core(
-        physical_plan, plan, streams, grid, budget, nested_context.profile, root,
-        version >= 2_u64,
+      canonical_root = ObjectDocumentInlineCallbackOrder.canonical_root_prefix(physical_plan)
+      root = callback_root_prefix || canonical_root
+      root_owner : ObjectDocumentInlineWriteOwners::Owner = {
+        canonical_root,
+        root,
+        physical_plan,
+        plan,
+        streams,
+        grid,
+      }
+      owners = ObjectDocumentInlineWriteOwners.new(root_owner, nested_context, budget)
+      callback_owners = owners.callback_owners(budget)
+
+      allow_advanced = version >= 2_u64
+      prefix_events = ObjectDocumentInlineCallbackOrder.prefix_callback_events(
+        physical_plan,
+        plan,
+        root,
+        budget,
+        allow_advanced: allow_advanced,
+        descendants: callback_owners,
       )
+      body_events = ObjectDocumentInlineCallbackOrder.body_callback_events(
+        physical_plan,
+        plan,
+        nested_context.profile,
+        root,
+        budget,
+        allow_advanced: allow_advanced,
+        include_advanced_shared: true,
+        descendants: callback_owners,
+      )
+      schedule = ObjectDocumentInlineCallbackEvents.new(
+        {canonical_root, root, physical_plan, plan},
+        callback_owners,
+        budget,
+      )
+      prefix_fragments = Hash(String, Hash(String, Bytes)).new(initial_capacity: owners.size)
+      body_fragments = Hash(String, Hash(String, Bytes)).new(initial_capacity: owners.size)
       relocations = [] of ObjectSharedInlineCallbackRelocation
-      bodies = ordinary_bodies
-      if version >= 2_u64
-        target_rows = nested_context.target_chunk_rows ||
-                      raise(ArgumentError.new("advanced inline child Object writer context has no target chunk size"))
-        unless target_rows > 0
-          raise ArgumentError.new("advanced inline child Object target chunk size must be positive")
-        end
-        advanced = ObjectSharedAdvancedInlineCodec.encode_body_callbacks(
-          physical_plan,
-          plan,
-          streams,
-          physical_rows_from_grid(grid, budget),
-          version.to_i,
-          physical_plan.shared_bucket_count,
-          target_rows,
-          nested_context.profile,
-          root,
-          budget,
-          shared_json_policy,
+      owners.each do |owner|
+        owner_event_context : ObjectDocumentInlineCallbackOrder::EventScheduleContext = {schedule, owner[0]}
+        local_prefixes, local_bodies = inline_fragments_for_child_site_core(
+          owner[2], owner[3], owner[4], owner[5], budget, nested_context.profile,
+          owner[1], allow_advanced, owner_event_context, true,
         )
-        unless advanced.prefix_callback_count == 0
-          raise UnsupportedFormatError.new("advanced inline Object body codec emitted an unexpected prefix callback")
+        prefix_fragments[owner[0]] = fragment_bytes_by_raw_name!(local_prefixes)
+        local_body_map = fragment_bytes_by_raw_name!(local_bodies)
+
+        if allow_advanced
+          target_rows = nested_context.target_chunk_rows ||
+                        raise(ArgumentError.new("advanced inline child Object writer context has no target chunk size"))
+          unless target_rows > 0
+            raise(ArgumentError.new("advanced inline child Object target chunk size must be positive"))
+          end
+          advanced = ObjectSharedAdvancedInlineCodec.encode_body_callbacks(
+            owner[2],
+            owner[3],
+            owner[4],
+            physical_rows_from_grid(owner[5], budget),
+            version.to_i,
+            owner[2].shared_bucket_count,
+            target_rows,
+            nested_context.profile,
+            owner[1],
+            budget,
+            shared_json_policy,
+            owner_event_context,
+            true,
+          )
+          unless advanced.prefix_callback_count == 0
+            raise UnsupportedFormatError.new("advanced inline Object body codec emitted an unexpected prefix callback")
+          end
+          expected_advanced_count = ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
+            owner[2], owner[3], nested_context.profile, budget, owner_event_context, true
+          ).count { |binding| binding[1] == :advanced_bucket || binding[1] == :advanced_copy }
+          unless advanced.body_callback_count == expected_advanced_count
+            raise UnsupportedFormatError.new("advanced inline Object callback count differs from its Compact schedule")
+          end
+          advanced.body_callback_count.times do |index|
+            callback = advanced.body_callback_at(index)
+            if local_body_map.has_key?(callback[0])
+              raise UnsupportedFormatError.new("advanced inline callback duplicates an ordinary body callback")
+            end
+            local_body_map[callback[0]] = callback[1]
+          end
+          relocations.concat(advanced.relocations)
         end
-        expected_advanced_count = ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
-          physical_plan, plan, nested_context.profile, budget
-        ).count { |binding| binding[1] == :advanced_bucket || binding[1] == :advanced_copy }
-        unless advanced.body_callback_count == expected_advanced_count
-          raise UnsupportedFormatError.new("advanced inline Object callback count differs from its Compact schedule")
-        end
-        budget.ensure_future_nodes(advanced.body_callback_count.to_u64)
-        bodies = Array(Tuple(String, Bytes)).new(ordinary_bodies.size + advanced.body_callback_count)
-        ordinary_bodies.each { |callback| bodies << callback }
-        advanced.body_callback_count.times do |index|
-          bodies << advanced.body_callback_at(index)
-        end
-        relocations = advanced.relocations
+        body_fragments[owner[0]] = local_body_map
       end
+
+      prefixes = splice_callback_events!(prefix_events, prefix_fragments, budget, "prefix")
+      bodies = splice_callback_events!(body_events, body_fragments, budget, "body")
       ObjectSharedAdvancedInlineRawLayout.new(prefixes, bodies, relocations, budget)
+    end
+
+    private def self.fragment_bytes_by_raw_name!(
+      fragments : Array(Tuple(String, Bytes)),
+    ) : Hash(String, Bytes)
+      result = Hash(String, Bytes).new(initial_capacity: fragments.size)
+      fragments.each do |fragment|
+        if result.has_key?(fragment[0])
+          raise UnsupportedFormatError.new("inline callback raw name is duplicated within its owner")
+        end
+        result[fragment[0]] = fragment[1]
+      end
+      result
+    end
+
+    private def self.splice_callback_events!(
+      events : Array(ObjectDocumentInlineCallbackOrder::CallbackEvent),
+      fragments : Hash(String, Hash(String, Bytes)),
+      budget : BinaryCodecBudget,
+      phase : String,
+    ) : Array(Tuple(String, Bytes))
+      count = events.size.to_u64
+      budget.ensure_future_nodes(count)
+      budget.ensure_future_elements(count)
+      output = Array(Tuple(String, Bytes)).new(events.size)
+      consumed = Hash(Tuple(String, String), Bool).new(initial_capacity: events.size)
+      events.each do |event|
+        owner_root = event[0]
+        callback_root = event[2]
+        owner_fragments = fragments[owner_root]? ||
+                          raise(UnsupportedFormatError.new("inline #{phase} event names an unmaterialized Object owner"))
+        bytes = owner_fragments[callback_root]? ||
+                raise(UnsupportedFormatError.new("inline #{phase} event has no owner-local callback bytes"))
+        key = {owner_root, callback_root}
+        if consumed.has_key?(key)
+          raise(UnsupportedFormatError.new("inline #{phase} event consumes one owner callback more than once"))
+        end
+        consumed[key] = true
+        output << {callback_root, bytes}
+        budget.charge_node
+      end
+      fragment_count = 0_u64
+      fragments.each do |owner_root, owner_fragments|
+        owner_fragments.each_key do |callback_root|
+          fragment_count += 1_u64
+          unless consumed.has_key?({owner_root, callback_root})
+            raise UnsupportedFormatError.new("inline #{phase} owner has callbacks outside the complete event schedule")
+          end
+        end
+      end
+      unless fragment_count == count
+        raise UnsupportedFormatError.new("inline #{phase} event count differs from owner-local callback materialization")
+      end
+      budget.charge_elements(count) if count > 0_u64
+      output
     end
 
     private def self.inline_fragments_for_child_site_core(
@@ -439,6 +544,8 @@ module CrystalClick
       profile : BinaryBulkProfile,
       callback_root : String,
       allow_advanced : Bool,
+      event_context : ObjectDocumentInlineCallbackOrder::EventScheduleContext? = nil,
+      local_only : Bool = false,
     ) : Tuple(Array(Tuple(String, Bytes)), Array(Tuple(String, Bytes)))
       grid.validate_for!(streams.mark_count, budget)
 
@@ -448,10 +555,11 @@ module CrystalClick
       end
       fragment_slots = lanes.size.to_u64 * 2_u64
       prefix_pairs = ObjectDocumentInlineCallbackOrder.prefix_callback_pairs(
-        physical_plan, plan, callback_root, budget, allow_advanced
+        physical_plan, plan, callback_root, budget, allow_advanced, event_context, local_only
       )
       body_pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
-        physical_plan, plan, profile, callback_root, budget, allow_advanced, false
+        physical_plan, plan, profile, callback_root, budget, allow_advanced, false,
+        event_context, local_only
       )
       expected_prefixes = Hash(String, Bool).new(initial_capacity: prefix_pairs.size)
       expected_bodies = Hash(String, Bool).new(initial_capacity: body_pairs.size)

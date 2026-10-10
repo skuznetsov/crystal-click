@@ -583,6 +583,23 @@ module CrystalClick
         raise CorruptPartError.new("inline child Object typed schema differs from its parsed prefix plan")
       end
 
+      root_json_leaf_plans = prefix.plan.root_dynamic_json_object_leaf_plans(budget)
+      root_json_loader : PhysicalRootDynamicJsonObjectLeafLoader? = if root_json_leaf_plans.empty?
+        nil
+      else
+        ->(path : String, key : BinaryDynamicJsonLeafKey, binding : DynamicJsonObjectBinding, child_grid : StorageOccurrenceGrid, _json_depth : Int32, child_budget : BinaryCodecBudget) {
+          ObjectSharedPathJsonTapeCodec.decode_child(
+            key,
+            binding,
+            child_grid,
+            prefix.root_dynamic_json_prefixes_for(path),
+            profile,
+            child_budget,
+            _json_depth,
+          )
+        }
+      end
+
       decode_core_with_budget(
         typed_schema,
         streams,
@@ -593,9 +610,9 @@ module CrystalClick
         BinaryBulkProfile.single_stream,
         Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
         prefix.typed_descriptor_root_depth,
-        RootDynamicJsonLeafPlans.new,
+        root_json_leaf_plans,
         prefix.inferred_actual_root_depth,
-        nil,
+        root_json_loader,
         grid,
         prefix,
       )

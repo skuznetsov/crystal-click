@@ -506,14 +506,25 @@ module CrystalClick
         # introduced here.
         if root_roster = roster
           sites = Hash(BinaryDynamicJsonLeafKey, DynamicJsonObjectPhysicalSite).new(initial_capacity: leaf_plans.size)
-          resolver = ObjectRootDynamicJsonSiteResolver.new(
-            path_prefix,
-            dynamic,
-            root_dynamic_json_budget,
-            context,
-            initial_array_level,
-            inferred_actual_root_depth,
-          )
+          resolver = if root_dynamic_json_budget.writing?
+                       ObjectRootDynamicJsonSiteResolver.for_write(
+                         path_prefix,
+                         dynamic,
+                         root_dynamic_json_budget,
+                         context,
+                         initial_array_level,
+                         inferred_actual_root_depth,
+                       )
+                     else
+                       ObjectRootDynamicJsonSiteResolver.new(
+                         path_prefix,
+                         dynamic,
+                         root_dynamic_json_budget,
+                         context,
+                         initial_array_level,
+                         inferred_actual_root_depth,
+                       )
+                     end
           leaf_plans.each do |entry|
             key = entry[0]
             child_plan = entry[1]

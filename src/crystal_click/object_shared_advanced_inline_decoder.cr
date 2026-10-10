@@ -47,11 +47,14 @@ module CrystalClick
         raise CorruptPartError.new("inline advanced Object bucket count differs from its physical plan")
       end
 
+      event_context = prefix.event_schedule_context
       bindings = ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
         physical_plan,
         prefix.plan,
         context.profile,
         budget,
+        event_context,
+        true,
       )
       pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
         physical_plan,
@@ -59,6 +62,9 @@ module CrystalClick
         context.profile,
         prefix.callback_prefix,
         budget,
+        true,
+        true,
+        event_context,
         true,
       )
       slice_count = prefix.body_callback_slice_count

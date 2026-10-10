@@ -41,12 +41,31 @@ module CrystalClick
         detached_path = path.dup
         retained << {detached_path, child_plan}
 
+        leaf_depth_i64 = 2_i64 + detached_path.size.to_i64
+        unless leaf_depth_i64 <= Int32::MAX.to_i64
+          raise ArgumentError.new("prepared JSON leaf depth overflows Int32")
+        end
+        leaf_depth = leaf_depth_i64.to_i32
+        budget.ensure_depth(leaf_depth)
+        child_plan_depth_i64 = leaf_depth_i64 + 1_i64
+        unless child_plan_depth_i64 <= Int32::MAX.to_i64
+          raise ArgumentError.new("prepared JSON child depth overflows Int32")
+        end
+        budget.ensure_depth(child_plan_depth_i64.to_i32)
+
+        # A JSON child Object is itself a prepared schema boundary. Validate
+        # every descendant plan, including descriptor-only JSON actuals that
+        # have no occurrences in the current value batch. A typed Dynamic
+        # declaration inside any such JSON Object remains outside this
+        # shared-envelope grammar; root-Dynamic JSON children remain
+        # compositional and are traversed through their exact local bindings.
+        validate_json_object_plan_tree!(child_plan, budget, child_plan_depth_i64.to_i32)
+
         # Reuse the established JSON/Object schema binding validator rather
         # than creating a second admission grammar for child plans.
         synthetic = DynamicStructure.new([@actual_type] of BinaryDataType)
         canonical_index = synthetic.canonical_index_for(@actual_type)
         key = BinaryDynamicJsonLeafKey.new("root", canonical_index, detached_path)
-        leaf_depth = 2 + detached_path.size
         DynamicJsonObjectBinding.new(
           key,
           synthetic,
@@ -56,15 +75,10 @@ module CrystalClick
           descriptor_root_depth: 2,
         )
 
-        # Inline child discovery currently stops at this Object boundary. Do
-        # not prepare a writer binding that would emit a child whose root or
-        # typed Dynamic JSON descendants the paired path reader cannot bind.
-        # Keep this check on the prepared plan (rather than a generic type
-        # summary), since those bindings are the persisted child owner roster.
-        unless child_plan.root_dynamic_json_object_leaf_plans(budget).empty? &&
-               child_plan.typed_dynamic_json_object_leaf_plans(budget).empty?
-          raise ArgumentError.new("prepared JSON child Object cannot contain further JSON-bound Dynamic sites")
-        end
+        # Child Object plans may themselves bind JSON leaves below their root
+        # Dynamic paths. Their keys are local to that Object, so recursive
+        # readers retain each child plan/prefix scope rather than flattening
+        # these keys into the enclosing actual's roster.
       end
       unless seen.size == expected.size && expected.all? { |path| seen.includes?(path) }
         raise ArgumentError.new("prepared Dynamic actual omits a JSON child binding")
@@ -126,6 +140,63 @@ module CrystalClick
         return true if dynamic_in_json_typed_metadata?(type.child_at(index))
       end
       false
+    end
+
+    private def validate_json_object_plan_tree!(
+      plan : ObjectDocumentPlan,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+    ) : Nil
+      budget.visit_node(depth)
+
+      typed_count = plan.typed_path_count.to_u64
+      typed_path_bytes = 0_u64
+      plan.typed_path_count.times do |index|
+        typed_path_bytes = checked_add(typed_path_bytes, plan.typed_path_byte_size_at(index).to_u64)
+      end
+      if typed_count > 0_u64
+        budget.preflight_children(typed_count)
+        budget.charge_wire_bytes(typed_path_bytes)
+      end
+
+      schema_context = BinaryCodecContext.new(budget.limits, nil, true, budget, false, false)
+      plan.typed_path_count.times do |index|
+        # Typed path names are detached by this accessor, so reserve their
+        # bytes and metadata nodes above before constructing each copy.
+        budget.visit_node(depth)
+        path = plan.typed_path_at(index)
+        type = plan.typed_type_for(path)
+        schema_context.validate_type_tree(type, depth + 1)
+        if type.contains_dynamic?
+          raise ArgumentError.new("Dynamic in JSON-bound Object typed metadata is outside the shared-envelope grammar")
+        end
+      end
+
+      next_depth = depth.to_i64 + 1_i64
+      unless next_depth <= Int32::MAX.to_i64
+        raise ArgumentError.new("prepared JSON Object child depth overflows Int32")
+      end
+      child_depth = next_depth.to_i32
+      budget.ensure_depth(child_depth)
+
+      plan.root_dynamic_json_object_leaf_plans(budget).each_value do |bindings|
+        bindings.each do |entry|
+          validate_json_object_plan_tree!(entry[1], budget, child_depth)
+        end
+      end
+      plan.typed_dynamic_json_object_leaf_plans(budget).each_value do |bindings|
+        bindings.each do |entry|
+          validate_json_object_plan_tree!(entry[1], budget, child_depth)
+        end
+      end
+      nil
+    end
+
+    private def checked_add(left : UInt64, right : UInt64) : UInt64
+      if left > UInt64::MAX - right
+        raise ArgumentError.new("prepared JSON Object child size overflows UInt64")
+      end
+      left + right
     end
   end
 end

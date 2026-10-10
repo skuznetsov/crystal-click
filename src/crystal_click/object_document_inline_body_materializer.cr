@@ -29,10 +29,25 @@ module CrystalClick
       plan = prefix.plan
       profile = context.profile
       advanced = context.shared_data_version >= 2_u64
+      event_context = prefix.event_schedule_context
       all_bindings = if advanced
-                       ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(physical_plan, plan, profile, budget)
+                       ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
+                         physical_plan,
+                         plan,
+                         profile,
+                         budget,
+                         event_context,
+                         true,
+                       )
                      else
-                       ObjectDocumentInlineCallbackOrder.body_lane_bindings(physical_plan, plan, profile, budget)
+                       ObjectDocumentInlineCallbackOrder.body_lane_bindings(
+                         physical_plan,
+                         plan,
+                         profile,
+                         budget,
+                         event_context,
+                         true,
+                       )
                      end
       callback_pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
         physical_plan,
@@ -41,6 +56,9 @@ module CrystalClick
         prefix.callback_prefix,
         budget,
         advanced,
+        true,
+        event_context,
+        true,
       )
       unless all_bindings.size == body_callbacks.size &&
              callback_pairs.size == body_callbacks.size &&

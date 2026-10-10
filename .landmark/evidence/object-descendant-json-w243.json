@@ -1,0 +1,527 @@
+{
+  "format": "crystal_click_object_descendant_json_w243_evidence_v1",
+  "observed_date": "2026-10-09",
+  "baseline_revision": "9810fcc759e26055947b729799d60f96992f6845",
+  "claim": {
+    "level": "VERIFIED",
+    "verdict": "ROBUST within stated finite scope",
+    "statement": "Crystal-generated Wide parts were read successfully by the pinned stock ClickHouse runtime at the four DEBUG/RELEASE × frame-32/frame-64 points, covering eight profiles. Recursive inline child-Object state and owner-local key collisions were exercised by the focused paired-codec controls. This is one-way interoperability evidence only.",
+    "provenance": "Root-curated executed observations; separately executed raw-capture audits share the harness lineage. This packet indexes evidence, it is not proof or immutable provenance."
+  },
+  "baseline_red": {
+    "result": "4 examples; 0 failures; 1 expected error; 3 controls passed.",
+    "diagnostic": "Prepared JSON child Object rejected further JSON-bound Dynamic sites.",
+    "source": "src/crystal_click/object_shared_advanced_json_actual_plan.cr:64",
+    "note": "Earlier compile/setup errors were not counted as the behavioral RED."
+  },
+  "implementation": {
+    "summary": [
+      "Recursive callback events identify canonical owner, canonical name, and raw callback name separately; same local JSON leaf keys remain owner-scoped.",
+      "Descendant plans/bindings match retained physical child sites; body callbacks are consumed once in source order, including empty/zero-use registered descendants.",
+      "One shared budget, inherited serialization profile/layout, and provenance-aware depth rules are retained. Typed nominal JSON depth and bare inferred-root depth are distinct; no arbitrary recursion ordinal cap.",
+      "Further JSON-bound Dynamic in typed metadata remains guarded."
+    ],
+    "changed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/object_document_codec.cr",
+      "src/crystal_click/object_document_inline_callback_order.cr",
+      "src/crystal_click/object_document_inline_callback_events.cr",
+      "src/crystal_click/object_document_inline_plan_reader.cr",
+      "src/crystal_click/object_document_inline_prefix.cr",
+      "src/crystal_click/object_shared_advanced_json_actual_plan.cr",
+      "src/crystal_click/object_shared_path_codec.cr",
+      "src/crystal_click/object_shared_path_json_tape_codec.cr",
+      "spec/object_shared_descendant_json_w243_spec.cr",
+      "scripts/check_object_descendant_json_w243.cr",
+      "src/crystal_click/object_document_column_writer.cr",
+      "src/crystal_click/object_shared_advanced_inline_codec.cr",
+      "src/crystal_click/object_root_dynamic_json_site_resolver.cr",
+      "src/crystal_click/object_document_physical_plan.cr",
+      "src/crystal_click/object_document_inline_write_owners.cr",
+      "src/crystal_click/object_document_inline_body_materializer.cr",
+      "src/crystal_click/object_shared_advanced_inline_decoder.cr",
+      "scripts/probe_object_descendant_json_w243.rb",
+      "scripts/audit_object_descendant_json_w243.rb"
+    ],
+    "selected_file_sha256": [
+      {
+        "sha256": "b87b676af625055f1088b1ebe9bdd78478db7a1befb4838a401f312e91db724e",
+        "path": "src/crystal_click.cr"
+      },
+      {
+        "sha256": "985c8fd8d12b9d08b72a48a7783b5d3dd716e98e15b099ba744f9d47b3135098",
+        "path": "src/crystal_click/object_document_codec.cr"
+      },
+      {
+        "sha256": "8f613fae18d997ecefc325f617185d832b60cc006fd551c0e98d0788595422ac",
+        "path": "src/crystal_click/object_document_inline_callback_order.cr"
+      },
+      {
+        "sha256": "1a33261bcd15edcffea6c17446cfd5daced5c341bb848a2acb5f50bec4cbcd0a",
+        "path": "src/crystal_click/object_document_inline_callback_events.cr"
+      },
+      {
+        "sha256": "1c034339dd284c8d1fcb2cbbebe716306ea11aa05caec2a31dab9f841ed2c6a9",
+        "path": "src/crystal_click/object_document_inline_plan_reader.cr"
+      },
+      {
+        "sha256": "3f28ce5e0b08f0d499ce4e4ee2de81ab62b109a20992be5300084665787b38c9",
+        "path": "src/crystal_click/object_document_inline_prefix.cr"
+      },
+      {
+        "sha256": "6d9da4e1d156c711eff29ff2b9708d2d8356b2f0c1900495faac2462833fb707",
+        "path": "src/crystal_click/object_shared_advanced_json_actual_plan.cr"
+      },
+      {
+        "sha256": "68e1f51e6de1b25b802a80332c8bf4b817269283d4c0a6abc6633b9cce7a0efe",
+        "path": "src/crystal_click/object_shared_path_codec.cr"
+      },
+      {
+        "sha256": "81c5079f9578ec0c848c4ab9d3913a750d545466e92b68ccb390f0c16ba0f5ab",
+        "path": "src/crystal_click/object_shared_path_json_tape_codec.cr"
+      },
+      {
+        "sha256": "e2d74a82f991cf8c8cf8f8f2e1a38433ee970a275c29686318d5bfa122566cfc",
+        "path": "spec/object_shared_descendant_json_w243_spec.cr"
+      },
+      {
+        "sha256": "2e4d7835a07fc596220d1d1b0b9daf5dd52684ca1b4773ba818cd98d468ba08e",
+        "path": "scripts/check_object_descendant_json_w243.cr"
+      },
+      {
+        "sha256": "2041acec3c4df126421d548a0d57fec9a47e05ea5387bcd1a741aed2d2aa2a5f",
+        "path": "src/crystal_click/object_document_column_writer.cr"
+      },
+      {
+        "sha256": "5c65279ff993a119bdd22f326c93f472214b52a4d64f91d31802c789fba0c813",
+        "path": "src/crystal_click/object_shared_advanced_inline_codec.cr"
+      },
+      {
+        "sha256": "dcfe6c6f45ee2fd8169e15e746a0e24365ee7ad15ea413e4a4224552ec32faf3",
+        "path": "src/crystal_click/object_root_dynamic_json_site_resolver.cr"
+      },
+      {
+        "sha256": "6130a0bdcdf01dec941a25b2c79014d9893c47a685e6357704beebb89dbe0f46",
+        "path": "src/crystal_click/object_document_physical_plan.cr"
+      },
+      {
+        "sha256": "181540d44099c456df7a803eff2a6fbdfb7b143a6eb8f33031dbfa853e526cb3",
+        "path": "src/crystal_click/object_document_inline_write_owners.cr"
+      },
+      {
+        "sha256": "5f479b0d81629f2ecaceaddb72c64d216f63e566e13cf01a0f1905e9c21d267f",
+        "path": "src/crystal_click/object_document_inline_body_materializer.cr"
+      },
+      {
+        "sha256": "8e17c7cad412ffe2f073fbbdbc88b9dfccc0ccf1d3fad45a12bb6a72f0bf497b",
+        "path": "src/crystal_click/object_shared_advanced_inline_decoder.cr"
+      },
+      {
+        "sha256": "98f15bcbafa409cb428bc0c5b73205ba574144913b05c80d955adaa8f04f3147",
+        "path": "spec/object_shared_recursive_dynamic_w242_spec.cr"
+      },
+      {
+        "sha256": "ecaeec9f5e657180c295926e8c8d3b4b05cfb0a9b83ac3534c5126d7e155f5c5",
+        "path": "scripts/probe_object_descendant_json_w243.rb"
+      },
+      {
+        "sha256": "475f9676c55a17306a2134b3442fa270fa0a8fef59cde9438bc4f6847234234b",
+        "path": "scripts/audit_object_descendant_json_w243.rb"
+      },
+      {
+        "sha256": "348ecd7b90e886aa7f226b1fa061bdee6796704ac154aaa59bc342e287565a73",
+        "path": "src/crystal_click/object_document_root_dynamic_json_physical.cr"
+      }
+    ]
+  },
+  "scope": {
+    "fixture": "Bare Tuple(JSON(max_dynamic_paths=1,max_dynamic_types=2,v UInt8), Array(Dynamic(max_types=1))); 8 rows, four real marks of 2 rows each; captured physical EOF zero-row mrk2 tuple.",
+    "profiles": [
+      "map_s0",
+      "map_s1",
+      "map_with_buckets_s0",
+      "map_with_buckets_s1",
+      "advanced_s0",
+      "advanced_s1",
+      "advanced_chunked_s0",
+      "advanced_chunked_s1"
+    ],
+    "frame_bytes": [
+      32,
+      64
+    ],
+    "mode_matrix": [
+      "DEBUG",
+      "RELEASE"
+    ],
+    "excluded": [
+      "Compact parts, reverse stock-authored interoperability, all product/layout combinations, arbitrary wrapper products, or broad SQL/API equivalence.",
+      "The deeper next_field fixture is paired-codec unit evidence, not native qualification; arbitrary dotted JSON-path support is not claimed.",
+      "No complete stock-native oracle for every nested Dynamic child actual type; no MV/projection, performance, throughput, allocator, or RSS-bound claims.",
+      "Native middle/last checks use PK predicates. Helper read_marks/read_shared_path_marks separately exercise physical windows, including empty interior and EOF-zero cases; these are distinct checks."
+    ],
+    "null_semantics": "JSON Nothing/NULL is omitted before storage; pk6 full document is {} and direct payload missing. No explicit JSON-null preservation claim."
+  },
+  "do_d": {
+    "guard": {
+      "wrapper": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "env": {
+        "COGNI_RUN_SAFE_MIN_FREE_PCT": "50",
+        "CRYSTAL_WORKERS": "1",
+        "RUN_SAFE_PASSTHROUGH_STDIO": "1",
+        "TMPDIR": "/private/tmp",
+        "CRYSTAL_CACHE_DIR": "/private/tmp/crystal-click-w243.PMeJkN/crystal-cache",
+        "SDKROOT": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+      },
+      "compiler_flags": [
+        "--single-module",
+        "--threads",
+        "1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace"
+      ],
+      "release_flags": [
+        "--release",
+        "--no-debug"
+      ]
+    },
+    "tests": {
+      "result_each_mode": "649 examples; 0 failures; 0 errors; 0 pending",
+      "decomposition": {
+        "main": "85 files / 512 examples",
+        "isolated": "15 files / 115 examples",
+        "focused": "2 files / 22 examples"
+      },
+      "rosters": {
+        "main": [
+          "spec/aggregate_dynamic_w226_adversary_spec.cr",
+          "spec/aggregate_dynamic_w226_core_spec.cr",
+          "spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr",
+          "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+          "spec/binary_dynamic_bulk_shared_context_w155_spec.cr",
+          "spec/binary_dynamic_bulk_values_w155_adversary_spec.cr",
+          "spec/binary_dynamic_bulk_values_w155_red_spec.cr",
+          "spec/binary_dynamic_bulk_values_w155_spec.cr",
+          "spec/binary_dynamic_value_w153_spec.cr",
+          "spec/binary_parameter_owners_w119_spec.cr",
+          "spec/binary_scalar_types_w119_spec.cr",
+          "spec/binary_value_codec_w117_spec.cr",
+          "spec/binary_variant_value_w147_adversary_spec.cr",
+          "spec/binary_variant_value_w147_spec.cr",
+          "spec/compressed_literal_position_plan_w240_spec.cr",
+          "spec/dynamic_structure_prefix_w193_adversary_spec.cr",
+          "spec/json_binary_kernel_w180_boundary_spec.cr",
+          "spec/json_binary_kernel_w180_guards_spec.cr",
+          "spec/json_binary_kernel_w180_spec.cr",
+          "spec/json_nested_scalar_w182_guards_spec.cr",
+          "spec/json_nested_scalar_w182_spec.cr",
+          "spec/json_nested_shared_dynamic_w182_spec.cr",
+          "spec/json_recursive_scalar_w181_guards_spec.cr",
+          "spec/json_recursive_scalar_w181_spec.cr",
+          "spec/object_column_lane_binder_refactor_spec.cr",
+          "spec/object_column_reader_w129_spec.cr",
+          "spec/object_column_writer_w127_root_spec.cr",
+          "spec/object_column_writer_w127_spec.cr",
+          "spec/object_document_inline_depth_w240_adversary_spec.cr",
+          "spec/object_document_inline_framing_w240_spec.cr",
+          "spec/object_document_inline_schedule_w240_adversary_spec.cr",
+          "spec/object_document_schema_w128_spec.cr",
+          "spec/object_document_schema_w131_spec.cr",
+          "spec/object_document_schema_w132_spec.cr",
+          "spec/object_document_schema_w133_spec.cr",
+          "spec/object_document_schema_w135_spec.cr",
+          "spec/object_document_schema_w136_spec.cr",
+          "spec/object_document_schema_w137_spec.cr",
+          "spec/object_document_schema_w138_spec.cr",
+          "spec/object_document_schema_w139_spec.cr",
+          "spec/object_document_schema_w140_spec.cr",
+          "spec/object_documents_w123_adversary_spec.cr",
+          "spec/object_documents_w123_root_spec.cr",
+          "spec/object_documents_w123_spec.cr",
+          "spec/object_dynamic_structure_w120_budget_spec.cr",
+          "spec/object_dynamic_structure_w120_spec.cr",
+          "spec/object_shared_advanced_chunk_w195_adversary_spec.cr",
+          "spec/object_shared_advanced_chunk_w195_spec.cr",
+          "spec/object_shared_advanced_copy_layout_w195_spec.cr",
+          "spec/object_shared_advanced_document_w195_spec.cr",
+          "spec/object_shared_advanced_inline_w240_adversary_spec.cr",
+          "spec/object_shared_advanced_profile_w195_spec.cr",
+          "spec/object_shared_buckets_w190_adversary_spec.cr",
+          "spec/object_shared_buckets_w190_spec.cr",
+          "spec/object_shared_chunk_structure_split_budget_w240_spec.cr",
+          "spec/object_shared_chunk_structure_w191_spec.cr",
+          "spec/object_shared_copy_w192_adversary_spec.cr",
+          "spec/object_shared_copy_w192_spec.cr",
+          "spec/object_shared_inline_coordinate_w240_adversary_spec.cr",
+          "spec/object_shared_inline_relocation_w240_adversary_spec.cr",
+          "spec/object_shared_json_envelope_w240_adversary_spec.cr",
+          "spec/object_shared_json_envelope_w240_spec.cr",
+          "spec/object_shared_json_name_domains_w240_adversary_spec.cr",
+          "spec/object_shared_json_policy_w240_spec.cr",
+          "spec/object_shared_json_prepared_policy_w240_adversary_spec.cr",
+          "spec/object_shared_json_w240_physical_spec.cr",
+          "spec/object_shared_json_w240_red_spec.cr",
+          "spec/object_shared_map_w118_spec.cr",
+          "spec/object_shared_nested_parts_w198_spec.cr",
+          "spec/object_shared_path_json_tape_w240_spec.cr",
+          "spec/object_shared_path_low_cardinality_w196_adversary_spec.cr",
+          "spec/object_shared_path_low_cardinality_w196_spec.cr",
+          "spec/object_shared_path_nested_w197_spec.cr",
+          "spec/object_shared_path_profile_w195_spec.cr",
+          "spec/object_shared_path_qbit_w199_spec.cr",
+          "spec/object_shared_path_w193_adversary_spec.cr",
+          "spec/object_shared_path_w193_spec.cr",
+          "spec/object_shared_physical_w194_adversary_spec.cr",
+          "spec/object_shared_physical_w194_spec.cr",
+          "spec/object_shared_qbit_parts_w200_spec.cr",
+          "spec/object_statistics_w127_spec.cr",
+          "spec/object_structure_inline_prefix_w240_adversary_spec.cr",
+          "spec/object_typed_dynamic_compact_w189_adversary_spec.cr",
+          "spec/object_typed_dynamic_compact_w189_spec.cr",
+          "spec/qbit_binary_kernel_w179_admission_spec.cr"
+        ],
+        "isolated": [
+          "spec/dynamic_json_bulk_object_w209_spec.cr",
+          "spec/dynamic_json_materialization_w207_spec.cr",
+          "spec/dynamic_json_metadata_w206_adversary_spec.cr",
+          "spec/dynamic_json_metadata_w206_spec.cr",
+          "spec/dynamic_json_object_bridge_w208_spec.cr",
+          "spec/dynamic_json_physical_w210_spec.cr",
+          "spec/dynamic_json_recursive_physical_w212_spec.cr",
+          "spec/dynamic_json_recursive_w212_spec.cr",
+          "spec/object_inferred_dynamic_json_physical_w216_spec.cr",
+          "spec/object_inferred_dynamic_json_w216_spec.cr",
+          "spec/object_typed_dynamic_json_context_w215_spec.cr",
+          "spec/object_typed_dynamic_json_physical_w215_spec.cr",
+          "spec/object_typed_dynamic_json_w215_spec.cr",
+          "spec/object_typed_dynamic_shared_json_physical_w214_spec.cr",
+          "spec/object_typed_dynamic_shared_json_w214_spec.cr"
+        ],
+        "focused": [
+          "spec/object_shared_descendant_json_w243_spec.cr",
+          "spec/object_shared_recursive_dynamic_w242_spec.cr"
+        ]
+      },
+      "command_template": "Using the guard above: DEBUG/RELEASE main roster in one `crystal spec` invocation (900s, 12288 MB); each isolated file separately (600s, 12288 MB); both focused files together (600s, 12288 MB). Apply compiler_flags in both modes and release_flags in RELEASE."
+    },
+    "helper_builds": [
+      {
+        "mode": "debug",
+        "status": "executed_passed",
+        "exit_code": 0,
+        "source_sha256": "2e4d7835a07fc596220d1d1b0b9daf5dd52684ca1b4773ba818cd98d468ba08e",
+        "output": "/private/tmp/crystal-click-w243.PMeJkN/helper-debug"
+      },
+      {
+        "mode": "release",
+        "status": "executed_passed",
+        "exit_code": 0,
+        "source_sha256": "2e4d7835a07fc596220d1d1b0b9daf5dd52684ca1b4773ba818cd98d468ba08e",
+        "output": "/private/tmp/crystal-click-w243.PMeJkN/helper-release"
+      }
+    ],
+    "format_and_syntax": {
+      "format": "executed_passed",
+      "format_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w243.PMeJkN/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 2048 tool format --check src/crystal_click.cr src/crystal_click/object_document_codec.cr src/crystal_click/object_document_inline_callback_order.cr src/crystal_click/object_document_inline_callback_events.cr src/crystal_click/object_document_inline_plan_reader.cr src/crystal_click/object_document_inline_prefix.cr src/crystal_click/object_shared_advanced_json_actual_plan.cr src/crystal_click/object_shared_path_codec.cr src/crystal_click/object_shared_path_json_tape_codec.cr spec/object_shared_descendant_json_w243_spec.cr scripts/check_object_descendant_json_w243.cr src/crystal_click/object_document_column_writer.cr src/crystal_click/object_shared_advanced_inline_codec.cr src/crystal_click/object_root_dynamic_json_site_resolver.cr src/crystal_click/object_document_physical_plan.cr src/crystal_click/object_document_inline_write_owners.cr src/crystal_click/object_document_inline_body_materializer.cr src/crystal_click/object_shared_advanced_inline_decoder.cr src/crystal_click/object_document_root_dynamic_json_physical.cr",
+      "ruby_syntax": "Passed for coordinator, auditor, and temporary raw adversary."
+    },
+    "native_command_template": "Using the same run_safe guard: `/usr/bin/ruby 600 12288 scripts/probe_object_descendant_json_w243.rb --clickhouse <pinned-runtime> --crystal-helper <mode-helper> --evidence-root <capture-root> --frame-bytes <32|64>`.",
+    "auditor_command_template": "Using the same guard: `/usr/bin/ruby 180 12288 scripts/audit_object_descendant_json_w243.rb --summary <capture-root>/summary.json --summary-sha256 <pinned-summary-sha> --clickhouse <pinned-runtime> --crystal-helper <mode-helper> --helper-sha256 <mode-helper-sha> --helper-source-sha256 <source-sha> --self-test`."
+  },
+  "pins": {
+    "crystal": "1.21.0; LLVM 22.1.8; aarch64 Darwin 25.6",
+    "helper_source_sha256": "2e4d7835a07fc596220d1d1b0b9daf5dd52684ca1b4773ba818cd98d468ba08e",
+    "helper_binaries": [
+      {
+        "path": "/private/tmp/crystal-click-w243.PMeJkN/helper-debug",
+        "sha256": "a21f96fbbcb1330af7b1e45fb1c8caac931319530ede06c58c9b0fcb153ebdfd"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w243.PMeJkN/helper-release",
+        "sha256": "ba90c26389afa03f30f6705f792743e1e4477cfd7c72728a06d8ac8c39c2de5b"
+      }
+    ],
+    "clickhouse_source": {
+      "checkout": "/private/tmp/crystal-click-w238.4nQqSo/clickhouse",
+      "revision": "f25eb93a0b890a3b87df05eb34e2af1f933b4089",
+      "shallow": true,
+      "runtime_built_from_source_not_asserted": true,
+      "files": [
+        {
+          "path": "src/DataTypes/DataTypeObject.cpp",
+          "sha256": "17aa66e87730ef2710d501ae08ed78b0e9ffa914f7a9d33541bb63983d3741b7"
+        },
+        {
+          "path": "src/DataTypes/DataTypeDynamic.cpp",
+          "sha256": "fec7e50ab5abee89ce79a953448ca7d7dca0aa9f9430c94a4deb2346dd74d4cc"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationObject.cpp",
+          "sha256": "9ba4b6ff274e56bd90652c32557565569d3b342a03ebbc6e2cafdad983bf17f8"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationObjectSharedData.cpp",
+          "sha256": "2534b49ac9f188696625aea26ecfbdeacea0580e5465091b9ef7f81b1c06b1fe"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationDynamic.cpp",
+          "sha256": "691029f31451f9e7f431922f8764764125ef434c3bd9ddf3868efc7742ba890a"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationVariant.cpp",
+          "sha256": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationObjectHelpers.cpp",
+          "sha256": "df6c1b227cd4035ae208158ec23bf26e7bc326a784c66cc85a78f986b5e8a228"
+        },
+        {
+          "path": "src/DataTypes/Serializations/SerializationNullable.cpp",
+          "sha256": "7f8f0f97725f21d196beabae47fefcc3bcb32e250f4a1f9a87b37f73eae7c43f",
+          "scope": "Source distinction: scalar NULL skips child; bulk keeps a full nested column plus null-map."
+        }
+      ]
+    },
+    "clickhouse_runtime": {
+      "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+    }
+  },
+  "raw_audit_points": [
+    {
+      "mode": "debug",
+      "frame_bytes": 32,
+      "capture_root": "/private/tmp/crystal-click-w243-debug32-seal.0bcQaa",
+      "summary_sha256": "e0a712fe28e9095522026a609f766207a346504a6a50da9606b98bc1757409ba",
+      "result": "raw_capture_authenticated",
+      "generated_parts": 16,
+      "native_invocations": 18,
+      "rows": {
+        "direct": 128,
+        "nested": 96,
+        "child": 64,
+        "full": 128
+      }
+    },
+    {
+      "mode": "debug",
+      "frame_bytes": 64,
+      "capture_root": "/private/tmp/crystal-click-w243-debug64-seal.eXGKwc",
+      "summary_sha256": "6da606f53d569a1392769556695c44250616bdf1f17abee0d2a416c2378346b2",
+      "result": "raw_capture_authenticated",
+      "generated_parts": 16,
+      "native_invocations": 18,
+      "rows": {
+        "direct": 128,
+        "nested": 96,
+        "child": 64,
+        "full": 128
+      }
+    },
+    {
+      "mode": "release",
+      "frame_bytes": 32,
+      "capture_root": "/private/tmp/crystal-click-w243-release32-seal.sEj76A",
+      "summary_sha256": "29b1a15c3d7c0e119ea697a7acb1320417118f218b47a8fc508e1d74425025c8",
+      "result": "raw_capture_authenticated",
+      "generated_parts": 16,
+      "native_invocations": 18,
+      "rows": {
+        "direct": 128,
+        "nested": 96,
+        "child": 64,
+        "full": 128
+      }
+    },
+    {
+      "mode": "release",
+      "frame_bytes": 64,
+      "capture_root": "/private/tmp/crystal-click-w243-release64-seal.fpAeq2",
+      "summary_sha256": "e4467a28daa921b4b3dcfc52a7ab55caca2a6e540744d32a815f5fd54b648a4b",
+      "result": "raw_capture_authenticated",
+      "generated_parts": 16,
+      "native_invocations": 18,
+      "rows": {
+        "direct": 128,
+        "nested": 96,
+        "child": 64,
+        "full": 128
+      }
+    }
+  ],
+  "raw_audit_controls": {
+    "siphash_stream_name_vector": true,
+    "duplicate_key_rejected": true,
+    "baseline_substreams_roster_accepted": true,
+    "same_column_substream_duplicate_rejected": true,
+    "cross_column_substream_duplicate_rejected": true,
+    "baseline_child_types_accepted": true,
+    "same_value_wrong_type_rejected": true,
+    "duplicate_child_row_rejected": true,
+    "missing_child_row_rejected": true,
+    "helper_type_witness_mutant_rejected": true,
+    "baseline_helper_witness_accepted": true
+  },
+  "raw_adversaries": {
+    "script_sha256": "029e82526d23f9a3e4216c5c8b5e05b86ef473d08bafb38050c87d8dd01fa1f6",
+    "result": "root_raw_adversaries_passed",
+    "same_value_type_only_mutant": {
+      "target": "native_direct_map_s0 CHILD type_only pk1 item1",
+      "changed_columns": [
+        8,
+        9
+      ],
+      "preserved_json_and_scalar": true,
+      "rejected_by": "leaf path type mismatch in the JSONAllPathsWithTypes witness"
+    },
+    "path_binding": {
+      "native_table_rows": 16,
+      "unique_native_data_paths": 16,
+      "unique_summary_data_paths": 16,
+      "unique_native_attached_paths": 16,
+      "unique_summary_attached_paths": 16,
+      "swapped_summary_data_path_rejected": true
+    },
+    "debug_release_generated_bytes": [
+      {
+        "frame_bytes": 32,
+        "compared_part_pairs": 16,
+        "files_per_frame": 456,
+        "bytes_per_frame": 535956,
+        "byte_identical": true
+      },
+      {
+        "frame_bytes": 64,
+        "compared_part_pairs": 16,
+        "files_per_frame": 456,
+        "bytes_per_frame": 427056,
+        "byte_identical": true
+      }
+    ]
+  },
+  "oracle_limitations": {
+    "capture_binding": "Native table/path binding and generated-part inventory were checked separately from native reads; raw-capture audits are not an independently authored semantic model.",
+    "checksum_v4": "Auditor checks the v4 header and bounded binary/compressed payload, not checksum-record semantics. Pinned native CHECK supplies that semantic validation.",
+    "row_windows": "The helper's physical mark-window reads and native SQL PK-filtered reads test different access paths."
+  },
+  "source_freeze": {
+    "unchanged_paths": 124,
+    "note": "Root rechecked all frozen production/spec/harness path hashes after verification. Selected change-file hashes are listed above; the full 124-path manifest remains in the root observation record."
+  },
+  "pivots": [
+    "Universal +2 depth was falsified by W216; final behavior distinguishes typed nominal JSON from bare inferred-root JSON, and W216 controls passed.",
+    "An intermediate extra cap-1 Dynamic fixture was superseded by the intended bare Tuple fixture before final captures.",
+    "A text checksum parser proposal was dropped after confirming the v4 binary/compressed representation."
+  ],
+  "decay": {
+    "triggers": [
+      "Pinned source/runtime/compiler/helper/auditor changes; selected roster changes; captures or helper binaries are removed/replaced; a new profile/layout is added."
+    ],
+    "refresh": "Rebuild both helpers; rerun the selected DEBUG/RELEASE tests, four native points, and raw-capture audits under the same resource guard.",
+    "failure_policy": "Unavailable or refuted pins/captures reopen the finite claim; do not extrapolate beyond this roster."
+  },
+  "observation_index": {
+    "path": "/private/tmp/crystal-click-w243.PMeJkN/root_verified_observations.json",
+    "status": "Curated root observation record, not cryptographic provenance."
+  }
+}

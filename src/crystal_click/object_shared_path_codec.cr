@@ -293,7 +293,16 @@ module CrystalClick
         budget: budget,
       )
       child_loader = ->(key : BinaryDynamicJsonLeafKey, binding : DynamicJsonObjectBinding, grid : StorageOccurrenceGrid, _child_budget : BinaryCodecBudget) {
-        ObjectSharedPathJsonTapeCodec.decode_child(key, binding, grid, prefixes, profile, _child_budget)
+        json_depth = plan.json_object_leaf_depth(key, 1)
+        ObjectSharedPathJsonTapeCodec.decode_child(
+          key,
+          binding,
+          grid,
+          prefixes,
+          profile,
+          _child_budget,
+          json_depth,
+        )
       }
       json_reader = BinaryDynamicBulkJsonObjectReader.new(
         plan,
@@ -353,6 +362,9 @@ module CrystalClick
       capture_prefix_fragment : Proc(String, Bytes, Nil)? = nil,
       register_prefixes_with_parent : Bool = true,
       capture_prefix_slice : Proc(ObjectSharedInlineCallbackReadSlice, Nil)? = nil,
+      nested_context : ObjectSharedNestedSerializationContext? = nil,
+      json_prefixes : ObjectSharedPathJsonTapeCodec::PrefixMap? = nil,
+      virtual_root_dynamic : Bool = false,
     ) : Nil
       if !register_prefixes_with_parent && capture_prefix_fragment.nil? && capture_prefix_slice.nil?
         raise ArgumentError.new("scoped inline prefix traversal requires a fragment capture callback")
@@ -373,10 +385,12 @@ module CrystalClick
         reject_json_descendants,
         capture_prefix_fragment,
         register_prefixes_with_parent,
-        nil,
-        nil,
+        nested_context,
+        json_prefixes,
         nil,
         capture_prefix_slice,
+        false,
+        virtual_root_dynamic,
       )
     end
 
@@ -634,6 +648,8 @@ module CrystalClick
       json_prefixes : ObjectSharedPathJsonTapeCodec::PrefixMap? = nil,
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
       capture_prefix_slice : Proc(ObjectSharedInlineCallbackReadSlice, Nil)? = nil,
+      bare_inferred_json_origin : Bool = false,
+      virtual_root_dynamic : Bool = false,
     ) : Nil
       budget.ensure_depth(depth)
       case type.tag
@@ -692,7 +708,8 @@ module CrystalClick
                                   append_type_component(callback_prefix, arm, budget)
                                 end
           arm_key = BinaryDynamicJsonLeafKey.new(path, index, [] of Int32)
-          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, arm_key, capture_prefix_slice)
+          child_bare_json_origin = virtual_root_dynamic
+          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, arm_key, capture_prefix_slice, child_bare_json_origin, false)
         end
       when BinaryDataType::TAG_VARIANT
         role = logical_name(path, ".discriminators", budget)
@@ -722,24 +739,24 @@ module CrystalClick
                          append_escaped_type_component(physical_prefix, arm, budget)
                        end
           callback_arm_prefix = append_type_component(callback_prefix, arm, budget)
-          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice)
+          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic)
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        decode_prefix_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, callback_prefix, array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice)
+        decode_prefix_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, callback_prefix, array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic)
       when BinaryDataType::TAG_NULLABLE
-        decode_prefix_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice)
+        decode_prefix_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        decode_prefix_type(type.child_at(0), path, physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice)
+        decode_prefix_type(type.child_at(0), path, physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = indexed_path(path, ".field.", index, budget)
           field_prefix = append_tuple_field(physical_prefix, type, index, budget)
           callback_field_prefix = append_tuple_field(callback_prefix, type, index, budget)
-          decode_prefix_type(type.child_at(index), child, field_prefix, callback_field_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice)
+          decode_prefix_type(type.child_at(index), child, field_prefix, callback_field_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic)
         end
       when BinaryDataType::TAG_MAP
-        decode_prefix_type(type.child_at(0), logical_name(path, ".elements.field.0", budget), append_escaped_field(physical_prefix, "keys", budget), append_escaped_field(callback_prefix, "keys", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice)
-        decode_prefix_type(type.child_at(1), logical_name(path, ".elements.field.1", budget), append_escaped_field(physical_prefix, "values", budget), append_escaped_field(callback_prefix, "values", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(1) }, capture_prefix_slice)
+        decode_prefix_type(type.child_at(0), logical_name(path, ".elements.field.0", budget), append_escaped_field(physical_prefix, "keys", budget), append_escaped_field(callback_prefix, "keys", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic)
+        decode_prefix_type(type.child_at(1), logical_name(path, ".elements.field.1", budget), append_escaped_field(physical_prefix, "values", budget), append_escaped_field(callback_prefix, "values", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(1) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic)
       when BinaryDataType::TAG_LOW_CARDINALITY
         role = logical_name(path, ".dictionary", budget)
         prefix_name = append_name(physical_prefix, ".dict_prefix", budget)
@@ -776,6 +793,7 @@ module CrystalClick
           array_level.to_u64,
           context,
           budget,
+          bare_inferred_json_origin,
         )
         if prefix.key != key || prefixes.has_key?(key)
           raise CorruptPartError.new("inline JSON prefix identity is duplicated or inconsistent")

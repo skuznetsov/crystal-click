@@ -1,4 +1,81 @@
-# Object shared JSON composition frontier — W240/W242
+# Object shared JSON composition frontier — W240/W243
+
+## Active W243 frontier — recursive child Object ownership
+
+Status: VERIFIED within the finite prepared shared-path actual
+`Tuple(JSON, Array(Dynamic(max_types=1)))` child-ownership fixture; root adversary
+verdict ROBUST within that scope. This qualifies library-write -> stock-read
+only. The unit fixture includes a deeper legal `next_field` Array(JSON)
+descendant with a String leaf; the native fixture remains shallower
+(child/grandchild). This is not a scalar serde rewrite or a claim about
+arbitrary wrapper/layout products.
+
+Implementation preserves descriptor-relative leaf identity, a single
+operation budget, inherited String/shared-layout settings, and containing-Data
+coordinates. Callback ownership follows the descriptor traversal and exact
+lane role, not longest-prefix matching: an Array(JSON) size callback shares
+the child's prefix but belongs to the parent; the child owns its structure
+callback. Registered unused descendants still require prefix structure, while
+their local callback/occurrence counts may be zero. Child logical row counts
+come from that child's streams and may be zero or exceed the parent's rows.
+
+The depth investigation refuted a universal child `+2` offset: focused22
+passed, but W216 persisted6 then had one error. The narrower provenance model
+retains persisted bare actual `+1`; typed descriptor envelopes use conditional
+`+2` only for a typed scope with child Dynamic paths. A synthetic inline seed
+at `inferred_actual_root_depth - 1` compensates for the generic Dynamic
+visitor's nominal child edge, so the selected bare actual begins at its correct
+root. Resetting the origin at a real nested Dynamic is a separate rule; these
+are not one global depth formula. The prepared-writer Dynamic-in-typed-metadata
+guard remains distinct from persisted-reader guard scope; no symmetric global
+refusal is claimed.
+
+Root-observed gates: all 102 selected files pass in DEBUG and RELEASE, 649
+examples per mode (512 main + 115 isolated + 22 focused), with zero failures,
+errors, or pending examples; the six W216 persisted-reader regressions pass
+in both modes and are included.
+Corrected helper SHA-256 `2e4d7835...68ba08e` builds exit 0 in DEBUG and RELEASE.
+All four native capture/coordinator points (DEBUG/RELEASE x frame32/frame64)
+and all four separately executed raw-capture audits exit 0; each audit passes
+11 self-test controls. Each point covers 16 fresh library-generated parts,
+18 native calls,
+128 direct, 96 nested, 64 child and 128 full rows, plus 128 helper physical
+windows over middle, last, empty-interior and zero-count-end positions with
+four real marks plus EOF. Across points: 64 parts, 72 native calls, 512 direct,
+384 nested, 256 child and 512 full rows.
+
+On the pinned DEBUG/frame32 capture, the raw child type-only `pk1/item1`
+UInt8-for-Int64 mutation leaves scalar and JSON values unchanged and is
+rejected for exact leaf-path type mismatch. The
+canonical table and attached paths are each unique; swapping the summary
+table's `data_path` is rejected against the exact native `system.tables`
+binding. The auditor authenticates checksum-v4 bytes without decoding their
+records; the pinned native CHECK validates semantics. Atomic UUID paths bind to
+`system.tables`. Generated files are byte-identical between DEBUG and RELEASE
+at each frame size: 456 files / 535,956 bytes at frame32 and 456 files /
+427,056 bytes at frame64.
+
+The attempted extra-Dynamic helper fixture was the wrong route: its intended
+bare Tuple had been wrapped in `Dynamic(cap=1)`. It is corrected to the bare
+Tuple while retaining exact Tuple/full-document and cap254 selected-carrier
+assertions; no oracle was relaxed. All native evidence remains one-way
+library-write -> stock-read. The saved
+[evidence index](../.landmark/evidence/object-descendant-json-w243.json)
+records the executed gates and their pins.
+
+Keep the raw-path grammar to simple ASCII components; dotted-path expansion is
+not admitted. Guard-only boundaries include unprepared JSON descendants,
+Dynamic in JSON typed metadata at the prepared-writer boundary, scalar JSON
+runtime Dynamic envelopes, unsupported Variant/LowCardinality/aggregate/QBit
+envelopes, and detached advanced callback coordinates. Do not infer a blanket
+persisted-reader refusal from the prepared-writer guard. No full-layout,
+all-types, reverse-write or performance claim is made. The next falsifier is
+the same prepared ownership with a non-empty real nested Dynamic / another
+legal wrapper product, or reciprocal stock-authored W243, with exact native
+types before widening. Overall types/MV/projections remains ACTIVE;
+memory/performance is deferred and broad class-facade decomposition remains
+open. Historical W242 qualification below remains unchanged. Infrastructure
+failures are inconclusive, not format refusals.
 
 ## Current qualification — W242 recursive Dynamic site ownership
 
@@ -244,6 +321,10 @@ Memory/performance remains deferred; the overall objective remains ACTIVE.
 
 ## Source and existing owners
 
+The seam inventory below records the initial W240 baseline. Its historical
+refusals are not current capability claims: the frozen W242 certificate and
+the active W243 frontier above take precedence.
+
 Inspected separate depth-one ClickHouse source:
 `f25eb93a0b890a3b87df05eb34e2af1f933b4089`,
 `/private/tmp/crystal-click-w238.4nQqSo/clickhouse`.
@@ -289,18 +370,22 @@ Qualifying a scalar envelope does not qualify the corresponding columnar part
 layout. W240 reuses the established leaf codecs and composes those physical
 owner contracts; it does not add a serializer for each product.
 
-One remaining implementation asymmetry is a JSON-bearing Dynamic actual with
-a non-JSON nested-Dynamic sibling, for example `Tuple(JSON, Array(Dynamic))`.
-`ObjectSharedAdvancedJsonActualPlan` rejects it explicitly. Generic paired path
+At the initial W240 baseline, an implementation asymmetry was a JSON-bearing
+Dynamic actual with a non-JSON nested-Dynamic sibling, for example
+`Tuple(JSON, Array(Dynamic))`. That finite fixture is now qualified by W242;
+the earlier probe below is historical evidence, not an outstanding refusal.
+At that baseline, `ObjectSharedAdvancedJsonActualPlan` rejected it explicitly.
+Generic paired path
 serde passed an isolated executable probe with an explicit JSON leaf binding,
 a nested String Dynamic site, a populated and an empty child Array, and NULL
 outer Dynamic. Its independent comparator rejected a changed nested String.
 The probe is `/private/tmp/crystal-click-w240-recursive-json.67ge3n/probe.cr`;
 the guarded DEBUG command returned exit 0. Two earlier attempts failed only in
 the probe import and zero-child container comparator, before useful closure.
-Neither the combined native shape nor the public physical path reader has been
-qualified. This is an open layout/admission question, not a proven native type
-prohibition or a reason to remove the prepared writer guard without that proof.
+At the time of that probe, neither the combined native shape nor the public
+physical path reader had been qualified. It was a layout/admission question,
+not a proven native type prohibition; W242 later supplied the finite storage
+evidence. W243 addresses the next owner boundary, not a new child value grammar.
 
 ## Design obligations before production edits
 
