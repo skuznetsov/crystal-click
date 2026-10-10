@@ -1,0 +1,1439 @@
+{
+  "format": "crystal_click_schema_wide_part_w245_evidence_v1",
+  "observed_date": "2026-10-10",
+  "baseline_revision": "dcb445d6864298e64be22e0dc71b3c5b240e8a65",
+  "claim": {
+    "level": "VERIFIED",
+    "verdict": "ROBUST within the finite scope below",
+    "statement": "One schema-aware Wide envelope composes the four existing typed column owners under common metadata, parent grid, writing budgets, staged value validation and exclusive publication. Eight library-written parts are accepted and read with exact type/value witnesses by the pinned stock ClickHouse runtime.",
+    "provenance": "Luna Max supplied heavy implementation, harness and source review. Root executed every final gate, final-source native cell, separately executed raw audit, actual-byte comparison and semantic falsifier. Same-lineage review is correlated, not independent evidence. This is a curated evidence index, not immutable cryptographic execution provenance.",
+    "goal_status": "ACTIVE: legal read/write types and MV/projections before memory/performance",
+    "risk": "CAUTION: persistent serialization, shared mutable counters and publication refactor",
+    "rollback": "One scoped local atomic feature commit; no remote push or history rewrite."
+  },
+  "scope": {
+    "public_api": "WidePartWriter.write_uint64_columns(destination, key_name, keys, Array(WidePartColumn), ...)",
+    "factories": [
+      "binary_bulk",
+      "dynamic_bulk",
+      "object",
+      "recursive"
+    ],
+    "type_grammar": "Unchanged. Every adapter retains its existing exact nominal and physical owner admission; passing primitive serde is not a universal wrapper/layout certificate.",
+    "native_direction": "library-write -> stock-read only",
+    "native_fixture": {
+      "key": "pk UInt64",
+      "keys": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "value_columns": [
+        {
+          "name": "state",
+          "type": "Tuple(label LowCardinality(String), total AggregateFunction(sum, UInt8))"
+        },
+        {
+          "name": "dyn",
+          "type": "Dynamic(max_types=1)"
+        },
+        {
+          "name": "object",
+          "type": "JSON(max_dynamic_types=1, max_dynamic_paths=1, label String)"
+        },
+        {
+          "name": "recursive",
+          "type": "Array(Tuple(doc JSON(max_dynamic_types=1, max_dynamic_paths=1, t UInt8), sample Dynamic(max_types=1)))"
+        }
+      ],
+      "rows": 5,
+      "parent_mark_rows_with_eof": [
+        2,
+        2,
+        1,
+        0
+      ],
+      "recursive_child_occurrences_per_parent_mark": [
+        0,
+        2,
+        3
+      ],
+      "frame_bytes": 32,
+      "storage": "Wide/LZ4/plain-mrk2/always-Default metadata",
+      "ordinary_string_versions": [
+        0,
+        1
+      ],
+      "dynamic_modes": [
+        "BASIC",
+        "COMPACT"
+      ],
+      "dynamic_mode_warning": "COMPACT is the discriminator mode, not the Compact part layout.",
+      "recursive_shared_map": "single-stream String0, independent of the global ordinary String version",
+      "aggregate_finalization": 1497,
+      "active_part": "one Wide all_1_1_0 part, five rows and four marks including EOF",
+      "mark_files_by_string_profile": {
+        "single": 27,
+        "sized": 31
+      }
+    },
+    "counters": {
+      "write": "One shared BinaryCodecBudget, transport budget and physical-name context across value owners, including charged Dynamic preparation; retained declarations/metadata and encoded lanes are bounded.",
+      "read": "Separate shared read-direction budgets consumed across compressed value-lane inspections, checksum decoded-byte passes and typed value decoding.",
+      "exclusions": "Key/index/common envelope parsing keep fixed per-file limits. Recursive descriptor/name planning and redundant legacy nominal-admission walks keep per-plan/auxiliary bounds. Not every part-validation/planning operation is aggregate-accounted; no process/RSS or allocation bound."
+    },
+    "guards": [
+      "Duplicate key/value names and cross-column logical/physical filename collisions",
+      "Parent-grid mismatch, unsorted/empty keys and unsupported descriptors",
+      "Existing destinations and symlinks; exclusive publication only",
+      "Shared codec/transport/decoded-byte refusal with owned-stage exception cleanup",
+      "Root Tuple Dynamic needing selected-subcolumn metadata",
+      "Nested leaves without their exact nominal WideNestedTypePlan owner",
+      "Recursive non-single shared-MAP profile and unqualified advanced shared policy/chunk overrides"
+    ],
+    "exclusions": [
+      "Arbitrary PK/partition metadata",
+      "Compact part publication",
+      "Sparse/custom codecs",
+      "All wrapper/layout/version intersections or all aggregate-state families",
+      "Reciprocal W245 stock-write qualification",
+      "Live-server mutation",
+      "INSERT-triggered MV execution or projection writing",
+      "Broad facade decomposition and admission widening of all old table/TUI/borrowed-reader APIs",
+      "Crash/SIGKILL stage cleanup, fsync durability, performance/RSS/GC claims",
+      "Whole test-suite execution",
+      "Immutable cryptographic execution provenance"
+    ]
+  },
+  "pins": {
+    "qualified_repository_state": "Baseline plus the source/test/harness path digests below; all final test/helper/native gates precede documentation-only seal updates.",
+    "repository_files": [
+      {
+        "path": "spec/recursive_qbit_parts_w230_spec.cr",
+        "sha256": "d6c98f558de67507971c8bc0d70ab3eef8612b2580f24d89fd5ccced272bc20e"
+      },
+      {
+        "path": "src/crystal_click.cr",
+        "sha256": "89bf14df2a228b3a8b04bf714156d2312fa0ed1b4d90a676b136ab2e7bf8d13e"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_column_reader.cr",
+        "sha256": "d845ea17a84de83d77d8cdfe4444d455f1b2df2853f0a588bc5d0a16a454923a"
+      },
+      {
+        "path": "src/crystal_click/binary_bulk_column_writer.cr",
+        "sha256": "9d11f6aaac5aa3c144c916f81f41e67b57b6c19324a5e02fc1c695358b814eab"
+      },
+      {
+        "path": "src/crystal_click/dynamic_bulk_column_reader.cr",
+        "sha256": "0318e25d9dad623712624eeed6a4c5907b0634ca2ae315f1a8ab0dce35007f88"
+      },
+      {
+        "path": "src/crystal_click/object_column_reader.cr",
+        "sha256": "f82ff14e1707f0a0669f244a536415a639abe6aa2ebcbd5fb632f30e1d355f41"
+      },
+      {
+        "path": "src/crystal_click/object_document_column_writer.cr",
+        "sha256": "721c16fcc18325f226cea74db8babd5378314b2bee2100f2ea02720bec51a757"
+      },
+      {
+        "path": "src/crystal_click/object_document_file_reader.cr",
+        "sha256": "f6ec1a1825e0e9d867e92e848e318b140236d82b3d737df711ce9d29c870f0d9"
+      },
+      {
+        "path": "src/crystal_click/recursive_storage_column_reader.cr",
+        "sha256": "2992f95718d245062be014a493ac64d6477a5188476fc59fad9dc24cd3781b7d"
+      },
+      {
+        "path": "src/crystal_click/recursive_storage_column_writer.cr",
+        "sha256": "5698a2992ce127ef1eec3c27c9f0eaa66c7e4a06a2c7db1d4ac71f891466812b"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer.cr",
+        "sha256": "1188e0b63a25504c89c7bb139911adc6838fcd298caae62f1a55c1f39fd45df1"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/two_column_bulk_part_writer.cr",
+        "sha256": "240f6d68d79867efcdf0c6ab9cb08f5d4fbed1f8a4f0b8e468ebca2dbf667105"
+      },
+      {
+        "path": "scripts/check_schema_wide_part_w245.cr",
+        "sha256": "0835933185790a3cc600c557cb5daff72e186a66fc633c1778260a9f1084f23a"
+      },
+      {
+        "path": "scripts/support/schema_wide_part_w245_fixture.cr",
+        "sha256": "ddb593cfc21a725fa44094adcda733af0792f6abb67fec7dd5e3dbc9ff0bc2f9"
+      },
+      {
+        "path": "spec/multi_column_part_writer_w245_spec.cr",
+        "sha256": "250537186214e0c53500c3af6aa3e61ace6c39ce88332af5e28c669b3c9f342b"
+      },
+      {
+        "path": "spec/storage_read_budget_w245_spec.cr",
+        "sha256": "0435cd4949bafc3f1d4838f9f82a8cca317d1042fa51b8147f40649d1da08932"
+      },
+      {
+        "path": "src/crystal_click/storage_read_budget_validator.cr",
+        "sha256": "f864e64df74d058a9dcb894b01eb8d72d51e689dab3dd9a3712c11b2928b1800"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/dynamic_wide_part_column_input.cr",
+        "sha256": "d3b08f3a2268fc588eca7f0582f5d18ab3b1e3ec4b1bd65a2a8e826963ea1201"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/object_wide_part_column_input.cr",
+        "sha256": "043f076c43ab9b995044af0fd07de48d0ea852c48657e7e323e71668f89abf2b"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/recursive_wide_part_column_input.cr",
+        "sha256": "4863230e7aa30a10b9f3c4da7b202d0a7fcd87fa9ceea082604ed3cb04c99907"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr",
+        "sha256": "b6c831152cfec692e8a30bb72fc7b3f1be0433e06d198b1fa0ddc834807dab3d"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_column.cr",
+        "sha256": "890417f0ca49d8e5ccb3da5a2ef7c634ab6b4e5e9346e144b0cb3df564a3f514"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_lane.cr",
+        "sha256": "6fdeeb84611dddbc68503b7ae426250dfe7454cf46e8e14cdec3a0ab9ca4d821"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_lane_binding.cr",
+        "sha256": "4c9b884ef808b0f4e4a2d602b6effb4de576833f9b5a47f62590380e87858933"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_metadata.cr",
+        "sha256": "023a0ae864d816c452ac81508120451fdf721aef5f14d62163ec4db66b81caac"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_metadata_envelope.cr",
+        "sha256": "0f10633d9a9bf6f5393789a4f7dec48482f0115a33f5c0018d908995171f3698"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_operation.cr",
+        "sha256": "154a1d73e76e8bd8b97e07ec07bf2d87ad0570bb59dcf7f8db8eaf4aeaddeba6"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_operation_context.cr",
+        "sha256": "44cba6a1545617178d5bb889321a38cb6d9b5fbb7d48704d9da2a1b624d03706"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_prepared_column.cr",
+        "sha256": "20d9f50c6d7f42584e0c6efed49c0f208e68a7beeae94739d2b653240b485a90"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_publication_input.cr",
+        "sha256": "2823e48228e67925e6e3e2939629a63948a5c2cfb43a42b916670a728be0203d"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_publisher.cr",
+        "sha256": "157c846465628e8bf27c275951791c7b79fa60979265efbb468dd1e4fb35c2bf"
+      },
+      {
+        "path": "src/crystal_click/wide_part_writer/wide_part_value_comparison.cr",
+        "sha256": "7914316a1c6b1b38ef023eab72baf9db285b2362e2994738b0066050c112ef06"
+      },
+      {
+        "path": "scripts/probe_schema_wide_part_w245.rb",
+        "sha256": "379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed"
+      },
+      {
+        "path": "scripts/audit_schema_wide_part_w245.rb",
+        "sha256": "97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8"
+      }
+    ],
+    "source_snapshot": {
+      "path": "/private/tmp/crystal-click-w238.4nQqSo/clickhouse",
+      "revision": "f25eb93a0b890a3b87df05eb34e2af1f933b4089",
+      "shallow": true,
+      "note": "Separate October 9 depth-one snapshot, not latest-at-completion or matching-runtime-build evidence. Original archive untouched."
+    },
+    "native_runtime": {
+      "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "version": "26.10.1.1201",
+      "build_revision": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+    },
+    "helper_binaries": [
+      {
+        "mode": "DEBUG",
+        "path": "/private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed",
+        "sha256": "52f8d318e48de470b94181209bed2f2c32255c5f0f3eaf83ea533d4b9f7a66eb"
+      },
+      {
+        "mode": "RELEASE",
+        "path": "/private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed",
+        "sha256": "15f29e55e84ca0cb57825cef930ae452d00b338ca7d6f3a157df1decc5eb0847"
+      }
+    ],
+    "probe_literal_require_relative_closure": [
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_array_json_parts_w185.rb",
+        "sha256": "a71366bf4e87ed7649373c0c251b865e75ac6cbe67263605a6ceb576ec4b1451"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_json_binary_kernel_w180.rb",
+        "sha256": "f4da2177f787fd1dc5a511cb6de8c47d7a44538efda4d26a25c4af1fb47b0c05"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_object_shared_buckets_w190.rb",
+        "sha256": "3aeaaf954198cbcf3ba01042ff87325988d2df369348575192f36df66ee4e38c"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/object_shared_advanced_layout_w191.rb",
+        "sha256": "9b9fe64dbbd49917939b3b79175148e83bd9643f88543375a6b06ffbf94405f2"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_json_array_storage_w183.rb",
+        "sha256": "ba628aa7037bb4421a0e7456d282e359b6ff2ae1aab9a4667776742237697adf"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_object_shared_advanced_w191.rb",
+        "sha256": "6f1c09719570c17699cb5076f63c5095ea53ca0426e7feba3d9b1edada85859d"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_object_shared_json_interop_w241.rb",
+        "sha256": "6330b660a7d4369f68a8b95e7a57a81bb6434549ee7d61357a60e89921d3aa6d"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_object_shared_json_w240.rb",
+        "sha256": "76aa69aef8510ff9edb2aafba2dd7f940be74c9bd2af1e953fbb125931fdd335"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_schema_wide_part_w245.rb",
+        "sha256": "379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/reconcile_object_shared_json_interop_w241.rb",
+        "sha256": "2751fc87f72522e2ec70821c7c8b7bc646fd03a92dc672ab8df2f25b29635a34"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/stock_part_probe_support_w191.rb",
+        "sha256": "f8302039adc306c4d94d0d4ea28919616eb1dc50ca2c7540c0d861e0282009e1"
+      }
+    ],
+    "auditor_literal_require_relative_closure": [
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/audit_schema_wide_part_w245.rb",
+        "sha256": "97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_array_json_parts_w185.rb",
+        "sha256": "a71366bf4e87ed7649373c0c251b865e75ac6cbe67263605a6ceb576ec4b1451"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_json_binary_kernel_w180.rb",
+        "sha256": "f4da2177f787fd1dc5a511cb6de8c47d7a44538efda4d26a25c4af1fb47b0c05"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_object_shared_buckets_w190.rb",
+        "sha256": "3aeaaf954198cbcf3ba01042ff87325988d2df369348575192f36df66ee4e38c"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/object_shared_advanced_layout_w191.rb",
+        "sha256": "9b9fe64dbbd49917939b3b79175148e83bd9643f88543375a6b06ffbf94405f2"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_json_array_storage_w183.rb",
+        "sha256": "ba628aa7037bb4421a0e7456d282e359b6ff2ae1aab9a4667776742237697adf"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_object_shared_advanced_w191.rb",
+        "sha256": "6f1c09719570c17699cb5076f63c5095ea53ca0426e7feba3d9b1edada85859d"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_object_shared_json_interop_w241.rb",
+        "sha256": "6330b660a7d4369f68a8b95e7a57a81bb6434549ee7d61357a60e89921d3aa6d"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_object_shared_json_w240.rb",
+        "sha256": "76aa69aef8510ff9edb2aafba2dd7f940be74c9bd2af1e953fbb125931fdd335"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/reconcile_object_shared_json_interop_w241.rb",
+        "sha256": "2751fc87f72522e2ec70821c7c8b7bc646fd03a92dc672ab8df2f25b29635a34"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/stock_part_probe_support_w191.rb",
+        "sha256": "f8302039adc306c4d94d0d4ea28919616eb1dc50ca2c7540c0d861e0282009e1"
+      }
+    ],
+    "closure_boundary": "The auditor verifies its exact literal require_relative closure and the probe's separate exact closure; this is not arbitrary dynamic-import or cryptographic compiler provenance."
+  },
+  "source_comparison": [
+    {
+      "file": "src/DataTypes/Serializations/SerializationInfo.cpp",
+      "anchor": "SerializationInfoByName constructor/writeJSON and ordered metadata"
+    },
+    {
+      "file": "src/DataTypes/Serializations/SerializationInfoSettings.h",
+      "anchor": "isAlwaysDefault"
+    },
+    {
+      "file": "src/DataTypes/Serializations/ISerialization.cpp",
+      "anchor": "getFileNameForStream, including shared Nested offset naming"
+    },
+    {
+      "file": "src/DataTypes/Serializations/SerializationArray.cpp",
+      "anchor": "enumerateStreams at line255; nested state prefix and bulk delegation at lines297/352"
+    },
+    {
+      "file": "src/DataTypes/Serializations/SerializationLowCardinality.cpp",
+      "anchor": "enumerateStreams at line72; state prefix at line271 and stateful multi-stream bulk at line534"
+    },
+    {
+      "file": "src/Storages/MergeTree/MergeTreeDataPartWriterWide.cpp",
+      "anchor": "per-column stream registration and common granularity"
+    }
+  ],
+  "executed_dod": {
+    "working_directory": "/Users/sergey/Projects/Crystal/crystal-click",
+    "execution_prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w245.BUwfcO/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "command_expansion": "Append each guarded command_tail to execution_prefix with one space. Heavy jobs were serial; raw audit and hash/byte checks are separate lightweight read-only commands.",
+    "compiler": "Crystal 1.21.0 / LLVM 22.1.8 / aarch64 Darwin 25.6; Ruby 2.6.10",
+    "guard": {
+      "minimum_free_memory_percent": 50,
+      "compiler_workers": 1,
+      "isolated_cache": "/private/tmp/crystal-click-w245.BUwfcO/crystal-cache",
+      "native_or_regression_timeout_seconds": 600,
+      "native_or_regression_max_rss_mib": 12288,
+      "focused_or_helper_timeout_seconds": 300,
+      "focused_or_helper_max_rss_mib": 8192
+    },
+    "observation_boundary": "Root observed Crystal exit/example signals in tool outputs; these are not signed persisted test transcripts. Native raw argv/stdin/stdout/stderr/exit files and actual part inventories remain in the pinned capture roots.",
+    "selected_files": {
+      "legacy": [
+        "spec/wide_part_writer_spec.cr",
+        "spec/wide_part_writer_typed_spec.cr",
+        "spec/wide_part_writer_metadata_w150_spec.cr",
+        "spec/wide_part_writer_plan_owners_w90_spec.cr",
+        "spec/wide_part_writer_compositional_tuple_spec.cr",
+        "spec/wide_part_writer_map_tuple_w108_spec.cr",
+        "spec/wide_part_writer_array_tuple_w107_spec.cr",
+        "spec/wide_part_writer_nullable_tuple_w105_spec.cr",
+        "spec/wide_part_writer_typed_mark_readback_spec.cr",
+        "spec/object_part_writer_w128_spec.cr",
+        "spec/object_part_writer_w128_root_spec.cr",
+        "spec/object_column_reader_w129_spec.cr",
+        "spec/dynamic_bulk_part_w203_spec.cr",
+        "spec/nested_bulk_part_w202_spec.cr",
+        "spec/recursive_storage_column_w186_spec.cr",
+        "spec/recursive_storage_reader_budget_w186_spec.cr",
+        "spec/recursive_storage_values_budget_w186_spec.cr",
+        "spec/recursive_storage_array_w187_spec.cr",
+        "spec/recursive_array_schema_w187_spec.cr",
+        "spec/recursive_array_table_w187_spec.cr",
+        "spec/recursive_tuple_metadata_w218_spec.cr"
+      ],
+      "owners": [
+        "spec/aggregate_minmax_w237_adversary_spec.cr",
+        "spec/aggregate_minmax_w237_core_spec.cr",
+        "spec/aggregate_minmax_w237_physical_spec.cr",
+        "spec/aggregate_recursive_w224_admission_red_spec.cr",
+        "spec/aggregate_recursive_w224_adversary_spec.cr",
+        "spec/aggregate_recursive_w224_bulk_spec.cr",
+        "spec/aggregate_recursive_w224_consumers_spec.cr",
+        "spec/aggregate_recursive_w224_core_spec.cr",
+        "spec/aggregate_recursive_w224_part_spec.cr",
+        "spec/aggregate_sum_w223_admission_red_spec.cr",
+        "spec/aggregate_sum_w223_bulk_spec.cr",
+        "spec/aggregate_sum_w223_consumers_spec.cr",
+        "spec/aggregate_sum_w223_core_spec.cr",
+        "spec/aggregate_sum_w223_part_spec.cr",
+        "spec/aggregate_sum_w223_root_adversary_spec.cr",
+        "spec/custom_geo_recursive_w238_bulk_spec.cr",
+        "spec/custom_geo_recursive_w238_guards_spec.cr",
+        "spec/custom_geo_recursive_w238_owner_intersections_spec.cr",
+        "spec/custom_geo_recursive_w238_parts_spec.cr",
+        "spec/dynamic_qbit_recursive_parts_w233_spec.cr",
+        "spec/geometry_recursive_w239_bulk_spec.cr",
+        "spec/geometry_recursive_w239_consumers_spec.cr",
+        "spec/geometry_recursive_w239_guards_spec.cr",
+        "spec/geometry_recursive_w239_parts_spec.cr",
+        "spec/object_declared_qbit_guards_w235_spec.cr",
+        "spec/object_runtime_qbit_parts_w234_spec.cr",
+        "spec/recursive_qbit_owner_guards_w230_spec.cr",
+        "spec/recursive_qbit_parts_w230_spec.cr",
+        "spec/recursive_qbit_static_parts_w231_spec.cr",
+        "spec/recursive_qbit_variant_parts_w232_spec.cr",
+        "spec/recursive_qbit_w230_spec.cr",
+        "spec/simple_aggregate_bulk_part_w221_spec.cr",
+        "spec/simple_aggregate_bulk_w221_spec.cr",
+        "spec/simple_aggregate_nullable_w221_admission_red_spec.cr",
+        "spec/simple_aggregate_recursive_w222_admission_red_spec.cr",
+        "spec/simple_aggregate_recursive_w222_core_spec.cr",
+        "spec/simple_aggregate_recursive_w222_part_spec.cr"
+      ],
+      "json": [
+        "spec/object_shared_nested_dynamic_json_w244_spec.cr",
+        "spec/object_shared_recursive_dynamic_w242_spec.cr",
+        "spec/object_shared_descendant_json_w243_spec.cr",
+        "spec/object_shared_json_envelope_w240_spec.cr",
+        "spec/object_shared_json_envelope_w240_adversary_spec.cr",
+        "spec/object_shared_json_prepared_policy_w240_adversary_spec.cr",
+        "spec/object_shared_path_json_tape_w240_spec.cr",
+        "spec/object_inferred_dynamic_json_physical_w216_spec.cr",
+        "spec/object_document_inline_depth_w240_adversary_spec.cr"
+      ],
+      "focused": [
+        "spec/multi_column_part_writer_w245_spec.cr",
+        "spec/storage_read_budget_w245_spec.cr"
+      ]
+    },
+    "unique_spec_files": 69,
+    "examples_per_mode": 414,
+    "tests": [
+      {
+        "mode": "DEBUG",
+        "cohort": "legacy",
+        "command_tail": "/opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_spec.cr spec/wide_part_writer_typed_spec.cr spec/wide_part_writer_metadata_w150_spec.cr spec/wide_part_writer_plan_owners_w90_spec.cr spec/wide_part_writer_compositional_tuple_spec.cr spec/wide_part_writer_map_tuple_w108_spec.cr spec/wide_part_writer_array_tuple_w107_spec.cr spec/wide_part_writer_nullable_tuple_w105_spec.cr spec/wide_part_writer_typed_mark_readback_spec.cr spec/object_part_writer_w128_spec.cr spec/object_part_writer_w128_root_spec.cr spec/object_column_reader_w129_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/nested_bulk_part_w202_spec.cr spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_array_schema_w187_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_tuple_metadata_w218_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "examples": 141,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_code": 0,
+        "observed_signal": "141 examples, 0 failures, 0 errors, 0 pending; [EXIT: 0] after ~14s"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": "owners",
+        "command_tail": "/opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_minmax_w237_adversary_spec.cr spec/aggregate_minmax_w237_core_spec.cr spec/aggregate_minmax_w237_physical_spec.cr spec/aggregate_recursive_w224_admission_red_spec.cr spec/aggregate_recursive_w224_adversary_spec.cr spec/aggregate_recursive_w224_bulk_spec.cr spec/aggregate_recursive_w224_consumers_spec.cr spec/aggregate_recursive_w224_core_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_admission_red_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_sum_w223_consumers_spec.cr spec/aggregate_sum_w223_core_spec.cr spec/aggregate_sum_w223_part_spec.cr spec/aggregate_sum_w223_root_adversary_spec.cr spec/custom_geo_recursive_w238_bulk_spec.cr spec/custom_geo_recursive_w238_guards_spec.cr spec/custom_geo_recursive_w238_owner_intersections_spec.cr spec/custom_geo_recursive_w238_parts_spec.cr spec/dynamic_qbit_recursive_parts_w233_spec.cr spec/geometry_recursive_w239_bulk_spec.cr spec/geometry_recursive_w239_consumers_spec.cr spec/geometry_recursive_w239_guards_spec.cr spec/geometry_recursive_w239_parts_spec.cr spec/object_declared_qbit_guards_w235_spec.cr spec/object_runtime_qbit_parts_w234_spec.cr spec/recursive_qbit_owner_guards_w230_spec.cr spec/recursive_qbit_parts_w230_spec.cr spec/recursive_qbit_static_parts_w231_spec.cr spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_w230_spec.cr spec/simple_aggregate_bulk_part_w221_spec.cr spec/simple_aggregate_bulk_w221_spec.cr spec/simple_aggregate_nullable_w221_admission_red_spec.cr spec/simple_aggregate_recursive_w222_admission_red_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "examples": 204,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_code": 0,
+        "observed_signal": "204 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": "json",
+        "command_tail": "/opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_nested_dynamic_json_w244_spec.cr spec/object_shared_recursive_dynamic_w242_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_shared_json_envelope_w240_spec.cr spec/object_shared_json_envelope_w240_adversary_spec.cr spec/object_shared_json_prepared_policy_w240_adversary_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/object_inferred_dynamic_json_physical_w216_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "examples": 62,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_code": 0,
+        "observed_signal": "62 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": "focused",
+        "command_tail": "/opt/homebrew/bin/crystal 300 8192 spec spec/multi_column_part_writer_w245_spec.cr spec/storage_read_budget_w245_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "examples": 7,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_code": 0,
+        "observed_signal": "7 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "legacy",
+        "command_tail": "/opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_spec.cr spec/wide_part_writer_typed_spec.cr spec/wide_part_writer_metadata_w150_spec.cr spec/wide_part_writer_plan_owners_w90_spec.cr spec/wide_part_writer_compositional_tuple_spec.cr spec/wide_part_writer_map_tuple_w108_spec.cr spec/wide_part_writer_array_tuple_w107_spec.cr spec/wide_part_writer_nullable_tuple_w105_spec.cr spec/wide_part_writer_typed_mark_readback_spec.cr spec/object_part_writer_w128_spec.cr spec/object_part_writer_w128_root_spec.cr spec/object_column_reader_w129_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/nested_bulk_part_w202_spec.cr spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/recursive_storage_array_w187_spec.cr spec/recursive_array_schema_w187_spec.cr spec/recursive_array_table_w187_spec.cr spec/recursive_tuple_metadata_w218_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug",
+        "examples": 141,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_code": 0,
+        "observed_signal": "141 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "owners",
+        "command_tail": "/opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_minmax_w237_adversary_spec.cr spec/aggregate_minmax_w237_core_spec.cr spec/aggregate_minmax_w237_physical_spec.cr spec/aggregate_recursive_w224_admission_red_spec.cr spec/aggregate_recursive_w224_adversary_spec.cr spec/aggregate_recursive_w224_bulk_spec.cr spec/aggregate_recursive_w224_consumers_spec.cr spec/aggregate_recursive_w224_core_spec.cr spec/aggregate_recursive_w224_part_spec.cr spec/aggregate_sum_w223_admission_red_spec.cr spec/aggregate_sum_w223_bulk_spec.cr spec/aggregate_sum_w223_consumers_spec.cr spec/aggregate_sum_w223_core_spec.cr spec/aggregate_sum_w223_part_spec.cr spec/aggregate_sum_w223_root_adversary_spec.cr spec/custom_geo_recursive_w238_bulk_spec.cr spec/custom_geo_recursive_w238_guards_spec.cr spec/custom_geo_recursive_w238_owner_intersections_spec.cr spec/custom_geo_recursive_w238_parts_spec.cr spec/dynamic_qbit_recursive_parts_w233_spec.cr spec/geometry_recursive_w239_bulk_spec.cr spec/geometry_recursive_w239_consumers_spec.cr spec/geometry_recursive_w239_guards_spec.cr spec/geometry_recursive_w239_parts_spec.cr spec/object_declared_qbit_guards_w235_spec.cr spec/object_runtime_qbit_parts_w234_spec.cr spec/recursive_qbit_owner_guards_w230_spec.cr spec/recursive_qbit_parts_w230_spec.cr spec/recursive_qbit_static_parts_w231_spec.cr spec/recursive_qbit_variant_parts_w232_spec.cr spec/recursive_qbit_w230_spec.cr spec/simple_aggregate_bulk_part_w221_spec.cr spec/simple_aggregate_bulk_w221_spec.cr spec/simple_aggregate_nullable_w221_admission_red_spec.cr spec/simple_aggregate_recursive_w222_admission_red_spec.cr spec/simple_aggregate_recursive_w222_core_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug --no-color",
+        "examples": 204,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_code": 0,
+        "observed_signal": "204 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "json",
+        "command_tail": "/opt/homebrew/bin/crystal 600 12288 spec spec/object_shared_nested_dynamic_json_w244_spec.cr spec/object_shared_recursive_dynamic_w242_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_shared_json_envelope_w240_spec.cr spec/object_shared_json_envelope_w240_adversary_spec.cr spec/object_shared_json_prepared_policy_w240_adversary_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/object_inferred_dynamic_json_physical_w216_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug --no-color",
+        "examples": 62,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_code": 0,
+        "observed_signal": "62 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "focused",
+        "command_tail": "/opt/homebrew/bin/crystal 300 8192 spec spec/multi_column_part_writer_w245_spec.cr spec/storage_read_budget_w245_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug --no-color",
+        "examples": 7,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_code": 0,
+        "observed_signal": "7 examples, 0 failures, 0 errors, 0 pending"
+      }
+    ],
+    "helper_builds": [
+      {
+        "mode": "DEBUG",
+        "command_tail": "/opt/homebrew/bin/crystal 300 8192 build scripts/check_schema_wide_part_w245.cr -o /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0
+      },
+      {
+        "mode": "RELEASE",
+        "command_tail": "/opt/homebrew/bin/crystal 300 8192 build scripts/check_schema_wide_part_w245.cr -o /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug",
+        "exit_code": 0
+      }
+    ],
+    "formatting": {
+      "command_tail": "/opt/homebrew/bin/crystal 300 8192 tool format --check spec/recursive_qbit_parts_w230_spec.cr src/crystal_click.cr src/crystal_click/binary_bulk_column_reader.cr src/crystal_click/binary_bulk_column_writer.cr src/crystal_click/dynamic_bulk_column_reader.cr src/crystal_click/object_column_reader.cr src/crystal_click/object_document_column_writer.cr src/crystal_click/object_document_file_reader.cr src/crystal_click/recursive_storage_column_reader.cr src/crystal_click/recursive_storage_column_writer.cr src/crystal_click/wide_part_writer.cr src/crystal_click/wide_part_writer/two_column_bulk_part_writer.cr scripts/check_schema_wide_part_w245.cr scripts/support/schema_wide_part_w245_fixture.cr spec/multi_column_part_writer_w245_spec.cr spec/storage_read_budget_w245_spec.cr src/crystal_click/storage_read_budget_validator.cr src/crystal_click/wide_part_writer/dynamic_wide_part_column_input.cr src/crystal_click/wide_part_writer/object_wide_part_column_input.cr src/crystal_click/wide_part_writer/recursive_wide_part_column_input.cr src/crystal_click/wide_part_writer/static_wide_part_column_input.cr src/crystal_click/wide_part_writer/wide_part_column.cr src/crystal_click/wide_part_writer/wide_part_lane.cr src/crystal_click/wide_part_writer/wide_part_lane_binding.cr src/crystal_click/wide_part_writer/wide_part_metadata.cr src/crystal_click/wide_part_writer/wide_part_metadata_envelope.cr src/crystal_click/wide_part_writer/wide_part_operation.cr src/crystal_click/wide_part_writer/wide_part_operation_context.cr src/crystal_click/wide_part_writer/wide_part_prepared_column.cr src/crystal_click/wide_part_writer/wide_part_publication_input.cr src/crystal_click/wide_part_writer/wide_part_publisher.cr src/crystal_click/wide_part_writer/wide_part_value_comparison.cr",
+      "changed_crystal_files": 32,
+      "exit_code": 0
+    },
+    "ruby_syntax_checks": [
+      {
+        "command": "/usr/bin/ruby -c scripts/probe_schema_wide_part_w245.rb",
+        "exit_code": 0,
+        "signal": "Syntax OK"
+      },
+      {
+        "command": "/usr/bin/ruby -c scripts/audit_schema_wide_part_w245.rb",
+        "exit_code": 0,
+        "signal": "Syntax OK"
+      }
+    ],
+    "auditor_self_test": {
+      "command": "/usr/bin/ruby scripts/audit_schema_wide_part_w245.rb --self-test-only",
+      "exit_code": 0,
+      "result": {
+        "status": "self_test_passed",
+        "controls": {
+          "typed_value_baseline_accepted": true,
+          "same_value_wrong_type_rejected": true,
+          "complete_source_closure_accepted": true,
+          "incomplete_source_closure_rejected": true,
+          "source_closure_hash_mismatch_rejected": true,
+          "extra_source_closure_entry_rejected": true,
+          "ordered_complete_schema_accepted": true,
+          "incomplete_schema_rejected": true,
+          "swapped_schema_rejected": true,
+          "successful_exit_check_zero_rejected": true,
+          "successful_exit_check_one_accepted": true,
+          "exact_pinned_tagged_stdout_accepted": true,
+          "unexpected_stdout_line_rejected": true,
+          "exact_object_path_types_accepted": true,
+          "extra_object_path_type_rejected": true,
+          "formatted_frame_assignment_accepted": true,
+          "wrong_frame_value_rejected": true,
+          "frame_expression_rejected": true,
+          "frame_prefix_number_rejected": true,
+          "comment_only_frame_rejected": true,
+          "duplicate_frame_assignment_rejected": true,
+          "exact_child_path_accepted": true,
+          "path_swap_rejected": true,
+          "symlink_escape_rejected": true,
+          "moved_detached_source_absence_accepted": true,
+          "residual_detached_directory_rejected": true,
+          "residual_detached_symlink_rejected": true,
+          "historical_detached_path_swap_rejected": true
+        }
+      }
+    },
+    "native_totals": {
+      "final_source_cells": 8,
+      "generated_parts": 8,
+      "stock_calls": 40,
+      "helper_calls": 8,
+      "auditor_controls_per_cell": 28
+    },
+    "native_cells": [
+      {
+        "mode": "DEBUG",
+        "string_profile": "single",
+        "dynamic_discriminator_mode": "basic",
+        "evidence_root": "/private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74",
+        "summary_path": "/private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74/summary.json",
+        "summary_sha256": "306f61d322292f4cdbc596d98f5901d32379cf7bd0652bcebf9949a561cad1a7",
+        "probe_command_tail": "/usr/bin/ruby 600 12288 scripts/probe_schema_wide_part_w245.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed --evidence-root /private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74 --string-profile single --dynamic-mode basic",
+        "probe_exit_code": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_schema_wide_part_w245.rb --summary /private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74/summary.json --summary-sha256 306f61d322292f4cdbc596d98f5901d32379cf7bd0652bcebf9949a561cad1a7 --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed --helper-sha256 52f8d318e48de470b94181209bed2f2c32255c5f0f3eaf83ea533d4b9f7a66eb --probe-source scripts/probe_schema_wide_part_w245.rb --probe-source-sha256 379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed --helper-source scripts/check_schema_wide_part_w245.cr --helper-source-sha256 0835933185790a3cc600c557cb5daff72e186a66fc633c1778260a9f1084f23a --fixture-source scripts/support/schema_wide_part_w245_fixture.cr --fixture-source-sha256 ddb593cfc21a725fa44094adcda733af0792f6abb67fec7dd5e3dbc9ff0bc2f9 --auditor-source scripts/audit_schema_wide_part_w245.rb --auditor-source-sha256 97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8 --self-test",
+        "audit_exit_code": 0,
+        "audit": {
+          "status": "raw_capture_authenticated",
+          "summary_sha256": "306f61d322292f4cdbc596d98f5901d32379cf7bd0652bcebf9949a561cad1a7",
+          "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+          "helper_sha256": "52f8d318e48de470b94181209bed2f2c32255c5f0f3eaf83ea533d4b9f7a66eb",
+          "string_profile": "single",
+          "dynamic_mode": "basic",
+          "schema_columns": [
+            "pk",
+            "state",
+            "dyn",
+            "object",
+            "recursive"
+          ],
+          "rows": 5,
+          "parent_mark_rows": [
+            2,
+            2,
+            1
+          ],
+          "child_occurrences_per_parent_mark": [
+            0,
+            2,
+            3
+          ],
+          "physical_mark_files": 27,
+          "controls": {
+            "typed_value_baseline_accepted": true,
+            "same_value_wrong_type_rejected": true,
+            "complete_source_closure_accepted": true,
+            "incomplete_source_closure_rejected": true,
+            "source_closure_hash_mismatch_rejected": true,
+            "extra_source_closure_entry_rejected": true,
+            "ordered_complete_schema_accepted": true,
+            "incomplete_schema_rejected": true,
+            "swapped_schema_rejected": true,
+            "successful_exit_check_zero_rejected": true,
+            "successful_exit_check_one_accepted": true,
+            "exact_pinned_tagged_stdout_accepted": true,
+            "unexpected_stdout_line_rejected": true,
+            "exact_object_path_types_accepted": true,
+            "extra_object_path_type_rejected": true,
+            "formatted_frame_assignment_accepted": true,
+            "wrong_frame_value_rejected": true,
+            "frame_expression_rejected": true,
+            "frame_prefix_number_rejected": true,
+            "comment_only_frame_rejected": true,
+            "duplicate_frame_assignment_rejected": true,
+            "exact_child_path_accepted": true,
+            "path_swap_rejected": true,
+            "symlink_escape_rejected": true,
+            "moved_detached_source_absence_accepted": true,
+            "residual_detached_directory_rejected": true,
+            "residual_detached_symlink_rejected": true,
+            "historical_detached_path_swap_rejected": true
+          },
+          "interpretation": "One fixture-produced library part read by the pinned stock local reader. No reciprocal writer, live table, broader type grammar, performance, RSS, or cryptographic execution-provenance claim."
+        }
+      },
+      {
+        "mode": "DEBUG",
+        "string_profile": "single",
+        "dynamic_discriminator_mode": "compact",
+        "evidence_root": "/private/tmp/crystal-click-w245-sealed-debug-single-compact.CW5CRf",
+        "summary_path": "/private/tmp/crystal-click-w245-sealed-debug-single-compact.CW5CRf/summary.json",
+        "summary_sha256": "1e5a09b06fcf3c90f18f9ea34d9c6497293eca8c78cdacbaf6abed1d146a6d0a",
+        "probe_command_tail": "/usr/bin/ruby 600 12288 scripts/probe_schema_wide_part_w245.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed --evidence-root /private/tmp/crystal-click-w245-sealed-debug-single-compact.CW5CRf --string-profile single --dynamic-mode compact",
+        "probe_exit_code": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_schema_wide_part_w245.rb --summary /private/tmp/crystal-click-w245-sealed-debug-single-compact.CW5CRf/summary.json --summary-sha256 1e5a09b06fcf3c90f18f9ea34d9c6497293eca8c78cdacbaf6abed1d146a6d0a --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed --helper-sha256 52f8d318e48de470b94181209bed2f2c32255c5f0f3eaf83ea533d4b9f7a66eb --probe-source scripts/probe_schema_wide_part_w245.rb --probe-source-sha256 379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed --helper-source scripts/check_schema_wide_part_w245.cr --helper-source-sha256 0835933185790a3cc600c557cb5daff72e186a66fc633c1778260a9f1084f23a --fixture-source scripts/support/schema_wide_part_w245_fixture.cr --fixture-source-sha256 ddb593cfc21a725fa44094adcda733af0792f6abb67fec7dd5e3dbc9ff0bc2f9 --auditor-source scripts/audit_schema_wide_part_w245.rb --auditor-source-sha256 97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8 --self-test",
+        "audit_exit_code": 0,
+        "audit": {
+          "status": "raw_capture_authenticated",
+          "summary_sha256": "1e5a09b06fcf3c90f18f9ea34d9c6497293eca8c78cdacbaf6abed1d146a6d0a",
+          "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+          "helper_sha256": "52f8d318e48de470b94181209bed2f2c32255c5f0f3eaf83ea533d4b9f7a66eb",
+          "string_profile": "single",
+          "dynamic_mode": "compact",
+          "schema_columns": [
+            "pk",
+            "state",
+            "dyn",
+            "object",
+            "recursive"
+          ],
+          "rows": 5,
+          "parent_mark_rows": [
+            2,
+            2,
+            1
+          ],
+          "child_occurrences_per_parent_mark": [
+            0,
+            2,
+            3
+          ],
+          "physical_mark_files": 27,
+          "controls": {
+            "typed_value_baseline_accepted": true,
+            "same_value_wrong_type_rejected": true,
+            "complete_source_closure_accepted": true,
+            "incomplete_source_closure_rejected": true,
+            "source_closure_hash_mismatch_rejected": true,
+            "extra_source_closure_entry_rejected": true,
+            "ordered_complete_schema_accepted": true,
+            "incomplete_schema_rejected": true,
+            "swapped_schema_rejected": true,
+            "successful_exit_check_zero_rejected": true,
+            "successful_exit_check_one_accepted": true,
+            "exact_pinned_tagged_stdout_accepted": true,
+            "unexpected_stdout_line_rejected": true,
+            "exact_object_path_types_accepted": true,
+            "extra_object_path_type_rejected": true,
+            "formatted_frame_assignment_accepted": true,
+            "wrong_frame_value_rejected": true,
+            "frame_expression_rejected": true,
+            "frame_prefix_number_rejected": true,
+            "comment_only_frame_rejected": true,
+            "duplicate_frame_assignment_rejected": true,
+            "exact_child_path_accepted": true,
+            "path_swap_rejected": true,
+            "symlink_escape_rejected": true,
+            "moved_detached_source_absence_accepted": true,
+            "residual_detached_directory_rejected": true,
+            "residual_detached_symlink_rejected": true,
+            "historical_detached_path_swap_rejected": true
+          },
+          "interpretation": "One fixture-produced library part read by the pinned stock local reader. No reciprocal writer, live table, broader type grammar, performance, RSS, or cryptographic execution-provenance claim."
+        }
+      },
+      {
+        "mode": "DEBUG",
+        "string_profile": "sized",
+        "dynamic_discriminator_mode": "basic",
+        "evidence_root": "/private/tmp/crystal-click-w245-sealed-debug-sized-basic.ZEr2Km",
+        "summary_path": "/private/tmp/crystal-click-w245-sealed-debug-sized-basic.ZEr2Km/summary.json",
+        "summary_sha256": "903617285ed2e512a6c44fdc0720b16df751730c03719858b435e5d78674720f",
+        "probe_command_tail": "/usr/bin/ruby 600 12288 scripts/probe_schema_wide_part_w245.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed --evidence-root /private/tmp/crystal-click-w245-sealed-debug-sized-basic.ZEr2Km --string-profile sized --dynamic-mode basic",
+        "probe_exit_code": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_schema_wide_part_w245.rb --summary /private/tmp/crystal-click-w245-sealed-debug-sized-basic.ZEr2Km/summary.json --summary-sha256 903617285ed2e512a6c44fdc0720b16df751730c03719858b435e5d78674720f --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed --helper-sha256 52f8d318e48de470b94181209bed2f2c32255c5f0f3eaf83ea533d4b9f7a66eb --probe-source scripts/probe_schema_wide_part_w245.rb --probe-source-sha256 379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed --helper-source scripts/check_schema_wide_part_w245.cr --helper-source-sha256 0835933185790a3cc600c557cb5daff72e186a66fc633c1778260a9f1084f23a --fixture-source scripts/support/schema_wide_part_w245_fixture.cr --fixture-source-sha256 ddb593cfc21a725fa44094adcda733af0792f6abb67fec7dd5e3dbc9ff0bc2f9 --auditor-source scripts/audit_schema_wide_part_w245.rb --auditor-source-sha256 97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8 --self-test",
+        "audit_exit_code": 0,
+        "audit": {
+          "status": "raw_capture_authenticated",
+          "summary_sha256": "903617285ed2e512a6c44fdc0720b16df751730c03719858b435e5d78674720f",
+          "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+          "helper_sha256": "52f8d318e48de470b94181209bed2f2c32255c5f0f3eaf83ea533d4b9f7a66eb",
+          "string_profile": "sized",
+          "dynamic_mode": "basic",
+          "schema_columns": [
+            "pk",
+            "state",
+            "dyn",
+            "object",
+            "recursive"
+          ],
+          "rows": 5,
+          "parent_mark_rows": [
+            2,
+            2,
+            1
+          ],
+          "child_occurrences_per_parent_mark": [
+            0,
+            2,
+            3
+          ],
+          "physical_mark_files": 31,
+          "controls": {
+            "typed_value_baseline_accepted": true,
+            "same_value_wrong_type_rejected": true,
+            "complete_source_closure_accepted": true,
+            "incomplete_source_closure_rejected": true,
+            "source_closure_hash_mismatch_rejected": true,
+            "extra_source_closure_entry_rejected": true,
+            "ordered_complete_schema_accepted": true,
+            "incomplete_schema_rejected": true,
+            "swapped_schema_rejected": true,
+            "successful_exit_check_zero_rejected": true,
+            "successful_exit_check_one_accepted": true,
+            "exact_pinned_tagged_stdout_accepted": true,
+            "unexpected_stdout_line_rejected": true,
+            "exact_object_path_types_accepted": true,
+            "extra_object_path_type_rejected": true,
+            "formatted_frame_assignment_accepted": true,
+            "wrong_frame_value_rejected": true,
+            "frame_expression_rejected": true,
+            "frame_prefix_number_rejected": true,
+            "comment_only_frame_rejected": true,
+            "duplicate_frame_assignment_rejected": true,
+            "exact_child_path_accepted": true,
+            "path_swap_rejected": true,
+            "symlink_escape_rejected": true,
+            "moved_detached_source_absence_accepted": true,
+            "residual_detached_directory_rejected": true,
+            "residual_detached_symlink_rejected": true,
+            "historical_detached_path_swap_rejected": true
+          },
+          "interpretation": "One fixture-produced library part read by the pinned stock local reader. No reciprocal writer, live table, broader type grammar, performance, RSS, or cryptographic execution-provenance claim."
+        }
+      },
+      {
+        "mode": "DEBUG",
+        "string_profile": "sized",
+        "dynamic_discriminator_mode": "compact",
+        "evidence_root": "/private/tmp/crystal-click-w245-sealed-debug-sized-compact.eyCQSY",
+        "summary_path": "/private/tmp/crystal-click-w245-sealed-debug-sized-compact.eyCQSY/summary.json",
+        "summary_sha256": "820fc0975dce52aaf2cba20e91f0af8b9e95299ab2886d446a7f670048d5d204",
+        "probe_command_tail": "/usr/bin/ruby 600 12288 scripts/probe_schema_wide_part_w245.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed --evidence-root /private/tmp/crystal-click-w245-sealed-debug-sized-compact.eyCQSY --string-profile sized --dynamic-mode compact",
+        "probe_exit_code": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_schema_wide_part_w245.rb --summary /private/tmp/crystal-click-w245-sealed-debug-sized-compact.eyCQSY/summary.json --summary-sha256 820fc0975dce52aaf2cba20e91f0af8b9e95299ab2886d446a7f670048d5d204 --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed --helper-sha256 52f8d318e48de470b94181209bed2f2c32255c5f0f3eaf83ea533d4b9f7a66eb --probe-source scripts/probe_schema_wide_part_w245.rb --probe-source-sha256 379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed --helper-source scripts/check_schema_wide_part_w245.cr --helper-source-sha256 0835933185790a3cc600c557cb5daff72e186a66fc633c1778260a9f1084f23a --fixture-source scripts/support/schema_wide_part_w245_fixture.cr --fixture-source-sha256 ddb593cfc21a725fa44094adcda733af0792f6abb67fec7dd5e3dbc9ff0bc2f9 --auditor-source scripts/audit_schema_wide_part_w245.rb --auditor-source-sha256 97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8 --self-test",
+        "audit_exit_code": 0,
+        "audit": {
+          "status": "raw_capture_authenticated",
+          "summary_sha256": "820fc0975dce52aaf2cba20e91f0af8b9e95299ab2886d446a7f670048d5d204",
+          "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+          "helper_sha256": "52f8d318e48de470b94181209bed2f2c32255c5f0f3eaf83ea533d4b9f7a66eb",
+          "string_profile": "sized",
+          "dynamic_mode": "compact",
+          "schema_columns": [
+            "pk",
+            "state",
+            "dyn",
+            "object",
+            "recursive"
+          ],
+          "rows": 5,
+          "parent_mark_rows": [
+            2,
+            2,
+            1
+          ],
+          "child_occurrences_per_parent_mark": [
+            0,
+            2,
+            3
+          ],
+          "physical_mark_files": 31,
+          "controls": {
+            "typed_value_baseline_accepted": true,
+            "same_value_wrong_type_rejected": true,
+            "complete_source_closure_accepted": true,
+            "incomplete_source_closure_rejected": true,
+            "source_closure_hash_mismatch_rejected": true,
+            "extra_source_closure_entry_rejected": true,
+            "ordered_complete_schema_accepted": true,
+            "incomplete_schema_rejected": true,
+            "swapped_schema_rejected": true,
+            "successful_exit_check_zero_rejected": true,
+            "successful_exit_check_one_accepted": true,
+            "exact_pinned_tagged_stdout_accepted": true,
+            "unexpected_stdout_line_rejected": true,
+            "exact_object_path_types_accepted": true,
+            "extra_object_path_type_rejected": true,
+            "formatted_frame_assignment_accepted": true,
+            "wrong_frame_value_rejected": true,
+            "frame_expression_rejected": true,
+            "frame_prefix_number_rejected": true,
+            "comment_only_frame_rejected": true,
+            "duplicate_frame_assignment_rejected": true,
+            "exact_child_path_accepted": true,
+            "path_swap_rejected": true,
+            "symlink_escape_rejected": true,
+            "moved_detached_source_absence_accepted": true,
+            "residual_detached_directory_rejected": true,
+            "residual_detached_symlink_rejected": true,
+            "historical_detached_path_swap_rejected": true
+          },
+          "interpretation": "One fixture-produced library part read by the pinned stock local reader. No reciprocal writer, live table, broader type grammar, performance, RSS, or cryptographic execution-provenance claim."
+        }
+      },
+      {
+        "mode": "RELEASE",
+        "string_profile": "single",
+        "dynamic_discriminator_mode": "basic",
+        "evidence_root": "/private/tmp/crystal-click-w245-sealed-release-single-basic.NSAck6",
+        "summary_path": "/private/tmp/crystal-click-w245-sealed-release-single-basic.NSAck6/summary.json",
+        "summary_sha256": "cb6d77aba43d1375c45a6283331fa182997a37cc1860df968d46fe42dbbe0036",
+        "probe_command_tail": "/usr/bin/ruby 600 12288 scripts/probe_schema_wide_part_w245.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed --evidence-root /private/tmp/crystal-click-w245-sealed-release-single-basic.NSAck6 --string-profile single --dynamic-mode basic",
+        "probe_exit_code": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_schema_wide_part_w245.rb --summary /private/tmp/crystal-click-w245-sealed-release-single-basic.NSAck6/summary.json --summary-sha256 cb6d77aba43d1375c45a6283331fa182997a37cc1860df968d46fe42dbbe0036 --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed --helper-sha256 15f29e55e84ca0cb57825cef930ae452d00b338ca7d6f3a157df1decc5eb0847 --probe-source scripts/probe_schema_wide_part_w245.rb --probe-source-sha256 379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed --helper-source scripts/check_schema_wide_part_w245.cr --helper-source-sha256 0835933185790a3cc600c557cb5daff72e186a66fc633c1778260a9f1084f23a --fixture-source scripts/support/schema_wide_part_w245_fixture.cr --fixture-source-sha256 ddb593cfc21a725fa44094adcda733af0792f6abb67fec7dd5e3dbc9ff0bc2f9 --auditor-source scripts/audit_schema_wide_part_w245.rb --auditor-source-sha256 97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8 --self-test",
+        "audit_exit_code": 0,
+        "audit": {
+          "status": "raw_capture_authenticated",
+          "summary_sha256": "cb6d77aba43d1375c45a6283331fa182997a37cc1860df968d46fe42dbbe0036",
+          "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+          "helper_sha256": "15f29e55e84ca0cb57825cef930ae452d00b338ca7d6f3a157df1decc5eb0847",
+          "string_profile": "single",
+          "dynamic_mode": "basic",
+          "schema_columns": [
+            "pk",
+            "state",
+            "dyn",
+            "object",
+            "recursive"
+          ],
+          "rows": 5,
+          "parent_mark_rows": [
+            2,
+            2,
+            1
+          ],
+          "child_occurrences_per_parent_mark": [
+            0,
+            2,
+            3
+          ],
+          "physical_mark_files": 27,
+          "controls": {
+            "typed_value_baseline_accepted": true,
+            "same_value_wrong_type_rejected": true,
+            "complete_source_closure_accepted": true,
+            "incomplete_source_closure_rejected": true,
+            "source_closure_hash_mismatch_rejected": true,
+            "extra_source_closure_entry_rejected": true,
+            "ordered_complete_schema_accepted": true,
+            "incomplete_schema_rejected": true,
+            "swapped_schema_rejected": true,
+            "successful_exit_check_zero_rejected": true,
+            "successful_exit_check_one_accepted": true,
+            "exact_pinned_tagged_stdout_accepted": true,
+            "unexpected_stdout_line_rejected": true,
+            "exact_object_path_types_accepted": true,
+            "extra_object_path_type_rejected": true,
+            "formatted_frame_assignment_accepted": true,
+            "wrong_frame_value_rejected": true,
+            "frame_expression_rejected": true,
+            "frame_prefix_number_rejected": true,
+            "comment_only_frame_rejected": true,
+            "duplicate_frame_assignment_rejected": true,
+            "exact_child_path_accepted": true,
+            "path_swap_rejected": true,
+            "symlink_escape_rejected": true,
+            "moved_detached_source_absence_accepted": true,
+            "residual_detached_directory_rejected": true,
+            "residual_detached_symlink_rejected": true,
+            "historical_detached_path_swap_rejected": true
+          },
+          "interpretation": "One fixture-produced library part read by the pinned stock local reader. No reciprocal writer, live table, broader type grammar, performance, RSS, or cryptographic execution-provenance claim."
+        }
+      },
+      {
+        "mode": "RELEASE",
+        "string_profile": "single",
+        "dynamic_discriminator_mode": "compact",
+        "evidence_root": "/private/tmp/crystal-click-w245-sealed-release-single-compact.VGX6Br",
+        "summary_path": "/private/tmp/crystal-click-w245-sealed-release-single-compact.VGX6Br/summary.json",
+        "summary_sha256": "14eeda2e23a1bbe3bef9ba335ac745895b248647d43f44fe6b4ed14e53d829f7",
+        "probe_command_tail": "/usr/bin/ruby 600 12288 scripts/probe_schema_wide_part_w245.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed --evidence-root /private/tmp/crystal-click-w245-sealed-release-single-compact.VGX6Br --string-profile single --dynamic-mode compact",
+        "probe_exit_code": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_schema_wide_part_w245.rb --summary /private/tmp/crystal-click-w245-sealed-release-single-compact.VGX6Br/summary.json --summary-sha256 14eeda2e23a1bbe3bef9ba335ac745895b248647d43f44fe6b4ed14e53d829f7 --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed --helper-sha256 15f29e55e84ca0cb57825cef930ae452d00b338ca7d6f3a157df1decc5eb0847 --probe-source scripts/probe_schema_wide_part_w245.rb --probe-source-sha256 379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed --helper-source scripts/check_schema_wide_part_w245.cr --helper-source-sha256 0835933185790a3cc600c557cb5daff72e186a66fc633c1778260a9f1084f23a --fixture-source scripts/support/schema_wide_part_w245_fixture.cr --fixture-source-sha256 ddb593cfc21a725fa44094adcda733af0792f6abb67fec7dd5e3dbc9ff0bc2f9 --auditor-source scripts/audit_schema_wide_part_w245.rb --auditor-source-sha256 97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8 --self-test",
+        "audit_exit_code": 0,
+        "audit": {
+          "status": "raw_capture_authenticated",
+          "summary_sha256": "14eeda2e23a1bbe3bef9ba335ac745895b248647d43f44fe6b4ed14e53d829f7",
+          "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+          "helper_sha256": "15f29e55e84ca0cb57825cef930ae452d00b338ca7d6f3a157df1decc5eb0847",
+          "string_profile": "single",
+          "dynamic_mode": "compact",
+          "schema_columns": [
+            "pk",
+            "state",
+            "dyn",
+            "object",
+            "recursive"
+          ],
+          "rows": 5,
+          "parent_mark_rows": [
+            2,
+            2,
+            1
+          ],
+          "child_occurrences_per_parent_mark": [
+            0,
+            2,
+            3
+          ],
+          "physical_mark_files": 27,
+          "controls": {
+            "typed_value_baseline_accepted": true,
+            "same_value_wrong_type_rejected": true,
+            "complete_source_closure_accepted": true,
+            "incomplete_source_closure_rejected": true,
+            "source_closure_hash_mismatch_rejected": true,
+            "extra_source_closure_entry_rejected": true,
+            "ordered_complete_schema_accepted": true,
+            "incomplete_schema_rejected": true,
+            "swapped_schema_rejected": true,
+            "successful_exit_check_zero_rejected": true,
+            "successful_exit_check_one_accepted": true,
+            "exact_pinned_tagged_stdout_accepted": true,
+            "unexpected_stdout_line_rejected": true,
+            "exact_object_path_types_accepted": true,
+            "extra_object_path_type_rejected": true,
+            "formatted_frame_assignment_accepted": true,
+            "wrong_frame_value_rejected": true,
+            "frame_expression_rejected": true,
+            "frame_prefix_number_rejected": true,
+            "comment_only_frame_rejected": true,
+            "duplicate_frame_assignment_rejected": true,
+            "exact_child_path_accepted": true,
+            "path_swap_rejected": true,
+            "symlink_escape_rejected": true,
+            "moved_detached_source_absence_accepted": true,
+            "residual_detached_directory_rejected": true,
+            "residual_detached_symlink_rejected": true,
+            "historical_detached_path_swap_rejected": true
+          },
+          "interpretation": "One fixture-produced library part read by the pinned stock local reader. No reciprocal writer, live table, broader type grammar, performance, RSS, or cryptographic execution-provenance claim."
+        }
+      },
+      {
+        "mode": "RELEASE",
+        "string_profile": "sized",
+        "dynamic_discriminator_mode": "basic",
+        "evidence_root": "/private/tmp/crystal-click-w245-sealed-release-sized-basic.I98VqB",
+        "summary_path": "/private/tmp/crystal-click-w245-sealed-release-sized-basic.I98VqB/summary.json",
+        "summary_sha256": "baf9c90c3ea20b50c2a7a3f2af6f6d2bfe7b417cc701ee2cce20594d8dff5b78",
+        "probe_command_tail": "/usr/bin/ruby 600 12288 scripts/probe_schema_wide_part_w245.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed --evidence-root /private/tmp/crystal-click-w245-sealed-release-sized-basic.I98VqB --string-profile sized --dynamic-mode basic",
+        "probe_exit_code": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_schema_wide_part_w245.rb --summary /private/tmp/crystal-click-w245-sealed-release-sized-basic.I98VqB/summary.json --summary-sha256 baf9c90c3ea20b50c2a7a3f2af6f6d2bfe7b417cc701ee2cce20594d8dff5b78 --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed --helper-sha256 15f29e55e84ca0cb57825cef930ae452d00b338ca7d6f3a157df1decc5eb0847 --probe-source scripts/probe_schema_wide_part_w245.rb --probe-source-sha256 379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed --helper-source scripts/check_schema_wide_part_w245.cr --helper-source-sha256 0835933185790a3cc600c557cb5daff72e186a66fc633c1778260a9f1084f23a --fixture-source scripts/support/schema_wide_part_w245_fixture.cr --fixture-source-sha256 ddb593cfc21a725fa44094adcda733af0792f6abb67fec7dd5e3dbc9ff0bc2f9 --auditor-source scripts/audit_schema_wide_part_w245.rb --auditor-source-sha256 97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8 --self-test",
+        "audit_exit_code": 0,
+        "audit": {
+          "status": "raw_capture_authenticated",
+          "summary_sha256": "baf9c90c3ea20b50c2a7a3f2af6f6d2bfe7b417cc701ee2cce20594d8dff5b78",
+          "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+          "helper_sha256": "15f29e55e84ca0cb57825cef930ae452d00b338ca7d6f3a157df1decc5eb0847",
+          "string_profile": "sized",
+          "dynamic_mode": "basic",
+          "schema_columns": [
+            "pk",
+            "state",
+            "dyn",
+            "object",
+            "recursive"
+          ],
+          "rows": 5,
+          "parent_mark_rows": [
+            2,
+            2,
+            1
+          ],
+          "child_occurrences_per_parent_mark": [
+            0,
+            2,
+            3
+          ],
+          "physical_mark_files": 31,
+          "controls": {
+            "typed_value_baseline_accepted": true,
+            "same_value_wrong_type_rejected": true,
+            "complete_source_closure_accepted": true,
+            "incomplete_source_closure_rejected": true,
+            "source_closure_hash_mismatch_rejected": true,
+            "extra_source_closure_entry_rejected": true,
+            "ordered_complete_schema_accepted": true,
+            "incomplete_schema_rejected": true,
+            "swapped_schema_rejected": true,
+            "successful_exit_check_zero_rejected": true,
+            "successful_exit_check_one_accepted": true,
+            "exact_pinned_tagged_stdout_accepted": true,
+            "unexpected_stdout_line_rejected": true,
+            "exact_object_path_types_accepted": true,
+            "extra_object_path_type_rejected": true,
+            "formatted_frame_assignment_accepted": true,
+            "wrong_frame_value_rejected": true,
+            "frame_expression_rejected": true,
+            "frame_prefix_number_rejected": true,
+            "comment_only_frame_rejected": true,
+            "duplicate_frame_assignment_rejected": true,
+            "exact_child_path_accepted": true,
+            "path_swap_rejected": true,
+            "symlink_escape_rejected": true,
+            "moved_detached_source_absence_accepted": true,
+            "residual_detached_directory_rejected": true,
+            "residual_detached_symlink_rejected": true,
+            "historical_detached_path_swap_rejected": true
+          },
+          "interpretation": "One fixture-produced library part read by the pinned stock local reader. No reciprocal writer, live table, broader type grammar, performance, RSS, or cryptographic execution-provenance claim."
+        }
+      },
+      {
+        "mode": "RELEASE",
+        "string_profile": "sized",
+        "dynamic_discriminator_mode": "compact",
+        "evidence_root": "/private/tmp/crystal-click-w245-sealed-release-sized-compact.sVjCZE",
+        "summary_path": "/private/tmp/crystal-click-w245-sealed-release-sized-compact.sVjCZE/summary.json",
+        "summary_sha256": "69827db3685555af406dc26ca15141b149736537cece1a828dd4d46facf71b86",
+        "probe_command_tail": "/usr/bin/ruby 600 12288 scripts/probe_schema_wide_part_w245.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed --evidence-root /private/tmp/crystal-click-w245-sealed-release-sized-compact.sVjCZE --string-profile sized --dynamic-mode compact",
+        "probe_exit_code": 0,
+        "audit_command": "/usr/bin/ruby scripts/audit_schema_wide_part_w245.rb --summary /private/tmp/crystal-click-w245-sealed-release-sized-compact.sVjCZE/summary.json --summary-sha256 69827db3685555af406dc26ca15141b149736537cece1a828dd4d46facf71b86 --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-release-sealed --helper-sha256 15f29e55e84ca0cb57825cef930ae452d00b338ca7d6f3a157df1decc5eb0847 --probe-source scripts/probe_schema_wide_part_w245.rb --probe-source-sha256 379e5e8509abf61e16d7a3b688a3461dced9477cadf4f655a38d5265ab22b3ed --helper-source scripts/check_schema_wide_part_w245.cr --helper-source-sha256 0835933185790a3cc600c557cb5daff72e186a66fc633c1778260a9f1084f23a --fixture-source scripts/support/schema_wide_part_w245_fixture.cr --fixture-source-sha256 ddb593cfc21a725fa44094adcda733af0792f6abb67fec7dd5e3dbc9ff0bc2f9 --auditor-source scripts/audit_schema_wide_part_w245.rb --auditor-source-sha256 97dfe256b0f328c3a84b263269096221a7a9c087cea634363aef19a1115bc1d8 --self-test",
+        "audit_exit_code": 0,
+        "audit": {
+          "status": "raw_capture_authenticated",
+          "summary_sha256": "69827db3685555af406dc26ca15141b149736537cece1a828dd4d46facf71b86",
+          "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+          "helper_sha256": "15f29e55e84ca0cb57825cef930ae452d00b338ca7d6f3a157df1decc5eb0847",
+          "string_profile": "sized",
+          "dynamic_mode": "compact",
+          "schema_columns": [
+            "pk",
+            "state",
+            "dyn",
+            "object",
+            "recursive"
+          ],
+          "rows": 5,
+          "parent_mark_rows": [
+            2,
+            2,
+            1
+          ],
+          "child_occurrences_per_parent_mark": [
+            0,
+            2,
+            3
+          ],
+          "physical_mark_files": 31,
+          "controls": {
+            "typed_value_baseline_accepted": true,
+            "same_value_wrong_type_rejected": true,
+            "complete_source_closure_accepted": true,
+            "incomplete_source_closure_rejected": true,
+            "source_closure_hash_mismatch_rejected": true,
+            "extra_source_closure_entry_rejected": true,
+            "ordered_complete_schema_accepted": true,
+            "incomplete_schema_rejected": true,
+            "swapped_schema_rejected": true,
+            "successful_exit_check_zero_rejected": true,
+            "successful_exit_check_one_accepted": true,
+            "exact_pinned_tagged_stdout_accepted": true,
+            "unexpected_stdout_line_rejected": true,
+            "exact_object_path_types_accepted": true,
+            "extra_object_path_type_rejected": true,
+            "formatted_frame_assignment_accepted": true,
+            "wrong_frame_value_rejected": true,
+            "frame_expression_rejected": true,
+            "frame_prefix_number_rejected": true,
+            "comment_only_frame_rejected": true,
+            "duplicate_frame_assignment_rejected": true,
+            "exact_child_path_accepted": true,
+            "path_swap_rejected": true,
+            "symlink_escape_rejected": true,
+            "moved_detached_source_absence_accepted": true,
+            "residual_detached_directory_rejected": true,
+            "residual_detached_symlink_rejected": true,
+            "historical_detached_path_swap_rejected": true
+          },
+          "interpretation": "One fixture-produced library part read by the pinned stock local reader. No reciprocal writer, live table, broader type grammar, performance, RSS, or cryptographic execution-provenance claim."
+        }
+      }
+    ],
+    "generated_actual_byte_comparison": {
+      "command": "/usr/bin/ruby -e 'require \"json\"; rows = ARGV.each_slice(3).map do |profile,left,right|; a=JSON.parse(File.read(left)).fetch(\"evidence_paths\").fetch(\"generated_part\"); b=JSON.parse(File.read(right)).fetch(\"evidence_paths\").fetch(\"generated_part\"); names=Dir.children(a).sort; raise \"different file roster #{profile}\" unless names==Dir.children(b).sort; bytes=0; names.each do |name|; pa=File.join(a,name); pb=File.join(b,name); raise \"not regular #{name}\" unless File.lstat(pa).file? && File.lstat(pb).file?; x=File.binread(pa); y=File.binread(pb); raise \"different actual bytes #{profile}/#{name}\" unless x==y; bytes+=x.bytesize; end; {profile:profile,files:names.size,bytes_per_mode:bytes,actual_byte_equality:true,debug_part:a,release_part:b}; end; puts JSON.generate({status:\"all_actual_bytes_equal\",profiles:rows,total_files_per_mode:rows.sum{|x|x[:files]},total_bytes_per_mode:rows.sum{|x|x[:bytes_per_mode]}})' single-basic /private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74/summary.json /private/tmp/crystal-click-w245-sealed-release-single-basic.NSAck6/summary.json single-compact /private/tmp/crystal-click-w245-sealed-debug-single-compact.CW5CRf/summary.json /private/tmp/crystal-click-w245-sealed-release-single-compact.VGX6Br/summary.json sized-basic /private/tmp/crystal-click-w245-sealed-debug-sized-basic.ZEr2Km/summary.json /private/tmp/crystal-click-w245-sealed-release-sized-basic.I98VqB/summary.json sized-compact /private/tmp/crystal-click-w245-sealed-debug-sized-compact.eyCQSY/summary.json /private/tmp/crystal-click-w245-sealed-release-sized-compact.sVjCZE/summary.json",
+      "exit_code": 0,
+      "result": {
+        "status": "all_actual_bytes_equal",
+        "profiles": [
+          {
+            "profile": "single-basic",
+            "files": 62,
+            "bytes_per_mode": 9030,
+            "actual_byte_equality": true,
+            "debug_part": "/private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74/generated/all_1_1_0",
+            "release_part": "/private/tmp/crystal-click-w245-sealed-release-single-basic.NSAck6/generated/all_1_1_0"
+          },
+          {
+            "profile": "single-compact",
+            "files": 62,
+            "bytes_per_mode": 9037,
+            "actual_byte_equality": true,
+            "debug_part": "/private/tmp/crystal-click-w245-sealed-debug-single-compact.CW5CRf/generated/all_1_1_0",
+            "release_part": "/private/tmp/crystal-click-w245-sealed-release-single-compact.VGX6Br/generated/all_1_1_0"
+          },
+          {
+            "profile": "sized-basic",
+            "files": 70,
+            "bytes_per_mode": 10255,
+            "actual_byte_equality": true,
+            "debug_part": "/private/tmp/crystal-click-w245-sealed-debug-sized-basic.ZEr2Km/generated/all_1_1_0",
+            "release_part": "/private/tmp/crystal-click-w245-sealed-release-sized-basic.I98VqB/generated/all_1_1_0"
+          },
+          {
+            "profile": "sized-compact",
+            "files": 70,
+            "bytes_per_mode": 10262,
+            "actual_byte_equality": true,
+            "debug_part": "/private/tmp/crystal-click-w245-sealed-debug-sized-compact.eyCQSY/generated/all_1_1_0",
+            "release_part": "/private/tmp/crystal-click-w245-sealed-release-sized-compact.sVjCZE/generated/all_1_1_0"
+          }
+        ],
+        "total_files_per_mode": 264,
+        "total_bytes_per_mode": 38584
+      }
+    },
+    "root_adversary": {
+      "command_tail": "/usr/bin/ruby 300 8192 /private/tmp/crystal-click-w245.BUwfcO/root_attack_w245.rb /private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74/summary.json /private/tmp/crystal-click-w245.BUwfcO/check-schema-wide-debug-sealed",
+      "exit_code": 0,
+      "script_path": "/private/tmp/crystal-click-w245.BUwfcO/root_attack_w245.rb",
+      "script_sha256": "a9c7918d6de874815146ba8cb5be8d58d7ef8b68d0e71f668b441e075a391bb8",
+      "result": {
+        "status": "root_checker_boundary_controls_passed",
+        "summary": "/private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74/summary.json",
+        "summary_sha256": "306f61d322292f4cdbc596d98f5901d32379cf7bd0652bcebf9949a561cad1a7",
+        "controls": {
+          "genuine_capture_accepted": true,
+          "same_dynamic_json_wrong_actual_type": {
+            "rejected": true,
+            "discriminator": "W245 audit: pk1 top-level Dynamic actual type differs; observed \"UInt8\", expected \"UInt64\""
+          },
+          "same_object_json_wrong_actual_type": {
+            "rejected": true,
+            "discriminator": "W245 audit: pk1 JSON Dynamic actual type differs; observed \"UInt8\", expected \"UInt64\""
+          },
+          "extra_object_path_type": {
+            "rejected": true,
+            "discriminator": "W245 audit: pk1 JSON path type map differs"
+          },
+          "missing_value_row": {
+            "rejected": true,
+            "discriminator": "W245 audit: native typed value row count differs; observed 4, expected 5"
+          },
+          "same_recursive_leaf_value_wrong_nominal_type": {
+            "rejected": true,
+            "discriminator": "W245 audit: recursive child pk3/1 nominal types differs; observed [\"3\", \"1\", \"JSON(max_dynamic_types=1, max_dynamic_paths=1, t UInt8)\", \"UInt64\", \"31\", \"Dynamic(max_types=1)\"], expected [\"3\", \"1\", \"JSON(max_dynamic_types=1, max_dynamic_paths=1, t UInt8)\", \"UInt8\", \"31\", \"Dynamic(max_types=1)\"]"
+          },
+          "recursive_occurrence_swap": {
+            "rejected": true,
+            "discriminator": "W245 audit: recursive child pk3/1 nominal types differs; observed [\"4\", \"1\", \"JSON(max_dynamic_types=1, max_dynamic_paths=1, t UInt8)\", \"UInt8\", \"41\", \"Dynamic(max_types=1)\"], expected [\"3\", \"1\", \"JSON(max_dynamic_types=1, max_dynamic_paths=1, t UInt8)\", \"UInt8\", \"31\", \"Dynamic(max_types=1)\"]"
+          },
+          "extra_untagged_value_stdout": {
+            "rejected": true,
+            "discriminator": "W245 audit: native_typed_values stdout is not exactly one runtime pin followed by tagged rows"
+          },
+          "successful_exit_check_zero_raw_view": {
+            "rejected": true,
+            "discriminator": "W245 audit: successful stock CHECK TABLE result differs; observed [\"all_1_1_0\\t0\\t\"], expected [\"all_1_1_0\\t1\\t\"]"
+          },
+          "summary_attached_path_swap": {
+            "rejected": true,
+            "discriminator": "W245 audit: summary active part path differs; observed \"/private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74/stores/native/store/965/965bd6d0-4853-4f45-a065-28e49dd8fedc/all_1_1_0-swapped\", expected \"/private/tmp/crystal-click-w245-sealed-debug-single-basic.rzjQ74/stores/native/store/965/965bd6d0-4853-4f45-a065-28e49dd8fedc/all_1_1_0\""
+          },
+          "incomplete_substream_owner_roster": {
+            "rejected": true,
+            "discriminator": "W245 audit: complete ordered logical column roster differs; observed [\"pk\", \"state\", \"dyn\", \"object\"], expected [\"pk\", \"state\", \"dyn\", \"object\", \"recursive\"]"
+          },
+          "restored_capture_accepted": true
+        },
+        "scope": "Genuine raw/filesystem baseline and restoration, with in-memory semantic rejection controls; no evidence files changed and no immutable execution-provenance claim."
+      },
+      "negative_controls": 10,
+      "positive_controls": 2,
+      "interpretation": "In-memory semantic mutations reject against a genuine final-source raw/filesystem baseline; restoration accepts. Captured files are unchanged. This qualifies the checker boundary, not immutable execution provenance."
+    },
+    "evidence_index_structural_validation": {
+      "command": "/usr/bin/ruby -e 'require \"json\"; require \"digest\"; p=JSON.parse(File.read(ARGV.fetch(0))); p.fetch(\"pins\").fetch(\"repository_files\").each{|r| raise \"source hash mismatch #{r.fetch(\"path\")}\" unless Digest::SHA256.file(r.fetch(\"path\")).hexdigest==r.fetch(\"sha256\")}; p.fetch(\"pins\").fetch(\"helper_binaries\").each{|r| raise \"helper hash mismatch\" unless Digest::SHA256.file(r.fetch(\"path\")).hexdigest==r.fetch(\"sha256\")}; %w[probe_literal_require_relative_closure auditor_literal_require_relative_closure].each{|k|p.fetch(\"pins\").fetch(k).each{|r| raise \"closure hash mismatch\" unless Digest::SHA256.file(r.fetch(\"path\")).hexdigest==r.fetch(\"sha256\")}}; d=p.fetch(\"executed_dod\"); raise \"mode totals\" unless %w[DEBUG RELEASE].all?{|m| d.fetch(\"tests\").select{|t|t.fetch(\"mode\")==m}.sum{|t|t.fetch(\"examples\")}==414}; roster=d.fetch(\"selected_files\").values.flatten; raise \"file roster\" unless roster.size==69 && roster.uniq.size==69 && roster.all?{|r|File.file?(r)}; cells=d.fetch(\"native_cells\"); raise \"cell roster\" unless cells.size==8 && cells.map{|r|[r.fetch(\"mode\"),r.fetch(\"string_profile\"),r.fetch(\"dynamic_discriminator_mode\")]}.uniq.size==8; cells.each{|r|raise \"summary hash mismatch\" unless Digest::SHA256.file(r.fetch(\"summary_path\")).hexdigest==r.fetch(\"summary_sha256\"); raise \"audit projection\" unless r.fetch(\"audit\").fetch(\"summary_sha256\")==r.fetch(\"summary_sha256\") && r.fetch(\"audit\").fetch(\"controls\").size==28 && r.fetch(\"audit\").fetch(\"controls\").values.all?{|x|x==true}}; puts JSON.generate({status:\"structural_index_valid\",source_files:p.fetch(\"pins\").fetch(\"repository_files\").size,spec_files:roster.size,native_cells:cells.size,scope:\"JSON, path/hash, roster and projected signal consistency only; not execution or semantic proof\"})' .landmark/evidence/schema-wide-part-w245.json",
+      "exit_code": 0,
+      "result": {
+        "status": "structural_index_valid",
+        "source_files": 34,
+        "spec_files": 69,
+        "native_cells": 8,
+        "scope": "JSON, path/hash, roster and projected signal consistency only; not execution or semantic proof"
+      }
+    },
+    "hygiene": {
+      "diff_check_command": "git diff --check",
+      "diff_check_exit_code": 0,
+      "baseline_large_file_command": "git cat-file -s dcb445d6864298e64be22e0dc71b3c5b240e8a65:src/crystal_click/wide_part_writer.cr",
+      "command": "/usr/bin/ruby -e 'require \"json\"; bytes=Integer(ARGV.shift); owned=\"src/crystal_click/wide_part_writer.cr\"; files=ARGV; large=files.select{|p|File.size(p)>1_048_576}; raise \"unexpected large file\" unless large==[owned] && bytes>1_048_576 && File.size(owned)-bytes<8192; hits=[]; pattern=/(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|sk-proj-[A-Za-z0-9_-]{24,})/; files.each{|p|File.foreach(p).with_index(1){|l,n|hits << {path:p,line:n} if pattern.match?(l)}}; puts JSON.generate({status:hits.empty? ? \"scoped_hygiene_passed\" : \"signature_refusal\",files:files.size,existing_large_source:{path:owned,baseline_bytes:bytes,current_bytes:File.size(owned),delta_bytes:File.size(owned)-bytes},credential_signature_locations:hits,interpretation:\"Pre-existing tracked facade size is not a newly added generated artifact; broad facade decomposition remains open. Targeted signatures are not a comprehensive secret scanner.\"}); exit(hits.empty? ? 0 : 1)' 1263373 spec/recursive_qbit_parts_w230_spec.cr src/crystal_click.cr src/crystal_click/binary_bulk_column_reader.cr src/crystal_click/binary_bulk_column_writer.cr src/crystal_click/dynamic_bulk_column_reader.cr src/crystal_click/object_column_reader.cr src/crystal_click/object_document_column_writer.cr src/crystal_click/object_document_file_reader.cr src/crystal_click/recursive_storage_column_reader.cr src/crystal_click/recursive_storage_column_writer.cr src/crystal_click/wide_part_writer.cr src/crystal_click/wide_part_writer/two_column_bulk_part_writer.cr scripts/check_schema_wide_part_w245.cr scripts/support/schema_wide_part_w245_fixture.cr spec/multi_column_part_writer_w245_spec.cr spec/storage_read_budget_w245_spec.cr src/crystal_click/storage_read_budget_validator.cr src/crystal_click/wide_part_writer/dynamic_wide_part_column_input.cr src/crystal_click/wide_part_writer/object_wide_part_column_input.cr src/crystal_click/wide_part_writer/recursive_wide_part_column_input.cr src/crystal_click/wide_part_writer/static_wide_part_column_input.cr src/crystal_click/wide_part_writer/wide_part_column.cr src/crystal_click/wide_part_writer/wide_part_lane.cr src/crystal_click/wide_part_writer/wide_part_lane_binding.cr src/crystal_click/wide_part_writer/wide_part_metadata.cr src/crystal_click/wide_part_writer/wide_part_metadata_envelope.cr src/crystal_click/wide_part_writer/wide_part_operation.cr src/crystal_click/wide_part_writer/wide_part_operation_context.cr src/crystal_click/wide_part_writer/wide_part_prepared_column.cr src/crystal_click/wide_part_writer/wide_part_publication_input.cr src/crystal_click/wide_part_writer/wide_part_publisher.cr src/crystal_click/wide_part_writer/wide_part_value_comparison.cr scripts/probe_schema_wide_part_w245.rb scripts/audit_schema_wide_part_w245.rb LANDMARKS.md docs/MODULARIZATION_FRONTIER.md docs/PROJECT_STATUS.md docs/SCHEMA_WIDE_PART_WRITER_FRONTIER.md .landmark/evidence/schema-wide-part-w245.json",
+      "exit_code": 0,
+      "result": {
+        "status": "scoped_hygiene_passed",
+        "files": 39,
+        "existing_large_source": {
+          "path": "src/crystal_click/wide_part_writer.cr",
+          "baseline_bytes": 1263373,
+          "current_bytes": 1264530,
+          "delta_bytes": 1157
+        },
+        "credential_signature_locations": [],
+        "interpretation": "Pre-existing tracked facade size is not a newly added generated artifact; broad facade decomposition remains open. Targeted signatures are not a comprehensive secret scanner."
+      },
+      "initial_unconditional_size_check": "Exit1 because the pre-existing tracked facade exceeds1MiB; zero credential-signature hits. Baseline size verification distinguishes it from a newly added artifact."
+    }
+  },
+  "refutations_and_corrections": [
+    {
+      "route": "Interface before implementation",
+      "signal": "Root guarded baseline probe exits1: undefined constant CrystalClick::WidePartColumn.",
+      "interpretation": "Missing API RED, not native format rejection. Sandbox process-group exit75 was inconclusive; approved rerun retained all resource guards."
+    },
+    {
+      "route": "Every part-validation read operation is aggregate-accounted",
+      "signal": "Source review finds fixed per-file key/index/envelope parsing and per-plan descriptor/name work outside the shared value counters.",
+      "decision": "Narrow the law/claim; preserve shared value-lane counters and their decoded-byte falsifier. No whole-part-work or RSS claim."
+    },
+    {
+      "route": "Nominal Nested refusal test",
+      "signal": "Initial reserved unquoted field name fails parsing before owner admission.",
+      "decision": "Rename to vals and require the exact nominal Nested-owner error. Do not count the parser failure."
+    },
+    {
+      "route": "Recursive shared-MAP profile follows ordinary String1",
+      "signal": "Existing recursive writer refuses sized shared profile and reader uses single-stream shared MAP.",
+      "decision": "Early matching refusal; native fixture keeps shared MAP String0 while independently testing ordinary String0/1."
+    },
+    {
+      "route": "W230 Dynamic Array(QBit) expected refusal",
+      "baseline_directory": "/private/tmp/crystal-click-w245-baseline.PHbWgl",
+      "baseline_command_tail": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w245.BUwfcO/baseline-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 300 8192 spec spec/recursive_qbit_parts_w230_spec.cr:580 --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "baseline_signal": "The same isolated assertion fails on unchanged dcb445d: expected ArgumentError, nothing raised, line597.",
+      "decision": "W233 already admitted this actual; update exact Dynamic child/type/empty-value positive assertions, retain invalid Nullable(Array) negative control."
+    },
+    {
+      "route": "Detached part path must exist after ATTACH",
+      "signal": "ATTACH moves it to the active directory.",
+      "decision": "Treat its snapshot as historical; bind the exact historical child path to canonical parent and require current lstat absence, rejecting residual directories/dangling symlinks. Actual generated/pre-attach/active byte checks remain."
+    },
+    {
+      "route": "Formatted fixture FRAME_BYTES literal source-pin check",
+      "evidence_root": "/private/tmp/crystal-click-w245-sealed-debug-single-basic.eYX9nS",
+      "signal": "One helper call and zero stock calls; probe stops on exact whitespace include? check after Crystal formatter aligns assignment.",
+      "decision": "Classify capture as inconclusive. Separate literal32 matchers accept whitespace and reject33,32+1,320,comment-only and duplicate assignments; all28 self-tests pass. Eight final-source native captures use corrected Ruby sources."
+    },
+    {
+      "route": "Pre-format positive native lineage",
+      "evidence_roots": [
+        "/private/tmp/crystal-click-w245-final-debug-single-basic.QJvvTm",
+        "/private/tmp/crystal-click-w245-final-debug-single-compact.drZVXT",
+        "/private/tmp/crystal-click-w245-final-debug-sized-basic.1pVIbW",
+        "/private/tmp/crystal-click-w245-final-debug-sized-compact.WD4Vck"
+      ],
+      "decision": "Retain diagnostics only; excluded from final8 cells,40 stock calls and byte parity."
+    },
+    {
+      "route": "Synchronous exception cleanup implies crash cleanup",
+      "signal": "Publisher catch/ensure cleanup does not run on SIGKILL; existing kill failpoint allows an orphan stage.",
+      "decision": "Only catchable-exception cleanup after stage ownership transfer is qualified. No process-kill, fsync or crash-recovery claim."
+    },
+    {
+      "route": "Identical JSON is sufficient value evidence",
+      "signal": "Root UInt8-for-UInt64 and UInt64-for-UInt8 same-value controls preserve visible values but reject exact native types.",
+      "decision": "Preserve nominal, runtime actual and descendant type witnesses alongside values."
+    },
+    {
+      "route": "Object Nothing/NULL must remain as a path",
+      "signal": "Native Object canonicalization omits that path.",
+      "decision": "Normalize the fixture's null-path omission, not its nonnull types or values."
+    }
+  ],
+  "continuation": {
+    "active_goal": "Legal ClickHouse-compatible read/write types and MV/projections before memory/performance.",
+    "confirmed_frontier": "Common schema-aware Wide envelope over the four existing typed owners is qualified for the finite target. No serializer per wrapper product.",
+    "next_falsifier": "Before widening, select one real unsupported owner/layout/state handoff or key/partition/projection seam and require exact nominal native read evidence rather than repeating this identical fixture matrix.",
+    "unresolved": [
+      "Remaining aggregate-state families and legal owner/layout intersections",
+      "Root Tuple Dynamic selected-subcolumn metadata in the new envelope",
+      "Shared flattened Nested offsets without independent-encoding deduplication",
+      "Arbitrary key/partition metadata",
+      "Projection/MV writing",
+      "Broad facade decomposition"
+    ],
+    "standing_authority": "Safe in-scope local implementation/tests and one verified atomic feature commit; no push/history rewrite/resource-guard bypass."
+  },
+  "decay": {
+    "triggers": [
+      "Production/codec/consumer or source-snapshot changes",
+      "Compiler, helper, fixture, Ruby closure or auditor/oracle changes",
+      "Native executable changes",
+      "Capture/artifact loss or alteration",
+      "New admitted layout or semantic option"
+    ],
+    "refresh": "Re-run the applicable exact commands with fresh empty capture roots and external source/helper/summary pins; re-run raw audits, semantic falsifiers and actual byte comparison. Do not promote a structural packet validator to semantic proof.",
+    "failure_policy": "Infrastructure failure is inconclusive. Retain admission guards and reopen dependent claims until requalified; do not mark the overall goal complete."
+  }
+}

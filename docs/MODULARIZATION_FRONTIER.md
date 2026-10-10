@@ -9,7 +9,31 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
-## Current responsibility reuse — W232
+## Current responsibility separation and reuse — W245
+
+`WidePartColumn` is the public typed-input facade. Four private own-file input
+owners adapt existing static BinaryBulk, Dynamic, root Object and recursive
+storage plans. `WidePartOperation` owns whole-roster admission and shared
+operation contexts; `WidePartMetadata` owns ordered N-column declarations and
+serialization metadata. Lane/binding/prepared/publication values and exact
+value comparison are separate cohesive owners. `WidePartPublisher` owns the
+single key/index/checksum/staging/validation/exclusive-publication envelope;
+the old two-column bulk owner is now its compatibility adapter. One codec
+remains responsible for each existing recursive grammar, not each product.
+
+Status: VERIFIED / scoped ROBUST for the finite four-owner Wide target. Root
+executes 414 examples in each mode across the same 69 affected spec files,
+eight final native cells and read-only raw audits, 28 auditor controls per
+cell and ten additional semantic refusals. All 264 generated files agree by
+actual bytes across modes. Shared value-lane read budgets and synchronous
+exception cleanup have explicit limits; metadata/key/planning work and process
+termination are not promoted to whole-operation/RSS or crash-recovery claims.
+This establishes cohesive ownership and codec reuse, not completion of broad
+facade decomposition, improved allocation/compiler coupling or throughput.
+Details: [W245 frontier](SCHEMA_WIDE_PART_WRITER_FRONTIER.md),
+[W245 evidence index](../.landmark/evidence/schema-wide-part-w245.json).
+
+## Previous responsibility reuse — W232
 
 Static QBit-bearing Variant alternatives reuse the existing leaf code and
 recursive visitors. The existing single-file `BinaryQBitRecursiveAdmission`

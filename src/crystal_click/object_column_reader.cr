@@ -23,24 +23,39 @@ module CrystalClick
     @typed_schema : Hash(String, BinaryDataType)
     @limits : BinaryCodecLimits
     @transport_limits : CompressedStreamLimits
+    @codec_budget : BinaryCodecBudget?
+    @transport_budget : CompressedStreamBudget?
     @descriptor : ObjectDocumentFileDescriptor
     @schema_declaration : String
     @source_declaration : String
 
+    # Borrowed budgets are consumptive owners for explicitly charged work in
+    # this selected-column inspection and later typed-value reads; nil retains
+    # the legacy per-operation owners. Common metadata, key/index, and checksum
+    # passes remain subject to their per-file bounds, not a whole-part cap.
     def self.open(
       part_path : String,
       column_name : String,
       expected_schema : ObjectDocumentSchema,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      codec_budget : BinaryCodecBudget? = nil,
+      transport_budget : CompressedStreamBudget? = nil,
     ) : ObjectColumnReader
-      new(part_path, column_name, expected_schema)
+      new(part_path, column_name, expected_schema, transport_limits, codec_budget, transport_budget)
     end
 
     private def initialize(
       part_path : String,
       column_name : String,
       expected_schema : ObjectDocumentSchema,
+      @transport_limits : CompressedStreamLimits,
+      codec_budget : BinaryCodecBudget?,
+      transport_budget : CompressedStreamBudget?,
     )
       @limits = expected_schema.limits
+      validate_read_budgets!(codec_budget, transport_budget)
+      @codec_budget = codec_budget
+      @transport_budget = transport_budget
       metadata = ObjectColumnPartMetadata.open(
         part_path,
         column_name,
@@ -54,7 +69,6 @@ module CrystalClick
       )
       @part_path = File.expand_path(part_path)
       @column_name = String.new(column_name.to_slice)
-      @transport_limits = CompressedStreamLimits.new
       @typed_schema = expected_schema.typed_paths
       @schema_declaration = expected_schema.declaration
       @source_declaration = metadata.source_declaration
@@ -76,6 +90,8 @@ module CrystalClick
         true,
         @limits,
         @transport_limits,
+        @codec_budget,
+        @transport_budget,
       )
       begin
         expected_schema.validate_plan(@descriptor.plan)
@@ -142,6 +158,8 @@ module CrystalClick
         true,
         @limits,
         @transport_limits,
+        @codec_budget,
+        @transport_budget,
       )
       unless selected.size == mark_count
         raise CorruptPartError.new("bounded Object read returned the wrong number of marks")
@@ -180,6 +198,8 @@ module CrystalClick
         true,
         @limits,
         @transport_limits,
+        @codec_budget,
+        @transport_budget,
       )
       unless selected.size == mark_count
         raise CorruptPartError.new("bounded Object shared-path read returned the wrong number of marks")
@@ -190,6 +210,20 @@ module CrystalClick
         end
       end
       selected
+    end
+
+    private def validate_read_budgets!(
+      codec_budget : BinaryCodecBudget?,
+      transport_budget : CompressedStreamBudget?,
+    ) : Nil
+      StorageReadBudgetValidator.validate!(
+        codec_budget,
+        transport_budget,
+        @limits,
+        @transport_limits,
+        "Object reader codec budget differs from its schema limits",
+        "Object reader transport budget differs from its read limits",
+      )
     end
   end
 end

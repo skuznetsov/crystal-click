@@ -105,8 +105,9 @@ module CrystalClick
     end
 
     # Inspect all Object metadata and all physical grids without reading any
-    # selected value windows. The typed schema and profiles remain explicit in
-    # this low-level API; ObjectColumnReader binds them from part metadata.
+    # selected value windows. Optional borrowed budgets are consumptive and
+    # must be owned by this inspection operation. The typed schema and profiles
+    # remain explicit here; ObjectColumnReader binds them from part metadata.
     def self.inspect(
       part_path : String,
       column_name : String,
@@ -116,6 +117,8 @@ module CrystalClick
       hashed : Bool = false,
       limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      codec_budget : BinaryCodecBudget? = nil,
+      transport_budget : CompressedStreamBudget? = nil,
     ) : ObjectDocumentFileDescriptor
       prepared = prepare_read(
         part_path,
@@ -129,6 +132,8 @@ module CrystalClick
         limits,
         transport_limits,
         true,
+        codec_budget_override: codec_budget,
+        transport_budget_override: transport_budget,
       )
       prepared.descriptor.not_nil!
     end
@@ -198,6 +203,8 @@ module CrystalClick
       prepared.descriptor.not_nil!
     end
 
+    # Optional borrowed budgets are consumptive and must be owned by this
+    # read operation (or shared with its enclosing column operation).
     def self.read(
       part_path : String,
       column_name : String,
@@ -209,6 +216,8 @@ module CrystalClick
       hashed : Bool = false,
       limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      codec_budget : BinaryCodecBudget? = nil,
+      transport_budget : CompressedStreamBudget? = nil,
     ) : Array(Array(ObjectDocument))
       prepared = prepare_read(
         part_path,
@@ -222,6 +231,8 @@ module CrystalClick
         limits,
         transport_limits,
         false,
+        codec_budget_override: codec_budget,
+        transport_budget_override: transport_budget,
       )
       read_prepared(prepared)
     end
@@ -241,6 +252,8 @@ module CrystalClick
       hashed : Bool = false,
       limits : BinaryCodecLimits = ObjectDocumentCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      codec_budget_override : BinaryCodecBudget? = nil,
+      transport_budget_override : CompressedStreamBudget? = nil,
     ) : Array(Array(BinaryValue))
       if first_mark < 0 || mark_count < 0
         raise ArgumentError.new("mark selection must be nonnegative")
@@ -253,12 +266,14 @@ module CrystalClick
         raise ArgumentError.new("selected Object shared path must not be empty")
       end
 
+      codec_budget = codec_budget_override || BinaryCodecBudget.new(limits)
+      transport_budget = transport_budget_override || CompressedStreamBudget.new(transport_limits)
+      validate_read_budgets!(codec_budget, transport_budget, limits, transport_limits)
+
       version = descriptor.plan.structures.object.shared_data_version
-      codec_budget = BinaryCodecBudget.new(limits)
       codec_budget.ensure_wire_bytes(path.bytesize.to_u64)
       codec_budget.charge_wire_bytes(path.bytesize.to_u64)
       codec_budget.charge_elements(path.bytesize.to_u64)
-      transport_budget = CompressedStreamBudget.new(transport_limits)
       physical_plan = ObjectDocumentPhysicalPlan.new(
         column_name,
         descriptor.plan,
@@ -566,10 +581,11 @@ module CrystalClick
       inferred_actual_root_depth : Int32 = 1,
       typed_dynamic_json_child : Bool = false,
     ) : PreparedRead
-      validate_selection_arguments!(first_mark, mark_count)
-      reject_json_schema!(typed_schema)
       codec_budget = codec_budget_override || BinaryCodecBudget.new(limits)
       transport_budget = transport_budget_override || CompressedStreamBudget.new(transport_limits)
+      validate_read_budgets!(codec_budget, transport_budget, limits, transport_limits)
+      validate_selection_arguments!(first_mark, mark_count)
+      reject_json_schema!(typed_schema)
       column_prefix = if site_prefix = escaped_prefix_override
                         preflight_escaped_prefix!(site_prefix, hashed, limits)
                       else
@@ -3349,6 +3365,22 @@ module CrystalClick
     private def self.same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
       left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
         left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
+    end
+
+    private def self.validate_read_budgets!(
+      codec_budget : BinaryCodecBudget,
+      transport_budget : CompressedStreamBudget,
+      limits : BinaryCodecLimits,
+      transport_limits : CompressedStreamLimits,
+    ) : Nil
+      StorageReadBudgetValidator.validate!(
+        codec_budget,
+        transport_budget,
+        limits,
+        transport_limits,
+        "Object reader codec budget differs from its read limits",
+        "Object reader transport budget differs from its read limits",
+      )
     end
   end
 end

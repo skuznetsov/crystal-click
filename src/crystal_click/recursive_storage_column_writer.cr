@@ -5,31 +5,37 @@ module CrystalClick
     def self.encode(
       plan : RecursiveStorageColumnPlan,
       granules : Array(Array(StorageColumnValue)),
+      codec_budget : BinaryCodecBudget? = nil,
+      transport_budget : CompressedStreamBudget? = nil,
     ) : RecursiveStorageColumnFiles
       validate_mark_grid!(granules)
       limits = plan.limits
+      write_codec_budget = codec_budget || BinaryCodecBudget.new(limits, true)
+      unless write_codec_budget.writing? && same_limits?(write_codec_budget.limits, limits)
+        raise ArgumentError.new("recursive storage requires a compatible write codec budget")
+      end
+      write_transport_budget = transport_budget || CompressedStreamBudget.new(plan.transport_limits, true)
+      validate_transport_budget!(write_transport_budget, plan.transport_limits)
       granules.each do |rows|
         rows.each do |value|
           StorageColumnDepthGuard.validate(value, limits, writing: true)
         end
       end
 
-      codec_budget = BinaryCodecBudget.new(limits, true)
-      validate_rows!(plan.schema, granules, codec_budget)
-      physical_rows = mark_counts_for(granules, codec_budget)
-      root_grid = StorageOccurrenceGrid.new(physical_rows, physical_rows, codec_budget)
+      validate_rows!(plan.schema, granules, write_codec_budget)
+      physical_rows = mark_counts_for(granules, write_codec_budget)
+      root_grid = StorageOccurrenceGrid.new(physical_rows, physical_rows, write_codec_budget)
 
       objects = Hash(String, Array(Array(ObjectDocument))).new
       bulks = Hash(String, Array(Array(BinaryValue))).new
       site_grids = Hash(String, StorageOccurrenceGrid).new
-      frames = prepare_array_frames(plan, granules, physical_rows, codec_budget)
+      frames = prepare_array_frames(plan, granules, physical_rows, write_codec_budget)
       collect_sites!(
         plan.schema, granules, "root", 0_u64, physical_rows, root_grid,
-        codec_budget, objects, bulks, site_grids, frames
+        write_codec_budget, objects, bulks, site_grids, frames
       )
       validate_collected_rosters!(plan, objects, bulks, site_grids, frames)
 
-      transport_budget = CompressedStreamBudget.new(plan.transport_limits, true)
       pairs = Hash(String, CompressedMarkFiles).new
 
       # Array size lanes are complete schedules prepared before this first
@@ -46,7 +52,7 @@ module CrystalClick
           stream.borrowed_slice(0, stream.byte_size),
           bulk_source: stream
         )
-        add_pair!(pairs, lane.name, lane.encode_child_site(frame.parent_grid, plan.frame_bytes, transport_budget))
+        add_pair!(pairs, lane.name, lane.encode_child_site(frame.parent_grid, plan.frame_bytes, write_transport_budget))
       end
 
       plan.object_site_count.times do |index|
@@ -59,8 +65,8 @@ module CrystalClick
                     site.object_plan,
                     site.physical,
                     site_granules,
-                    codec_budget,
-                    transport_budget,
+                    write_codec_budget,
+                    write_transport_budget,
                     plan.profile,
                     plan.shared_profile,
                     plan.mode,
@@ -75,8 +81,8 @@ module CrystalClick
                     site.physical,
                     grid,
                     site_granules,
-                    codec_budget,
-                    transport_budget,
+                    write_codec_budget,
+                    write_transport_budget,
                     plan.profile,
                     plan.shared_profile,
                     plan.mode,
@@ -95,7 +101,7 @@ module CrystalClick
         site = plan.bulk_site_at(index)
         site_granules = bulks[site.key]? || raise(UnsupportedFormatError.new("recursive BinaryBulk site data is missing"))
         grid = site_grids[site.key]? || raise(UnsupportedFormatError.new("recursive BinaryBulk site grid is missing"))
-        streams = BinaryBulkCodec.encode_with_budget(site.type, site_granules, codec_budget, profile: plan.profile)
+        streams = BinaryBulkCodec.encode_with_budget(site.type, site_granules, write_codec_budget, profile: plan.profile)
         physical_names = site.physical.stream_names
         roles = streams.roles
         unless physical_names.keys.sort == roles && streams.mark_count == granules.size
@@ -120,13 +126,13 @@ module CrystalClick
           )
         end
         raw_sizes = Array(Int32).new(lanes.size) { |lane_index| lanes[lane_index].byte_size }
-        CompressedMarkWriter.preflight_batch(raw_sizes, granules.size + 1, plan.frame_bytes, transport_budget)
-        BinaryBulkPhysicalPrefixAdapter.preflight_write(prefix_adapter_lanes, codec_budget) unless prefix_adapter_lanes.empty?
+        CompressedMarkWriter.preflight_batch(raw_sizes, granules.size + 1, plan.frame_bytes, write_transport_budget)
+        BinaryBulkPhysicalPrefixAdapter.preflight_write(prefix_adapter_lanes, write_codec_budget) unless prefix_adapter_lanes.empty?
         lanes.each do |lane|
           pair = if site.array_level == 0_u64
-                   lane.encode(physical_rows, plan.frame_bytes, transport_budget)
+                   lane.encode(physical_rows, plan.frame_bytes, write_transport_budget)
                  else
-                   lane.encode_child_site(grid, plan.frame_bytes, transport_budget)
+                   lane.encode_child_site(grid, plan.frame_bytes, write_transport_budget)
                  end
           add_pair!(pairs, lane.name, pair)
         end
@@ -144,8 +150,8 @@ module CrystalClick
           plan.frame_bytes,
           limits,
           plan.transport_limits,
-          codec_budget,
-          transport_budget,
+          write_codec_budget,
+          write_transport_budget,
         )
         expected_names = site.physical.stream_names.values.sort!
         unless files.keys.sort == expected_names
@@ -155,6 +161,25 @@ module CrystalClick
       end
 
       RecursiveStorageColumnFiles.new(plan, pairs)
+    end
+
+    private def self.same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
+      left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
+        left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
+    end
+
+    private def self.validate_transport_budget!(budget : CompressedStreamBudget, limits : CompressedStreamLimits) : Nil
+      budget.ensure_direction(true)
+      unless budget.limits.max_file_bytes == limits.max_file_bytes &&
+             budget.limits.max_mark_bytes == limits.max_mark_bytes &&
+             budget.limits.max_frame_compressed_bytes == limits.max_frame_compressed_bytes &&
+             budget.limits.max_frame_decompressed_bytes == limits.max_frame_decompressed_bytes &&
+             budget.limits.max_records == limits.max_records &&
+             budget.limits.max_decoded_bytes == limits.max_decoded_bytes &&
+             budget.limits.max_result_bytes == limits.max_result_bytes
+        raise ArgumentError.new("recursive storage requires a compatible write transport budget")
+      end
+      nil
     end
 
     private def self.validate_mark_grid!(granules : Array(Array(StorageColumnValue))) : Nil

@@ -1,5 +1,51 @@
 # Crystal Click landmarks
 
+## Schema-aware multi-column Wide publication — W245
+
+- Status: VERIFIED / root adversary ROBUST within the finite four-owner target
+  at the hashed source state over baseline `dcb445d`. Heavy implementation and
+  harness work delegated to Luna Max; root executes all final gates, fresh
+  native captures/raw audits, actual-byte comparison and semantic attacks.
+  Same-lineage review remains correlated, not independent evidence.
+- `WidePartWriter.write_uint64_columns` uses typed `WidePartColumn` factories
+  for static BinaryBulk, Dynamic, root Object and recursive JSON-bearing inputs.
+  Existing recursive serde is reused; common roster/grid admission, metadata,
+  lane binding and one staged publisher have cohesive own-file owners. The old
+  two-column bulk API delegates to the common publisher. This removes an
+  envelope seam, not every physical owner/state/layout boundary.
+- Same 69 affected files / 414 examples per mode pass; both final helper builds,
+  32-file Crystal formatting and Ruby syntax pass. Eight final native cells
+  (DEBUG/RELEASE x ordinary String0/1 x Dynamic BASIC/COMPACT) and raw audits
+  pass; COMPACT is not the part layout. Forty stock calls qualify one five-row
+  key+four-value Wide part per cell, CHECK1, exact schema/values/recursive child
+  types, aggregate1497 and one active four-mark part. P=[2,2,1,EOF0], Q=[0,2,3].
+  All 264 generated files / 38,584 bytes per mode agree by actual bytes.
+- All 28 auditor controls pass per final capture; root separately rejects ten
+  semantic mutations with genuine/restored acceptance. Wrong-type same-value,
+  wrong occurrence, missing output, successful-exit CHECK0, swapped active path
+  and incomplete owner roster are discriminating, not execution provenance.
+- Read budgets aggregate value-lane inspections/decoded-checksum passes/typed
+  decoding; fixed envelope/key and per-plan/legacy admission work remain outside
+  that claim. Recursive shared-MAP stays String0 while ordinary String0/1 is
+  independent. Root Tuple Dynamic and unqualified Nested adapters fail closed.
+  Exception stage cleanup is not SIGKILL/crash recovery or fsync durability.
+- Refutations: stale W230 refusal also fails on archived baseline (W233 already
+  admits it); retain the invalid Nullable(Array) guard. Reserved-field parser
+  failure is not Nested-admission evidence. ATTACH moves detached files, whose
+  snapshots are historical; actual absence rejects residual symlinks/directories.
+  Formatter-spacing source-pin failure happened before stock calls and is
+  inconclusive; final captures use the corrected literal32 guard and six new
+  controls. Four pre-format positives remain decayed-source diagnostics only.
+- Active goal remains all legal read/write types + MV/projections before memory/
+  performance. Next: unqualified type/state/layout handoffs, key/partition
+  metadata and projection/MV writes; broad facade decomposition remains open.
+  Return pointers: [W245 frontier](docs/SCHEMA_WIDE_PART_WRITER_FRONTIER.md),
+  [evidence index](.landmark/evidence/schema-wide-part-w245.json).
+  Standing authority: safe local implementation/tests and one verified atomic
+  feature commit; no push, history rewrite or resource-guard bypass. Refresh
+  after source/runtime/compiler/codec/consumer/helper/fixture/oracle changes or
+  capture loss; infrastructure failure is inconclusive and cannot widen scope.
+
 ## Populated nested Dynamic JSON baseline qualification — W244
 
 - Status: VERIFIED / root adversary ROBUST within the finite prepared target.

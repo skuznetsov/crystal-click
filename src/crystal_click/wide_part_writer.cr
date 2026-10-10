@@ -19,6 +19,31 @@ module CrystalClick
     MAX_PRIMARY_INDEX_BYTES                = PrimaryKeyIndex::MAX_INDEX_FILE_BYTES
     RENAME_EXCL                            = 0x0000_0004_u32
 
+    # Publishes a complete Wide part with an ordered set of independently
+    # admitted value-column owners and one shared UInt64 key stream.
+    def self.write_uint64_columns(
+      destination : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      columns : Array(WidePartColumn),
+      rows_per_mark : Int32 = 8192,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      mode : UInt64 = ObjectDocumentCodec::DEFAULT_MODE,
+      frame_bytes : Int = 4096,
+      metadata_version : Int64 = 0_i64,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      shared_target_chunk_rows : Int32 = 1,
+    ) : String
+      WidePartOperation.write_uint64_columns(
+        destination, key_name, keys, columns, rows_per_mark, profile,
+        shared_profile, mode, frame_bytes, metadata_version, limits,
+        transport_limits, shared_json_policy, shared_target_chunk_rows
+      )
+    end
+
     # Creates a complete normalized Object V3 Wide part from an explicit
     # schema, descriptor roster and outer granules. Hashed filenames and the
     # unpartitioned UInt64-key profile are fixed; no source part is required.

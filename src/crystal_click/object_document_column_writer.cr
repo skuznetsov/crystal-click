@@ -17,6 +17,8 @@ module CrystalClick
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
       shared_target_chunk_rows : Int32 = 1,
+      codec_budget : BinaryCodecBudget? = nil,
+      transport_budget : CompressedStreamBudget? = nil,
     ) : ObjectDocumentColumnFiles
       if granules.empty?
         raise ArgumentError.new("a physical Object column requires at least one real mark")
@@ -43,14 +45,17 @@ module CrystalClick
       )
       file_roster = preflight_file_roster(physical_plan, hashed)
 
-      codec_budget = BinaryCodecBudget.new(limits, true)
-      fresh_plan = ObjectDocumentStatistics.recompute_with_budget(plan, granules, codec_budget)
+      write_codec_budget = codec_budget || BinaryCodecBudget.new(limits, true)
+      validate_write_codec_budget!(write_codec_budget, limits)
+      write_transport_budget = transport_budget || CompressedStreamBudget.new(transport_limits, true)
+      validate_write_transport_budget!(write_transport_budget, transport_limits)
+      fresh_plan = ObjectDocumentStatistics.recompute_with_budget(plan, granules, write_codec_budget)
 
       # Statistics and value traversal share exactly one logical write budget.
       streams = ObjectDocumentCodec.encode_with_budget(
         fresh_plan,
         granules,
-        codec_budget,
+        write_codec_budget,
         mode: mode,
         profile: profile,
         shared_profile: shared_profile
@@ -59,35 +64,58 @@ module CrystalClick
       # Variant and typed-Dynamic discriminators acquire physical framing
       # only at the column boundary. Admit added headers, COMPACT bodies, and
       # coordinate rebasing before constructing any adapted lane buffer.
-      preflight_variant_prefixes!(physical_plan, fresh_plan, streams, codec_budget)
+      preflight_variant_prefixes!(physical_plan, fresh_plan, streams, write_codec_budget)
       lanes = bind_lanes(physical_plan, fresh_plan, streams)
       mark_count = streams.mark_count + 1
       raw_sizes = Array(Int32).new(lanes.size) { |index| lanes[index].byte_size }
-      transport_budget = CompressedStreamBudget.new(transport_limits, true)
-      CompressedMarkWriter.preflight_batch(raw_sizes, mark_count, frame_bytes, transport_budget)
+      CompressedMarkWriter.preflight_batch(raw_sizes, mark_count, frame_bytes, write_transport_budget)
 
       # This is the first K-sized row-grid copy in physical composition, and it
       # follows the aggregate frame/mark/byte admission above.
       rows_per_mark = streams.rows_per_mark
       pairs = Hash(String, CompressedMarkFiles).new
       lanes.each do |lane|
-        pairs[lane.name] = lane.encode(rows_per_mark, frame_bytes, transport_budget)
+        pairs[lane.name] = lane.encode(rows_per_mark, frame_bytes, write_transport_budget)
       end
       append_advanced_pairs!(
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
-        codec_budget, transport_budget, frame_bytes, profile,
+        write_codec_budget, write_transport_budget, frame_bytes, profile,
         shared_json_policy, shared_target_chunk_rows
       )
       ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
-        codec_budget, transport_budget, frame_bytes, profile
+        write_codec_budget, write_transport_budget, frame_bytes, profile
       )
       ObjectDocumentRootDynamicJsonPhysical.append_pairs!(
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
-        codec_budget, transport_budget, frame_bytes, profile
+        write_codec_budget, write_transport_budget, frame_bytes, profile
       )
 
       ObjectDocumentColumnFiles.new(fresh_plan, physical_plan, pairs, file_roster)
+    end
+
+    private def self.validate_write_codec_budget!(budget : BinaryCodecBudget, limits : BinaryCodecLimits) : Nil
+      unless budget.writing? && budget.limits.max_depth == limits.max_depth &&
+             budget.limits.max_nodes == limits.max_nodes &&
+             budget.limits.max_elements == limits.max_elements &&
+             budget.limits.max_bytes == limits.max_bytes
+        raise ArgumentError.new("Object writer requires a compatible write codec budget")
+      end
+      nil
+    end
+
+    private def self.validate_write_transport_budget!(budget : CompressedStreamBudget, limits : CompressedStreamLimits) : Nil
+      budget.ensure_direction(true)
+      unless budget.limits.max_file_bytes == limits.max_file_bytes &&
+             budget.limits.max_mark_bytes == limits.max_mark_bytes &&
+             budget.limits.max_frame_compressed_bytes == limits.max_frame_compressed_bytes &&
+             budget.limits.max_frame_decompressed_bytes == limits.max_frame_decompressed_bytes &&
+             budget.limits.max_records == limits.max_records &&
+             budget.limits.max_decoded_bytes == limits.max_decoded_bytes &&
+             budget.limits.max_result_bytes == limits.max_result_bytes
+        raise ArgumentError.new("Object writer requires a compatible write transport budget")
+      end
+      nil
     end
 
     # Encodes one Object JSON site under an already escaped structural prefix.
@@ -107,6 +135,8 @@ module CrystalClick
       hashed : Bool = false,
       frame_bytes : Int = 4096,
       initial_array_level : UInt64 = 0_u64,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      shared_target_chunk_rows : Int32 = 1,
     ) : ObjectDocumentColumnFiles
       if granules.empty?
         raise ArgumentError.new("a physical Object site requires at least one real mark")
@@ -190,6 +220,8 @@ module CrystalClick
       hashed : Bool = false,
       frame_bytes : Int = 4096,
       initial_array_level : UInt64 = 0_u64,
+      shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
+      shared_target_chunk_rows : Int32 = 1,
     ) : ObjectDocumentColumnFiles
       if granules.empty?
         raise ArgumentError.new("a physical Object site requires at least one real mark")
@@ -201,6 +233,9 @@ module CrystalClick
         raise ArgumentError.new("Object site codec budget must be write-direction")
       end
       transport_budget.ensure_direction(true)
+      unless shared_target_chunk_rows > 0
+        raise ArgumentError.new("Object shared advanced target chunk rows must be positive")
+      end
       limits = codec_budget.limits
       unless physical_plan.initial_array_level == initial_array_level
         raise ArgumentError.new("Object physical site plan does not match the admitted Array level")
@@ -236,7 +271,8 @@ module CrystalClick
       end
       append_advanced_pairs!(
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,
-        codec_budget, transport_budget, frame_bytes, profile
+        codec_budget, transport_budget, frame_bytes, profile,
+        shared_json_policy, shared_target_chunk_rows
       )
       ObjectDocumentTypedDynamicJsonPhysical.append_pairs!(
         pairs, physical_plan, fresh_plan, streams, rows_per_mark,

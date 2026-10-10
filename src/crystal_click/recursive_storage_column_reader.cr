@@ -2,7 +2,9 @@ module CrystalClick
   # Reads recursive Tuple/Array layouts. Each JSON leaf remains an Object site
   # with its own discovered structure plan; JSON-free leaves remain BinaryBulk
   # sites. Array occurrences are owned by their structural size schedules,
-  # while all lanes share the top-level physical mark grid and operation budgets.
+  # while typed value lanes share the top-level physical mark grid and supplied
+  # operation budgets. Common metadata, key/index, and checksum file passes
+  # remain subject to their per-file bounds, not a whole-part cap.
   class RecursiveStorageColumnReader
     getter row_count : UInt64
     getter mark_count : Int32
@@ -21,6 +23,8 @@ module CrystalClick
     @schema : StorageColumnSchema
     @limits : BinaryCodecLimits
     @transport_limits : CompressedStreamLimits
+    @codec_budget : BinaryCodecBudget?
+    @transport_budget : CompressedStreamBudget?
     @source : PartStreamSource
     @plan : RecursiveStorageColumnPlan
     @object_descriptors : Hash(String, ObjectDocumentFileDescriptor)
@@ -36,18 +40,28 @@ module CrystalClick
     @physical_stream_names : Array(String)
     @selected_checksum_names : Array(String)
 
+    # Borrowed budgets are consumptive owners for explicitly charged work in
+    # this recursive-column inspection and later typed-value reads; nil retains
+    # the legacy per-operation owners. Common metadata, key/index, and checksum
+    # passes remain subject to their per-file bounds, not a whole-part cap.
     def self.open(
       part_path : String,
       column_name : String,
       expected_schema : StorageColumnSchema,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      codec_budget : BinaryCodecBudget? = nil,
+      transport_budget : CompressedStreamBudget? = nil,
     ) : RecursiveStorageColumnReader
-      new(part_path, column_name, expected_schema)
+      new(part_path, column_name, expected_schema, transport_limits, codec_budget, transport_budget)
     end
 
     private def initialize(
       part_path : String,
       column_name : String,
       expected_schema : StorageColumnSchema,
+      @transport_limits : CompressedStreamLimits,
+      codec_budget : BinaryCodecBudget?,
+      transport_budget : CompressedStreamBudget?,
     )
       @array_frames = Hash(String, StorageArrayOccurrenceFrame).new
       @array_size_names = Hash(String, String).new
@@ -55,6 +69,9 @@ module CrystalClick
       @site_domain_rows = Hash(String, Array(UInt64)).new
       @schema = expected_schema
       @limits = limits_for_schema(expected_schema)
+      validate_read_budgets!(codec_budget, transport_budget)
+      @codec_budget = codec_budget
+      @transport_budget = transport_budget
       # Reparse public factory descriptors before they can select metadata,
       # physical prefixes, or codec sites.
       begin
@@ -70,8 +87,6 @@ module CrystalClick
       raise ArgumentError.new("recursive storage column name must not be empty") if column_name.empty?
       @part_path = File.expand_path(part_path)
       @column_name = String.new(column_name.to_slice)
-      @transport_limits = CompressedStreamLimits.new
-
       selected_declaration = WidePart.selected_recursive_json_declaration(@part_path, @column_name) ||
                              raise(UnsupportedFormatError.new("selected column is not an admitted recursive Tuple/Array JSON declaration"))
 
@@ -103,8 +118,8 @@ module CrystalClick
       @ordinary_profile = metadata.ordinary_profile
 
       @source = PartStreamSource.new(@part_path)
-      codec_budget = BinaryCodecBudget.new(@limits)
-      transport_budget = CompressedStreamBudget.new(@transport_limits)
+      open_codec_budget = codec_budget || BinaryCodecBudget.new(@limits)
+      open_transport_budget = transport_budget || CompressedStreamBudget.new(@transport_limits)
       name_context = PhysicalStreamPlanContext.new(@limits)
       descriptors = Hash(String, ObjectDocumentFileDescriptor).new
       object_plans = Hash(String, ObjectDocumentPlan).new
@@ -118,7 +133,7 @@ module CrystalClick
       rows = if expected_schema.has_array?
                location = first_array_location(expected_schema, root_prefix, "root", 0_u64, name_context) ||
                           raise(CorruptPartError.new("recursive Array schema has no Array site"))
-               discover_root_rows_from_array(location[1], location[2], transport_budget)
+               discover_root_rows_from_array(location[1], location[2], open_transport_budget)
              else
                location = first_object_location(expected_schema, root_prefix, "root", name_context) ||
                           raise(CorruptPartError.new("recursive Tuple schema has no Object site"))
@@ -126,9 +141,9 @@ module CrystalClick
                  @source,
                  location[1],
                  location[2].typed_paths,
-                 codec_budget,
+                 open_codec_budget,
                  name_context,
-                 transport_budget,
+                 open_transport_budget,
                  @ordinary_profile,
                  BinaryBulkProfile.single_stream,
                  true,
@@ -145,7 +160,7 @@ module CrystalClick
              end
 
       validate_parent_schedule!(rows, metadata.row_count)
-      root_grid = StorageOccurrenceGrid.new(rows, rows, codec_budget)
+      root_grid = StorageOccurrenceGrid.new(rows, rows, open_codec_budget)
       array_frames = Hash(String, StorageArrayOccurrenceFrame).new
       array_size_names = Hash(String, String).new
       object_domain_grids = Hash(String, StorageOccurrenceGrid).new
@@ -167,9 +182,9 @@ module CrystalClick
         object_domain_grids,
         site_domain_rows,
         dynamic_readers,
-        codec_budget,
+        open_codec_budget,
         name_context,
-        transport_budget,
+        open_transport_budget,
       )
 
       @plan = RecursiveStorageColumnPlan.for_column_with_dynamic_readers(
@@ -202,7 +217,7 @@ module CrystalClick
             data_name,
             marks_name,
             site.physical.prefix_size_for(role),
-            transport_budget,
+            open_transport_budget,
           )
           validate_same_physical_rows!(grid, rows, "BinaryBulk site #{site.key}")
           grids[String.new(role.to_slice)] = grid
@@ -210,9 +225,9 @@ module CrystalClick
           if BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(role, site.physical.prefix_size_for(role))
             BinaryBulkPhysicalPrefixAdapter.preflight_read(
               [{role, site.physical.prefix_size_for(role), 1}],
-              codec_budget,
+              open_codec_budget,
             )
-            window = @source.read_window(data_name, marks_name, 0, 0, site.physical.prefix_size_for(role), transport_budget)
+            window = @source.read_window(data_name, marks_name, 0, 0, site.physical.prefix_size_for(role), open_transport_budget)
             BinaryBulkPhysicalPrefixAdapter.read_lane(role, window.bytes, window.offsets, site.physical.prefix_size_for(role))
           end
         end
@@ -283,10 +298,10 @@ module CrystalClick
     # complete state before this window is assembled.
     def read_marks(first_mark : Int, mark_count : Int) : Array(Array(StorageColumnValue))
       validate_selection!(first_mark, mark_count)
-      codec_budget = BinaryCodecBudget.new(@limits)
+      codec_budget = @codec_budget || BinaryCodecBudget.new(@limits)
       validate_complete_schedules!(codec_budget)
       charge_selected_value_shape!(first_mark, mark_count, codec_budget)
-      transport_budget = CompressedStreamBudget.new(@transport_limits)
+      transport_budget = @transport_budget || CompressedStreamBudget.new(@transport_limits)
       name_context = PhysicalStreamPlanContext.new(@limits)
 
       object_rows = Hash(String, Array(Array(ObjectDocument))).new
@@ -1244,6 +1259,20 @@ module CrystalClick
     private def same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
       left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
         left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
+    end
+
+    private def validate_read_budgets!(
+      codec_budget : BinaryCodecBudget?,
+      transport_budget : CompressedStreamBudget?,
+    ) : Nil
+      StorageReadBudgetValidator.validate!(
+        codec_budget,
+        transport_budget,
+        @limits,
+        @transport_limits,
+        "recursive storage reader codec budget differs from its schema limits",
+        "recursive storage reader transport budget differs from its read limits",
+      )
     end
 
     private def checked_add_u64(left : UInt64, right : UInt64) : UInt64

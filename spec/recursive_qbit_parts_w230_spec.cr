@@ -594,9 +594,11 @@ describe "W230 recursive QBit complete-part and typed consumers" do
     array_candidate = w230_parts_try_array_type(qbit)
     if array_type = array_candidate
       value = w230_parts_array_value(array_type, [] of CrystalClick::BinaryValue)
-      expect_raises(ArgumentError) do
-        CrystalClick::BinaryValue.dynamic(dynamic, value)
-      end
+      actual = CrystalClick::BinaryValue.dynamic(dynamic, value)
+      actual.type.should eq(dynamic)
+      actual.child_count.should eq(1)
+      actual.child_at(0).type.should eq(array_type)
+      actual.child_at(0).element_count.should eq(0)
     end
   end
 end

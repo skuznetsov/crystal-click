@@ -1,6 +1,39 @@
 # CrystalClick project status
 
-Latest qualification (W244, 2026-10-09): VERIFIED within one finite prepared
+Latest qualification (W245, 2026-10-10): VERIFIED within the finite schema-wide
+Wide publication target; root adversary ROBUST within scope. The new
+`WidePartWriter.write_uint64_columns` composes N typed value columns over one
+sorted UInt64 key, common metadata/checksum envelope and exclusive publisher.
+Four `WidePartColumn` factories select existing static BinaryBulk, Dynamic,
+root Object and recursive JSON-bearing owners. Recursive serializers are
+reused; no codec per wrapper product is introduced. Operation, typed inputs,
+metadata/lane binding and publisher have cohesive own-file owners; broad
+facade decomposition remains open.
+
+The same 69 affected spec files pass 414 examples in each of DEBUG and RELEASE;
+both final helpers, formatting and Ruby syntax gates pass. All eight final
+native cells and independent raw audits pass, with 28 auditor controls per
+cell. Each generated part combines all four owners; stock ATTACH/CHECK=1,
+exact schema/values/child types and aggregate=1497 qualify 40 stock calls.
+All 264 generated files / 38,584 bytes per mode agree by actual bytes across
+four profiles. Dynamic COMPACT is not the Compact part layout. Ten additional
+root semantic refusals and restored acceptance pass. This is one-way
+library-write -> stock-read, not every admitted product or the whole suite.
+See the [schema-aware publication frontier](SCHEMA_WIDE_PART_WRITER_FRONTIER.md)
+and [W245 evidence index](../.landmark/evidence/schema-wide-part-w245.json).
+
+Recursive logical/bulk composition and full physical qualification are distinct:
+state/prefix ownership, parent-vs-child occurrences, stream/mark binding and
+nominal admission still have boundaries. W245 removes the former mostly
+two-column envelope seam without widening type grammar. Key/partition metadata,
+remaining layouts/state families/owner handoffs and projection/MV writes remain
+open. Value-lane read-validation budgets are shared; not all envelope/planning
+work is aggregate-accounted, and exception cleanup is not crash recovery.
+Overall goal ACTIVE; memory/performance deferred; no remote push. The shallow
+comparison source `f25eb93a0b890a3b87df05eb34e2af1f933b4089` is a separately
+pinned October 9 snapshot, not the runtime build or latest-at-completion claim.
+
+Previous qualification (W244, 2026-10-09): VERIFIED within one finite prepared
 JSON-bearing actual at a populated nested Dynamic site; root adversary verdict
 ROBUST within scope. The existing recursive implementation passed the new
 falsifier: production sources are unchanged from `8e11216`. Six focused and
@@ -16,10 +49,10 @@ compatibility, reciprocal W244 or a whole-suite claim. See the
 
 Distinguish unqualified combinations from missing implementation: recursive
 logical/bulk codecs already compose wrappers, but physical consumers still
-have exact admission gates and the complete-part writer is largely specialized
-to two-column UInt64-key slices. The next substantial architectural frontier is
-a general schema-aware part publisher over shared recursive column plans,
-followed by key/partition metadata and projection/MV writes. Additional legal
+have exact admission gates. At the W244 checkpoint the complete-part writer was
+largely specialized to two-column UInt64-key slices; W245 now supplies a common
+schema-aware envelope through the four qualified owner adapters above.
+Key/partition metadata and projection/MV writes remain next. Additional legal
 type products, Compact and aggregate-state families remain open. Overall goal
 ACTIVE; memory/performance deferred; no remote push. The latest comparison
 source is shallow snapshot `f25eb93a0b890a3b87df05eb34e2af1f933b4089`; it is not

@@ -15,6 +15,8 @@ module CrystalClick
     @type : BinaryDataType
     @limits : BinaryCodecLimits
     @transport_limits : CompressedStreamLimits
+    @codec_budget : BinaryCodecBudget?
+    @transport_budget : CompressedStreamBudget?
     @source : PartStreamSource
     @physical : BinaryBulkPhysicalPlan
     @grids : Hash(String, CompressedMarkGrid)
@@ -24,14 +26,20 @@ module CrystalClick
     @physical_stream_names : Array(String)
     @selected_checksum_names : Array(String)
 
+    # Borrowed budgets are consumptive owners for explicitly charged work in
+    # this selected-column inspection and later typed-value reads; nil retains
+    # the legacy per-operation owners. Common metadata, key/index, and checksum
+    # file passes remain subject to their per-file bounds, not a whole-part cap.
     def self.open(
       part_path : String,
       column_name : String,
       expected_type : BinaryDataType,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      codec_budget : BinaryCodecBudget? = nil,
+      transport_budget : CompressedStreamBudget? = nil,
     ) : BinaryBulkColumnReader
-      new(part_path, column_name, expected_type, limits, transport_limits)
+      new(part_path, column_name, expected_type, limits, transport_limits, codec_budget, transport_budget)
     end
 
     private def initialize(
@@ -40,10 +48,19 @@ module CrystalClick
       @type : BinaryDataType,
       @limits : BinaryCodecLimits,
       @transport_limits : CompressedStreamLimits,
+      codec_budget : BinaryCodecBudget?,
+      transport_budget : CompressedStreamBudget?,
     )
+      validate_read_budgets!(codec_budget, transport_budget)
+      @codec_budget = codec_budget
+      @transport_budget = transport_budget
+
       # Bound descriptor traversal and display-name rendering before asking
       # summary predicates, plans, or metadata owners to materialize anything.
-      name_budget = BinaryCodecBudget.new(@limits)
+      # Explicitly borrowed operations charge descriptor work together with
+      # this column's typed-value path. Common metadata and other part files
+      # retain their independent per-file bounds.
+      name_budget = codec_budget || BinaryCodecBudget.new(@limits)
       name_bounds = BinaryTypeNameBudget.measure(@type, name_budget)
       canonical = BinaryTypeNameBudget.materialize(@type, name_budget, name_bounds)
       canonical_bytes = canonical.bytesize.to_u64
@@ -120,8 +137,8 @@ module CrystalClick
       end
 
       @source = PartStreamSource.new(@part_path)
-      codec_budget = BinaryCodecBudget.new(@limits)
-      transport_budget = CompressedStreamBudget.new(@transport_limits)
+      operation_codec_budget = codec_budget || BinaryCodecBudget.new(@limits)
+      operation_transport_budget = transport_budget || CompressedStreamBudget.new(@transport_limits)
       grids = Hash(String, CompressedMarkGrid).new(initial_capacity: role_names.size)
       parent_rows = nil.as(Array(UInt64)?)
       logical_bytes = 0_u64
@@ -132,7 +149,7 @@ module CrystalClick
           @physical.data_file_for(role, true),
           @physical.marks_file_for(role, true),
           prefix,
-          transport_budget,
+          operation_transport_budget,
         )
         if current_rows = parent_rows
           unless grid.rows_per_mark == current_rows
@@ -150,7 +167,7 @@ module CrystalClick
 
         if BinaryBulkPhysicalPrefixAdapter.variant_discriminator_role?(role, prefix)
           BinaryBulkPhysicalPrefixAdapter.preflight_read(
-            [{role, prefix, 1}], codec_budget
+            [{role, prefix, 1}], operation_codec_budget
           )
           window = @source.read_window(
             @physical.data_file_for(role, true),
@@ -158,7 +175,7 @@ module CrystalClick
             0,
             0,
             prefix,
-            transport_budget,
+            operation_transport_budget,
           )
           BinaryBulkPhysicalPrefixAdapter.read_lane(
             role, window.bytes, window.offsets, prefix
@@ -194,8 +211,8 @@ module CrystalClick
           grids,
           rows,
           @limits,
-          codec_budget,
-          transport_budget,
+          operation_codec_budget,
+          operation_transport_budget,
         )
       end
 
@@ -213,7 +230,7 @@ module CrystalClick
           grids,
           rows,
           @limits,
-          transport_budget,
+          operation_transport_budget,
         )
       end
 
@@ -258,8 +275,8 @@ module CrystalClick
     # so malformed off-window dictionary schedules cannot be hidden.
     def read_marks(first_mark : Int, mark_count : Int) : Array(Array(BinaryValue))
       validate_selection!(first_mark, mark_count)
-      codec_budget = BinaryCodecBudget.new(@limits)
-      transport_budget = CompressedStreamBudget.new(@transport_limits)
+      codec_budget = @codec_budget || BinaryCodecBudget.new(@limits)
+      transport_budget = @transport_budget || CompressedStreamBudget.new(@transport_limits)
       replay_complete = @type.contains_low_cardinality?
       read_first = replay_complete ? 0 : first_mark
       read_count = replay_complete ? @mark_count : mark_count
@@ -393,6 +410,20 @@ module CrystalClick
 
     private def copy_strings(values : Array(String)) : Array(String)
       values.map { |value| String.new(value.to_slice) }
+    end
+
+    private def validate_read_budgets!(
+      codec_budget : BinaryCodecBudget?,
+      transport_budget : CompressedStreamBudget?,
+    ) : Nil
+      StorageReadBudgetValidator.validate!(
+        codec_budget,
+        transport_budget,
+        @limits,
+        @transport_limits,
+        "Binary bulk reader codec budget differs from its read limits",
+        "Binary bulk reader transport budget differs from its read limits",
+      )
     end
   end
 end

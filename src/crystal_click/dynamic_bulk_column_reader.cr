@@ -13,18 +13,26 @@ module CrystalClick
     @type : BinaryDataType
     @limits : BinaryCodecLimits
     @transport_limits : CompressedStreamLimits
+    @codec_budget : BinaryCodecBudget?
+    @transport_budget : CompressedStreamBudget?
     @site_reader : DynamicBulkSiteReader
     @schema_declaration : String
     @source_declaration : String
 
+    # Borrowed budgets are consumptive owners for explicitly charged work in
+    # this selected-column inspection and later Dynamic value reads; nil keeps
+    # the legacy per-operation owners. Common metadata, key/index, and checksum
+    # passes remain subject to their per-file bounds, not a whole-part cap.
     def self.open(
       part_path : String,
       column_name : String,
       expected_type : BinaryDataType,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      codec_budget : BinaryCodecBudget? = nil,
+      transport_budget : CompressedStreamBudget? = nil,
     ) : DynamicBulkColumnReader
-      new(part_path, column_name, expected_type, limits, transport_limits)
+      new(part_path, column_name, expected_type, limits, transport_limits, codec_budget, transport_budget)
     end
 
     private def initialize(
@@ -33,10 +41,19 @@ module CrystalClick
       @type : BinaryDataType,
       @limits : BinaryCodecLimits,
       @transport_limits : CompressedStreamLimits,
+      codec_budget : BinaryCodecBudget?,
+      transport_budget : CompressedStreamBudget?,
     )
+      validate_read_budgets!(codec_budget, transport_budget)
+      @codec_budget = codec_budget
+      @transport_budget = transport_budget
+
       # Bound descriptor/name work before summary predicates, metadata
       # callbacks, or structure discovery can traverse the caller's type.
-      name_budget = BinaryCodecBudget.new(@limits)
+      # Explicitly borrowed operations charge descriptor work with this
+      # column's typed-value/site path; common metadata and other part files
+      # retain their independent per-file bounds.
+      name_budget = codec_budget || BinaryCodecBudget.new(@limits)
       name_bounds = BinaryTypeNameBudget.measure(@type, name_budget)
       canonical = BinaryTypeNameBudget.materialize(@type, name_budget, name_bounds)
       name_budget.ensure_wire_bytes(canonical.bytesize.to_u64)
@@ -88,8 +105,8 @@ module CrystalClick
         @ordinary_profile,
         @limits,
         @transport_limits,
-        BinaryCodecBudget.new(@limits),
-        CompressedStreamBudget.new(@transport_limits),
+        codec_budget || BinaryCodecBudget.new(@limits),
+        transport_budget || CompressedStreamBudget.new(@transport_limits),
         nil,
         nil,
         metadata.row_count,
@@ -134,7 +151,12 @@ module CrystalClick
     # LowCardinality state; table consumers must call this even for empty
     # candidate/window selections.
     def validate_complete_schedule : Nil
-      @site_reader.read_marks(0, 0)
+      @site_reader.read_marks(
+        0,
+        0,
+        @codec_budget || BinaryCodecBudget.new(@limits),
+        @transport_budget || CompressedStreamBudget.new(@transport_limits),
+      )
       nil
     end
 
@@ -143,7 +165,26 @@ module CrystalClick
     # middle/end-empty selection. A zero mark count still validates the full
     # schedule and any bound-child replay required by the site plan.
     def read_marks(first_mark : Int, mark_count : Int) : Array(Array(BinaryValue))
-      @site_reader.read_marks(first_mark, mark_count)
+      @site_reader.read_marks(
+        first_mark,
+        mark_count,
+        @codec_budget || BinaryCodecBudget.new(@limits),
+        @transport_budget || CompressedStreamBudget.new(@transport_limits),
+      )
+    end
+
+    private def validate_read_budgets!(
+      codec_budget : BinaryCodecBudget?,
+      transport_budget : CompressedStreamBudget?,
+    ) : Nil
+      StorageReadBudgetValidator.validate!(
+        codec_budget,
+        transport_budget,
+        @limits,
+        @transport_limits,
+        "Dynamic bulk reader codec budget differs from its read limits",
+        "Dynamic bulk reader transport budget differs from its read limits",
+      )
     end
   end
 end
