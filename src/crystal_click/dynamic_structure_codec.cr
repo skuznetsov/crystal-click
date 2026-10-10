@@ -1,6 +1,6 @@
 module CrystalClick
-  # Exact complete-blob codec for the admitted MergeTree Dynamic V3
-  # descriptor roster and optional statistics.
+  # Exact complete-blob codec for admitted MergeTree Dynamic V1, V2, and V3
+  # descriptor rosters and their version-specific statistics framing.
   module DynamicStructureCodec
     def self.encode(
       structure : DynamicStructure,
@@ -21,9 +21,8 @@ module CrystalClick
       structure
     end
 
-    # Compact Object Dynamic V3 stores only the descriptor prefix in the
-    # substream; unlike the complete metadata blob, it omits the statistics
-    # flag as well as any statistics payload.
+    # Prefix-only frames store the version and ordinary roster without any
+    # statistics bytes; the caller owns their exact enclosing slice.
     def self.encode_prefix_without_statistics(
       structure : DynamicStructure,
       limits : BinaryCodecLimits = BinaryCodecLimits.default,
@@ -55,8 +54,8 @@ module CrystalClick
       nil
     end
 
-    # Writes the complete metadata and returns the relative position before its
-    # statistics flag without finishing or copying the encoded blob.
+    # Writes complete metadata and returns the relative position before its
+    # statistics suffix without finishing or copying the encoded blob.
     def self.write_with_statistics_offset(
       structure : DynamicStructure,
       context : BinaryCodecContext,
@@ -66,11 +65,17 @@ module CrystalClick
       parse_start = context.output_size
       write_prefix_without_statistics(structure, context, structure_depth, type_depth)
       statistics_offset = context.output_size - parse_start
-      if statistics = structure.statistics
-        context.write_byte(1_u8)
-        StructureStatisticsCodec.write(statistics, context, structure.canonical_variant_count)
+      if structure.version == DynamicStructure::VERSION_V3
+        if statistics = structure.statistics
+          context.write_byte(1_u8)
+          StructureStatisticsCodec.write(statistics, context, structure.canonical_variant_count)
+        else
+          context.write_byte(0_u8)
+        end
       else
-        context.write_byte(0_u8)
+        statistics = structure.statistics ||
+                     raise UnsupportedFormatError.new("complete Dynamic V1/V2 metadata requires statistics")
+        StructureStatisticsCodec.write(statistics, context, structure.canonical_variant_count)
       end
       statistics_offset
     end
@@ -84,7 +89,13 @@ module CrystalClick
       type_depth : Int = 1,
     ) : Nil
       context.visit_node(structure_depth)
-      write_u64_le(context, 4_u64)
+      write_u64_le(context, structure.version)
+
+      if structure.version == DynamicStructure::VERSION_V1
+        legacy_max_dynamic_types = structure.legacy_max_dynamic_types ||
+                                   raise UnsupportedFormatError.new("Dynamic V1 structure is missing its legacy maximum")
+        context.write_var_uint(legacy_max_dynamic_types)
+      end
 
       type_count = structure.type_count
       context.preflight_metadata(
@@ -94,7 +105,21 @@ module CrystalClick
       )
       context.write_var_uint(type_count.to_u64)
       type_count.times do |index|
-        BinaryDataTypeCodec.write_to(structure.type_at(index), context, type_depth)
+        type = structure.type_at(index)
+        if structure.version == DynamicStructure::VERSION_V3
+          BinaryDataTypeCodec.write_to(type, context, type_depth)
+        else
+          bounds = BinaryTypeNameBudget.measure(type, context.budget, type_depth)
+          name = BinaryTypeNameBudget.materialize(type, context.budget, bounds)
+          unless name.valid_encoding?
+            raise UnsupportedFormatError.new("Dynamic V1/V2 SQL type name is not valid UTF-8")
+          end
+          parsed = BinaryRecursiveDataTypeNameReader.parse_canonical_with_budget(name, context.budget, type_depth)
+          unless parsed == type
+            raise UnsupportedFormatError.new("Dynamic V1/V2 SQL type name does not preserve descriptor identity")
+          end
+          write_string_binary(name, context)
+        end
       end
       nil
     end
@@ -109,8 +134,8 @@ module CrystalClick
       read_with_statistics_offset(context, structure_depth, type_depth, preflight_type_names)[0]
     end
 
-    # Reads the complete metadata while exposing the relative start of the
-    # statistics suffix flag for paired mark checks.
+    # Reads complete metadata while exposing the relative start of its
+    # statistics suffix for paired mark checks.
     def self.read_with_statistics_offset(
       context : BinaryCodecContext,
       structure_depth : Int = 1,
@@ -120,20 +145,29 @@ module CrystalClick
       parse_start = context.input_offset
       profile, types = read_prefix_without_statistics_internal(context, structure_depth, type_depth, preflight_type_names)
       statistics_offset = (context.input_offset - parse_start).to_i32
-      statistics = case context.read_byte
-                   when 0_u8
-                     nil
-                   when 1_u8
-                     StructureStatisticsCodec.read(context, profile.canonical_variant_count)
+      statistics = if profile.version == DynamicStructure::VERSION_V3
+                     case context.read_byte
+                     when 0_u8
+                       nil
+                     when 1_u8
+                       StructureStatisticsCodec.read(context, profile.canonical_variant_count)
+                     else
+                       context.corrupt!("Dynamic statistics flag must be zero or one")
+                     end
                    else
-                     context.corrupt!("Dynamic statistics flag must be zero or one")
+                     StructureStatisticsCodec.read(context, profile.canonical_variant_count)
                    end
 
       begin
-        structure = DynamicStructure.new(types, statistics)
+        structure = DynamicStructure.new(
+          types,
+          statistics,
+          profile.version,
+          profile.legacy_max_dynamic_types,
+        )
         {structure, statistics_offset}
       rescue ex : ArgumentError
-        context.corrupt!("invalid Dynamic V3 statistics: #{ex.message}")
+        context.corrupt!("invalid Dynamic statistics: #{ex.message}")
       end
     end
 
@@ -157,11 +191,16 @@ module CrystalClick
     ) : Tuple(DynamicStructure, Array(BinaryDataType))
       context.visit_node(structure_depth)
       version = read_u64_le(context)
+      legacy_max_dynamic_types = nil.as(UInt64?)
       case version
-      when 4_u64
+      when DynamicStructure::VERSION_V3
         # Current MergeTree Dynamic V3 uses binary descriptors.
-      when 1_u64, 2_u64
-        context.unsupported!("older Dynamic part structure version #{version} is not admitted")
+      when DynamicStructure::VERSION_V1
+        # ClickHouse skips this historical compatibility field and uses only
+        # the actual roster count that follows it.
+        legacy_max_dynamic_types = context.read_var_uint
+      when DynamicStructure::VERSION_V2
+        # V2 has a textual roster but no historical maximum field.
       when 3_u64
         context.corrupt!("Dynamic FLATTENED version is Native-only, not a MergeTree part version")
       else
@@ -177,26 +216,63 @@ module CrystalClick
       )
       types = Array(BinaryDataType).new(type_count)
       type_count.times do
-        types << BinaryDataTypeCodec.read_from(context, type_depth)
+        if version == DynamicStructure::VERSION_V3
+          types << BinaryDataTypeCodec.read_from(context, type_depth)
+        else
+          name_size = context.read_var_uint
+          name = String.new(context.read_slice(name_size))
+          unless name.valid_encoding?
+            context.corrupt!("Dynamic V1/V2 SQL type name is not valid UTF-8")
+          end
+          type = BinaryRecursiveDataTypeNameReader.parse_canonical_with_budget(name, context.budget, type_depth)
+          unless type
+            context.corrupt!("Dynamic V1/V2 SQL type name is not a supported canonical descriptor")
+          end
+          types << type
+        end
       end
 
       types.each do |type|
         if type.tag == BinaryDataType::TAG_DYNAMIC
-          context.unsupported!("Dynamic alternatives are not admitted in Dynamic V3")
+          message = if version == DynamicStructure::VERSION_V3
+                      "Dynamic alternatives are not admitted in Dynamic V3"
+                    else
+                      "Dynamic alternatives are not admitted in a Dynamic ordinary roster"
+                    end
+          context.unsupported!(message)
         end
         if type.tag == BinaryDataType::TAG_VARIANT
-          context.unsupported!("Variant-containing alternatives are not admitted in Dynamic V3")
+          message = if version == DynamicStructure::VERSION_V3
+                      "Variant-containing alternatives are not admitted in Dynamic V3"
+                    else
+                      "Variant-containing alternatives are not admitted in a Dynamic ordinary roster"
+                    end
+          context.unsupported!(message)
         end
         if type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_NULLABLE
-          context.unsupported!("top-level Nothing and Nullable are not admitted in Dynamic V3")
+          message = if version == DynamicStructure::VERSION_V3
+                      "top-level Nothing and Nullable are not admitted in Dynamic V3"
+                    else
+                      "top-level Nothing and Nullable are not admitted in a Dynamic ordinary roster"
+                    end
+          context.unsupported!(message)
         end
         if type.tag == BinaryDataType::TAG_LOW_CARDINALITY && type.child_at(0).tag == BinaryDataType::TAG_NULLABLE
-          context.unsupported!("LowCardinality(Nullable) alternatives are not admitted in Dynamic V3")
+          message = if version == DynamicStructure::VERSION_V3
+                      "LowCardinality(Nullable) alternatives are not admitted in Dynamic V3"
+                    else
+                      "LowCardinality(Nullable) alternatives are not admitted in a Dynamic ordinary roster"
+                    end
+          context.unsupported!(message)
         end
       end
 
       name_work_bytes = 0_u64
-      if preflight_type_names
+      # Text-name versions must always budget the canonical roster names that
+      # DynamicStructure materializes. Binary V3 keeps its existing opt-in
+      # preflight contract for callers that do not cross an untrusted name
+      # boundary.
+      if preflight_type_names || version != DynamicStructure::VERSION_V3
         # DynamicStructure canonicalizes names twice while checking the roster
         # and retaining its statistics-bearing form. Measure both operations,
         # including each detached retained-name copy, before either constructor
@@ -220,11 +296,16 @@ module CrystalClick
       end
 
       profile = begin
-        DynamicStructure.new(types)
+        DynamicStructure.new(types, nil, version, legacy_max_dynamic_types)
       rescue ex : ArgumentError
-        context.corrupt!("invalid Dynamic V3 alternative roster: #{ex.message}")
+        context.corrupt!("invalid Dynamic alternative roster: #{ex.message}")
       end
       {profile, types}
+    end
+
+    private def self.write_string_binary(value : String, context : BinaryCodecContext) : Nil
+      context.write_var_uint(value.bytesize.to_u64)
+      context.write_slice(value.to_slice)
     end
 
     private def self.read_u64_le(context : BinaryCodecContext) : UInt64

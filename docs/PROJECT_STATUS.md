@@ -1,6 +1,38 @@
 # CrystalClick project status
 
-Current qualification (W249, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W250, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite persisted Dynamic V1/V2 target. The existing recursive serde and
+physical/public handoffs are reused. One shared structure codec dispatches
+legacy SQL-name rosters and mandatory unflagged statistics versus V3 binary
+descriptors and optional statistics. The immutable owner preserves the version
+and V1's ignored legacy maximum through re-encoding and statistics rebuilding;
+text parsing borrows the same aggregate budget and inherited depth. Defaults
+remain V3. There is no codec per container/type product.
+
+The same ordered 30-file roster passes 87 + 46 + 60 = 193 examples per DEBUG
+and RELEASE mode, zero failures/errors/pending. All four helper builds pass.
+Four fresh reciprocal cells qualify V1/single String and V2/sized String in
+both modes, not a full versions/profiles Cartesian product. Sixteen native and
+sixteen helper calls establish ATTACH/CHECK=1, exact nominal schema, literal
+values/types, stock re-emission/CHECK=1 and direct/table/window/candidate/offline
+reads. Root independently parses all 48 raw structure streams and physical
+marks. The 208 generated files / 32,219 bytes per mode agree by actual bytes.
+Two post-snapshot private-copy mutations reject at the intended library/stock
+guards; baseline and both byte-exact restored acceptances pass.
+
+This closes finite adaptive Wide/BASIC legacy-version qualification, not all
+Dynamic alternatives, mixed-version stock parts, native Compact, JSON SQL-name
+grammar, aggregate states or MV/projection writes. The stock child site's
+ordinary String/shared Int64 choice is valid and checked against its own exact
+census; it need not match the library's ordinary Int64/shared String choice.
+Source snapshot and separately pinned runtime are not the same identity.
+Same-lineage review is correlated; raw root checks and guarded builds carry
+the evidence. See the [W250 frontier](DYNAMIC_STRUCTURE_VERSIONS_FRONTIER.md)
+and [root-owned evidence index](../.landmark/evidence/dynamic-structure-versions-w250.json).
+Refresh after relevant source/toolchain/runtime changes or capture loss.
+Overall goal ACTIVE; memory/performance deferred; no push authorized.
+
+Previous qualification (W249, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite recursive Dynamic declaration/public-handoff target. A shared bounded
 preflight now has an explicit DynamicBulk profile. The root-only Nested rewrite
 is removed; ObjectJson defaults, inherited aggregate budgets, exact nominal

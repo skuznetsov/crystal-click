@@ -19,6 +19,26 @@ module CrystalClick
       nil
     end
 
+    # Shared-budget entry point for a roster of StringBinary type names. A
+    # Dynamic structure may contain many alternatives and recursive sites;
+    # each name therefore consumes the caller's existing node/edge/name-work
+    # budget instead of silently receiving a fresh per-name allowance.
+    def self.parse_canonical_with_budget(
+      source : String,
+      budget : BinaryCodecBudget,
+      depth : Int32 = 1,
+    ) : BinaryDataType?
+      return nil if source.bytesize.to_i64 > budget.limits.max_bytes
+
+      reader = new(source, budget.limits, budget, depth)
+      type = reader.parse || return nil
+      bounds = BinaryTypeNameBudget.measure(type, budget, depth)
+      rendered = BinaryTypeNameBudget.materialize(type, budget, bounds)
+      rendered == source ? type : nil
+    rescue ex : ArgumentError | CorruptPartError | UnsupportedFormatError
+      nil
+    end
+
     MAX_ENUM8_ENTRIES  = BinaryEnumDefinition::MAX_ENUM8_ENTRIES
     MAX_ENUM16_ENTRIES = BinaryEnumDefinition::MAX_ENUM16_ENTRIES
 
@@ -26,16 +46,22 @@ module CrystalClick
     @offset : Int32
     @budget : BinaryCodecBudget
     @limits : BinaryCodecLimits
+    @root_depth : Int32
 
-    def initialize(source : String, @limits : BinaryCodecLimits)
+    def initialize(
+      source : String,
+      @limits : BinaryCodecLimits,
+      budget : BinaryCodecBudget? = nil,
+      @root_depth : Int32 = 1,
+    )
       @bytes = source.to_slice
       @offset = 0
-      @budget = BinaryCodecBudget.new(@limits)
+      @budget = budget || BinaryCodecBudget.new(@limits)
     end
 
     def parse : BinaryDataType?
       begin
-        type = parse_type(1)
+        type = parse_type(@root_depth)
         skip_whitespace
         @offset == @bytes.size ? type : nil
       rescue ex : ArgumentError | CorruptPartError

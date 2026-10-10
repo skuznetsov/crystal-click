@@ -371,9 +371,21 @@ describe "W120 paired Object and Dynamic structure metadata" do
       CrystalClick::DynamicStructureCodec.decode(w120_concat(valid_dynamic, Bytes[0x00_u8]))
     end
 
-    {1_u64, 2_u64}.each do |old_part_version|
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::DynamicStructureCodec.decode(w120_u64_le(old_part_version))
+    v1_empty = w120_concat(w120_u64_le(1_u64), Bytes[0x00_u8, 0x00_u8, 0x00_u8, 0x00_u8])
+    v1_decoded = CrystalClick::DynamicStructureCodec.decode(v1_empty)
+    v1_decoded.types.should be_empty
+    v1_decoded.statistics.not_nil!.counts.should eq([0_u64])
+    CrystalClick::DynamicStructureCodec.encode(v1_decoded).should eq(v1_empty)
+
+    v2_empty = w120_concat(w120_u64_le(2_u64), Bytes[0x00_u8, 0x00_u8, 0x00_u8])
+    v2_decoded = CrystalClick::DynamicStructureCodec.decode(v2_empty)
+    v2_decoded.types.should be_empty
+    v2_decoded.statistics.not_nil!.counts.should eq([0_u64])
+    CrystalClick::DynamicStructureCodec.encode(v2_decoded).should eq(v2_empty)
+
+    {1_u64, 2_u64}.each do |incomplete_old_part_version|
+      expect_raises(CrystalClick::CorruptPartError) do
+        CrystalClick::DynamicStructureCodec.decode(w120_u64_le(incomplete_old_part_version))
       end
     end
     expect_raises(CrystalClick::CorruptPartError) do

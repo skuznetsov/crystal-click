@@ -22,10 +22,13 @@ describe "W193 Dynamic no-statistics prefix boundary" do
     end
   end
 
-  it "preserves the known-version error distinction in prefix mode" do
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::DynamicStructureCodec.decode_prefix_without_statistics(Bytes[2, 0, 0, 0, 0, 0, 0, 0, 0])
-    end
+  it "admits V1 and V2 descriptor prefixes while preserving the other version guards" do
+    v2_prefix = Bytes[2, 0, 0, 0, 0, 0, 0, 0, 0]
+    decoded_v2 = CrystalClick::DynamicStructureCodec.decode_prefix_without_statistics(v2_prefix)
+    decoded_v2.types.should be_empty
+    decoded_v2.statistics.should be_nil
+    CrystalClick::DynamicStructureCodec.encode_prefix_without_statistics(decoded_v2).should eq(v2_prefix)
+
     expect_raises(CrystalClick::CorruptPartError) do
       CrystalClick::DynamicStructureCodec.decode_prefix_without_statistics(Bytes[3, 0, 0, 0, 0, 0, 0, 0, 0])
     end

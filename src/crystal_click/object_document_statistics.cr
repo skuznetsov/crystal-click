@@ -531,7 +531,12 @@ module CrystalClick
       # DynamicStructure's constructor renders every ordinary type again and
       # copies those names into its canonical roster. Charge the conservative
       # metadata-aware bounds before that constructor can allocate them.
-      result = DynamicStructure.new(types, stats)
+      result = DynamicStructure.new(
+        types,
+        stats,
+        source.version,
+        source.legacy_max_dynamic_types,
+      )
       budget.charge_wire_bytes(constructor_name_bytes)
       result
     end

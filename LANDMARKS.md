@@ -1,5 +1,46 @@
 # Crystal Click landmarks
 
+## Shared persisted Dynamic V1/V2 structure framing — W250
+
+- Status: VERIFIED / root adversary ROBUST within the finite persisted-version
+  target over clean baseline `16983dafadd8175b016ac0df39e519137baf3848`. A valid
+  literal legacy metadata RED separates missing framing from recursive value
+  serde. One existing structure codec dispatches V1/V2 SQL-name rosters and
+  mandatory unflagged statistics; V3 binary descriptors/defaults remain.
+  The immutable owner and statistics rebuild preserve version and exact V1
+  legacy maximum. ClickHouse ignores that field on read; it is not a type cap.
+  Parsing uses a borrowed operation budget and inherited depth, not per-name
+  allowances or per-container codecs.
+- Same ordered 30-file scoped roster: 193 examples per DEBUG/RELEASE mode, zero
+  failures/errors/pending. All four final helpers build. Four fresh reciprocal
+  native cells qualify V1/single and V2/sized String in both modes, not the full
+  eight-cell Cartesian product. Six Dynamic sites/five recursive families,
+  adaptive Wide/BASIC, P=[2,2,1,EOF0]. Sixteen native and sixteen helper calls
+  establish exact schema/values/actual types, both CHECK=1, direct/table/window/
+  candidate/offline reads. Root independently reconciles 48 raw structure
+  streams, statistics and `.mrk2` positions. The 208 generated files / 32,219
+  bytes per mode match by actual bytes.
+- Stock's recursive child registers String and spills Int64; the library does
+  the reverse. Both origin-specific literal censuses pass. Two metadata changes
+  in private copies reject at the actual probe's post-snapshot guards, followed
+  by byte-exact restored acceptance; qualified captures remain untouched.
+  Mixed local V1/V2/V3, arbitrary ignored V1 maxima, statistics rebuilding,
+  prefix tapes, exact budgets/depth and UTF-8/layout fences have local coverage,
+  not general native-layout qualification. Early diagnostics do not count.
+- Source: shallow `fe0f91b6c3de9e1efa33a1bce4ca9bcbfb4c509d`, commit UTC
+  2026-10-10T09:01:51Z. Separate runtime CH 26.10.1.1201, build
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Root-owned guarded builds bind
+  helper binaries to the pinned sources; standalone observed hashes do not
+  certify arbitrary build provenance. Same-lineage model review is correlated.
+- Return pointers: [W250 frontier](docs/DYNAMIC_STRUCTURE_VERSIONS_FRONTIER.md),
+  [root-owned evidence index](.landmark/evidence/dynamic-structure-versions-w250.json).
+  Refresh after parser/codec/budget/consumer/compiler/helper/fixture/oracle/runtime
+  changes or capture loss. JSON SQL-name grammar, further contextual layouts
+  and aggregate states, MV/projection writes, general keys/partitions and facade
+  decomposition remain open. Offline synthetic reads do not prove Active state
+  or stock-root discovery. Overall goal ACTIVE; memory/performance deferred;
+  no speed/10% parity claim and no push.
+
 ## Recursive Dynamic nominal Nested declaration handoff — W249
 
 - Status: VERIFIED / root adversary ROBUST within the finite target over clean

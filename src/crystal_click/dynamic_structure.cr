@@ -1,9 +1,13 @@
 require "set"
 
 module CrystalClick
-  # Immutable Dynamic V3 type roster and optional canonical-order statistics.
-  # The implicit SharedVariant is a spilled value alternative, not NULL.
+  # Immutable versioned Dynamic type roster and optional canonical-order
+  # statistics. The implicit SharedVariant is spilled data, not NULL.
   class DynamicStructure
+    VERSION_V1 = 1_u64
+    VERSION_V2 = 2_u64
+    VERSION_V3 = 4_u64
+
     MAX_ORDINARY_TYPES  = 254
     SHARED_VARIANT_NAME = "SharedVariant"
 
@@ -11,12 +15,36 @@ module CrystalClick
     @canonical_variant_names : Array(String)
     @shared_index : Int32
     @statistics : StructureStatistics?
+    @version : UInt64
+    @legacy_max_dynamic_types : UInt64?
 
-    def initialize(types : Array(BinaryDataType), statistics : StructureStatistics? = nil)
-      if types.size > MAX_ORDINARY_TYPES
-        raise ArgumentError.new("Dynamic V3 supports at most 254 ordinary types")
+    def initialize(
+      types : Array(BinaryDataType),
+      statistics : StructureStatistics? = nil,
+      version : UInt64 = VERSION_V3,
+      legacy_max_dynamic_types : UInt64? = nil,
+    )
+      unless version == VERSION_V1 || version == VERSION_V2 || version == VERSION_V3
+        raise ArgumentError.new("Dynamic structure version is outside the MergeTree part-version domain")
       end
 
+      if types.size > MAX_ORDINARY_TYPES
+        raise ArgumentError.new("Dynamic supports at most 254 ordinary types")
+      end
+
+      if version == VERSION_V1
+        # ClickHouse writes this legacy VarUInt slot for V1 compatibility but
+        # deliberately ignores it on read. Preserve it as opaque wire identity;
+        # newly constructed V1 structures use the actual roster count.
+        @legacy_max_dynamic_types = legacy_max_dynamic_types || types.size.to_u64
+      else
+        if legacy_max_dynamic_types
+          raise ArgumentError.new("legacy max_dynamic_types is only valid for Dynamic V1")
+        end
+        @legacy_max_dynamic_types = nil
+      end
+
+      @version = version
       @types = types.dup
       names = [String.new(SHARED_VARIANT_NAME.to_slice)] of String
       seen = Set(String).new
@@ -91,11 +119,20 @@ module CrystalClick
       @statistics
     end
 
-    def ==(other : DynamicStructure) : Bool
-      return false unless @types == other.@types && @canonical_variant_names == other.@canonical_variant_names
-      @shared_index == other.@shared_index && @statistics == other.@statistics
+    def version : UInt64
+      @version
     end
 
-    def_hash @types, @canonical_variant_names, @shared_index, @statistics
+    def legacy_max_dynamic_types : UInt64?
+      @legacy_max_dynamic_types
+    end
+
+    def ==(other : DynamicStructure) : Bool
+      return false unless @types == other.@types && @canonical_variant_names == other.@canonical_variant_names
+      @shared_index == other.@shared_index && @statistics == other.@statistics &&
+        @version == other.@version && @legacy_max_dynamic_types == other.@legacy_max_dynamic_types
+    end
+
+    def_hash @types, @canonical_variant_names, @shared_index, @statistics, @version, @legacy_max_dynamic_types
   end
 end
