@@ -1,6 +1,35 @@
 # CrystalClick project status
 
-Current qualification (W255, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W256, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite precomputed Wide projection publication target. The public
+`WidePartProjection.precomputed` owner carries caller-computed rows, independent
+UInt64 keys and a mark grid; the generic N-column writer accepts `projections:`.
+The child planning and checksum-summary owners have their own files. Existing
+column codecs are reused, all parent/child operation counters are shared, and
+the complete staged parent is published exclusively after typed readback and
+child-summary validation. No raw-file injection or nested projection is admitted.
+
+The same ordered 29-file affected roster passes 163 examples in each DEBUG and
+RELEASE mode, zero failures/errors/pending; both sealed helpers build. Two fresh
+native cells establish stock public reads, library ATTACH/CHECK=1/exact schema
+and literal rows, plus an actual forced `ReadFromMergeTree` projection-use
+witness. The four-column fixture includes UInt64, String and Array(UInt16),
+different keys/orders and parent [2,2,2] versus child [3,3] grids. Root independently
+audits 12 streams per parent/child pair across four pairs; all 40 generated
+files / 4,715 bytes per mode agree. Twelve raw-summary, eighteen nonzero-exit,
+six raw CHECK=0 and ten false-EXPLAIN controls reject with original captures
+unchanged. This is scoped qualification, not a full-suite/all-type/performance
+or exhaustive corruption claim.
+
+Physical publication does not compute SELECT or prove provenance/freshness.
+Existing selected-projection readers still do not authenticate the parent's
+`.proj` entry. General MV transformations, remaining aggregate/type-layout
+products, Compact writing, broader facade decomposition and speed parity stay
+open. See the [W256 frontier](PROJECTION_PUBLICATION_FRONTIER.md) and
+[root-owned evidence](../.landmark/evidence/projection-publication-w256.json).
+Overall goal ACTIVE; memory/performance deferred; local commit only, no push.
+
+Previous qualification (W255, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite bitwise AggregateFunction storage target. The three exact unary,
 version-zero, zero-parameter groupBitOr/And/Xor identities admit the twelve bare
 integer types. One own-file argument policy plugs into existing descriptor and
@@ -3307,8 +3336,11 @@ source/runtime identities and executed evidence.
 3. **MV/projection coverage.** Offline declaration metadata and explicit reads
    of fully covered physical Wide projection child parts are available. The
    persisted MV materializer is one explicit-TO identity projection over
-   unpartitioned `k UInt64, v String`. General MV execution, projection
-   planning/writing and arbitrary MV transformations are not implemented.
+   unpartitioned `k UInt64, v String`. W256 adds atomic publication of caller-
+   precomputed, non-nested Wide projection children through existing column
+   owners, including the parent checksum summary. SQL projection planning/
+   automatic materialization and arbitrary MV transformations are not implemented;
+   physical validity is not proof of SELECT equivalence or freshness.
 4. **General table writing.** The detached-part writers and small
    `EmbeddedMergeTreeTable` are not an arbitrary-schema, arbitrary-partition
    MergeTree writer with compound keys and a server lifecycle.
@@ -3458,6 +3490,12 @@ source/runtime identities and executed evidence.
    distinct source laws and native witnesses, not a generic opaque-blob fallback.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
+   W256 now qualifies precomputed projection publication. Next is a selected-part
+   scan through existing DDL/type preflight and caller-run batch transformation
+   into target-schema-bound detached output. Preserve owner-specific recursive
+   values and independent filtered/recomputed keys; do not rename a caller-row
+   writer as execution. Failed callbacks/wrong target schemas must not publish.
+   General key/partition derivation and composable output appenders remain open.
 4. Only then reopen memory/performance work. No current claim of stock-reader
    speed parity or a quantified percentage of complete ClickHouse support.
 
@@ -3468,7 +3506,9 @@ The current bounded comparison checkout is
 `ed30948f095ecb70679986d7d60e27ad770ae27a` (2026-10-10), rechecked clean and
 shallow after the official depth-1 sparse fetch. W254 compares selected
 Object/MAP/statistics/settings owners; W255 compares bitwise dispatch/state and
-the wide-number parser, not every upstream change. This is not a continuing
+the wide-number parser; W256 compares projection checksum/hash envelopes,
+Array metadata/substream laws and the actual projection read-plan witness,
+not every upstream change. This is not a continuing
 upstream freshness claim or the identity of the executed runtime build.
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records
 the previous snapshots, six-directory comparison and earlier identities. In that prior

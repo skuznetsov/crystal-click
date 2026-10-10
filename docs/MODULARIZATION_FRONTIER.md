@@ -9,6 +9,28 @@ granule I/O, staged validation/publication and table/catalog orchestration
 into separate owners. Private value structs may remain with their owner;
 do not add a class hierarchy merely to reduce line counts.
 
+## Projection publication responsibility separation — W256
+
+The public `WidePartProjection` has its own file and owns detached caller-
+materialized identity, keys and existing value-column owners. Private
+`WidePartPreparedProjection` owns independent child planning/encoding/readback;
+private `WidePartProjectionSummary` owns the exact CH child checksum-summary
+envelope. Each has its own file. `WidePartOperationContext` derives the child's
+mark grid while retaining the same mutable planning/codec/transport/readback
+budgets. `WidePartPublisher` remains the single exclusive publication boundary
+for the complete parent. Existing static/Dynamic/Object/recursive column owners
+and codecs are reused, not specialized per projection/type product.
+
+Status: VERIFIED / scoped ROBUST for the finite Wide fixture, 163 affected
+examples per DEBUG/RELEASE mode, both helpers and two reciprocal native cells.
+Root checks raw child summaries, actual projection-use captures and hostile
+acceptance controls. This is cohesive ownership/reuse, not completed broad
+facade decomposition or evidence of reduced allocation/RSS/compiler coupling
+or improved throughput. Parent-summary authentication in selected readers,
+general caller-run MV transformations and remaining physical products are open.
+Details: [W256 frontier](PROJECTION_PUBLICATION_FRONTIER.md),
+[W256 evidence index](../.landmark/evidence/projection-publication-w256.json).
+
 ## Current responsibility separation and reuse — W245
 
 `WidePartColumn` is the public typed-input facade. Four private own-file input

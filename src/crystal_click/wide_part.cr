@@ -12162,12 +12162,12 @@ module CrystalClick
               raise UnsupportedFormatError.new("Dynamic physical substreams do not match a supported arm subset") unless valid_dynamic_substream_inventory?(column, streams)
             else
               expected_streams = expected_physical_streams(column, selected_type, escape_simple_uint64_column: true)
-              if selected_type == "String"
-                # BinaryBulk metadata may present the exact String roster in
-                # sorted name order, while the legacy String reader keeps the
-                # stock size-first order for its internal stream bindings.
-                # Names are unique-checked above; retain exact identity and
-                # return the canonical reader order after comparison.
+              if selected_type == "String" || !WidePart.numeric_array_element_type(selected_type).nil?
+                # BinaryBulk metadata may present the exact String or
+                # primitive numeric-array roster in sorted name order, while
+                # the readers keep their canonical stream order for internal
+                # bindings. Names are unique-checked above; retain exact
+                # identity and return the canonical reader order after comparison.
                 unless streams.sort == expected_streams.sort
                   raise UnsupportedFormatError.new(physical_stream_shape_mismatch(column, selected_type, streams, expected_streams))
                 end
@@ -12655,12 +12655,13 @@ module CrystalClick
       propagated = info["propagate_types_serialization_versions_to_nested_types"]?.try(&.as_bool)
       raise UnsupportedFormatError.new("array nested serialization versions are unsupported") unless propagated == true
 
+      numeric_array = !WidePart.numeric_array_element_type(type).nil?
       versions = info["types_serialization_versions"]?.try(&.as_h) || raise(CorruptPartError.new("serialization type versions are missing or malformed"))
-      unless versions.size == 1 && versions["string"]?.try(&.as_i) == 1
+      string_version = versions["string"]?.try(&.as_i)
+      unless versions.size == 1 && (string_version == 1 || (numeric_array && string_version == 0))
         raise UnsupportedFormatError.new("only nested String serialization version 1 is supported for arrays")
       end
 
-      numeric_array = !WidePart.numeric_array_element_type(type).nil?
       key_columns = columns.select { |name, column_type| name != selected_column && column_type == "UInt64" }
       serializers = info["columns"]?.try(&.as_a) || raise(UnsupportedFormatError.new("array column serializers are required"))
       w33_fixed_string_pair_shape = fixed_string_array_w33_schema?(columns, selected_column)
@@ -12680,8 +12681,9 @@ module CrystalClick
       w51_array_tuple_pair_shape = w51_array_tuple_pair_schema?(columns, selected_column)
       if serializers.empty?
         legacy_two_column_shape = columns.size == 2 && key_columns.size == 1
+        keyed_numeric_array_shape = numeric_array && !key_columns.empty?
         w31_nullable_numeric_shape = nullable_numeric_w31_schema?(columns, selected_column)
-        unless legacy_two_column_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape || w47_ipv6_array_shape || w48_enum_array_shape || w49_bfloat16_array_shape || w50_time_array_shape || w51_array_tuple_pair_shape
+        unless legacy_two_column_shape || keyed_numeric_array_shape || w31_nullable_numeric_shape || w33_fixed_string_pair_shape || w34_bool_pair_shape || w39_wide_array_shape || w40_temporal_array_shape || w41_uuid_array_shape || w42_decimal32_array_shape || w43_decimal64_array_shape || w44_decimal128_array_shape || w45_decimal256_array_shape || w46_ipv4_array_shape || w47_ipv6_array_shape || w48_enum_array_shape || w49_bfloat16_array_shape || w50_time_array_shape || w51_array_tuple_pair_shape
           raise UnsupportedFormatError.new("array serialization requires one UInt64 key/value pair when key serializer is absent")
         end
       else

@@ -13,6 +13,7 @@ module CrystalClick
         limits : BinaryCodecLimits,
         transport_limits : CompressedStreamLimits,
         validation_transport_budget : CompressedStreamBudget? = nil,
+        projections : Array(WidePartPreparedProjection) = [] of WidePartPreparedProjection,
         &validate_value : String -> Nil
       ) : String
         unless keys.size.to_u64 == input.expected_rows.sum(0_u64)
@@ -24,8 +25,11 @@ module CrystalClick
         unless encoded_files.size == input.logical_names.size && encoded_files.keys.sort == input.logical_names
           raise UnsupportedFormatError.new("encoded lanes differ from the admitted physical roster")
         end
+        unless projections.map(&.entry_name) == input.projection_entries
+          raise UnsupportedFormatError.new("prepared projections differ from the admitted parent roster")
+        end
 
-        records = Array(ChecksumRecord).new(input.lane_bindings.size * 2 + 5)
+        records = Array(ChecksumRecord).new(input.checksum_entry_count)
         lanes = checksum_column_files(encoded_files, input, transport_limits, records, validation_transport_budget)
         stage = PartDirectoryPublisher.create_stage(input.parent)
         begin
@@ -47,6 +51,7 @@ module CrystalClick
           File.write(File.join(stage, "columns_substreams.txt"), metadata.substreams)
           File.write(File.join(stage, "default_compression_codec.txt"), metadata.codec)
           File.write(File.join(stage, "metadata_version.txt"), metadata.metadata_version)
+          projections.each { |projection| records << projection.publish(stage) }
           PartChecksumsWriter.write(stage, records)
 
           validate_staged_part!(stage, input, keys, metadata, records, transport_limits, validation_transport_budget)
@@ -199,7 +204,15 @@ module CrystalClick
         unless checksums.entries.keys.sort == record_names
           raise CorruptPartError.new("staged checksums roster differs from generated files")
         end
-        records.each { |record| checksums.validate_selected_entries(stage, record.name) }
+        records.each do |record|
+          if record.name.ends_with?(".proj")
+            entry = checksums.entry(record.name) ||
+                    raise CorruptPartError.new("projection summary entry is absent from checksums.txt")
+            WidePartProjectionSummary.validate_entry!(stage, record.name, entry)
+          else
+            checksums.validate_selected_entries(stage, record.name)
+          end
+        end
         validate_metadata_files!(stage, metadata)
 
         primary = PrimaryKeyIndex.open(stage, input.mark_count, checksums, verify_recorded_hash: true)

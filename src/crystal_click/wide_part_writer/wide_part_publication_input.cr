@@ -11,6 +11,8 @@ module CrystalClick
       getter expected_rows : Array(UInt64)
       getter logical_names : Array(String)
       getter lane_bindings : Array(WidePartLaneBinding)
+      getter projection_entries : Array(String)
+      getter checksum_entry_count : Int32
 
       def initialize(
         @target : String,
@@ -21,7 +23,20 @@ module CrystalClick
         @expected_rows : Array(UInt64),
         @logical_names : Array(String),
         @lane_bindings : Array(WidePartLaneBinding),
+        @projection_entries : Array(String) = [] of String,
       )
+        @checksum_entry_count = @lane_bindings.size * 2 + 5 + @projection_entries.size
+      end
+
+      # Projection inputs are fully validated before a parent staging path
+      # exists. Bind their exact child destination only after the publisher
+      # creates the unpublished parent directory.
+      def bind_destination(destination : String) : WidePartPublicationInput
+        target, parent = WidePartPublicationInput.validate_destination!(destination)
+        WidePartPublicationInput.new(
+          target, parent, @key_name, @mark_count, @expected_files,
+          @expected_rows, @logical_names, @lane_bindings, @projection_entries
+        )
       end
 
       def self.prepare(
@@ -31,6 +46,8 @@ module CrystalClick
         columns : Array(WidePartPreparedColumn),
         rows_per_mark : Int32,
         metadata_version : Int64,
+        projection_names : Array(String) = [] of String,
+        defer_destination_check : Bool = false,
       ) : WidePartPublicationInput
         ensure_supported_platform!
         validate_column_name!(key_name)
@@ -41,6 +58,7 @@ module CrystalClick
         unless keys.size > 0 && keys.size.to_u64 <= WidePart::MAX_ROWS
           raise ArgumentError.new("a Wide part requires a bounded nonempty key stream")
         end
+        projection_entries = validate_projection_names!(projection_names)
         if columns.empty? || columns.size + 1 > WidePart::MAX_METADATA_COLUMNS
           raise UnsupportedFormatError.new("Wide part column count is outside the metadata limit")
         end
@@ -76,18 +94,19 @@ module CrystalClick
           end
         end
         value_streams = total_streams - 1 # checksum envelope also includes key lanes and three metadata records
-        if value_streams > (PartChecksums::MAX_ENTRIES - 5) // 2
+        checksum_entries = value_streams.to_i64 * 2_i64 + 5_i64 + projection_entries.size.to_i64
+        if checksum_entries > PartChecksums::MAX_ENTRIES
           raise UnsupportedFormatError.new("Wide part exceeds checksums entry limit")
         end
 
-        target = File.expand_path(destination)
-        parent = File.dirname(target)
-        raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
-        if File.exists?(target) || File.symlink?(target)
-          raise ArgumentError.new("destination must not already exist")
-        end
+        target, parent = if defer_destination_check
+                           path = File.expand_path(destination)
+                           {path, File.dirname(path)}
+                         else
+                           validate_destination!(destination)
+                         end
 
-        expected_file_count = total_streams * 2 + 8
+        expected_file_count = total_streams * 2 + 8 + projection_entries.size
         expected_files = Array(String).new(expected_file_count)
         logical_names = Array(String).new(total_streams - 1)
         lane_bindings = Array(WidePartLaneBinding).new(total_streams - 1)
@@ -124,6 +143,7 @@ module CrystalClick
           "columns_substreams.txt", "default_compression_codec.txt",
           "metadata_version.txt", "checksums.txt",
         ])
+        names.concat(projection_entries)
         names.each { |name| validate_filename!(name) }
         names.sort!
         index = 1
@@ -136,8 +156,39 @@ module CrystalClick
 
         new(
           target, parent, key_name, first.parent_rows.size.to_i32,
-          names, expected_rows, logical_names, lane_bindings
+          names, expected_rows, logical_names, lane_bindings, projection_entries
         )
+      end
+
+      def self.validate_destination!(destination : String) : Tuple(String, String)
+        target = File.expand_path(destination)
+        parent = File.dirname(target)
+        raise ArgumentError.new("destination path exceeds reader limit") if target.bytesize > WidePartTable::MAX_PART_PATH_BYTES
+        raise ArgumentError.new("destination parent must exist") unless Dir.exists?(parent)
+        if File.exists?(target) || File.symlink?(target)
+          raise ArgumentError.new("destination must not already exist")
+        end
+        {target, parent}
+      end
+
+      private def self.validate_projection_names!(names : Array(String)) : Array(String)
+        if names.size > WidePartWriter::MAX_PROJECTIONS
+          raise UnsupportedFormatError.new("projection count exceeds the writer limit")
+        end
+        seen = Set(String).new
+        entries = Array(String).new(names.size)
+        names.each do |name|
+          max_bytes = WidePartTable::MAX_PART_NAME_BYTES - ".proj".bytesize
+          unless name.bytesize > 0 && name.bytesize <= max_bytes &&
+                 /\A[A-Za-z0-9_]+\z/.matches?(name)
+            raise ArgumentError.new("projection name must be a bounded ASCII identifier")
+          end
+          unless seen.add?(name)
+            raise ArgumentError.new("projection names must be unique")
+          end
+          entries << "#{name}.proj"
+        end
+        entries
       end
 
       private def self.validate_unique_columns!(columns : Array(WidePartPreparedColumn)) : Nil

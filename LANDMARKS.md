@@ -1,5 +1,47 @@
 # Crystal Click landmarks
 
+## Caller-precomputed projection publication through shared column owners — W256
+
+- VERIFIED / root adversary ROBUST within the finite target over clean baseline
+  `fdb644a2faa66be7ab7b0ec9ecfaacd267ea8d4f`. `WidePartProjection.precomputed`
+  retains detached identity/keys and existing column owners. Separate prepared-
+  child and summary owners reuse the N-column codecs; independently keyed/
+  gridded children consume the same parent operation counters. Typed readback,
+  sorted CH checksum-summary input/ordinary SipHash-128, and exclusive parent
+  publication are one envelope. No raw-file injection or nested projections.
+- Behavioral RED: flat parent/child composition omits the parent `.proj`
+  checksum entry. A guard-removal RED admits an over-limit final child path.
+  Numeric-array metadata/version and exact-name-set canonicalization are narrow
+  prerequisite adapter repairs, not new recursive codecs or Sparse admission.
+- Same ordered 29-file affected gates: 163 examples per DEBUG/RELEASE mode,
+  zero failures/errors/pending; both sealed helpers build. Two fresh native
+  cells qualify stock public reads and library ATTACH/CHECK=1/exact schema/
+  literal rows. An actual forced `ReadFromMergeTree` node describes `by_score`;
+  analysis mentioning the name is not a use witness. Fixture: id/score UInt64,
+  String with NUL/UTF-8/empty values, ragged Array(UInt16); parent [2,2,2]+EOF,
+  generated child [3,3]+EOF and a different key/sort order.
+- Root independently checks 12 streams per parent/child pair across four pairs.
+  Generated DEBUG/RELEASE bytes agree: 40 files / 4,715 bytes. Twelve summary,
+  eighteen nonzero-exit, six raw CHECK=0 and ten false-EXPLAIN controls reject;
+  acceptance is rechecked and original captures remain unchanged. Corrected
+  harness/auditor diagnostics are excluded; these controls are not exhaustive
+  production corruption evidence. Path 4096/+1 is preflight, not OS portability.
+- Return pointers: [W256 frontier](docs/PROJECTION_PUBLICATION_FRONTIER.md),
+  [root-owned evidence](.landmark/evidence/projection-publication-w256.json).
+  Comparison `ed30948f095ecb70679986d7d60e27ad770ae27a` is distinct from executed
+  CH build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Refresh after writer/hash/
+  metadata/budget/consumer/fixture/helper/tool/oracle drift or capture loss.
+  Same-lineage review is correlated. Selected readers still do not authenticate
+  the parent's `.proj` entry; no SELECT equivalence, freshness or provenance.
+- Confirmed next frontier: selected-source-part DDL/type preflight, caller-run
+  Crystal batch transform, target-schema-bound detached output. Next falsifier:
+  read JSON/Dynamic input, filter [1,2,3] to [1,3], compute changed String output;
+  wrong target or a callback throwing after partial append leaves no publication.
+  Source discovery alone and a renamed caller-row writer do not establish MV
+  execution. Owner-specific bounded output appenders, general keys/partitions,
+  remaining type/state/layout products and facade decomposition stay open.
+  Full goal ACTIVE; memory/performance deferred; local commit only, no push.
+
 ## Bitwise aggregate states through the shared recursive storage owners — W255
 
 - VERIFIED / root adversary ROBUST within the finite target over clean baseline

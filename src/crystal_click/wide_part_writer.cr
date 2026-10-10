@@ -17,6 +17,7 @@ module CrystalClick
     MAX_DATA_FILE_BYTES                    = WidePart::MAX_DATA_FILE_BYTES
     MAX_MARK_FILE_BYTES                    = WidePart::MAX_MARK_FILE_BYTES
     MAX_PRIMARY_INDEX_BYTES                = PrimaryKeyIndex::MAX_INDEX_FILE_BYTES
+    MAX_PROJECTIONS                        =              64
     RENAME_EXCL                            = 0x0000_0004_u32
 
     # Publishes a complete Wide part with an ordered set of independently
@@ -36,11 +37,13 @@ module CrystalClick
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
       shared_target_chunk_rows : Int32 = 1,
+      projections : Array(WidePartProjection) = [] of WidePartProjection,
     ) : String
       WidePartOperation.write_uint64_columns(
         destination, key_name, keys, columns, rows_per_mark, profile,
         shared_profile, mode, frame_bytes, metadata_version, limits,
-        transport_limits, shared_json_policy, shared_target_chunk_rows
+        transport_limits, shared_json_policy, shared_target_chunk_rows,
+        projections
       )
     end
 

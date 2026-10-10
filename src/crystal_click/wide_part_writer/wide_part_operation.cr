@@ -19,7 +19,12 @@ module CrystalClick
         transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
         shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
         shared_target_chunk_rows : Int32 = 1,
+        projections : Array(WidePartProjection) = [] of WidePartProjection,
       ) : String
+        if projections.size > WidePartWriter::MAX_PROJECTIONS
+          raise UnsupportedFormatError.new("projection count exceeds the writer limit")
+        end
+        retained_projections = projections.dup
         context = WidePartOperationContext.new(
           rows_per_mark, profile, shared_profile, mode, frame_bytes,
           metadata_version, limits, transport_limits, shared_json_policy,
@@ -31,9 +36,11 @@ module CrystalClick
 
         prepared = Array(WidePartPreparedColumn).new(columns.size)
         columns.each { |column| prepared << column.prepare(context) }
+        projection_names = retained_projections.map(&.name)
 
         input = WidePartPublicationInput.prepare(
-          destination, key_name, keys, prepared, rows_per_mark, metadata_version
+          destination, key_name, keys, prepared, rows_per_mark, metadata_version,
+          projection_names
         )
         metadata_columns = Array(Tuple(String, String, Array(String))).new(prepared.size)
         prepared.each do |column|
@@ -43,6 +50,24 @@ module CrystalClick
           key_name, metadata_columns, keys, metadata_version, profile,
           limits, context.codec_budget
         )
+
+        prepared_projections = Array(WidePartPreparedProjection).new(retained_projections.size)
+        combined_entries = input.checksum_entry_count.to_i64
+        combined_files = input.expected_files.size.to_i64
+        retained_projections.each do |projection|
+          child = WidePartPreparedProjection.prepare(input.target, projection, context)
+          combined_entries += child.checksum_entry_count.to_i64
+          combined_files += child.file_count.to_i64
+          if combined_entries > PartChecksums::MAX_ENTRIES.to_i64
+            raise UnsupportedFormatError.new("combined Wide projection checksum roster exceeds its limit")
+          end
+          prepared_projections << child
+        end
+        max_combined_files = PartChecksums::MAX_ENTRIES.to_i64 +
+                             (prepared_projections.size.to_i64 + 1_i64) * 5_i64
+        if combined_files > max_combined_files
+          raise UnsupportedFormatError.new("combined Wide projection file roster exceeds its limit")
+        end
 
         encoded = Hash(String, CompressedMarkFiles).new
         prepared.each do |column|
@@ -56,10 +81,12 @@ module CrystalClick
             encoded[name] = pair
           end
         end
+        prepared_projections.each(&.encode!)
 
         WidePartPublisher.write(
           input, keys, WidePartMetadataEnvelope.new(metadata), encoded,
-          rows_per_mark, limits, transport_limits, context.read_transport_budget
+          rows_per_mark, limits, transport_limits, context.read_transport_budget,
+          prepared_projections
         ) do |stage|
           prepared.each do |column|
             column.validate(stage, context.read_codec_budget, context.read_transport_budget)
