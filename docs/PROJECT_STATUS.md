@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Current qualification (W250, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W251, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite canonical JSON SQL-name and legacy Dynamic physical-handoff target.
+One cohesive shared-parser method connects existing JSON descriptors and
+recursive physical owners; no value codec per type combination was added.
+The Count syntax parser recognizes JSON while its explicit state admission
+fence remains closed. V3 defaults and existing container/value guards stay.
+
+The same ordered 22-file affected roster passes 70 + 63 = 133 examples in each
+DEBUG/RELEASE mode, zero failures/errors/pending. Both final helpers build.
+Four reciprocal cells qualify V1/single and V2/sized String in both modes,
+root Dynamic and Array(Dynamic), nonempty and unused JSON actuals, typed NULL,
+and nested counter Dynamic structures. Eight native and four helper calls
+establish ATTACH/CHECK=1/exact schema/values/types and direct/public/owned reads
+of stock parts. Root reconciles all 40 raw structures, statistics and marks.
+Actual bytes of 264 generated files / 44,885 bytes per mode match. Four forged
+metadata/coordinate reports reject at the intended raw guards; physical specs
+reject unused-child corruption even on empty selections/EOF before callbacks.
+
+This is not full JSON, all version/profile products, native Compact, stock
+re-emission, stock-root discovery, server Active state or a performance claim.
+Quoted/dotted JSON paths and SKIP/RE2 need real descriptor/physical semantics.
+The legacy roster borrows one aggregate budget; pre-existing standalone parsing
+and canonical rendering have separate bounded budgets. Broader facade
+decomposition, remaining layouts/state families and native MV/projection
+writes remain open. Same-lineage review is correlated. See the
+[W251 frontier](JSON_SQL_TYPE_NAME_FRONTIER.md) and
+[root-owned evidence index](../.landmark/evidence/json-sql-type-name-w251.json).
+Refresh after relevant source/toolchain/runtime changes or capture loss.
+Overall goal ACTIVE; memory/performance deferred; no push authorized.
+
+Previous qualification (W250, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite persisted Dynamic V1/V2 target. The existing recursive serde and
 physical/public handoffs are reused. One shared structure codec dispatches
 legacy SQL-name rosters and mandatory unflagged statistics versus V3 binary

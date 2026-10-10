@@ -150,6 +150,8 @@ module CrystalClick
         maximum = read_unsigned(254_u64)
         expect(')')
         BinaryDataType.dynamic(maximum.to_i32)
+      when "JSON"
+        parse_json_type(depth)
       when "SimpleAggregateFunction"
         function_name = read_identifier(BinarySimpleAggregateType::MAX_FUNCTION_NAME_BYTES) ||
                         invalid!("SimpleAggregateFunction name is missing")
@@ -219,9 +221,63 @@ module CrystalClick
       BinaryDataType.qbit(qbit_type)
     end
 
+    private def parse_json_type(depth : Int32) : BinaryDataType
+      max_dynamic_paths = BinaryJsonType::DEFAULT_MAX_DYNAMIC_PATHS
+      max_dynamic_types = BinaryJsonType::DEFAULT_MAX_DYNAMIC_TYPES
+      saw_max_dynamic_paths = false
+      saw_max_dynamic_types = false
+      typed_paths = {} of String => BinaryDataType
+
+      skip_whitespace
+      return BinaryDataType.json if consume(')')
+
+      loop do
+        skip_whitespace
+        token = read_identifier(BinaryJsonType::MAX_PATH_BYTES) ||
+                invalid!("JSON path or capacity setting is missing")
+        skip_whitespace
+
+        if consume('=')
+          case token
+          when "max_dynamic_paths"
+            invalid!("JSON max_dynamic_paths is repeated") if saw_max_dynamic_paths
+            saw_max_dynamic_paths = true
+            max_dynamic_paths = read_unsigned(BinaryJsonType::MAX_DYNAMIC_PATHS.to_u64).to_i32
+          when "max_dynamic_types"
+            invalid!("JSON max_dynamic_types is repeated") if saw_max_dynamic_types
+            saw_max_dynamic_types = true
+            max_dynamic_types = read_unsigned(BinaryJsonType::MAX_DYNAMIC_TYPES.to_u64).to_i32
+          else
+            invalid!("unsupported JSON capacity setting")
+          end
+        else
+          invalid!("JSON typed path count exceeds its supported limit") if typed_paths.size >= BinaryJsonType::MAX_TYPED_PATHS
+          invalid!("JSON typed path is outside the admitted profile") unless BinaryJsonType.valid_path?(token)
+          invalid!("JSON typed path is repeated") if typed_paths.has_key?(token)
+
+          # A typed path contributes a declaration edge/node at this JSON
+          # depth and a separate descriptor edge whose type starts one level
+          # deeper. Charge each edge before retaining/parsing its declaration.
+          @budget.preflight_children(1_u64)
+          @budget.visit_node(depth)
+          @budget.preflight_children(1_u64)
+          @budget.ensure_depth(depth + 1)
+          declared_type = parse_type(depth + 1)
+          typed_paths[token] = declared_type
+        end
+
+        skip_whitespace
+        break if consume(')')
+        expect(',')
+      end
+
+      BinaryDataType.json(max_dynamic_paths, max_dynamic_types, typed_paths)
+    end
+
     private def parse_atom(name : String, depth : Int32) : BinaryDataType
       return BinaryDataType.datetime if name == "DateTime"
       return BinaryDataType.dynamic if name == "Dynamic"
+      return BinaryDataType.json if name == "JSON"
       if interval = BinaryIntervalType.parse(name)
         return BinaryDataType.interval(interval.kind)
       end

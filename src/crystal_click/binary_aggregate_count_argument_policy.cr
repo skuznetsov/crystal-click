@@ -19,6 +19,7 @@ module CrystalClick
 
       argument = argument_type.not_nil!
       return false if argument.contains_qbit?
+      return false if argument.contains_json?
       return false if argument.contains_aggregate_function?
       return false if argument.contains_custom_geo?
       return false if nullable_nothing?(argument)

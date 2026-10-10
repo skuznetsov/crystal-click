@@ -106,7 +106,6 @@ describe CrystalClick::BinaryAggregateCountArgumentNameParser do
       "Array(AggregateFunction(count))",
       "AggregateFunction(count)",
       "AggregateFunction(sum, UInt64)",
-      "JSON",
       "Object('json')",
       "UnknownType",
       "Enum8('duplicate' = 1, 'duplicate' = 2)",
@@ -126,6 +125,16 @@ describe CrystalClick::BinaryAggregateCountArgumentNameParser do
     invalid_names.each do |name|
       CrystalClick::BinaryAggregateCountArgumentNameParser.parse_canonical(name).should be_nil
     end
+  end
+
+  it "accepts JSON syntax without admitting JSON to Count state metadata" do
+    json = CrystalClick::BinaryDataType.json(
+      typed_paths: {"a" => primitive.call("UInt8")},
+    )
+
+    parsed = CrystalClick::BinaryAggregateCountArgumentNameParser.parse_canonical(json.name)
+    parsed.should eq(json)
+    CrystalClick::BinaryAggregateCountArgumentPolicy.admitted?(parsed).should be_false
   end
 
   it "applies depth, node, element, and name-byte limits before admitting a name" do
