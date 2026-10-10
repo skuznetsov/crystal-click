@@ -45,12 +45,11 @@ private def w247_all_rows!(table : CrystalClick::WidePartTable, column : String)
 end
 
 describe "W247 generic static BinaryBulk table handoff" do
-  it "keeps context-owned and nominal declarations out of the generic owner" do
+  it "keeps contextual and nominal-owner declarations out while admitting static Nested" do
     [
       "Dynamic(max_types=0)",
       "Array(Dynamic(max_types=0))",
       "JSON(x UInt8)",
-      "Nested(a UInt64)",
       "AggregateFunction(sum, UInt64)",
       "Array(AggregateFunction(sum, UInt64))",
       "SimpleAggregateFunction(sum, UInt64)",
@@ -58,6 +57,10 @@ describe "W247 generic static BinaryBulk table handoff" do
     ].each do |declaration|
       CrystalClick::StaticBinaryBulkColumnDeclaration.parse(declaration).should be_nil
     end
+
+    CrystalClick::StaticBinaryBulkColumnDeclaration.parse(
+      "Nested(a UInt64)"
+    ).not_nil!.name.should eq("Nested(a UInt64)")
 
     CrystalClick::SimpleAggregateBulkColumnDeclaration.parse(
       "SimpleAggregateFunction(sum, UInt64)"

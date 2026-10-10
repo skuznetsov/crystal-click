@@ -336,7 +336,7 @@ describe "W245 schema-wide part publication" do
     end
   end
 
-  it "admits root Tuple Dynamic with declared field sites and rejects unqualified Nested adapters" do
+  it "admits root Tuple Dynamic and static Nested descendants while retaining contextual ownership" do
     dynamic_type = CrystalClick::BinaryDataType.dynamic(max_types: 1)
     tuple_type = CrystalClick::BinaryDataType.tuple(
       [dynamic_type] of CrystalClick::BinaryDataType,
@@ -396,16 +396,30 @@ describe "W245 schema-wide part publication" do
     )
 
     w245_with_parent do |parent|
-      destination = File.join(parent, "part")
+      destination = File.join(parent, "all_1_1_0")
       columns = [CrystalClick::WidePartColumn.binary_bulk(
         "nested_child",
         tuple_with_nested,
         [[value_with_nested] of CrystalClick::BinaryValue],
       )]
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        w245_write(destination, columns, [1_u64], rows_per_mark: 1)
+      w245_write(destination, columns, [1_u64], rows_per_mark: 1).should eq(destination)
+
+      table = CrystalClick::WidePartTable.open_selected_typed(
+        [destination], ["pk", "nested_child"]
+      )
+      table.column_types.should eq([
+        {"pk", "UInt64"}, {"nested_child", tuple_with_nested.name},
+      ])
+      observed = [] of CrystalClick::BinaryValue
+      table.scan_typed do |batch|
+        observed.concat(batch.binary_bulk_values_for("nested_child"))
       end
-      w245_assert_no_publication(parent, destination)
+      observed.size.should eq(1)
+      observed[0].type.name.should eq(tuple_with_nested.name)
+      restored_nested = observed[0].child_at(0)
+      restored_nested.type.name.should eq(nested.name)
+      restored_nested.element_count.should eq(1)
+      restored_nested.element_at(0).child_at(0).element_at(0).as_uint64.should eq(9_u64)
     end
 
     schema = CrystalClick::StorageColumnSchema.parse(

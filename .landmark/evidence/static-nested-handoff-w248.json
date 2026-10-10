@@ -1,0 +1,652 @@
+{
+  "format": "crystal_click_w248_evidence_index_v1",
+  "date": "2026-10-10",
+  "claim_level": "VERIFIED",
+  "adversary_verdict": "ROBUST within the finite declared static nominal Nested target",
+  "overall_goal": "ACTIVE; legal read/write types and MV/projections before memory/performance",
+  "baseline_commit": "8e7693f1e6bcea4fbf395cb6a808a50af984944d",
+  "scope": "Static nominal Nested N-column publication and generic public table/batch, owned offline .values and local selected-projection handoff; finite reciprocal Wide stock qualification.",
+  "implementation": {
+    "production_files": [
+      "src/crystal_click/static_binary_bulk_column_declaration.cr",
+      "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr"
+    ],
+    "admission": "Remove three over-broad predicates across two admission-owner boundaries. Reuse existing canonical descriptors, recursive type/physical plans and codecs; retain nominal Nested identity.",
+    "reused_serde": true,
+    "no_per_product_codec": true,
+    "no_new_production_class": true,
+    "legacy_contract": "Simple legacy root-Nested keeps its specialized carrier; rich Nested uses generic BinaryValue. WidePart.open_typed is not widened.",
+    "retained_guards": [
+      "Dynamic/JSON contextual owners",
+      "specialized nominal child owners",
+      "illegal Nullable/LowCardinality edges",
+      "canonical declaration identity",
+      "profile and collision-free physical roster",
+      "complete selected grids",
+      "shared operation and retained-value accounting",
+      "staged typed readback and exclusive no-overwrite publication"
+    ],
+    "risk": "CAUTION: public consumer and persistent-format admission",
+    "rollback": "One coherent atomic local feature commit; preserve unrelated work. No push/history rewrite."
+  },
+  "lineage": {
+    "heavy_work": "Luna Max implementation, fixture and harness work; root-owned scope and final verification.",
+    "root_verification": "Root inspected admission changes, executed all final guarded builds/specs/native probes/externally pinned raw audits/actual-byte comparisons and nine raw controls serially.",
+    "model_agreement": "Same-lineage read-only review is correlated, not independent evidence.",
+    "frozen_file_sha256": {
+      "src/crystal_click/static_binary_bulk_column_declaration.cr": "96c5c202f3d5efc9455a958d607090261e4ccb0db5d1a6e075aa81924b10ffdb",
+      "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr": "3844457f7b6e3ae52be2e94308090c406aaca135710ba5f7a3f720240b1a39fe",
+      "spec/static_binary_bulk_table_w247_spec.cr": "9374ff849a0ef0e5d41415e626f366a20da08f1c6eb8ebd05e8848185d5b3cd3",
+      "spec/multi_column_part_writer_w245_spec.cr": "80826a2a7379989dad69d2887d249c66b86cbf3dbbe868e9da34d27a23cdf1e6",
+      "spec/static_nested_handoff_w248_spec.cr": "bd4824497d1ae8c579eff7fb0454ae4ee08539e982040f61a4739906bcacd213",
+      "scripts/check_static_nested_handoff_w248.cr": "dc642c1d744100b04870c7538f9938dadbba22949b08bcc2548fc757b0cd85ac",
+      "scripts/support/static_nested_handoff_w248_fixture.cr": "b24951950fd6eff3c69f8eecb90a30dfe40f10c2b1bfad4e7d31d3e2a7885986",
+      "scripts/probe_static_nested_handoff_w248.rb": "839e99ebdb4edc83f4ec1ec859ac24859e842066bf7a1ace2d515d9ae058e0e5",
+      "scripts/audit_static_nested_handoff_w248.rb": "20253f978eb46ae93cb3f79c2d1aba872df496e07b0137a1b384a86c23fa9e12",
+      "scripts/check_static_nested_handoff_w248_adversary.rb": "07b1dfd3423b349eb0ba5909bbf6ff9e460248f15217792451396287dc3d6ecc",
+      "/private/tmp/crystal-click-w248.QGFLnt/helper-debug": "8444ac357cb2d81b1a388dce1f07af267d70e462f76bddc8e38379d424392262",
+      "/private/tmp/crystal-click-w248.QGFLnt/helper-release": "ff69fd99b6a1403d99c9412410659960f9dca5ec8369dae97bc616643f480521",
+      "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+    },
+    "capture_policy": "Final raw captures below qualify the frozen source. Diagnostic failed attempts remain historical and do not qualify current source."
+  },
+  "source_comparison": {
+    "snapshots": [
+      {
+        "tree": "clickhouse-2026-10-07-depth1",
+        "root": "/Users/sergey/SrcArchives/clickhouse-2026-10-07-depth1",
+        "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "files": [
+          {
+            "path": "src/Core/Settings.cpp",
+            "sha256": "1feab11c05a33d9df8c6e4886ad00a81efa358ba320803d720db32eef4f9db9a"
+          },
+          {
+            "path": "src/Storages/MergeTree/MergeTreeDataWriter.cpp",
+            "sha256": "7da96e0583100c60c5c09a3a3f099d99367d8fbb3c4cb03e7bad66e571b8b751"
+          },
+          {
+            "path": "src/Storages/MergeTree/MergedBlockOutputStream.cpp",
+            "sha256": "84be13120fc36b38c54e05965fb504fbce3b741d8d65e0080fe4ac9bd5b1d076"
+          },
+          {
+            "path": "src/Storages/MergeTree/MergeTreeSettings.cpp",
+            "sha256": "b8bdea86a07f61481c747517b56035855fa9726217d5b7183f292a5432b9b515"
+          },
+          {
+            "path": "src/Storages/MergeTree/MergeTreeDataPartWriterWide.cpp",
+            "sha256": "a54c556841343f20ffb22b6cbd406f27c9a81df50eddb23ee5dca884d1686a76"
+          },
+          {
+            "path": "src/Databases/DatabaseAtomic.cpp",
+            "sha256": "f327671aaabe9855e6e275ed86daead8b87659b54c35af39ed18d26e0270e589"
+          },
+          {
+            "path": "src/Storages/MergeTree/MergeTreeData.cpp",
+            "sha256": "0e64e089bf72997ea98d0c0ee8a9213c636f1faedd0fdc092e4881877d2b3714"
+          },
+          {
+            "path": "src/Storages/MergeTree/IMergeTreeDataPart.cpp",
+            "sha256": "5dd7c249ac1a79532a0d7d24016a692d5194abd80b904f206f5f7bc9737de935"
+          },
+          {
+            "path": "src/Storages/MergeTree/IMergeTreeDataPart.h",
+            "sha256": "5f6efa47dcece1a1506b87f10d0370eecc1f3665be031702bec92d3e8d82e0ad"
+          },
+          {
+            "path": "src/Storages/MergeTree/MergeTreeReaderWide.cpp",
+            "sha256": "3c1a14d7c401c2ec3028fe2c945b4b2d27bb3f1a4ed6cfd7b3ac9130de6df612"
+          }
+        ]
+      },
+      {
+        "tree": "clickhouse-w238-serializer-snapshot",
+        "root": "/private/tmp/crystal-click-w238.4nQqSo/clickhouse",
+        "revision": "f25eb93a0b890a3b87df05eb34e2af1f933b4089",
+        "files": [
+          {
+            "path": "src/DataTypes/Serializations/SerializationVariant.cpp",
+            "sha256": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022"
+          },
+          {
+            "path": "src/DataTypes/Serializations/SerializationVariant.h",
+            "sha256": "075e43b8c2ab6f69ad0a5954d08e233568c32905ef145841fa3fb6ab9f03f748"
+          },
+          {
+            "path": "src/DataTypes/Serializations/SerializationArray.cpp",
+            "sha256": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791"
+          },
+          {
+            "path": "src/DataTypes/Serializations/SerializationTuple.cpp",
+            "sha256": "12e38b357204e005fc4780bac7e2e358b0a14357e0e246137414166062a1a884"
+          },
+          {
+            "path": "src/DataTypes/Serializations/SerializationLowCardinality.cpp",
+            "sha256": "86fdddb8a6cd30ff440c6230aae884e978738885c916130310ba0413eff7f02a"
+          },
+          {
+            "path": "src/DataTypes/Serializations/SerializationString.cpp",
+            "sha256": "630253117d3b9f2a67ef68f25b3c06286fa38cf85583ddba56f727e331588f03"
+          },
+          {
+            "path": "src/DataTypes/Serializations/SerializationNullable.cpp",
+            "sha256": "7f8f0f97725f21d196beabae47fefcc3bcb32e250f4a1f9a87b37f73eae7c43f"
+          },
+          {
+            "path": "src/DataTypes/DataTypeNested.cpp",
+            "sha256": "bb0cd02e0c94e0bd8520f6c8a83f64c7089fc47e5dc09f9d72e15f81367f16e4"
+          },
+          {
+            "path": "src/DataTypes/DataTypeFactory.cpp",
+            "sha256": "a1062d44f84afe86082f7a6fbe3110cabf9a050be7cd108e26171fc0eaa5e478"
+          }
+        ]
+      }
+    ],
+    "source_runtime_identity_separate": true,
+    "latest_at_completion_claim": false,
+    "total_pinned_files": 19,
+    "anchors": [
+      {
+        "snapshot": "f25eb93a0b890a3b87df05eb34e2af1f933b4089",
+        "file": "src/DataTypes/DataTypeNested.cpp",
+        "lines": "51-75,185-208,234-249",
+        "finding": "Nominal Nested wraps Array(named Tuple); flatten_nested=0 admits recursive nesting. Flattened sibling aliases are separate."
+      },
+      {
+        "snapshot": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "file": "src/Storages/MergeTree/MergeTreeData.cpp",
+        "lines": "9030-9045",
+        "finding": "ATTACH writes invalidated persisted virtual-system-column metadata before loading the part."
+      },
+      {
+        "snapshot": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "file": "src/Storages/MergeTree/IMergeTreeDataPart.cpp",
+        "lines": "1899-1918,1949-1962",
+        "finding": "Exact invalidation sidecar filename, reload and write laws."
+      },
+      {
+        "snapshot": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "file": "src/Storages/MergeTree/MergeTreeReaderWide.cpp",
+        "lines": "131-133,427-429",
+        "finding": "Readers skip invalidated persisted virtual-system-column streams."
+      }
+    ]
+  },
+  "runtime": {
+    "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+    "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "isolated_stores": true,
+    "max_threads": 1,
+    "max_memory_usage_bytes": 4294967296
+  },
+  "falsifiers": {
+    "red": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/static_nested_handoff_w248_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit": 1,
+      "examples": 5,
+      "failures": 0,
+      "errors": 5,
+      "pending": 0,
+      "guard_seconds": 44,
+      "fixture_sha256": "cfc50aa8a3021afa002db356b1cfbb6b0c941c31ad02f63798922d1015327378",
+      "spec_sha256": "667e986b8bcffe0a79cdfcdb8db0d53b4c5f73cfddb8c9457979ca0904e06be1",
+      "direct_control": "Passed first profile before target admission refusal",
+      "target": "static writer exact nominal Nested guard; generic declaration flattened alias guard",
+      "diagnostic": "new UInt64 cumulative-budget success control20 bytes failed; not target RED; test being refined"
+    },
+    "strongest": "Stock interoperability in both directions with independently stated literal schema, values and inner Variant actual types, not self-roundtrip or CHECK=1 alone.",
+    "refutations": [
+      "Existing recursive codecs already compose static Nested. Generic declaration and N-column writer had over-broad adapter guards.",
+      "Parent mark row counts and recursive child occurrence counts differ; the first recursive Nested mark has no children before later populated marks.",
+      "Nominal Nested must not be replaced by a same-shape Array(Tuple) declaration.",
+      "ATTACH adds one exact persisted invalidation marker, not permission for arbitrary extra files or generic virtual-column compatibility.",
+      "Retained-value budget counts logical owned descendants including repeated LC values, not physical dictionary deduplication or RSS."
+    ],
+    "diagnostics": [
+      {
+        "stage": "Combined 28-file RELEASE compilation",
+        "result": {
+          "exit_code": 1,
+          "output": "[KILL] Memory limit for process tree: 12585856KB > 12288MB after ~300s",
+          "reason": "guarded release 28-file suite compilation exceeded process-tree memory cap"
+        },
+        "qualification": "Inconclusive infrastructure limit before tests; same roster partitioned without changing limits."
+      },
+      {
+        "stage": "Auditor Ruby constant access",
+        "finding": "W248.ROWS invoked a method; corrected to W248::ROWS after root reproduction."
+      },
+      {
+        "stage": "Auditor runtime coordinate",
+        "finding": "Inherited default executable path differed from explicitly passed pinned runtime; exact canonical runtime path corrected without relaxing SHA/version/build/argv checks."
+      },
+      {
+        "stage": "Auditor Variant-prefix scope",
+        "finding": "Three-site literal validator was incorrectly called once per entry; now applied once to the complete three-entry roster with all per-site guards retained."
+      }
+    ]
+  },
+  "fixture": {
+    "columns": [
+      "pk UInt64",
+      "root_nested Nested(label LowCardinality(Nullable(String)), choice Variant(String, UInt64), note String)",
+      "array_parent Tuple(id UInt64, batches Array(Nested(label LowCardinality(Nullable(String)), choice Variant(String, UInt64), note String)))",
+      "recursive_nested Nested(label LowCardinality(Nullable(String)), choice Variant(String, UInt64), note String, child Nested(note String, tags Array(String)))",
+      "string0 String",
+      "string1 String"
+    ],
+    "keys": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "parent_mark_grid": [
+      2,
+      2,
+      1,
+      0
+    ],
+    "generated_frame_bytes": 32,
+    "values": "Ragged/empty Nested and nested Nested children, Array(String), first empty child mark then population, LC Nullable NULL/default/repeats, Variant NULL/String/UInt64 zero/MAX and empty/NUL Strings.",
+    "string_profiles": "Both ordinary String columns use the cell's selected single or sized profile; column names do not determine layouts.",
+    "layouts": "Wide/LZ4/plain mrk2/Default/BASIC at three exact Variant sites; flatten_nested=0.",
+    "local_projection": "Selected projection positive spec only; not native projection interoperability.",
+    "logical_budget_stress": "Either of two rich Nested columns passes alone, but their combined retained 68 MiB exceeds the default 64 MiB owner budget before callback. Test-local codec/transport limits are widened solely to reach that retained-owner check; production defaults unchanged. Not a transient allocation/RSS bound."
+  },
+  "verification": {
+    "guard": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh ",
+    "serial_heavy_execution": true,
+    "minimum_free_memory_percent": 50,
+    "crystal_workers": 1,
+    "compiler": "Crystal 1.21.0",
+    "build_spec_native_memory_limit_mib": 12288,
+    "debug": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/static_nested_handoff_w248_spec.cr spec/static_binary_bulk_table_w247_spec.cr spec/multi_column_part_writer_w245_spec.cr spec/storage_read_budget_w245_spec.cr spec/binary_variant_bulk_w148_spec.cr spec/binary_variant_bulk_w148_adversary_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/wide_part_table_w95_tuple_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr spec/wide_part_table_low_cardinality_cache_spec.cr spec/wide_part_table_w53_spec.cr spec/wide_part_table_w61_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/offline_projection_window_w229_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr spec/simple_aggregate_bulk_part_w221_spec.cr spec/aggregate_recursive_w224_consumers_spec.cr spec/aggregate_count_table_w177_spec.cr spec/recursive_qbit_static_parts_w231_spec.cr spec/geometry_recursive_w239_consumers_spec.cr spec/multi_column_tuple_dynamic_w246_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/nested_bulk_part_w202_spec.cr spec/wide_flattened_nested_consumers_w174_spec.cr spec/wide_flattened_nested_consumers_w174_guards_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit": 0,
+      "examples": 160,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "spec_files": 28,
+      "new_nested_examples": 6,
+      "test_seconds": 38.21,
+      "guard_seconds": 90,
+      "spec_sha256": "bd4824497d1ae8c579eff7fb0454ae4ee08539e982040f61a4739906bcacd213"
+    },
+    "helper_builds": [
+      {
+        "mode": "debug",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_static_nested_handoff_w248.cr -o /private/tmp/crystal-click-w248.QGFLnt/helper-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit": 0,
+        "guard_seconds": 40
+      },
+      {
+        "mode": "release",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_static_nested_handoff_w248.cr -o /private/tmp/crystal-click-w248.QGFLnt/helper-release --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit": 0,
+        "guard_seconds": 34
+      }
+    ],
+    "final_light_checks": [
+      {
+        "label": "crystal_format",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 300 8192 tool format --check src/crystal_click/static_binary_bulk_column_declaration.cr src/crystal_click/wide_part_writer/static_wide_part_column_input.cr spec/static_binary_bulk_table_w247_spec.cr spec/multi_column_part_writer_w245_spec.cr spec/static_nested_handoff_w248_spec.cr scripts/check_static_nested_handoff_w248.cr scripts/support/static_nested_handoff_w248_fixture.cr",
+        "exit": 0,
+        "guard_seconds": 0,
+        "observed": "Seven Crystal files formatted"
+      },
+      {
+        "label": "probe_syntax",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 -c scripts/probe_static_nested_handoff_w248.rb",
+        "exit": 0,
+        "guard_seconds": 0,
+        "observed": "Syntax OK"
+      },
+      {
+        "label": "auditor_syntax",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 -c scripts/audit_static_nested_handoff_w248.rb",
+        "exit": 0,
+        "guard_seconds": 0,
+        "observed": "Syntax OK"
+      },
+      {
+        "label": "adversary_syntax",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 -c scripts/check_static_nested_handoff_w248_adversary.rb",
+        "exit": 0,
+        "guard_seconds": 0,
+        "observed": "Syntax OK"
+      },
+      {
+        "label": "auditor_selftest",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 scripts/audit_static_nested_handoff_w248.rb --self-test",
+        "exit": 0,
+        "guard_seconds": 0,
+        "observed": "10 rejection controls passed"
+      },
+      {
+        "label": "source_pin_inventory",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 -r ./scripts/probe_static_nested_handoff_w248.rb -e 'puts JSON.generate(ProbeStaticNestedHandoffW248.source_pin_inventory)'",
+        "exit": 0,
+        "guard_seconds": 0,
+        "observed": "19 source pins checked"
+      },
+      {
+        "label": "restored_raw_audit",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 scripts/audit_static_nested_handoff_w248.rb --evidence-root /private/tmp/crystal-click-w248-final-debug-single.FFyM35 --expected-summary-sha256 757c683de928ac6d4cb92e24ae6d0a7796ddedc2523a40d98d6ec1e87a4ce5f1 --expected-helper-sha256 8444ac357cb2d81b1a388dce1f07af267d70e462f76bddc8e38379d424392262 --expected-probe-sha256 839e99ebdb4edc83f4ec1ec859ac24859e842066bf7a1ace2d515d9ae058e0e5 --expected-auditor-sha256 20253f978eb46ae93cb3f79c2d1aba872df496e07b0137a1b384a86c23fa9e12 --expected-helper-source-sha256 dc642c1d744100b04870c7538f9938dadbba22949b08bcc2548fc757b0cd85ac --expected-fixture-sha256 b24951950fd6eff3c69f8eecb90a30dfe40f10c2b1bfad4e7d31d3e2a7885986",
+        "exit": 0,
+        "guard_seconds": 2,
+        "observed": "Authenticated restored baseline accepted"
+      }
+    ],
+    "native_cells": [
+      {
+        "mode": "debug",
+        "profile": "single",
+        "evidence_root": "/private/tmp/crystal-click-w248-final-debug-single.FFyM35",
+        "summary_sha256": "757c683de928ac6d4cb92e24ae6d0a7796ddedc2523a40d98d6ec1e87a4ce5f1",
+        "probe_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_static_nested_handoff_w248.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w248.QGFLnt/helper-debug --evidence-root /private/tmp/crystal-click-w248-final-debug-single.FFyM35 --string-profile single --helper-mode debug",
+        "probe_exit": 0,
+        "audit_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 scripts/audit_static_nested_handoff_w248.rb --evidence-root /private/tmp/crystal-click-w248-final-debug-single.FFyM35 --expected-summary-sha256 757c683de928ac6d4cb92e24ae6d0a7796ddedc2523a40d98d6ec1e87a4ce5f1 --expected-helper-sha256 8444ac357cb2d81b1a388dce1f07af267d70e462f76bddc8e38379d424392262 --expected-probe-sha256 839e99ebdb4edc83f4ec1ec859ac24859e842066bf7a1ace2d515d9ae058e0e5 --expected-auditor-sha256 20253f978eb46ae93cb3f79c2d1aba872df496e07b0137a1b384a86c23fa9e12 --expected-helper-source-sha256 dc642c1d744100b04870c7538f9938dadbba22949b08bcc2548fc757b0cd85ac --expected-fixture-sha256 b24951950fd6eff3c69f8eecb90a30dfe40f10c2b1bfad4e7d31d3e2a7885986",
+        "audit_exit": 0,
+        "stock_sql_calls": 4
+      },
+      {
+        "mode": "debug",
+        "profile": "sized",
+        "evidence_root": "/private/tmp/crystal-click-w248-final-debug-sized.PaJFLS",
+        "summary_sha256": "b96af06c719377391f7352d24fa3ebf89bcf2767e4410dcf2573aab3f1ae3d4a",
+        "probe_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_static_nested_handoff_w248.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w248.QGFLnt/helper-debug --evidence-root /private/tmp/crystal-click-w248-final-debug-sized.PaJFLS --string-profile sized --helper-mode debug",
+        "probe_exit": 0,
+        "audit_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 scripts/audit_static_nested_handoff_w248.rb --evidence-root /private/tmp/crystal-click-w248-final-debug-sized.PaJFLS --expected-summary-sha256 b96af06c719377391f7352d24fa3ebf89bcf2767e4410dcf2573aab3f1ae3d4a --expected-helper-sha256 8444ac357cb2d81b1a388dce1f07af267d70e462f76bddc8e38379d424392262 --expected-probe-sha256 839e99ebdb4edc83f4ec1ec859ac24859e842066bf7a1ace2d515d9ae058e0e5 --expected-auditor-sha256 20253f978eb46ae93cb3f79c2d1aba872df496e07b0137a1b384a86c23fa9e12 --expected-helper-source-sha256 dc642c1d744100b04870c7538f9938dadbba22949b08bcc2548fc757b0cd85ac --expected-fixture-sha256 b24951950fd6eff3c69f8eecb90a30dfe40f10c2b1bfad4e7d31d3e2a7885986",
+        "audit_exit": 0,
+        "stock_sql_calls": 4
+      },
+      {
+        "mode": "release",
+        "profile": "single",
+        "evidence_root": "/private/tmp/crystal-click-w248-final-release-single.8F5Vbq",
+        "summary_sha256": "6bc6bd0ba19ecc22d641943f25014a9a82162357fc3581a2a0f757459f332b20",
+        "probe_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_static_nested_handoff_w248.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w248.QGFLnt/helper-release --evidence-root /private/tmp/crystal-click-w248-final-release-single.8F5Vbq --string-profile single --helper-mode release",
+        "probe_exit": 0,
+        "audit_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 scripts/audit_static_nested_handoff_w248.rb --evidence-root /private/tmp/crystal-click-w248-final-release-single.8F5Vbq --expected-summary-sha256 6bc6bd0ba19ecc22d641943f25014a9a82162357fc3581a2a0f757459f332b20 --expected-helper-sha256 ff69fd99b6a1403d99c9412410659960f9dca5ec8369dae97bc616643f480521 --expected-probe-sha256 839e99ebdb4edc83f4ec1ec859ac24859e842066bf7a1ace2d515d9ae058e0e5 --expected-auditor-sha256 20253f978eb46ae93cb3f79c2d1aba872df496e07b0137a1b384a86c23fa9e12 --expected-helper-source-sha256 dc642c1d744100b04870c7538f9938dadbba22949b08bcc2548fc757b0cd85ac --expected-fixture-sha256 b24951950fd6eff3c69f8eecb90a30dfe40f10c2b1bfad4e7d31d3e2a7885986",
+        "audit_exit": 0,
+        "stock_sql_calls": 4
+      },
+      {
+        "mode": "release",
+        "profile": "sized",
+        "evidence_root": "/private/tmp/crystal-click-w248-final-release-sized.1vRvDs",
+        "summary_sha256": "1526d0052a62d2b16c352bf98ca978416d8e645fc841bfdcfc32c0aed0f46ad2",
+        "probe_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_static_nested_handoff_w248.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w248.QGFLnt/helper-release --evidence-root /private/tmp/crystal-click-w248-final-release-sized.1vRvDs --string-profile sized --helper-mode release",
+        "probe_exit": 0,
+        "audit_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 scripts/audit_static_nested_handoff_w248.rb --evidence-root /private/tmp/crystal-click-w248-final-release-sized.1vRvDs --expected-summary-sha256 1526d0052a62d2b16c352bf98ca978416d8e645fc841bfdcfc32c0aed0f46ad2 --expected-helper-sha256 ff69fd99b6a1403d99c9412410659960f9dca5ec8369dae97bc616643f480521 --expected-probe-sha256 839e99ebdb4edc83f4ec1ec859ac24859e842066bf7a1ace2d515d9ae058e0e5 --expected-auditor-sha256 20253f978eb46ae93cb3f79c2d1aba872df496e07b0137a1b384a86c23fa9e12 --expected-helper-source-sha256 dc642c1d744100b04870c7538f9938dadbba22949b08bcc2548fc757b0cd85ac --expected-fixture-sha256 b24951950fd6eff3c69f8eecb90a30dfe40f10c2b1bfad4e7d31d3e2a7885986",
+        "audit_exit": 0,
+        "stock_sql_calls": 4
+      }
+    ],
+    "native_total_stock_sql_calls": 16,
+    "native_claim": "Library-written part ATTACH/CHECK=1/exact ordered six-column schema and values/inner Variant actual types; stock-written part direct, public-table and owned offline library reads.",
+    "attach_metadata_law": {
+      "name": "invalidated_system_columns.txt",
+      "literal_utf8": "_block_offset\n_block_number\n",
+      "roster": "Original generated file size/hash identities unchanged; attached roster permits exactly this one additional link-free regular file and exact bytes.",
+      "qualification": "Persisted ATTACH invalidation artifact only; not arbitrary extras or generic virtual-system-column compatibility."
+    },
+    "actual_generated_bytes": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 -e 'require \"json\"; results=[]; [[0,2],[1,3]].each do |i,j|; a=JSON.parse(File.binread(ARGV[i])); b=JSON.parse(File.binread(ARGV[j])); raise \"profile/mode pair\" unless a.fetch(\"string_profile\")==b.fetch(\"string_profile\") && a.fetch(\"helper_mode\")==\"debug\" && b.fetch(\"helper_mode\")==\"release\"; pa=a.fetch(\"parts\").fetch(\"crystal_generated\"); pb=b.fetch(\"parts\").fetch(\"crystal_generated\"); ra=pa.fetch(\"path\"); rb=pb.fetch(\"path\"); na=Dir.children(ra).sort; nb=Dir.children(rb).sort; raise \"actual roster\" unless na==nb && na==pa.fetch(\"files\").map { |e| e.fetch(\"path\") }.sort && nb==pb.fetch(\"files\").map { |e| e.fetch(\"path\") }.sort; total=0; na.each do |name|; xa=File.join(ra,name); xb=File.join(rb,name); [xa,xb].each { |p| st=File.lstat(p); raise \"nonregular linked file\" unless st.file? && st.nlink==1 }; aa=File.binread(xa); bb=File.binread(xb); raise \"actual bytes differ: #{name}\" unless aa==bb; total+=aa.bytesize; end; results << {profile:a.fetch(\"string_profile\"),files:na.size,bytes:total,actual_bytes_equal:true}; end; puts JSON.generate({profiles:results,total_files_per_mode:results.sum { |r| r[:files] },total_bytes_per_mode:results.sum { |r| r[:bytes] }});' /private/tmp/crystal-click-w248-final-debug-single.FFyM35/summary.json /private/tmp/crystal-click-w248-final-debug-sized.PaJFLS/summary.json /private/tmp/crystal-click-w248-final-release-single.8F5Vbq/summary.json /private/tmp/crystal-click-w248-final-release-sized.1vRvDs/summary.json",
+      "result": {
+        "chunk_id": "ce77ac",
+        "wall_time_seconds": 0.646268292,
+        "exit_code": 0,
+        "original_token_count": 69,
+        "output": "[PREFLIGHT] System memory free 63% > 50%\n{\"profiles\":[{\"profile\":\"single\",\"files\":68,\"bytes\":10914,\"actual_bytes_equal\":true},{\"profile\":\"sized\",\"files\":88,\"bytes\":14153,\"actual_bytes_equal\":true}],\"total_files_per_mode\":156,\"total_bytes_per_mode\":25067}\n[EXIT: 0] after ~0s\n"
+      },
+      "expected_total_files_per_mode": 156,
+      "expected_total_bytes_per_mode": 25067,
+      "meaning": "Root compared File.binread results, not just declared hashes. Mutation controls then restored the exact typed capture inventory."
+    },
+    "raw_adversary": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/check_static_nested_handoff_w248_adversary.rb --evidence-root /private/tmp/crystal-click-w248-final-debug-single.FFyM35 --expected-helper-sha256 8444ac357cb2d81b1a388dce1f07af267d70e462f76bddc8e38379d424392262 --expected-probe-sha256 839e99ebdb4edc83f4ec1ec859ac24859e842066bf7a1ace2d515d9ae058e0e5 --expected-auditor-sha256 20253f978eb46ae93cb3f79c2d1aba872df496e07b0137a1b384a86c23fa9e12 --expected-helper-source-sha256 dc642c1d744100b04870c7538f9938dadbba22949b08bcc2548fc757b0cd85ac --expected-fixture-sha256 b24951950fd6eff3c69f8eecb90a30dfe40f10c2b1bfad4e7d31d3e2a7885986",
+      "exit": 0,
+      "report": {
+        "format": "static_nested_handoff_w248_adversary_v1",
+        "status": "all_controls_rejected_and_capture_restored",
+        "evidence_root": "/private/tmp/crystal-click-w248-final-debug-single.FFyM35",
+        "original_summary_sha256": "757c683de928ac6d4cb92e24ae6d0a7796ddedc2523a40d98d6ec1e87a4ce5f1",
+        "initial_inventory_sha256": "db9b45b3a4a45bf29efe4351e9807299ad6a5da877d1fea9d1a9541934ec0925",
+        "final_inventory_sha256": "db9b45b3a4a45bf29efe4351e9807299ad6a5da877d1fea9d1a9541934ec0925",
+        "entry_count": 272,
+        "audits": [
+          {
+            "name": "baseline_initial",
+            "exit": 0,
+            "signal": null,
+            "stdout_bytes": 138,
+            "stdout_sha256": "f5a6e074f2d69acc26f2a4ba73fb672815e8e5c53ec17b3d13b2dfdda913b6ba",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "name": "unrebound_native_stdout_digest",
+            "exit": 1,
+            "signal": null,
+            "stdout_bytes": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_bytes": 145,
+            "stderr_sha256": "12ee1dd5ab5f5842b107cf037850ca5d9b6f289db73d0f96b7de04cede31e5f0"
+          },
+          {
+            "name": "rebound_check_zero",
+            "exit": 1,
+            "signal": null,
+            "stdout_bytes": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_bytes": 119,
+            "stderr_sha256": "9e39532e26c52224a7e45ac9e3aaf6e491a60aa333d7cf67289cd4ff3bb4c1dc"
+          },
+          {
+            "name": "rebound_native_schema",
+            "exit": 1,
+            "signal": null,
+            "stdout_bytes": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_bytes": 123,
+            "stderr_sha256": "1b6fa32992e2fa100df1a8ad7070a1ae0cb13b49851e6429a29120c2510cee6a"
+          },
+          {
+            "name": "rebound_attached_invalidation_marker",
+            "exit": 1,
+            "signal": null,
+            "stdout_bytes": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_bytes": 145,
+            "stderr_sha256": "755debdd899c70c9822a920e560ec9f5de4b72767a1c0a4577b70e9f13c1b9d6"
+          },
+          {
+            "name": "rebound_nominal_type",
+            "exit": 1,
+            "signal": null,
+            "stdout_bytes": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_bytes": 121,
+            "stderr_sha256": "83abcad505d798e309b61eb95512b4b4f91f96354458890f2a9e7913a7950961"
+          },
+          {
+            "name": "rebound_variant_prefix",
+            "exit": 1,
+            "signal": null,
+            "stdout_bytes": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_bytes": 110,
+            "stderr_sha256": "5fea33ce95650729ff76c2aee2706b75ab2f76d02971b557121da61e38274e53"
+          },
+          {
+            "name": "rebound_recursive_mark_coordinate",
+            "exit": 1,
+            "signal": null,
+            "stdout_bytes": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_bytes": 168,
+            "stderr_sha256": "c6360a1f1f46357f14ae8854eea03841981144b944acaae967ba899adde0d549"
+          },
+          {
+            "name": "omitted_invocation",
+            "exit": 1,
+            "signal": null,
+            "stdout_bytes": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_bytes": 134,
+            "stderr_sha256": "8ae37df806258cd18b67926e3a938e3c7a79c13eb3b2d36725f94a3e1a5192e1"
+          },
+          {
+            "name": "hidden_generated_part_symlink",
+            "exit": 1,
+            "signal": null,
+            "stdout_bytes": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_bytes": 145,
+            "stderr_sha256": "08952d7f9b8868eca696e18995e4562e95fc2e684e165551da71348fffbd4d0b"
+          },
+          {
+            "name": "baseline_final",
+            "exit": 0,
+            "signal": null,
+            "stdout_bytes": 138,
+            "stdout_sha256": "f5a6e074f2d69acc26f2a4ba73fb672815e8e5c53ec17b3d13b2dfdda913b6ba",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ]
+      },
+      "meaning": "Nine semantic/raw mutations reject at intended guards. Original final summary and 272-entry typed capture inventory restored, then independent root baseline audit accepted."
+    },
+    "peer_review": {
+      "verdict": "ROBUST within finite W248 scope; correlated same-lineage read-only review",
+      "performed_by": "Luna Max",
+      "notes": [
+        "Rich nominal Nested uses existing recursive plans/serde and N-column/public/offline handoffs; legacy simple Nested may retain its carrier.",
+        "Dynamic/JSON/specialized nominal-owner descendant guards remain. Variant(Nested) is declaration-only admission, not native data qualification.",
+        "Budgets are logical retained ownership, not RSS/transient peak memory.",
+        "Exactly one pinned ATTACH invalidation marker with exact bytes; original generated files remain size/hash-identical."
+      ],
+      "builds_tests_native_git_run": false
+    },
+    "release": {
+      "same_ordered_28_file_roster_as_debug": true,
+      "total_examples": 160,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "batches": [
+        {
+          "batch": 0,
+          "files": [
+            "spec/static_nested_handoff_w248_spec.cr",
+            "spec/static_binary_bulk_table_w247_spec.cr",
+            "spec/multi_column_part_writer_w245_spec.cr",
+            "spec/storage_read_budget_w245_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/static_nested_handoff_w248_spec.cr spec/static_binary_bulk_table_w247_spec.cr spec/multi_column_part_writer_w245_spec.cr spec/storage_read_budget_w245_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug",
+          "exit": 0,
+          "examples": 23,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0,
+          "guard_seconds": 137
+        },
+        {
+          "batch": 1,
+          "files": [
+            "spec/binary_variant_bulk_w148_spec.cr",
+            "spec/binary_variant_bulk_w148_adversary_spec.cr",
+            "spec/binary_bulk_physical_prefix_w151_spec.cr",
+            "spec/dynamic_table_consumer_w211_spec.cr",
+            "spec/dynamic_table_budget_w211_spec.cr",
+            "spec/wide_part_table_w95_tuple_spec.cr",
+            "spec/offline_catalog_w95_tuple_values_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_variant_bulk_w148_spec.cr spec/binary_variant_bulk_w148_adversary_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/wide_part_table_w95_tuple_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug",
+          "exit": 0,
+          "examples": 43,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0,
+          "guard_seconds": 144
+        },
+        {
+          "batch": 2,
+          "files": [
+            "spec/wide_part_table_low_cardinality_cache_spec.cr",
+            "spec/wide_part_table_w53_spec.cr",
+            "spec/wide_part_table_w61_spec.cr",
+            "spec/wide_part_table_projection_w87_spec.cr",
+            "spec/projection_specialized_consumers_w217_spec.cr",
+            "spec/offline_projection_window_w229_spec.cr",
+            "spec/simple_aggregate_recursive_w222_part_spec.cr",
+            "spec/simple_aggregate_bulk_part_w221_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_low_cardinality_cache_spec.cr spec/wide_part_table_w53_spec.cr spec/wide_part_table_w61_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/offline_projection_window_w229_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr spec/simple_aggregate_bulk_part_w221_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release --no-debug",
+          "exit": 0,
+          "examples": 44,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0,
+          "guard_seconds": 121
+        },
+        {
+          "batch": 3,
+          "files": [
+            "spec/aggregate_recursive_w224_consumers_spec.cr",
+            "spec/aggregate_count_table_w177_spec.cr",
+            "spec/recursive_qbit_static_parts_w231_spec.cr",
+            "spec/geometry_recursive_w239_consumers_spec.cr",
+            "spec/multi_column_tuple_dynamic_w246_spec.cr",
+            "spec/binary_nested_specialized_w201_spec.cr",
+            "spec/nested_bulk_part_w202_spec.cr",
+            "spec/wide_flattened_nested_consumers_w174_spec.cr",
+            "spec/wide_flattened_nested_consumers_w174_guards_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_recursive_w224_consumers_spec.cr spec/aggregate_count_table_w177_spec.cr spec/recursive_qbit_static_parts_w231_spec.cr spec/geometry_recursive_w239_consumers_spec.cr spec/multi_column_tuple_dynamic_w246_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/nested_bulk_part_w202_spec.cr spec/wide_flattened_nested_consumers_w174_spec.cr spec/wide_flattened_nested_consumers_w174_guards_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit": 0,
+          "examples": 50,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0,
+          "guard_seconds": 153
+        }
+      ]
+    },
+    "root_adversary_verdict": "ROBUST within scope: independent literal stock oracles both directions, preserved owner guards and raw semantic controls with restored acceptance. Wider type/layout/native projection claims remain unqualified."
+  },
+  "claim_limits": [
+    "Finite reciprocal static-Nested native qualification, not every admitted legal product or the whole suite.",
+    "Variant(Nested) declaration-only; no native value/layout qualification.",
+    "Dynamic/JSON-containing Nested remains contextual and is not widened.",
+    "Native projection interoperability, projection writes and MV transformations/freshness are not qualified.",
+    "General primary-key/partition metadata, Compact and other physical/state families remain open.",
+    "Offline stock Atomic-root discovery is not qualified by direct known-part reads.",
+    "Logical retained budgets are not unique-heap, RSS or transient-allocation bounds.",
+    "Authenticated raw replay controls do not prove immutable execution provenance or a fully forged-capture audit.",
+    "No source/runtime-build identity, latest-at-completion, performance or full-type closure claim."
+  ],
+  "refresh_policy": {
+    "assumptions": "Frozen indexed code, fixture, compiler, native runtime, profiles, source comparison and retained capture files.",
+    "decay_triggers": "Relevant owner/admission/codec/consumer/compiler/profile/fixture/helper/oracle/runtime changes or raw capture loss.",
+    "refresh": "Repeat guarded DoD, native cells and externally pinned audits/byte comparison/semantic controls for affected boundary.",
+    "failure": "Reopen or narrow the dependent claim; infrastructure failures are inconclusive, never blanket admission."
+  },
+  "index_validation": {
+    "kind": "JSON parsing plus exact pin/roster/capture-reference consistency fallback",
+    "substantive_truth": false,
+    "limitation": "The skill-referenced landmark graph validator/template are absent. This index is a curated evidence pointer, not proof by itself.",
+    "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w248.QGFLnt/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 -rjson -rdigest -e 'p=JSON.parse(File.binread(ARGV[0])); expected=JSON.parse(ARGV[1]); cells=JSON.parse(ARGV[2]); raise \"claim\" unless p.fetch(\"claim_level\")==\"VERIFIED\"; raise \"root pins\" unless p.fetch(\"lineage\").fetch(\"frozen_file_sha256\")==expected; expected.each { |path,sha| raise \"source hash: #{path}\" unless File.file?(path) && Digest::SHA256.file(path).hexdigest==sha }; v=p.fetch(\"verification\"); d=v.fetch(\"debug\"); r=v.fetch(\"release\"); raise \"debug counts\" unless [d.fetch(\"exit\"),d.fetch(\"examples\"),d.fetch(\"failures\"),d.fetch(\"errors\"),d.fetch(\"pending\")]==[0,160,0,0,0]; batches=r.fetch(\"batches\"); roster=batches.flat_map { |b| b.fetch(\"files\") }; raise \"release roster\" unless roster.size==28 && roster.uniq.size==28 && roster.all? { |f| File.file?(f) } && d.fetch(\"command\").include?(\"spec \"+roster.join(\" \")); raise \"release counts\" unless batches.map { |b| b.fetch(\"examples\") }==[23,43,44,50] && batches.all? { |b| [b.fetch(\"exit\"),b.fetch(\"failures\"),b.fetch(\"errors\"),b.fetch(\"pending\")]==[0,0,0,0] && b.fetch(\"command\").include?(\"spec \"+b.fetch(\"files\").join(\" \")) }; raise \"light gates\" unless v.fetch(\"final_light_checks\").all? { |x| x.fetch(\"exit\")==0 }; native=v.fetch(\"native_cells\"); raise \"native count\" unless native.size==4 && cells.size==4; native.zip(cells).each do |n,c|; raise \"external capture pin\" unless n.fetch(\"evidence_root\")==c.fetch(\"root\") && n.fetch(\"mode\")==c.fetch(\"mode\") && n.fetch(\"profile\")==c.fetch(\"profile\") && n.fetch(\"summary_sha256\")==c.fetch(\"summary_sha256\"); path=File.join(c.fetch(\"root\"),\"summary.json\"); raise \"summary hash\" unless Digest::SHA256.file(path).hexdigest==c.fetch(\"summary_sha256\"); s=JSON.parse(File.binread(path)); raise \"summary coordinates\" unless s.fetch(\"helper_mode\")==c.fetch(\"mode\") && s.fetch(\"string_profile\")==c.fetch(\"profile\"); raise \"native exits\" unless n.fetch(\"probe_exit\")==0 && n.fetch(\"audit_exit\")==0; end; sources=p.fetch(\"source_comparison\").fetch(\"snapshots\"); raise \"source pin count\" unless sources.sum { |s| s.fetch(\"files\").size }==19; sources.each { |s| s.fetch(\"files\").each { |f| path=File.join(s.fetch(\"root\"),f.fetch(\"path\")); raise \"source pin #{path}\" unless Digest::SHA256.file(path).hexdigest==f.fetch(\"sha256\") } }; a=v.fetch(\"raw_adversary\"); report=a.fetch(\"report\"); controls=report.fetch(\"audits\"); raise \"raw controls\" unless a.fetch(\"exit\")==0 && controls.size==11 && controls.first.fetch(\"exit\")==0 && controls.last.fetch(\"exit\")==0 && controls[1..-2].all? { |x| x.fetch(\"exit\")==1 && x.fetch(\"signal\").nil? } && report.fetch(\"initial_inventory_sha256\")==report.fetch(\"final_inventory_sha256\") && report.fetch(\"entry_count\")==272; raise \"actual bytes\" unless v.fetch(\"actual_generated_bytes\").fetch(\"result\").fetch(\"exit_code\")==0; puts \"W248 evidence index: JSON, exact external file/capture pins, 28-file roster, gate references and nine-control restoration consistency passed; not substantive proof by itself.\"' .landmark/evidence/static-nested-handoff-w248.json '{\"src/crystal_click/static_binary_bulk_column_declaration.cr\":\"96c5c202f3d5efc9455a958d607090261e4ccb0db5d1a6e075aa81924b10ffdb\",\"src/crystal_click/wide_part_writer/static_wide_part_column_input.cr\":\"3844457f7b6e3ae52be2e94308090c406aaca135710ba5f7a3f720240b1a39fe\",\"spec/static_binary_bulk_table_w247_spec.cr\":\"9374ff849a0ef0e5d41415e626f366a20da08f1c6eb8ebd05e8848185d5b3cd3\",\"spec/multi_column_part_writer_w245_spec.cr\":\"80826a2a7379989dad69d2887d249c66b86cbf3dbbe868e9da34d27a23cdf1e6\",\"spec/static_nested_handoff_w248_spec.cr\":\"bd4824497d1ae8c579eff7fb0454ae4ee08539e982040f61a4739906bcacd213\",\"scripts/check_static_nested_handoff_w248.cr\":\"dc642c1d744100b04870c7538f9938dadbba22949b08bcc2548fc757b0cd85ac\",\"scripts/support/static_nested_handoff_w248_fixture.cr\":\"b24951950fd6eff3c69f8eecb90a30dfe40f10c2b1bfad4e7d31d3e2a7885986\",\"scripts/probe_static_nested_handoff_w248.rb\":\"839e99ebdb4edc83f4ec1ec859ac24859e842066bf7a1ace2d515d9ae058e0e5\",\"scripts/audit_static_nested_handoff_w248.rb\":\"20253f978eb46ae93cb3f79c2d1aba872df496e07b0137a1b384a86c23fa9e12\",\"scripts/check_static_nested_handoff_w248_adversary.rb\":\"07b1dfd3423b349eb0ba5909bbf6ff9e460248f15217792451396287dc3d6ecc\",\"/private/tmp/crystal-click-w248.QGFLnt/helper-debug\":\"8444ac357cb2d81b1a388dce1f07af267d70e462f76bddc8e38379d424392262\",\"/private/tmp/crystal-click-w248.QGFLnt/helper-release\":\"ff69fd99b6a1403d99c9412410659960f9dca5ec8369dae97bc616643f480521\",\"/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped\":\"bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2\"}' '[{\"root\":\"/private/tmp/crystal-click-w248-final-debug-single.FFyM35\",\"mode\":\"debug\",\"profile\":\"single\",\"summary_sha256\":\"757c683de928ac6d4cb92e24ae6d0a7796ddedc2523a40d98d6ec1e87a4ce5f1\"},{\"root\":\"/private/tmp/crystal-click-w248-final-debug-sized.PaJFLS\",\"mode\":\"debug\",\"profile\":\"sized\",\"summary_sha256\":\"b96af06c719377391f7352d24fa3ebf89bcf2767e4410dcf2573aab3f1ae3d4a\"},{\"root\":\"/private/tmp/crystal-click-w248-final-release-single.8F5Vbq\",\"mode\":\"release\",\"profile\":\"single\",\"summary_sha256\":\"6bc6bd0ba19ecc22d641943f25014a9a82162357fc3581a2a0f757459f332b20\"},{\"root\":\"/private/tmp/crystal-click-w248-final-release-sized.1vRvDs\",\"mode\":\"release\",\"profile\":\"sized\",\"summary_sha256\":\"1526d0052a62d2b16c352bf98ca978416d8e645fc841bfdcfc32c0aed0f46ad2\"}]'",
+    "exit": 0,
+    "observed": "JSON, exact external file/capture pins, same ordered 28-file DEBUG/RELEASE roster, gate references and nine-control restored-capture consistency passed. This validates the index, not substantive truth."
+  },
+  "git_policy": "Exact owned paths only, one verified local atomic feature commit; no push/history rewrite."
+}

@@ -1,5 +1,45 @@
 # Crystal Click landmarks
 
+## Recursive static nominal Nested N-column handoff — W248
+
+- Status: VERIFIED / root adversary ROBUST within the finite target over clean
+  baseline `8e7693f1e6bcea4fbf395cb6a808a50af984944d`. Three over-broad predicates
+  at two admission-owner boundaries were removed. The existing generic static
+  BinaryBulk owner and recursive serde are reused; no per-product codec/class
+  was needed. Legacy simple root-Nested keeps its specialized carrier. Rich
+  Nested and recursively nested static descriptors use nominal `BinaryValue`.
+- Final 28-file DEBUG roster: 160 examples, zero failures/errors/pending. The
+  combined RELEASE compile was killed by the unchanged 12 GiB guard before
+  tests. The same ordered roster split without changing limits passes
+  23 + 43 + 44 + 50 = 160 RELEASE examples, zero failures/errors/pending.
+  Both helper builds, seven-file formatting, three Ruby syntax checks, final
+  10-control auditor self-test and 19-source-pin refresh pass. Same-lineage
+  model review is correlated, not independent evidence.
+- Four fresh DEBUG/RELEASE x single/sized native cells have independent root
+  raw audits: 16 stock calls establish library-write -> stock ATTACH/CHECK=1,
+  exact ordered six-column schema/values/inner Variant types, and stock-write ->
+  library direct/public-table/offline reads. Per mode, single generated 68 files
+  / 10,914 bytes and sized 88 / 14,153; all 156 / 25,067 match exactly across
+  modes. Nine semantic controls reject at intended guards; the typed 272-entry
+  capture inventory is restored and final baseline audit passed.
+- ATTACH added only source-derived `invalidated_system_columns.txt` with exact
+  bytes `_block_offset\n_block_number\n`; original generated-file identities
+  remain unchanged. This is not blanket extra-file or virtual-column
+  compatibility. Native projection interop is untested (only local selected
+  projection coverage); `Variant(Nested)` is declaration-only, not a native
+  product. Dynamic/JSON-containing Nested, other layouts, MV/projection writes,
+  general keys/partitions, and whole-type closure remain open. Retained-value
+  limits are logical ownership guards, not transient-allocation/RSS bounds.
+- Native pin: ClickHouse `26.10.1.1201`, build
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, SHA-256
+  `bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+  October 7/9 source snapshots are separate comparisons, not runtime source
+  identity. Return pointers: [W248 frontier](docs/STATIC_NESTED_HANDOFF_FRONTIER.md),
+  [root-owned evidence index](.landmark/evidence/static-nested-handoff-w248.json).
+  Refresh after source/runtime/compiler/codec/consumer/helper/fixture/oracle
+  changes or capture loss. Overall goal ACTIVE; memory/performance deferred.
+  No push or history rewrite.
+
 ## Static recursive BinaryBulk public consumer handoff — W247
 
 - Status: VERIFIED / root adversary ROBUST within the finite target over clean

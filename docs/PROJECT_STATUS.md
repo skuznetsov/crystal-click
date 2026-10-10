@@ -1,6 +1,37 @@
 # CrystalClick project status
 
-Latest qualification (W247, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W248, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite static nominal Nested target. The N-column/public-consumer boundary
+removes three over-broad predicates across two admission-owner boundaries;
+the existing generic BinaryBulk declaration owner and recursive codecs are
+reused. The legacy simple root-Nested carrier remains specialized. Rich
+Nested(LC(Nullable(String)), Variant(String, UInt64), String), Nested under an
+otherwise-admitted static parent, and recursive Nested children are in scope;
+Dynamic/JSON-containing Nested and `Variant(Nested)` native product behavior are
+not admitted by this evidence.
+
+The final 28-file DEBUG roster passes 160 examples, zero failures/errors/pending.
+The combined RELEASE compile was killed by the unchanged 12 GiB guard before
+tests; splitting the same ordered roster without changing limits passes
+23 + 43 + 44 + 50 = 160 RELEASE examples, zero failures/errors/pending.
+Both helper builds, seven-file formatting, three Ruby syntax checks, final
+10-control auditor self-test and 19-source-pin refresh pass.
+
+Four fresh reciprocal native cells (DEBUG/RELEASE x single/sized profile) have
+independent root raw audits and 16 stock calls: library-written parts pass
+ATTACH/CHECK=1 with exact ordered six-column schemas, values and inner Variant
+types; stock-written parts are read through direct, public-table and offline
+library APIs. The 156 generated files / 25,067 bytes per mode agree exactly
+(single 68 / 10,914; sized 88 / 14,153). Nine semantic controls reject at
+their intended guards; the typed 272-entry capture inventory was restored and
+the final baseline audit passed. Native projection interop is untested; only
+the local selected-projection spec is covered. Same-lineage model review is
+correlated, not independent evidence. See the [W248 frontier](STATIC_NESTED_HANDOFF_FRONTIER.md)
+and root-owned [W248 evidence index](../.landmark/evidence/static-nested-handoff-w248.json).
+The project goal remains ACTIVE; memory/performance is deferred, and no push is
+authorized.
+
+Previous qualification (W247, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite static recursive public-consumer target. Existing BinaryBulk serde
 already composes the selected types; a new own-file canonical declaration owner
 connects the generic static fallback to table batches, owned offline `.values`

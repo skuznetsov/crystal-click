@@ -1,7 +1,8 @@
 module CrystalClick
   module WidePartWriter
-    # Adapter for the existing static BinaryBulk physical owner. Nominal
-    # declarations remain with their existing narrow admission classes.
+    # Adapter for the generic static BinaryBulk physical owner. Nominal static
+    # Nested nodes retain their recursive identity; other contextual and
+    # nominal owners remain behind their existing admission paths.
     private class StaticWidePartColumnInput
       def self.prepare(
         name : String,
@@ -22,9 +23,6 @@ module CrystalClick
         if type.contains_dynamic?
           raise UnsupportedFormatError.new("Dynamic requires its bound Dynamic column owner")
         end
-        if type.contains_nested? && type.tag != BinaryDataType::TAG_NESTED
-          raise UnsupportedFormatError.new("Nested BinaryBulk requires its exact nominal Nested storage plan")
-        end
         if type.geometry_storage_variant?
           raise UnsupportedFormatError.new("Geometry storage Variants require their nominal physical owner")
         end
@@ -36,10 +34,6 @@ module CrystalClick
         declaration = admitted_declaration(type, type_name, context)
         unless declaration == type_name
           raise UnsupportedFormatError.new("static BinaryBulk nominal declaration differs from the canonical type")
-        end
-        if type.contains_nested? &&
-           (type.tag != BinaryDataType::TAG_NESTED || WideNestedTypePlan.for_type(declaration).nil?)
-          raise UnsupportedFormatError.new("Nested BinaryBulk requires its exact nominal Nested storage plan")
         end
         BinaryBulkTypePlan.new(type, context.profile, nil, context.limits, true).role_count
 

@@ -1,8 +1,9 @@
 module CrystalClick
   # Canonical admission owner for static BinaryBulk declarations that do not
   # belong to an existing nominal or legacy typed table route. Specialized
-  # SimpleAggregate, AggregateFunction, QBit, Geo, Dynamic, JSON and flattened
-  # Nested layouts retain their separate owners.
+  # SimpleAggregate, AggregateFunction, QBit, Geo, Dynamic and JSON layouts,
+  # along with legacy flattened Nested storage aliases, retain separate owners.
+  # Nominal static Nested nodes remain part of the recursive BinaryBulk tree.
   class StaticBinaryBulkColumnDeclaration
     getter type : BinaryDataType
 
@@ -55,9 +56,6 @@ module CrystalClick
       end
       if type.contains_json?
         raise UnsupportedFormatError.new("JSON requires its bound column-specific physical context")
-      end
-      if type.contains_nested?
-        raise UnsupportedFormatError.new("Nested requires its flattened storage alias owner")
       end
       if type.contains_aggregate_function?
         raise UnsupportedFormatError.new("AggregateFunction requires its nominal static owner")
