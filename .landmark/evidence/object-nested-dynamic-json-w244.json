@@ -1,0 +1,373 @@
+{
+  "format": "crystal_click_object_nested_dynamic_json_w244_evidence_v1",
+  "observed_date": "2026-10-09",
+  "baseline_revision": "8e11216b9007cd0257cfed71c2dc16b54d6cdfe2",
+  "claim": {
+    "level": "VERIFIED",
+    "verdict": "ROBUST within the finite scope below",
+    "statement": "The existing recursive implementation composes the selected populated nested Dynamic actual containing JSON. Two library-written Wide parts were accepted and read with exact native type/value witnesses by the pinned stock ClickHouse runtime.",
+    "production_sources_changed": false,
+    "production_behavior_red": false,
+    "provenance": "Root-executed gates and root raw/filesystem falsifiers; Luna Max supplied the test/harness and source review. Same-lineage review is correlated, not independent evidence. This is a curated evidence index, not immutable cryptographic execution provenance.",
+    "goal_status": "ACTIVE: legal read/write types and MV/projections before memory/performance"
+  },
+  "scope": {
+    "outer_actual": "Tuple(JSON(max_dynamic_types=2, max_dynamic_paths=1, v UInt8), Array(Dynamic(max_types=1)))",
+    "inner_actual": "Tuple(JSON(max_dynamic_types=0, max_dynamic_paths=0, v Int64), UInt8)",
+    "collision": "Both JSON child plans have local descriptor child [0], field v and value 7; Dynamic site and UInt8/Int64 types distinguish them.",
+    "rows": 4,
+    "flattened_nested_dynamic_elements": 5,
+    "json_bearing_inner_actuals": 1,
+    "controls": "String overflow, ordinary String, Dynamic NULL and empty arrays; scalar sibling UInt8(9).",
+    "storage": "Wide/LZ4/plain-mrk2, advanced_s0, shared version2, String profile0, frame32",
+    "mark_files": 11,
+    "parent_rows_with_eof": [
+      2,
+      2,
+      0
+    ],
+    "direction": "library-write -> stock-read only",
+    "window_boundary": "Helper physical first/last/EOF windows and native PK-filtered SQL windows are distinct evidence; SQL predicates do not establish selective native physical reads."
+  },
+  "pins": {
+    "source_snapshot": {
+      "path": "/private/tmp/crystal-click-w238.4nQqSo/clickhouse",
+      "revision": "f25eb93a0b890a3b87df05eb34e2af1f933b4089",
+      "shallow": true,
+      "note": "Separate October 9 snapshot; not a latest-at-completion or matching-runtime-build claim. Original source archive untouched."
+    },
+    "native_runtime": {
+      "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "version": "26.10.1.1201",
+      "build_revision": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+    },
+    "repository_files": [
+      {
+        "path": "spec/object_shared_nested_dynamic_json_w244_spec.cr",
+        "sha256": "263f2851f2d1b8f2806f203881ece8614c20b3c0484e1344b2f8f21c4de6b975"
+      },
+      {
+        "path": "scripts/check_object_nested_dynamic_json_w244.cr",
+        "sha256": "0a83bf1cae58a920f0d0a3e5b3e2a38169ab9bb8d232a63ddeb15715d5a62af2"
+      },
+      {
+        "path": "scripts/probe_object_nested_dynamic_json_w244.rb",
+        "sha256": "26c8e38a2f40fc3697e37b009627c4e6930bdf157c3844bc7d8be39839132d79"
+      },
+      {
+        "path": "scripts/audit_object_nested_dynamic_json_w244.rb",
+        "sha256": "0e9736ee9d6f295369db6d634719fcf4d1a66f129e87d6b99647f8813e30a23a"
+      }
+    ],
+    "ruby_loaded_import_closure": [
+      {
+        "path": "scripts/audit_object_nested_dynamic_json_w244.rb",
+        "sha256": "0e9736ee9d6f295369db6d634719fcf4d1a66f129e87d6b99647f8813e30a23a"
+      },
+      {
+        "path": "scripts/check_array_json_parts_w185.rb",
+        "sha256": "a71366bf4e87ed7649373c0c251b865e75ac6cbe67263605a6ceb576ec4b1451"
+      },
+      {
+        "path": "scripts/check_json_binary_kernel_w180.rb",
+        "sha256": "f4da2177f787fd1dc5a511cb6de8c47d7a44538efda4d26a25c4af1fb47b0c05"
+      },
+      {
+        "path": "scripts/check_object_shared_buckets_w190.rb",
+        "sha256": "3aeaaf954198cbcf3ba01042ff87325988d2df369348575192f36df66ee4e38c"
+      },
+      {
+        "path": "scripts/object_shared_advanced_layout_w191.rb",
+        "sha256": "9b9fe64dbbd49917939b3b79175148e83bd9643f88543375a6b06ffbf94405f2"
+      },
+      {
+        "path": "scripts/probe_json_array_storage_w183.rb",
+        "sha256": "ba628aa7037bb4421a0e7456d282e359b6ff2ae1aab9a4667776742237697adf"
+      },
+      {
+        "path": "scripts/probe_object_nested_dynamic_json_w244.rb",
+        "sha256": "26c8e38a2f40fc3697e37b009627c4e6930bdf157c3844bc7d8be39839132d79"
+      },
+      {
+        "path": "scripts/probe_object_shared_advanced_w191.rb",
+        "sha256": "6f1c09719570c17699cb5076f63c5095ea53ca0426e7feba3d9b1edada85859d"
+      },
+      {
+        "path": "scripts/probe_object_shared_json_interop_w241.rb",
+        "sha256": "6330b660a7d4369f68a8b95e7a57a81bb6434549ee7d61357a60e89921d3aa6d"
+      },
+      {
+        "path": "scripts/probe_object_shared_json_w240.rb",
+        "sha256": "76aa69aef8510ff9edb2aafba2dd7f940be74c9bd2af1e953fbb125931fdd335"
+      },
+      {
+        "path": "scripts/reconcile_object_shared_json_interop_w241.rb",
+        "sha256": "2751fc87f72522e2ec70821c7c8b7bc646fd03a92dc672ab8df2f25b29635a34"
+      },
+      {
+        "path": "scripts/stock_part_probe_support_w191.rb",
+        "sha256": "f8302039adc306c4d94d0d4ea28919616eb1dc50ca2c7540c0d861e0282009e1"
+      }
+    ],
+    "regression_files": [
+      {
+        "path": "spec/object_shared_recursive_dynamic_w242_spec.cr",
+        "sha256": "98f15bcbafa409cb428bc0c5b73205ba574144913b05c80d955adaa8f04f3147"
+      },
+      {
+        "path": "spec/object_shared_descendant_json_w243_spec.cr",
+        "sha256": "e2d74a82f991cf8c8cf8f8f2e1a38433ee970a275c29686318d5bfa122566cfc"
+      },
+      {
+        "path": "spec/object_shared_json_envelope_w240_spec.cr",
+        "sha256": "b990bb086e84d04fb74a3a36de843be3345c287eea411f1cd10b7d24df9ad610"
+      },
+      {
+        "path": "spec/object_shared_json_envelope_w240_adversary_spec.cr",
+        "sha256": "c84e0e23f27eecaee620b5f8d002ca7ffc9e4843d2c80a4fa255128f08896304"
+      },
+      {
+        "path": "spec/object_shared_json_prepared_policy_w240_adversary_spec.cr",
+        "sha256": "89ff84d891d4d801303c18423009e9c0ba7458fac0ad0a9a99d6d642bb0bcdf0"
+      },
+      {
+        "path": "spec/object_shared_path_json_tape_w240_spec.cr",
+        "sha256": "524ef93d814b8b1912a80a1bd8651dc8b75312625b7543670cacd680b0bfe1b8"
+      },
+      {
+        "path": "spec/object_inferred_dynamic_json_physical_w216_spec.cr",
+        "sha256": "0e4795b047df1b5eda549b4141436bae91e4b3961bb48454cb9a4ee9f836f60d"
+      },
+      {
+        "path": "spec/object_document_inline_depth_w240_adversary_spec.cr",
+        "sha256": "04b7517aa0b77d46449995170584ed7b8aad8296810f3434da5f98202c4c68d8"
+      }
+    ]
+  },
+  "executed_dod": {
+    "working_directory": "/Users/sergey/Projects/Crystal/crystal-click",
+    "risk": "CAUTION for persistent serialization qualification; no production edits. Rollback is the single owned local qualification commit.",
+    "execution_prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w244.DMB2ho/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+    "command_expansion": "Each command_tail below is appended to execution_prefix with one space; heavy jobs were serial.",
+    "compiler": "Crystal 1.21.0 / LLVM 22.1.8 / aarch64 Darwin 25.6; Ruby 2.6.10",
+    "observation_boundary": "Crystal gate signals were observed in root tool outputs, not persisted as signed transcripts. Native raw invocation files and summaries remain at the pinned capture paths.",
+    "tests": [
+      {
+        "mode": "DEBUG",
+        "focused_command_tail": "crystal 600 12288 spec spec/object_shared_nested_dynamic_json_w244_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "focused_examples": 6,
+        "regression_command_tail": "crystal 900 12288 spec spec/object_shared_recursive_dynamic_w242_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_shared_json_envelope_w240_spec.cr spec/object_shared_json_envelope_w240_adversary_spec.cr spec/object_shared_json_prepared_policy_w240_adversary_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/object_inferred_dynamic_json_physical_w216_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "regression_examples": 56,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_codes": [
+          0,
+          0
+        ]
+      },
+      {
+        "mode": "RELEASE",
+        "focused_command_tail": "crystal 600 12288 spec spec/object_shared_nested_dynamic_json_w244_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug --verbose",
+        "focused_examples": 6,
+        "regression_command_tail": "crystal 900 12288 spec spec/object_shared_recursive_dynamic_w242_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_shared_json_envelope_w240_spec.cr spec/object_shared_json_envelope_w240_adversary_spec.cr spec/object_shared_json_prepared_policy_w240_adversary_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/object_inferred_dynamic_json_physical_w216_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug --verbose",
+        "regression_examples": 56,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "exit_codes": [
+          0,
+          0
+        ]
+      }
+    ],
+    "builds": [
+      {
+        "mode": "DEBUG",
+        "command_tail": "crystal 600 12288 build scripts/check_object_nested_dynamic_json_w244.cr -o /private/tmp/crystal-click-w244.DMB2ho/check-w244-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "exit_code": 0,
+        "path": "/private/tmp/crystal-click-w244.DMB2ho/check-w244-debug",
+        "sha256": "bcd08270f9633d19253563f30a1be1bcb6ac735d840f47799c76f9e82388940f"
+      },
+      {
+        "mode": "RELEASE",
+        "command_tail": "crystal 600 12288 build scripts/check_object_nested_dynamic_json_w244.cr -o /private/tmp/crystal-click-w244.DMB2ho/check-w244-release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release --no-debug",
+        "exit_code": 0,
+        "path": "/private/tmp/crystal-click-w244.DMB2ho/check-w244-release",
+        "sha256": "5cd17cec3242cd0a545b7c071516ccbab7d63607a2054d0c96844aff9c1380fe"
+      }
+    ],
+    "light_checks": [
+      "Crystal formatter --check for the two new .cr files; both Ruby syntax checks; git diff --check; production diff against baseline is empty."
+    ]
+  },
+  "captures": [
+    {
+      "mode": "DEBUG",
+      "summary": "/private/tmp/crystal-click-w244-debug32-seal.uQOW1C/summary.json",
+      "summary_sha256": "e8ab46a5e6cb968b5b13420a04cf7f3153f93115199d4db2d23913a36711d6e0",
+      "native_command_tail": "ruby 600 12288 scripts/probe_object_nested_dynamic_json_w244.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w244.DMB2ho/check-w244-debug --evidence-root /private/tmp/crystal-click-w244-debug32-seal.uQOW1C",
+      "native_exit_code": 0,
+      "audit_command_tail": "ruby 180 4096 scripts/audit_object_nested_dynamic_json_w244.rb --summary /private/tmp/crystal-click-w244-debug32-seal.uQOW1C/summary.json --summary-sha256 e8ab46a5e6cb968b5b13420a04cf7f3153f93115199d4db2d23913a36711d6e0 --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w244.DMB2ho/check-w244-debug --helper-sha256 bcd08270f9633d19253563f30a1be1bcb6ac735d840f47799c76f9e82388940f --helper-source-sha256 0a83bf1cae58a920f0d0a3e5b3e2a38169ab9bb8d232a63ddeb15715d5a62af2 --self-test",
+      "audit_exit_code": 0,
+      "audit_observation": {
+        "status": "raw_capture_authenticated",
+        "summary_sha256": "e8ab46a5e6cb968b5b13420a04cf7f3153f93115199d4db2d23913a36711d6e0",
+        "clickhouse_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+        "helper_sha256": "bcd08270f9633d19253563f30a1be1bcb6ac735d840f47799c76f9e82388940f",
+        "helper_source_sha256": "0a83bf1cae58a920f0d0a3e5b3e2a38169ab9bb8d232a63ddeb15715d5a62af2",
+        "profile_id": "advanced_s0",
+        "frame_bytes": 32,
+        "part_file_count": 30,
+        "physical_mark_file_count": 11,
+        "physical_mark_rows_with_eof": [
+          2,
+          2,
+          0
+        ],
+        "native_invocation_count": 7,
+        "rows": 4,
+        "controls": {
+          "baseline_child_accepted": true,
+          "uppercase_equivalent_child_accepted": true,
+          "malformed_hex_rejected": true,
+          "empty_helper_stdin_accepted": true,
+          "nonempty_helper_stdin_rejected": true,
+          "single_trailing_separator_normalized": true,
+          "part_path_swap_rejected": true,
+          "noncanonical_escape_rejected": true,
+          "canonical_invocation_directory_accepted": true,
+          "invocation_directory_symlink_rejected": true,
+          "invocation_directory_escape_rejected": true,
+          "same_value_wrong_type_rejected": true,
+          "path_swap_rejected": true
+        },
+        "interpretation": "Only this library-written advanced_s0 part is covered; isDynamicElementInSharedData is retained as query-column placement diagnostic, not persisted per-mark roster proof."
+      }
+    },
+    {
+      "mode": "RELEASE",
+      "summary": "/private/tmp/crystal-click-w244-release32-seal.NzHEfL/summary.json",
+      "summary_sha256": "a09829180271763e80b4e8d78dbe3b5083c40eeb0eca0bdd7251e2164c185f12",
+      "native_command_tail": "ruby 600 12288 scripts/probe_object_nested_dynamic_json_w244.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w244.DMB2ho/check-w244-release --evidence-root /private/tmp/crystal-click-w244-release32-seal.NzHEfL",
+      "native_exit_code": 0,
+      "audit_command_tail": "ruby 180 4096 scripts/audit_object_nested_dynamic_json_w244.rb --summary /private/tmp/crystal-click-w244-release32-seal.NzHEfL/summary.json --summary-sha256 a09829180271763e80b4e8d78dbe3b5083c40eeb0eca0bdd7251e2164c185f12 --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w244.DMB2ho/check-w244-release --helper-sha256 5cd17cec3242cd0a545b7c071516ccbab7d63607a2054d0c96844aff9c1380fe --helper-source-sha256 0a83bf1cae58a920f0d0a3e5b3e2a38169ab9bb8d232a63ddeb15715d5a62af2 --self-test",
+      "audit_exit_code": 0,
+      "audit_observation": {
+        "status": "raw_capture_authenticated",
+        "summary_sha256": "a09829180271763e80b4e8d78dbe3b5083c40eeb0eca0bdd7251e2164c185f12",
+        "clickhouse_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+        "helper_sha256": "5cd17cec3242cd0a545b7c071516ccbab7d63607a2054d0c96844aff9c1380fe",
+        "helper_source_sha256": "0a83bf1cae58a920f0d0a3e5b3e2a38169ab9bb8d232a63ddeb15715d5a62af2",
+        "profile_id": "advanced_s0",
+        "frame_bytes": 32,
+        "part_file_count": 30,
+        "physical_mark_file_count": 11,
+        "physical_mark_rows_with_eof": [
+          2,
+          2,
+          0
+        ],
+        "native_invocation_count": 7,
+        "rows": 4,
+        "controls": {
+          "baseline_child_accepted": true,
+          "uppercase_equivalent_child_accepted": true,
+          "malformed_hex_rejected": true,
+          "empty_helper_stdin_accepted": true,
+          "nonempty_helper_stdin_rejected": true,
+          "single_trailing_separator_normalized": true,
+          "part_path_swap_rejected": true,
+          "noncanonical_escape_rejected": true,
+          "canonical_invocation_directory_accepted": true,
+          "invocation_directory_symlink_rejected": true,
+          "invocation_directory_escape_rejected": true,
+          "same_value_wrong_type_rejected": true,
+          "path_swap_rejected": true
+        },
+        "interpretation": "Only this library-written advanced_s0 part is covered; isDynamicElementInSharedData is retained as query-column placement diagnostic, not persisted per-mark roster proof."
+      }
+    }
+  ],
+  "native_totals": {
+    "qualified_parts": 2,
+    "stock_calls": 14,
+    "helper_calls": 2,
+    "per_mode_calls": [
+      "create_table",
+      "attach_check",
+      "type_values",
+      "inner_json_child",
+      "full_rows",
+      "mark_windows",
+      "query_column_placement_diagnostic"
+    ],
+    "native_check": "all_1_1_0\\t1\\t",
+    "process_domain": "Each capture has one helper and seven native records, all actual exits zero; exact table/active-part binding and all raw observations were reopened.",
+    "byte_comparison": {
+      "comparison": "actual bytes",
+      "files_per_part": 30,
+      "bytes_per_part": 19475,
+      "debug_release_identical": true
+    },
+    "attachment_boundary": "ATTACH consumes detached staging. Historical copied digest is bound to the generated source; current generated and attached bytes are reopened. Only exact invalidated_system_columns.txt bytes '_block_offset\\n_block_number\\n' are admitted as an added file."
+  },
+  "independent_root_controls": {
+    "script": "/private/tmp/crystal-click-w244.DMB2ho/root-audit-controls.rb",
+    "script_sha256": "dd96862150c6bc14fb6822f014b450c35a43ba848c8387ec5102d3ada46f2322",
+    "command_tail": "ruby 180 4096 /private/tmp/crystal-click-w244.DMB2ho/root-audit-controls.rb /private/tmp/crystal-click-w244-debug32-seal.uQOW1C/summary.json e8ab46a5e6cb968b5b13420a04cf7f3153f93115199d4db2d23913a36711d6e0 /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped /private/tmp/crystal-click-w244.DMB2ho/check-w244-debug bcd08270f9633d19253563f30a1be1bcb6ac735d840f47799c76f9e82388940f 0a83bf1cae58a920f0d0a3e5b3e2a38169ab9bb8d232a63ddeb15715d5a62af2",
+    "exit_code": 0,
+    "observation": {
+      "status": "root_raw_controls_passed",
+      "immutable_capture": "/private/tmp/crystal-click-w244-debug32-seal.uQOW1C/summary.json",
+      "temporary_path_fixture": "/private/tmp/crystal-click-w244-root-path-controls.20261009-98983-cwvh0l",
+      "controls": {
+        "authentic_capture_accepted": true,
+        "raw_same_value_wrong_type": {
+          "rejected": true,
+          "reason": "W244 audit: native nested child row differs"
+        },
+        "raw_table_path_swap": {
+          "rejected": true,
+          "reason": "W244 audit: active part path does not exactly join from the table data path"
+        },
+        "raw_table_identity_swap": {
+          "rejected": true,
+          "reason": "W244 audit: native table identity differs; observed [\"default\", \"wrong_table\"], expected [\"default\", \"w244_4f33cecc_advanced_s0\"]"
+        },
+        "actual_invocations_directory_symlink": {
+          "rejected": true,
+          "reason": "W244 audit: invocations artifact directory is absent, symlinked, or not a directory"
+        },
+        "actual_noncanonical_path_segment": {
+          "rejected": true,
+          "reason": "W244 audit: root falsifier path is symlinked or noncanonical"
+        }
+      }
+    },
+    "mutation_boundary": "Raw type/table/path mutations were in memory only. Actual symlink/noncanonical tests used a separate root-owned temporary fixture; sealed captures were not edited and their summary pins were rechecked."
+  },
+  "corrections_and_refutations": [
+    "The first new spec confused ordinary type index0 with canonical arm0. SharedVariant sorts first, so the Tuple is arm1. This was a test-assumption failure before encoding, not production RED.",
+    "Version2 single-chunk state is per parent mark. Prepared but unobserved actuals are not registered; empty/NULL-only ordinary rosters are empty. Query-column shared-placement flags do not prove persisted per-mark rosters.",
+    "Native dynamicElement may extract Nullable(Tuple); assumeNotNull normalization is after exact dynamicType selection, without weakening exact inner/JSON child types.",
+    "The initial native capture /private/tmp/crystal-click-w244-debug32-seal.zW72OX was inconclusive qualification because the hex oracle expected lowercase. Raw native outputs matched; both corrected validators decoded the authentic uppercase JSON and rejected same-value wrong-type/malformed controls. Failed capture calls are not included in qualified totals.",
+    "Audit oracles were corrected for Ruby 2.6, helper argv-file input with empty stdin, consumed detached staging and one trailing directory separator. Canonical path/table joins and pinned input bytes remain strict.",
+    "The first independent root control run expected a different refusal message fragment; the table-path mutation was already refused. Only the temporary control's expected diagnostic was corrected.",
+    "Sandbox group-isolation setup failure before tests was infrastructure-only; guarded escalated runs retained min-free50%, one worker, isolated cache and macOS linker settings."
+  ],
+  "exclusions": [
+    "No arbitrary type products, all-layouts, Compact, other String/shared/frame profiles or whole-suite qualification.",
+    "No reciprocal stock-authored W244, native nested-Dynamic cap-zero or registered unused JSON-arm-across-marks qualification.",
+    "JSON typed/runtime Dynamic ancestry fences, unprepared leaves and unauthenticated Data coordinates remain guarded.",
+    "No performance, allocator, memory, general part publisher, arbitrary PK/partition or MV/projection writing completion claim."
+  ],
+  "continuation": {
+    "frontier": "General schema-aware complete-part publication over shared recursive column/stream plans; current WidePartWriter remains largely two-column UInt64-key slices and WideTypePlan.admitted gates exact physical forms.",
+    "sequence": "Arbitrary admitted value-column schemas, then key/partition metadata, then projection child publication and MV materialization.",
+    "other_open": "Legal Nested/LowCardinality/Variant/Dynamic/QBit intersections, Compact, aggregate-state families and broader facade decomposition.",
+    "authority": "Safe local work and atomic verified feature commits; no push, remote history change or resource-guard bypass.",
+    "refresh": "Re-run affected tests/builds and raw/native qualification after compiler, source/runtime, codec/consumer, fixture/helper/oracle changes or capture loss. Infrastructure failures are inconclusive and cannot widen admission."
+  }
+}

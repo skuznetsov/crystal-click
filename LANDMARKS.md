@@ -1,5 +1,45 @@
 # Crystal Click landmarks
 
+## Populated nested Dynamic JSON baseline qualification — W244
+
+- Status: VERIFIED / root adversary ROBUST within the finite prepared target.
+  Existing W243 production at `8e11216b9007cd0257cfed71c2dc16b54d6cdfe2`
+  already supports the selected composition; no production sources changed.
+  Heavy work was delegated to Luna Max; root executed the gates and independent
+  raw/filesystem controls. Same-lineage review is not independent evidence.
+- Outer actual: `Tuple(JSON(max_dynamic_types=2, max_dynamic_paths=1, v UInt8),
+  Array(Dynamic(max_types=1)))`; populated inner actual:
+  `Tuple(JSON(max_dynamic_types=0, max_dynamic_paths=0, v Int64), UInt8)`.
+  Same local leaf `[0]` / field `v` / value7 remains distinct by site and type.
+  Four rows, five nested Dynamic elements, one JSON-bearing inner actual.
+- Six focused + 56 affected regression examples pass in both modes, including
+  W216 persisted-reader controls; both helper builds pass. Two stock-read Wide
+  parts qualify only advanced_s0 / String0 / frame32. Both native coordinators
+  and raw audits exit0; fourteen stock calls, CHECK=1, exact types/values,
+  eleven mark streams `[2,2,0]`, thirteen self-tests per audit. Thirty generated
+  files / 19,475 bytes per mode match by actual bytes. Root raw type/table/path
+  and actual symlink/noncanonical-path refusals pass; captures remain unchanged.
+- Ordinary registry index0 is canonical arm1 because SharedVariant sorts first.
+  Version2's single chunk is per parent mark; prepared but unobserved actuals
+  are not registered. Query-column shared-placement flags do not prove the
+  persisted roster. Native PK predicates are not helper physical mark windows.
+  Nullable extraction, uppercase hex, helper argv-file vs stdin, and a single
+  trailing directory separator were corrected in harness oracles only.
+- Pre-ATTACH copied digest is historical; current generated/attached bytes are
+  checked with only the exact invalidation metadata addition admitted. No
+  immutable execution provenance, reciprocal W244, all-layout/type or perf claim.
+- Active goal remains types + MV/projections before memory/performance.
+  Next real frontier: general schema-aware complete-part publication beyond the
+  two-column UInt64-key writer; recursive stream plans and arbitrary admitted
+  value columns first, key/partition metadata next, then projection/MV writers.
+  Do not keep repeating identical JSON profile matrices without a new seam.
+- Return pointer: [W244 frontier](docs/OBJECT_SHARED_JSON_FRONTIER.md),
+  [evidence index](.landmark/evidence/object-nested-dynamic-json-w244.json).
+  Standing authority: safe local implementation/tests and atomic verified feature
+  commits; no push or resource-guard bypass. Refresh after source/runtime,
+  compiler/codec/consumer, fixture/helper/oracle changes or capture loss; any
+  infrastructure failure is inconclusive and cannot widen admission.
+
 ## Recursive child Object ownership — W243
 
 - Status: VERIFIED within the finite prepared shared-path

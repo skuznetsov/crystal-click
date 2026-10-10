@@ -1,6 +1,88 @@
-# Object shared JSON composition frontier — W240/W243
+# Object shared JSON composition frontier — W240/W244
 
-## Active W243 frontier — recursive child Object ownership
+## Qualified W244 frontier — JSON-bearing actuals at a real nested Dynamic site
+
+Status: VERIFIED within the finite baseline qualification below; root adversary
+verdict ROBUST within scope. Baseline:
+`8e11216b9007cd0257cfed71c2dc16b54d6cdfe2`. Production sources are unchanged.
+The new falsifier passed the existing implementation: no serializer or
+combination-specific branch was needed. W243's outer Array(Dynamic) was empty;
+W244 qualifies a populated nested Dynamic actual containing a prepared Object.
+
+The exact outer actual is
+`Tuple(JSON(max_dynamic_types=2, max_dynamic_paths=1, v UInt8), Array(Dynamic(max_types=1)))`.
+The nested Dynamic selects
+`Tuple(JSON(max_dynamic_types=0, max_dynamic_paths=0, v Int64), UInt8)`. Outer and inner JSON
+leaves share local descriptor child `[0]`, field `v` and value `7`, while their
+types and Dynamic-site identities differ. Each exact leaf requires its own
+prepared child plan. This is recursive state composition, not a serializer per
+complete type product.
+
+Executed DoD: six focused specs and 56 affected regression examples pass in
+both DEBUG and RELEASE (62 per mode, zero failures/errors/pending). The W216
+persisted-reader controls are included. Both helper builds, Crystal formatting
+and Ruby syntax checks pass. Root ran all heavy gates serially with run_safe,
+min-free 50%, one Crystal worker, isolated cache and the established macOS
+linker flag. Risk was CAUTION for persistent serialization; rollback is the
+single owned local qualification commit. No production edit or push occurred.
+
+Each mode qualifies one fresh library-written Wide/LZ4/plain-mrk2 part, only
+`advanced_s0` / shared version2 / String profile0 / frame32. Four parent rows
+produce five nested Dynamic elements, only one JSON-bearing inner actual.
+The fixture includes String overflow, NULL and empty arrays. All eleven
+`.mrk2` files contain two real marks plus EOF with row counts `[2, 2, 0]`.
+Both coordinators and separately executed raw audits exit zero: two qualified
+parts and fourteen stock calls, exact schema/active-part identity, CHECK=1,
+actual/leaf types and literal values. Each audit passes thirteen self-tests.
+All thirty generated files (19,475 bytes per part) match by actual bytes across
+DEBUG and RELEASE. Helper physical windows are distinct from native PK-filtered
+SQL results; these queries do not prove selective native physical reads.
+
+Root's separate authentic-raw-output controls reject same-value UInt8-for-Int64,
+table-path and table-identity swaps. Actual filesystem controls reject an
+invocation-directory symlink and a noncanonical `..` path. The generated source
+and current attached bytes are reopened; the exact
+`invalidated_system_columns.txt` addition is the only admitted ATTACH exception.
+The pre-ATTACH copied digest is a historical coordinator observation, not a
+claim that detached staging still exists or cryptographic execution provenance.
+
+Retained corrections and boundaries:
+
+- Ordinary type index0 is not canonical Variant arm0: implicit `SharedVariant`
+  sorts before these Tuple types, which use arm1. The initial failure was a new
+  test assumption, before encoding, not a production format failure.
+- Version2's single chunk is per parent mark, not per whole part. The advanced
+  document/chunk owners rebuild the census per chunk. A prepared but unobserved
+  arm is not registered. Empty/NULL-only sites have zero ordinary actual types;
+  this fixture does not qualify registered unused-arm state across marks.
+- `isDynamicElementInSharedData` is retained only as in-memory query-column
+  placement diagnostics, not direct persisted per-mark roster evidence.
+- Native `dynamicElement` extraction may wrap Tuple in Nullable; normalize that
+  extraction only after exact `dynamicType` selection. Native uppercase `hex()`
+  and trailing directory separators are representation differences. Exact type,
+  decoded path-map, scalar and canonical table-to-part checks remain strict.
+  Helper input is a pinned argv file, not stdin. These were harness corrections.
+
+No stock-authored reciprocal W244, native nested-Dynamic cap-zero, Compact,
+other shared/String/frame profiles or arbitrary type products are qualified.
+JSON typed/runtime Dynamic fences, unprepared leaves and unauthenticated Data
+coordinates remain guarded. Source is shallow snapshot
+`f25eb93a0b890a3b87df05eb34e2af1f933b4089`; stock runtime 26.10.1.1201 has
+separate build pin `d9bcb5ab007f0f6299f7f973f2642245bab3d028`.
+See the [W244 evidence index](../.landmark/evidence/object-nested-dynamic-json-w244.json)
+for exact paths, hashes, commands and refresh conditions.
+
+Next real architectural frontier: general schema-aware complete-part
+publication beyond `WidePartWriter`'s two-column UInt64-key slices, using shared
+recursive column/stream plans. `WideTypePlan.admitted` still gates exact forms;
+logical/bulk recursion is not universal persisted consumer admission. Extend
+arbitrary admitted value-column schemas first, then keys/partition metadata,
+before broader projection-child writes and MV materialization. Other legal
+Nested/LowCardinality/Variant/Dynamic/QBit products and aggregate-state families
+remain separate gaps. Overall legal types/MV/projections remains ACTIVE;
+memory/performance stays deferred.
+
+## Qualified W243 frontier — recursive child Object ownership
 
 Status: VERIFIED within the finite prepared shared-path actual
 `Tuple(JSON, Array(Dynamic(max_types=1)))` child-ownership fixture; root adversary
