@@ -37,15 +37,18 @@ module CrystalClick
       end
     end
 
-    def self.canonical_size(bytes : Bytes) : UInt64
-      canonical_size(bytes.size) { |index| bytes[index] }
+    # SKIP roster names use ClickHouse's `backQuoteIfNeed` presentation, where
+    # the raw word SKIP is emitted bare after the SKIP clause. Typed-path
+    # callers keep the default and quote that reserved word.
+    def self.canonical_size(bytes : Bytes, quote_skip_keyword : Bool = true) : UInt64
+      canonical_size(bytes.size, quote_skip_keyword) { |index| bytes[index] }
     end
 
     # Byte-at form lets descriptor owners measure escaped output without
     # materializing a path String before their shared budget preflight.
-    def self.canonical_size(byte_size : Int32, &byte_at : Int32 -> UInt8) : UInt64
+    def self.canonical_size(byte_size : Int32, quote_skip_keyword : Bool = true, &byte_at : Int32 -> UInt8) : UInt64
       validate_raw_size!(byte_size)
-      return byte_size.to_u64 unless needs_quotes?(byte_size, &byte_at)
+      return byte_size.to_u64 unless needs_quotes?(byte_size, quote_skip_keyword, &byte_at)
 
       size = 2_u64
       byte_size.times do |index|
@@ -54,13 +57,13 @@ module CrystalClick
       size
     end
 
-    def self.write_canonical(io : IO, bytes : Bytes) : Nil
-      write_canonical(io, bytes.size) { |index| bytes[index] }
+    def self.write_canonical(io : IO, bytes : Bytes, quote_skip_keyword : Bool = true) : Nil
+      write_canonical(io, bytes.size, quote_skip_keyword) { |index| bytes[index] }
     end
 
-    def self.write_canonical(io : IO, byte_size : Int32, &byte_at : Int32 -> UInt8) : Nil
+    def self.write_canonical(io : IO, byte_size : Int32, quote_skip_keyword : Bool = true, &byte_at : Int32 -> UInt8) : Nil
       validate_raw_size!(byte_size)
-      unless needs_quotes?(byte_size, &byte_at)
+      unless needs_quotes?(byte_size, quote_skip_keyword, &byte_at)
         byte_size.times { |index| io.write_byte(byte_at.call(index)) }
         return nil
       end
@@ -156,12 +159,22 @@ module CrystalClick
       end
     end
 
-    private def self.needs_quotes?(byte_size : Int32, &byte_at : Int32 -> UInt8) : Bool
+    private def self.needs_quotes?(byte_size : Int32, quote_skip_keyword : Bool = true, &byte_at : Int32 -> UInt8) : Bool
+      return false if !quote_skip_keyword && skip_keyword?(byte_size, &byte_at)
       return true unless identifier_start?(byte_at.call(0))
       (1...byte_size).each do |index|
         return true unless identifier_continue?(byte_at.call(index))
       end
       reserved_word?(byte_size, &byte_at)
+    end
+
+    private def self.skip_keyword?(byte_size : Int32, &byte_at : Int32 -> UInt8) : Bool
+      return false unless byte_size == 4
+      word = "skip".to_slice
+      4.times do |index|
+        return false unless ascii_lower(byte_at.call(index)) == word[index]
+      end
+      true
     end
 
     private def self.reserved_word?(byte_size : Int32, &byte_at : Int32 -> UInt8) : Bool

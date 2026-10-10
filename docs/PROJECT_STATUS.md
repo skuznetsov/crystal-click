@@ -1,6 +1,38 @@
 # CrystalClick project status
 
-Current qualification (W252, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W253, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite JSON SKIP-path target. One own-file `JsonSkipPaths` preserves detached,
+sorted/deduplicated raw policy identity through descriptors, SQL names, shared
+budgets, root Object schemas and existing Dynamic bindings. Existing recursive
+value and physical owners are reused. Scalar binary reads fully consume and
+validate skipped values; stored bulk reads do not reapply text normalization.
+The stock constructor conflict and binary lower-bound behavior are retained,
+including their directional and final-prefix edge cases. Real SKIP REGEXP stays
+refused pending RE2-compatible semantics; raw REGEXP path names remain a scalar
+wire identity but cannot cross SQL-name-dependent reconstruction boundaries.
+
+The same ordered 48-file affected roster passes 121 + 93 + 115 = 329 examples
+in each DEBUG/RELEASE mode, zero failures/errors/pending. Both final helpers
+build. Four reciprocal cells qualify V1/single and V2/sized profiles in both
+modes for root Dynamic, Array(Dynamic) and root Object with SKIP. Eight native
+and four helper calls establish ATTACH/CHECK=1/exact schemas/literal values and
+stock-part direct/public/owned Dynamic or offline Object reads. Root reconciles
+104 raw Dynamic structures, statistics, mark coordinates and typed/null/parent
+lanes. Object structure metadata is presence/roster/snapshot-bound, not fully
+independently decoded. All 572 generated files / 125,471 bytes per mode match by
+actual bytes. Six in-memory identity/cap/value/statistics/roster/coordinate
+forgeries reject at their intended guards; restored four-cell acceptance passes
+with captures unchanged.
+
+This is not arbitrary-layout/product, JSON text-ingestion, REGEXP/RE2, remaining
+aggregate-state, Compact-writer, native MV/projection-write, server Active-state
+or speed-parity closure. "Missing recursive combinations" means unbound or
+unqualified physical plans/state/coordinate handoffs, not a missing serializer
+for each Cartesian type product. See the [W253 frontier](JSON_SKIP_PATHS_FRONTIER.md)
+and [root-owned evidence index](../.landmark/evidence/json-skip-paths-w253.json).
+Overall goal ACTIVE; memory/performance deferred; no push.
+
+Previous qualification (W252, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite shared raw
 JSON-path identity target. `JsonPathSqlName` is the one-file presentation owner
 for nonempty raw names, canonical SQL quoting/escaping, output measurement and
@@ -3104,8 +3136,9 @@ source/runtime identities and executed evidence.
    W252 unifies nonempty raw typed-path identity and SQL quoting across embedded
    descriptors, root Object schemas and existing Dynamic bindings, with finite
    reciprocal physical evidence for dotted/percent/backtick/equals names.
-   It does not implement SKIP/REGEXP, JSON text normalization, invalid-UTF-8
-   physical names or all enclosing products. Neither adapter implies arbitrary
+   W253 additionally qualifies finite SKIP-path metadata and reciprocal handoffs;
+   REGEXP/RE2, JSON text normalization, invalid-UTF-8 physical names and all
+   enclosing products remain open. Neither adapter implies arbitrary
    JSON schemas or physical layouts; Default serialization metadata is still
    required. W217 now qualifies selected whole-Object projection child reads
    in its finite schema-bound profile; freshness/provenance is not implied. See
@@ -3193,9 +3226,11 @@ source/runtime identities and executed evidence.
    admitted root JSON v0 descriptors and structured scalar RowBinary values;
    W181/W182 then reuse recursive child laws and later physical owners bind
    finite persisted products. W250/W251 connect legacy Dynamic metadata and
-   canonical JSON names to those owners. W252 widens shared raw-path identity,
-   with native qualification still pending. None of these certificates implies
-   SKIP/regexp, arbitrary persisted JSON layouts or every recursive child type.
+   canonical JSON names to those owners. W252 qualifies shared raw-path identity
+   with 286 examples per mode and four reciprocal native cells. W253 adds finite
+   SKIP-path policy with 329 examples per mode and four fresh reciprocal cells.
+   None of these certificates implies REGEXP/RE2, arbitrary persisted JSON
+   layouts or every recursive child type.
    W179 now pairs QBit/QBitWithStride tags,
    scalar RowBinary and normalized bulk for root/direct Nullable only; its
    finite native matrix does not admit container, borrowed Object or arbitrary

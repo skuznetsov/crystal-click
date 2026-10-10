@@ -290,8 +290,9 @@ module CrystalClick
       max_dynamic_paths : Int = BinaryJsonType::DEFAULT_MAX_DYNAMIC_PATHS,
       max_dynamic_types : Int = BinaryJsonType::DEFAULT_MAX_DYNAMIC_TYPES,
       typed_paths : Hash(String, BinaryDataType) = {} of String => BinaryDataType,
+      skip_paths : Array(String) = [] of String,
     ) : BinaryDataType
-      descriptor = BinaryJsonType.new(max_dynamic_paths, max_dynamic_types, typed_paths)
+      descriptor = BinaryJsonType.new(max_dynamic_paths, max_dynamic_types, typed_paths, skip_paths)
       new(TAG_JSON, nil, [] of BinaryDataType, [] of String, nil, json_type: descriptor)
     end
 

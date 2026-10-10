@@ -227,6 +227,7 @@ module CrystalClick
       saw_max_dynamic_paths = false
       saw_max_dynamic_types = false
       typed_paths = {} of String => BinaryDataType
+      skip_paths = [] of String
 
       skip_whitespace
       return BinaryDataType.json if consume(')')
@@ -250,6 +251,18 @@ module CrystalClick
           else
             invalid!("unsupported JSON capacity setting")
           end
+        elsif json_token_equals?(measure, "SKIP")
+          @budget.preflight_children(1_u64)
+          @budget.visit_node(depth)
+          skip_measure = JsonPathSqlName.scan_token(@bytes, @offset, BinaryJsonType::MAX_PATH_BYTES) ||
+                         invalid!("JSON SKIP path is missing or malformed")
+          @offset = skip_measure.token_after
+          skip_whitespace
+          skip_path = JsonPathSqlName.decode_token(@bytes, skip_measure, @budget)
+          if JsonSkipPaths.regexp_path?(skip_path.to_slice)
+            invalid!("JSON SKIP REGEXP cannot be reconstructed from a canonical SQL type name")
+          end
+          skip_paths << skip_path
         else
           invalid!("JSON typed path count exceeds its supported limit") if typed_paths.size >= BinaryJsonType::MAX_TYPED_PATHS
 
@@ -271,7 +284,7 @@ module CrystalClick
         expect(',')
       end
 
-      BinaryDataType.json(max_dynamic_paths, max_dynamic_types, typed_paths)
+      BinaryDataType.json(max_dynamic_paths, max_dynamic_types, typed_paths, skip_paths)
     end
 
     private def json_token_equals?(measure : JsonPathSqlName::TokenMeasure, expected : String) : Bool

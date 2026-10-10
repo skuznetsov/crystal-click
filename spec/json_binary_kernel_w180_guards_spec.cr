@@ -15,17 +15,16 @@ private def w180_json_limits(
 end
 
 describe "W180 JSON binary profile guards and malformed boundaries" do
-  it "refuses skip, regexp, future versions, out-of-range caps, and oversized metadata" do
-    # Nonempty SKIP and SKIP REGEXP descriptors are valid ClickHouse metadata,
-    # but this local JSON v0 profile deliberately does not interpret them.
+  it "admits nonempty SKIP names but keeps regexps, future versions, out-of-range caps, and oversized metadata refused" do
+    # Nonempty SKIP path names are retained as scalar row policy metadata.
     skip_wire = Bytes[0x30_u8, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x78, 0x00]
     regexp_wire = Bytes[
       0x30_u8, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x01, 0x03, 0x5e, 0x6b, 0x24, # one valid regexp: ^k$
     ]
-    expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::BinaryDataTypeCodec.decode(skip_wire)
-    end
+    skipped_type = CrystalClick::BinaryDataTypeCodec.decode(skip_wire)
+    skipped_type.name.should eq("JSON(max_dynamic_types=0, max_dynamic_paths=0, SKIP x)")
+    skipped_type.json_type.not_nil!.skip_paths.should eq(["x"])
     expect_raises(CrystalClick::UnsupportedFormatError) do
       CrystalClick::BinaryDataTypeCodec.decode(regexp_wire)
     end

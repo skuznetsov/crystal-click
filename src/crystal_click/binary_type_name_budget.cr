@@ -45,6 +45,14 @@ module CrystalClick
             json_path_bounds << measure(descriptor.typed_type_at(index), budget, depth + 1)
           end
         end
+        skip_count = descriptor.skip_path_count.to_u64
+        if skip_count > 0_u64
+          budget.preflight_children(skip_count)
+          skip_count.times { budget.visit_node(depth) }
+          descriptor.skip_path_count.times do |index|
+            json_path_bytes = add(json_path_bytes, descriptor.skip_path_byte_size(index).to_u64)
+          end
+        end
       end
       metadata_count = type.metadata_entry_count.to_u64
       if metadata_count > 0_u64
@@ -155,6 +163,16 @@ module CrystalClick
                    total = add(total, rendered_path_size)
                    total = add(total, 1_u64) # path/type separator
                    total = add(total, json_path_bounds[index][0])
+                   first = false
+                 end
+                 descriptor.skip_path_count.times do |index|
+                   total = add(total, 2_u64) unless first
+                   path_size = descriptor.skip_path_byte_size(index)
+                   rendered_path_size = JsonPathSqlName.canonical_size(path_size, quote_skip_keyword: false) do |byte_index|
+                     descriptor.skip_path_byte_at(index, byte_index)
+                   end
+                   total = add(total, 5_u64) # "SKIP "
+                   total = add(total, rendered_path_size)
                    first = false
                  end
                  total

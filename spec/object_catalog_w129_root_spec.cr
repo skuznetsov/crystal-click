@@ -83,8 +83,11 @@ describe "W129 independently authored catalog contract" do
   it "canonicalizes declaration semantics without permitting unsupported schemas" do
     w129_root_schema.declaration.should eq("JSON(max_dynamic_types=1, max_dynamic_paths=1, t UInt64)")
     CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(t Nullable(UInt64))").typed_paths["t"].name.should eq("Nullable(UInt64)")
+    skipped = CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(SKIP t)")
+    skipped.skip_paths.should eq(["t"])
+    skipped.declaration.should eq("JSON(SKIP t)")
     ["JSON(max_dynamic_paths=1,max_dynamic_paths=1)", "JSON(t UInt64,t UInt64)",
-     "JSON(t Nullable(Array(UInt64)))", "JSON(SKIP t)", "JSON(max_dynamic_types=255)", "JSON(unknown=1)"].each do |name|
+     "JSON(t Nullable(Array(UInt64)))", "JSON(max_dynamic_types=255)", "JSON(unknown=1)"].each do |name|
       expect_raises(CrystalClick::UnsupportedFormatError) { CrystalClick::ObjectDocumentSchema.parse_declaration(name) }
     end
   end

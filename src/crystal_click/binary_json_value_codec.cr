@@ -114,7 +114,11 @@ module CrystalClick
             end
           end
         end
-        entries << {path, value}
+        # Skipped runtime lanes are still fully decoded under the shared
+        # operation budget above. Only their retained row entry is omitted.
+        unless descriptor.binary_path_skipped?(path)
+          entries << {path, value}
+        end
       end
 
       descriptor.typed_path_count.times do |index|

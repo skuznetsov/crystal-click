@@ -37,7 +37,11 @@ describe "W129 Object catalog schema declaration" do
     opaque.typed_paths.should eq({"a..b" => w129_type("String")})
     opaque.declaration.should eq("JSON(`a..b` String)")
 
-    ["JSON(select UInt64)", "JSON(SKIP String)", "JSON(a.b UInt64)"].each do |declaration|
+    skipped = CrystalClick::ObjectDocumentSchema.parse_declaration("JSON(SKIP String)")
+    skipped.skip_paths.should eq(["String"])
+    skipped.declaration.should eq("JSON(SKIP String)")
+
+    ["JSON(select UInt64)", "JSON(a.b UInt64)"].each do |declaration|
       expect_raises(CrystalClick::UnsupportedFormatError) do
         CrystalClick::ObjectDocumentSchema.parse_declaration(declaration)
       end

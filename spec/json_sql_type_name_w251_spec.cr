@@ -192,7 +192,6 @@ describe "W251 canonical JSON SQL type names in Dynamic V1/V2" do
       "JSON(foo UInt8, foo String)",
       "JSON(foo.bar UInt8)",
       "JSON(`foo` UInt8)",
-      "JSON(SKIP UInt8)",
       "JSON(SKIP REGEXP '.*')",
       "JSON( max_dynamic_types=1)",
       "JSON(max_dynamic_types=1) trailing",

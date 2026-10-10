@@ -54,6 +54,7 @@ module CrystalClick
       argument_count = count_arguments(inner_first, inner_after)
       budget.preflight_children(argument_count.to_u64)
       pending_fields = Array(ParsedField).new
+      skip_measures = Array(JsonPathSqlName::TokenMeasure).new
       seen_paths = Set(String).new
       seen_max_dynamic_paths = false
       seen_max_dynamic_types = false
@@ -75,6 +76,8 @@ module CrystalClick
           else
             unsupported!("unsupported Object JSON capacity option")
           end
+        elsif skip_measure = parse_skip_path(argument)
+          skip_measures << skip_measure
         else
           unsupported!("JSON schema exceeds the maximum of #{ObjectDocumentSchema::MAX_TYPED_PATHS} typed paths") if pending_fields.size >= ObjectDocumentSchema::MAX_TYPED_PATHS
           field = parse_field(argument, budget)
@@ -83,6 +86,8 @@ module CrystalClick
           pending_fields << field
         end
       end
+
+      skip_paths = materialize_skip_paths(skip_measures, budget)
 
       # Every recursive declaration and aggregate metadata charge is admitted
       # before constructing any descriptor tree.
@@ -95,14 +100,19 @@ module CrystalClick
       fields.each_key do |path|
         retained_path_bytes = checked_add(retained_path_bytes, path.bytesize.to_u64)
       end
-      declaration_bytes = canonical_declaration_bytes(fields, max_dynamic_paths, max_dynamic_types)
+      skip_paths.each do |path|
+        retained_path_bytes = checked_add(retained_path_bytes, path.bytesize.to_u64)
+      end
+      skip_paths.sort! { |left, right| JsonSkipPaths.compare_raw(left, right) }
+      declaration_bytes = canonical_declaration_bytes(fields, skip_paths, max_dynamic_paths, max_dynamic_types)
       budget.charge_wire_bytes(checked_add(retained_path_bytes, checked_multiply(declaration_bytes, 2_u64)))
 
       ObjectDocumentSchema.new(
         fields,
         max_dynamic_paths: max_dynamic_paths,
         max_dynamic_types: max_dynamic_types,
-        limits: @limits
+        limits: @limits,
+        skip_paths: skip_paths,
       )
     rescue ex : ArgumentError
       raise UnsupportedFormatError.new("unsupported Object JSON declaration")
@@ -236,7 +246,67 @@ module CrystalClick
       ParsedField.new(path, resolution)
     end
 
-    private def canonical_declaration_bytes(fields : Hash(String, BinaryDataType), max_dynamic_paths : Int32, max_dynamic_types : Int32) : UInt64
+    private def parse_skip_path(argument : Range) : JsonPathSqlName::TokenMeasure?
+      first, after = trim(argument.first, argument.after)
+      return nil unless starts_with_skip_keyword?(first, after)
+
+      cursor = first + "SKIP".bytesize
+      unless cursor < after && whitespace?(@bytes[cursor])
+        unsupported!("SKIP requires one raw path")
+      end
+      while cursor < after && whitespace?(@bytes[cursor])
+        cursor += 1
+      end
+      unsupported!("SKIP requires one raw path") if cursor >= after
+
+      measure = JsonPathSqlName.scan_token(@bytes, cursor) || unsupported!("invalid Object JSON SKIP path")
+      tail = measure.token_after
+      while tail < after && whitespace?(@bytes[tail])
+        tail += 1
+      end
+      unsupported!("SKIP accepts exactly one raw path") unless tail == after
+
+      measure
+    end
+
+    private def materialize_skip_paths(
+      measures : Array(JsonPathSqlName::TokenMeasure),
+      budget : BinaryCodecBudget,
+    ) : Array(String)
+      total_bytes = 0_u64
+      measures.each do |measure|
+        total_bytes = checked_add(total_bytes, measure.decoded_bytes)
+      end
+      # All supplied entries, including duplicates, are known before the first
+      # decoded path string is retained.
+      budget.ensure_wire_bytes(total_bytes)
+
+      skip_paths = Array(String).new(measures.size)
+      measures.each do |measure|
+        path = JsonPathSqlName.decode_token(@bytes, measure, budget)
+        JsonPathSqlName.validate_raw_bytes!(path.to_slice)
+        unsupported!("Object JSON SKIP REGEXP path has no reparsable canonical SQL name") if JsonSkipPaths.regexp_path?(path.to_slice)
+        unless measure.quoted || JsonPathSqlName.canonical_size(path.to_slice, quote_skip_keyword: false) == path.bytesize.to_u64
+          unsupported!("noncanonical Object JSON SKIP path must be backtick quoted")
+        end
+        skip_paths << path
+      end
+      skip_paths
+    end
+
+    private def starts_with_skip_keyword?(first : Int32, after : Int32) : Bool
+      return false if after - first < "SKIP".bytesize
+      return false unless slice_equals?(first, first + "SKIP".bytesize, "SKIP")
+      cursor = first + "SKIP".bytesize
+      cursor == after || whitespace?(@bytes[cursor])
+    end
+
+    private def canonical_declaration_bytes(
+      fields : Hash(String, BinaryDataType),
+      skip_paths : Array(String),
+      max_dynamic_paths : Int32,
+      max_dynamic_types : Int32,
+    ) : UInt64
       argument_count = 0_u64
       size = "JSON".bytesize.to_u64
       unless max_dynamic_types == ObjectDocumentSchema::DEFAULT_MAX_DYNAMIC_TYPES
@@ -256,6 +326,15 @@ module CrystalClick
         type_bytes = ObjectTypedFieldType.byte_size_for(type, @limits, 2) || unsupported!("unsupported Object JSON typed field type")
         size = checked_add(size, checked_add(1_u64, type_bytes))
         argument_count += 1_u64
+      end
+      previous_skip_path : String? = nil
+      skip_paths.each do |path|
+        next if previous_skip_path == path
+        size = checked_add(size, 2_u64) if argument_count > 0_u64
+        size = checked_add(size, "SKIP ".bytesize.to_u64)
+        size = checked_add(size, JsonPathSqlName.canonical_size(path.to_slice, quote_skip_keyword: false))
+        argument_count += 1_u64
+        previous_skip_path = path
       end
       if argument_count > 0_u64
         size = checked_add(size, 2_u64)

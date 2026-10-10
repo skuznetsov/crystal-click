@@ -55,14 +55,23 @@ module CrystalClick
       @json_type = json_type
 
       descriptor = @json_type.json_type || raise(ArgumentError.new("bound Dynamic arm has no JSON descriptor"))
+      if descriptor.skip_path_owner.has_regexp_path?
+        if budget.writing?
+          raise UnsupportedFormatError.new("Dynamic JSON SKIP REGEXP path has no reparsable canonical SQL name")
+        else
+          raise CorruptPartError.new("Dynamic JSON SKIP REGEXP path has no reparsable canonical SQL name")
+        end
+      end
       validate_plan_dynamic_paths!(@plan, descriptor, budget, depth)
       typed_paths = copy_typed_paths(descriptor, budget)
+      skip_paths = copy_skip_paths(descriptor, budget, depth + 1)
       @schema = ObjectDocumentSchema.new(
         typed_paths,
         descriptor.max_dynamic_paths,
         descriptor.max_dynamic_types.to_i,
         budget,
         depth: depth,
+        skip_paths: skip_paths,
       )
       @schema.validate_plan(@plan, budget, depth: depth)
     end
@@ -215,6 +224,31 @@ module CrystalClick
         typed_paths[descriptor.typed_path_at(index)] = descriptor.typed_type_at(index)
       end
       typed_paths
+    end
+
+    private def copy_skip_paths(
+      descriptor : BinaryJsonType,
+      budget : BinaryCodecBudget,
+      depth : Int,
+    ) : Array(String)
+      count = descriptor.skip_path_count.to_u64
+      budget.ensure_depth(depth) if count > 0_u64
+      budget.preflight_children(count) if count > 0_u64
+      path_bytes = 0_u64
+      descriptor.skip_path_count.times do |index|
+        size = descriptor.skip_path_byte_size(index).to_u64
+        if path_bytes > UInt64::MAX - size
+          raise budget.writing? ? UnsupportedFormatError.new("JSON binding SKIP path size overflows UInt64") : CorruptPartError.new("JSON binding SKIP path size overflows UInt64")
+        end
+        path_bytes += size
+      end
+      budget.charge_wire_bytes(path_bytes) if path_bytes > 0_u64
+
+      skip_paths = Array(String).new(descriptor.skip_path_count)
+      descriptor.skip_path_count.times do |index|
+        skip_paths << descriptor.skip_path_at(index)
+      end
+      skip_paths
     end
 
     # The Object plan can represent raw names outside the scalar JSON path

@@ -13,11 +13,13 @@ module CrystalClick
     getter max_dynamic_types : UInt8
 
     @typed_paths : Array(Tuple(String, BinaryDataType))
+    getter skip_path_owner : JsonSkipPaths
 
     def initialize(
       max_dynamic_paths : Int = DEFAULT_MAX_DYNAMIC_PATHS,
       max_dynamic_types : Int = DEFAULT_MAX_DYNAMIC_TYPES,
       typed_paths : Hash(String, BinaryDataType) = {} of String => BinaryDataType,
+      skip_paths : Array(String) = [] of String,
     )
       unless 0 <= max_dynamic_paths <= MAX_DYNAMIC_PATHS
         raise ArgumentError.new("JSON max_dynamic_paths must be between 0 and 10000")
@@ -55,6 +57,17 @@ module CrystalClick
         end
       end
 
+      # Charge and retain SKIP metadata only after all typed descriptors have
+      # consumed this constructor's shared budget, but before copying typed
+      # names. This makes the complete descriptor metadata budget precede the
+      # proportional retained path copies.
+      @skip_path_owner = JsonSkipPaths.new(skip_paths, budget, 1, MAX_PATH_BYTES)
+      typed_paths.each_key do |path|
+        if @skip_path_owner.typed_path_conflicts?(path)
+          raise ArgumentError.new("JSON typed path conflicts with a SKIP path")
+        end
+      end
+
       entries = Array(Tuple(String, BinaryDataType)).new(typed_paths.size)
       typed_paths.each do |path, type|
         entries << {String.new(path.to_slice), type}
@@ -68,6 +81,30 @@ module CrystalClick
 
     def typed_path_count : Int32
       @typed_paths.size
+    end
+
+    def skip_path_count : Int32
+      @skip_path_owner.skip_path_count
+    end
+
+    def skip_path_at(index : Int) : String
+      @skip_path_owner.skip_path_at(index)
+    end
+
+    def skip_path_byte_size(index : Int) : Int32
+      @skip_path_owner.skip_path_byte_size(index)
+    end
+
+    def skip_path_byte_at(index : Int, byte_index : Int) : UInt8
+      @skip_path_owner.skip_path_byte_at(index, byte_index)
+    end
+
+    def skip_paths : Array(String)
+      @skip_path_owner.skip_paths
+    end
+
+    def binary_path_skipped?(path : String) : Bool
+      @skip_path_owner.binary_path_skipped?(path)
     end
 
     def typed_path_at(index : Int) : String
@@ -117,7 +154,7 @@ module CrystalClick
     def type_name : String
       if @max_dynamic_paths == DEFAULT_MAX_DYNAMIC_PATHS &&
          @max_dynamic_types == DEFAULT_MAX_DYNAMIC_TYPES &&
-         @typed_paths.empty?
+         @typed_paths.empty? && @skip_path_owner.size == 0
         return "JSON"
       end
 
@@ -139,6 +176,14 @@ module CrystalClick
           io << ' ' << type.name
           first = false
         end
+        @skip_path_owner.size.times do |index|
+          io << ", " unless first
+          io << "SKIP "
+          JsonPathSqlName.write_canonical(io, @skip_path_owner.skip_path_byte_size(index), quote_skip_keyword: false) do |byte_index|
+            @skip_path_owner.skip_path_byte_at(index, byte_index)
+          end
+          first = false
+        end
         io << ')'
       end
     end
@@ -147,6 +192,7 @@ module CrystalClick
       return false unless @max_dynamic_paths == other.@max_dynamic_paths
       return false unless @max_dynamic_types == other.@max_dynamic_types
       return false unless @typed_paths.size == other.@typed_paths.size
+      return false unless @skip_path_owner == other.@skip_path_owner
       @typed_paths.each_with_index do |entry, index|
         other_entry = other.@typed_paths[index]
         return false unless entry[0] == other_entry[0] && entry[1] == other_entry[1]
@@ -157,7 +203,8 @@ module CrystalClick
     def hash(hasher)
       hasher = @max_dynamic_paths.hash(hasher)
       hasher = @max_dynamic_types.hash(hasher)
-      @typed_paths.hash(hasher)
+      hasher = @typed_paths.hash(hasher)
+      @skip_path_owner.hash(hasher)
     end
 
     def self.validate_path!(path : String) : Nil

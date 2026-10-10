@@ -1,24 +1,32 @@
 module CrystalClick
-  # Bounded JSON DataType descriptor codec. SKIP and regexp metadata are
-  # deliberately refused until their independent semantics are qualified.
+  # Bounded JSON DataType descriptor codec. SKIP path metadata is retained;
+  # SKIP REGEXP remains outside this profile.
   module BinaryJsonTypeCodec
     VERSION = 0_u8
 
     def self.write(type : BinaryJsonType, context : BinaryCodecContext, depth : Int) : Nil
       count = type.typed_path_count.to_u64
+      skip_count = type.skip_path_count.to_u64
+      path_wire_bytes = 0_u64
       if count > 0_u64
         context.preflight_children(count) # path metadata records
         context.visit_metadata_nodes(count, depth)
         context.preflight_children(count) # declared child descriptors
         context.ensure_depth(depth + 1)
 
-        path_wire_bytes = 0_u64
         type.typed_path_count.times do |index|
           path_wire_bytes = checked_add(path_wire_bytes, BinaryJsonType.path_wire_size(type.typed_path_byte_size(index).to_u64), context)
         end
-        # Reject a too-small byte budget before any path accessor copies.
-        context.ensure_output_bytes(path_wire_bytes)
       end
+      if skip_count > 0_u64
+        context.preflight_children(skip_count)
+        context.visit_metadata_nodes(skip_count, depth)
+        type.skip_path_count.times do |index|
+          path_wire_bytes = checked_add(path_wire_bytes, BinaryJsonType.path_wire_size(type.skip_path_byte_size(index).to_u64), context)
+        end
+      end
+      # Reject a too-small byte budget before writing any path metadata.
+      context.ensure_output_bytes(path_wire_bytes)
 
       context.write_byte(VERSION)
       context.write_var_uint(type.max_dynamic_paths.to_u64)
@@ -26,15 +34,19 @@ module CrystalClick
       context.write_var_uint(count)
       type.typed_path_count.times do |index|
         path_size = type.typed_path_byte_size(index)
-        path = type.typed_path_at(index) # after aggregate preflight above
         context.write_var_uint(path_size.to_u64)
         context.ensure_output_bytes(path_size.to_u64)
-        path_size.times { |byte_index| context.write_byte(path.to_slice[byte_index]) }
+        path_size.times { |byte_index| context.write_byte(type.typed_path_byte_at(index, byte_index)) }
         context.with_shared_json_payload_scope do
           BinaryDataTypeCodec.write_to(type.typed_type_at(index), context, depth + 1)
         end
       end
-      context.write_var_uint(0_u64) # unsupported path-to-skip roster is empty
+      context.write_var_uint(skip_count)
+      type.skip_path_count.times do |index|
+        path_size = type.skip_path_byte_size(index)
+        context.write_var_uint(path_size.to_u64)
+        path_size.times { |byte_index| context.write_byte(type.skip_path_byte_at(index, byte_index)) }
+      end
       context.write_var_uint(0_u64) # unsupported regexp roster is empty
       nil
     end
@@ -93,9 +105,25 @@ module CrystalClick
         typed_paths[path] = path_type
       end
 
-      skip_count = context.read_var_uint
-      if skip_count != 0_u64
-        context.unsupported!("JSON SKIP path descriptors are outside the admitted profile")
+      raw_skip_count = context.read_var_uint
+      skip_count = context.preflight_metadata(
+        raw_skip_count,
+        2_u64,
+        context.limits.max_elements.to_u64,
+        "JSON SKIP path count",
+      )
+      context.visit_metadata_nodes(raw_skip_count, depth) if raw_skip_count > 0_u64
+      skip_paths = Array(String).new(skip_count)
+      skip_count.times do
+        raw_path_size = context.read_var_uint
+        if raw_path_size == 0_u64 || raw_path_size > BinaryJsonType::MAX_PATH_BYTES.to_u64
+          context.unsupported!("JSON SKIP path is empty or exceeds the embedded raw-name byte limit")
+        end
+        raw_path = context.read_slice(raw_path_size)
+        unless BinaryJsonType.valid_path_bytes?(raw_path)
+          context.unsupported!("JSON SKIP path is empty or exceeds the embedded raw-name byte limit")
+        end
+        skip_paths << String.new(raw_path)
       end
       regexp_count = context.read_var_uint
       if regexp_count != 0_u64
@@ -103,7 +131,7 @@ module CrystalClick
       end
 
       begin
-        BinaryDataType.json(max_dynamic_paths.to_i, max_dynamic_types.to_i, typed_paths)
+        BinaryDataType.json(max_dynamic_paths.to_i, max_dynamic_types.to_i, typed_paths, skip_paths)
       rescue ex : ArgumentError
         context.unsupported!("JSON descriptor is outside the admitted JSON scalar profile")
       end

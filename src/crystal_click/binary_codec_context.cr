@@ -175,6 +175,13 @@ module CrystalClick
             validate_type_tree(descriptor.typed_type_at(index), depth + 1)
           end
         end
+        skip_count = descriptor.skip_path_count.to_u64
+        if skip_count > 0_u64
+          # SKIP names are scalar-owned metadata: charge their shared edges
+          # and nodes, but do not deepen the recursive descriptor tree.
+          preflight_children(skip_count)
+          visit_metadata_nodes(skip_count, depth)
+        end
         return nil
       end
       if type.tag == BinaryDataType::TAG_QBIT

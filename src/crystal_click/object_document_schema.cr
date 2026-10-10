@@ -16,6 +16,7 @@ module CrystalClick
 
     @typed_types : Hash(String, BinaryDataType)
     @typed_paths : Array(String)
+    @skip_path_owner : JsonSkipPaths
     @declaration : String
 
     def initialize(
@@ -23,6 +24,7 @@ module CrystalClick
       max_dynamic_paths : Int = DEFAULT_MAX_DYNAMIC_PATHS,
       max_dynamic_types : Int = DEFAULT_MAX_DYNAMIC_TYPES,
       limits : BinaryCodecLimits = DEFAULT_LIMITS,
+      skip_paths : Array(String) = [] of String,
     )
       @limits = limits
       prepared = prepare_with_budget(
@@ -32,12 +34,14 @@ module CrystalClick
         BinaryCodecBudget.new(@limits, true),
         1,
         @limits,
+        skip_paths,
       )
       @max_dynamic_paths = prepared[0]
       @max_dynamic_types = prepared[1]
       @typed_types = prepared[2]
       @typed_paths = prepared[3]
-      @declaration = prepared[4]
+      @skip_path_owner = prepared[4]
+      @declaration = prepared[5]
     end
 
     def initialize(
@@ -46,14 +50,16 @@ module CrystalClick
       max_dynamic_types : Int,
       budget : BinaryCodecBudget,
       depth : Int = 1,
+      skip_paths : Array(String) = [] of String,
     )
       @limits = budget.limits
-      prepared = prepare_with_budget(typed_paths, max_dynamic_paths, max_dynamic_types, budget, depth, @limits)
+      prepared = prepare_with_budget(typed_paths, max_dynamic_paths, max_dynamic_types, budget, depth, @limits, skip_paths)
       @max_dynamic_paths = prepared[0]
       @max_dynamic_types = prepared[1]
       @typed_types = prepared[2]
       @typed_paths = prepared[3]
-      @declaration = prepared[4]
+      @skip_path_owner = prepared[4]
+      @declaration = prepared[5]
     end
 
     private def prepare_with_budget(
@@ -63,7 +69,8 @@ module CrystalClick
       budget : BinaryCodecBudget,
       depth : Int,
       limits : BinaryCodecLimits,
-    ) : Tuple(Int32, Int32, Hash(String, BinaryDataType), Array(String), String)
+      skip_paths : Array(String),
+    ) : Tuple(Int32, Int32, Hash(String, BinaryDataType), Array(String), JsonSkipPaths, String)
       unless 0 <= max_dynamic_paths <= MAX_DYNAMIC_PATHS
         raise ArgumentError.new("JSON max_dynamic_paths is outside the admitted range")
       end
@@ -79,15 +86,53 @@ module CrystalClick
       budget.visit_node(depth)
       inherited_depth = depth.to_i32
       entry_count = typed_paths.size.to_u64
+      skip_entry_count = skip_paths.size.to_u64
       budget.preflight_children(entry_count) if entry_count > 0_u64
       budget.ensure_depth(depth + 1) if entry_count > 0_u64
+      # Reject an over-budget supplied roster before walking or sorting it.
+      # JsonSkipPaths charges these entries when it takes ownership below.
+      budget.ensure_future_elements(skip_entry_count) if skip_entry_count > 0_u64
+      budget.ensure_future_nodes(skip_entry_count) if skip_entry_count > 0_u64
+      budget.ensure_depth(depth + 1) if skip_entry_count > 0_u64
+
+      # Inspect every supplied SKIP name (including duplicates) before any
+      # retained copy. The shared owner charges their nodes, edges, and wire
+      # bytes when it takes ownership; these checks only preflight headroom.
+      skip_wire_bytes = 0_u64
+      skip_render_upper_bound = 0_u64
+      skip_paths.each do |skip_path|
+        JsonPathSqlName.validate_raw_bytes!(skip_path.to_slice)
+        if JsonSkipPaths.regexp_path?(skip_path.to_slice)
+          raise ArgumentError.new("Object JSON SKIP REGEXP path has no reparsable canonical SQL name")
+        end
+        path_bytes = skip_path.bytesize.to_u64
+        skip_wire_bytes = checked_add(skip_wire_bytes, checked_add(path_bytes, var_uint_size(path_bytes)))
+        rendered_path_bytes = JsonPathSqlName.canonical_size(skip_path.to_slice, quote_skip_keyword: false)
+        # Include every supplied entry (also duplicates), plus a conservative
+        # separator allowance for each one. The normalized exact size is
+        # measured after sorting and deduplication below.
+        skip_render_upper_bound = checked_add(
+          skip_render_upper_bound,
+          checked_add(2_u64, checked_add("SKIP ".bytesize.to_u64, rendered_path_bytes)),
+        )
+      end
+      if skip_entry_count > 0_u64
+        conservative_declaration_bytes = checked_add(
+          declaration_prefix_size,
+          checked_add(skip_render_upper_bound, 2_u64), # parentheses
+        )
+        budget.ensure_wire_bytes(checked_add(
+          skip_wire_bytes,
+          checked_multiply(conservative_declaration_bytes, 2_u64),
+        ))
+      else
+        budget.ensure_wire_bytes(skip_wire_bytes)
+      end
 
       # Inspect all raw keys without copying them, then admit the complete
       # retained-key and declaration output before allocating either.
       raw_key_bytes = 0_u64
       declaration_bytes = declaration_prefix_size
-      argument_count = capacity_entry_count(normalized_max_dynamic_paths, normalized_max_dynamic_types).to_u64 + entry_count
-      declaration_bytes = checked_add(declaration_bytes, 1_u64) if argument_count > 0_u64 # opening parenthesis
       rendered_entry_count = 0_u64
       unless normalized_max_dynamic_types == DEFAULT_MAX_DYNAMIC_TYPES
         declaration_bytes = checked_add(declaration_bytes, checked_add("max_dynamic_types=".bytesize.to_u64, digits(normalized_max_dynamic_types.to_u64)))
@@ -113,11 +158,64 @@ module CrystalClick
         declaration_bytes = checked_add(declaration_bytes, checked_add(1_u64, type_bytes))
         raw_key_bytes = checked_add(raw_key_bytes, path.bytesize.to_u64)
       end
-      declaration_bytes = checked_add(declaration_bytes, 1_u64) if argument_count > 0_u64 # closing parenthesis
+
+      # Recursive typed descriptors may have consumed part of the shared
+      # operation budget, so recheck the SKIP roster immediately before its
+      # normalization work and later owner materialization.
+      budget.ensure_future_elements(skip_entry_count) if skip_entry_count > 0_u64
+      budget.ensure_future_nodes(skip_entry_count) if skip_entry_count > 0_u64
+      budget.ensure_depth(depth + 1) if skip_entry_count > 0_u64
+      # Preflight a linear, duplicate-inclusive upper bound for the complete
+      # declaration before sorting or checking typed-path conflicts.
+      conservative_argument_count = capacity_entry_count(normalized_max_dynamic_paths, normalized_max_dynamic_types).to_u64 + entry_count + skip_entry_count
+      conservative_declaration_bytes = checked_add(declaration_bytes, skip_render_upper_bound)
+      conservative_declaration_bytes = checked_add(conservative_declaration_bytes, 2_u64) if conservative_argument_count > 0_u64
+      conservative_retained_wire_bytes = checked_add(raw_key_bytes, checked_multiply(conservative_declaration_bytes, 2_u64))
+      budget.ensure_wire_bytes(checked_add(skip_wire_bytes, conservative_retained_wire_bytes))
+
+      # Sort references, not strings, so normalization is O(n log n) while all
+      # supplied duplicate bytes remain included in skip_wire_bytes.
+      ordered_skip_paths = Array(String).new(skip_paths.size)
+      skip_paths.each { |path| ordered_skip_paths << path }
+      ordered_skip_paths.sort! { |left, right| JsonSkipPaths.compare_raw(left, right) }
+      unique_skip_count = 0
+      ordered_skip_paths.each do |skip_path|
+        if unique_skip_count == 0 || ordered_skip_paths[unique_skip_count - 1] != skip_path
+          ordered_skip_paths[unique_skip_count] = skip_path
+          unique_skip_count += 1
+        end
+      end
+      while ordered_skip_paths.size > unique_skip_count
+        ordered_skip_paths.pop
+      end
+      unique_skip_count_u64 = unique_skip_count.to_u64
+      argument_count = capacity_entry_count(normalized_max_dynamic_paths, normalized_max_dynamic_types).to_u64 + entry_count + unique_skip_count_u64
+
+      typed_path_refs = Array(String).new(typed_paths.size)
+      typed_paths.each_key { |typed_path| typed_path_refs << typed_path }
+      typed_path_refs.sort! { |left, right| JsonSkipPaths.compare_raw(left, right) }
+      ordered_skip_paths.each do |skip_path|
+        if typed_path_conflicts?(typed_path_refs, skip_path)
+          raise ArgumentError.new("JSON typed path conflicts with a SKIP path")
+        end
+
+        declaration_bytes = checked_add(declaration_bytes, 2_u64) if rendered_entry_count > 0_u64
+        rendered_entry_count += 1_u64
+        declaration_bytes = checked_add(declaration_bytes, "SKIP ".bytesize.to_u64)
+        rendered_path_bytes = JsonPathSqlName.canonical_size(skip_path.to_slice, quote_skip_keyword: false)
+        declaration_bytes = checked_add(declaration_bytes, rendered_path_bytes)
+      end
+      declaration_bytes = checked_add(declaration_bytes, 2_u64) if argument_count > 0_u64 # parentheses
 
       # String.build may temporarily hold a builder and its finished string.
-      budget.ensure_wire_bytes(checked_add(raw_key_bytes, checked_multiply(declaration_bytes, 2_u64)))
-      budget.charge_wire_bytes(checked_add(raw_key_bytes, checked_multiply(declaration_bytes, 2_u64)))
+      retained_wire_bytes = checked_add(raw_key_bytes, checked_multiply(declaration_bytes, 2_u64))
+      budget.ensure_future_elements(skip_entry_count) if skip_entry_count > 0_u64
+      budget.ensure_future_nodes(skip_entry_count) if skip_entry_count > 0_u64
+      budget.ensure_depth(depth + 1) if skip_entry_count > 0_u64
+      budget.ensure_wire_bytes(checked_add(skip_wire_bytes, retained_wire_bytes))
+
+      skip_path_owner = JsonSkipPaths.new(skip_paths, budget, depth + 1)
+      budget.charge_wire_bytes(retained_wire_bytes)
 
       typed_types_copy = Hash(String, BinaryDataType).new(initial_capacity: typed_paths.size)
       typed_paths_copy = Array(String).new(typed_paths.size)
@@ -132,6 +230,7 @@ module CrystalClick
         normalized_max_dynamic_paths,
         typed_paths_copy,
         typed_types_copy,
+        skip_path_owner,
         limits,
         inherited_depth,
       )
@@ -143,6 +242,7 @@ module CrystalClick
         normalized_max_dynamic_types,
         typed_types_copy,
         typed_paths_copy,
+        skip_path_owner,
         declaration,
       }
     end
@@ -167,6 +267,23 @@ module CrystalClick
         detached[String.new(path.to_slice)] = @typed_types[path]
       end
       detached
+    end
+
+    # Every call returns detached raw-name strings. The full copy set is
+    # budgeted before the owner materializes the snapshot.
+    def skip_paths : Array(String)
+      budget = BinaryCodecBudget.new(@limits, true)
+      budget.visit_node(1)
+      count = @skip_path_owner.skip_path_count.to_u64
+      budget.preflight_children(count) if count > 0_u64
+      bytes = 0_u64
+      @skip_path_owner.skip_path_count.times do |index|
+        budget.visit_node(2)
+        bytes = checked_add(bytes, @skip_path_owner.skip_path_byte_size(index).to_u64)
+      end
+      budget.ensure_wire_bytes(bytes)
+      budget.charge_wire_bytes(bytes)
+      @skip_path_owner.skip_paths
     end
 
     def declaration : String
@@ -255,6 +372,7 @@ module CrystalClick
       max_dynamic_paths : Int32,
       typed_paths : Array(String),
       typed_types : Hash(String, BinaryDataType),
+      skip_paths : JsonSkipPaths,
       limits : BinaryCodecLimits,
       inherited_depth : Int32,
     ) : String
@@ -285,6 +403,22 @@ module CrystalClick
           ObjectTypedFieldType.append_name(io, typed_types[path], limits, inherited_depth + 1)
           first = false
         end
+        skip_paths.skip_path_count.times do |index|
+          if first
+            io << '('
+          else
+            io << ", "
+          end
+          io << "SKIP "
+          JsonPathSqlName.write_canonical(
+            io,
+            skip_paths.skip_path_byte_size(index),
+            quote_skip_keyword: false,
+          ) do |byte_index|
+            skip_paths.skip_path_byte_at(index, byte_index)
+          end
+          first = false
+        end
         io << ')' unless first
       end
     end
@@ -302,6 +436,26 @@ module CrystalClick
 
     private def validate_path!(path : String) : Nil
       JsonPathSqlName.validate_raw_bytes!(path.to_slice)
+    end
+
+    private def typed_path_conflicts?(typed_paths : Array(String), skip_path : String) : Bool
+      low = 0
+      high = typed_paths.size
+      while low < high
+        middle = low + (high - low) // 2
+        comparison = JsonSkipPaths.compare_raw(typed_paths[middle], skip_path)
+        if comparison < 0
+          low = middle + 1
+        else
+          high = middle
+        end
+      end
+
+      if typed_path = typed_paths[low]?
+        JsonSkipPaths.raw_starts_with?(typed_path, skip_path)
+      else
+        false
+      end
     end
 
     private def same_path_bytes?(expected : String, plan : ObjectDocumentPlan, index : Int, actual_size : Int32) : Bool
@@ -334,6 +488,16 @@ module CrystalClick
         raise UnsupportedFormatError.new("JSON schema size overflows UInt64")
       end
       left * right
+    end
+
+    private def var_uint_size(value : UInt64) : UInt64
+      size = 1_u64
+      remaining = value
+      while remaining >= 0x80_u64
+        remaining >>= 7
+        size += 1_u64
+      end
+      size
     end
   end
 end
