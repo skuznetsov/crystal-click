@@ -1,8 +1,9 @@
 module CrystalClick
   # Immutable state plan for a root non-Count AggregateFunction. Sum-family
-  # states remain fixed-width; Avg and Min/Max own variable-width layouts.
-  # Both are distinct from scalar result validation: accumulator bytes are raw
-  # state, and nullable presence is aggregate framing rather than scalar NULL.
+  # and bitwise states are fixed-width; Avg and Min/Max own variable-width layouts.
+  # These state layouts are distinct from scalar result validation:
+  # accumulator bytes are raw state, and nullable presence is aggregate
+  # framing rather than scalar NULL.
   class BinaryAggregateFunctionStatePlan
     getter type : BinaryDataType
     getter descriptor : BinaryAggregateFunctionType
@@ -24,7 +25,7 @@ module CrystalClick
         raise ArgumentError.new("Count state is owned by its compatibility codec")
       end
       @function_name = @descriptor.function_name
-      @argument_type = @descriptor.argument_type || raise ArgumentError.new("Sum-family AggregateFunction requires an argument")
+      @argument_type = @descriptor.argument_type || raise ArgumentError.new("AggregateFunction state requires an argument")
       BinaryAggregateFunctionAdmission.validate_argument!(@argument_type, @function_name)
 
       if @function_name == "min" || @function_name == "max"
@@ -72,6 +73,8 @@ module CrystalClick
       end
       if @nullable_argument
         Bytes[0_u8]
+      elsif @function_name == "groupBitAnd"
+        Bytes.new(state_width, 0xFF_u8)
       elsif layout = @avg_layout
         layout.default_state_bytes
       else
@@ -98,9 +101,9 @@ module CrystalClick
       nil
     end
 
-    # Kept as the historical fixed-width accessor for Sum-family callers.
-    # Avg has no single state width; returning one would invite fixed-stride
-    # row traversal and make adjacent states ambiguous.
+    # Fixed-width accessor for Sum-family and bitwise callers. Avg has no
+    # single state width; returning one would invite fixed-stride row
+    # traversal and make adjacent states ambiguous.
     def state_width : Int32
       @fixed_state_width || raise(ArgumentError.new("AggregateFunction #{@function_name} state width is variable"))
     end
@@ -118,6 +121,8 @@ module CrystalClick
 
     private def state_width_for(function_name : String, input_type : BinaryDataType) : Int32
       case function_name
+      when "groupBitOr", "groupBitAnd", "groupBitXor"
+        BinaryAggregateBitwiseArgumentPolicy.state_width(input_type)
       when "sumKahan"
         16
       when "sumWithOverflow"

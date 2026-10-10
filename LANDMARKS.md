@@ -1,5 +1,40 @@
 # Crystal Click landmarks
 
+## Bitwise aggregate states through the shared recursive storage owners — W255
+
+- VERIFIED / root adversary ROBUST within the finite target over clean baseline
+  `8119e11b35c1e0647e649fc177223e93f3573c8e`. One own-file policy admits exact
+  unary, version-zero, zero-parameter groupBitOr/And/Xor over twelve bare integer
+  types. The existing fixed-state owner supplies width and zero/FF neutral
+  bytes; existing recursive codecs/physical consumers compose the leaf. SAF
+  scalar storage is not AF state admission. No per-product codec or contextual
+  guard relaxation is introduced; shells/combinators remain locally refused.
+- Ordered 40-file affected gates: 239 examples per DEBUG/RELEASE mode, zero
+  failures/errors/pending; both helpers build. Two reciprocal cells qualify
+  36 root states and one ragged Array(Tuple) schema through direct/window/table/
+  offline reads and native ATTACH/CHECK=1/schema/raw state readback. Parent
+  P=[2,2,2]+EOF and child Q=[3,1,2] remain separate coordinate domains. Quote
+  exact wide fixture operands before CAST; unquoted SQL literals can hit the
+  Float64 parser fallback and are not an exact bit oracle.
+- Root independently audits 41 streams per part across four stock/library
+  parts. All 90 generated files / 18,553 bytes per mode match. The 392 raw
+  fixture controls, ten successful-classification/nonzero-exit controls and six
+  raw CHECK=0 controls reject at intended audit guards; acceptance is rechecked
+  and original captures are unchanged. This is not exhaustive production
+  corruption coverage; native CHECK supplies frame/checksum acceptance.
+- Return pointers: [W255 frontier](docs/AGGREGATE_FUNCTION_BITWISE_FRONTIER.md),
+  [root-owned evidence](.landmark/evidence/aggregate-bitwise-w255.json).
+  Comparison `ed30948f095ecb70679986d7d60e27ad770ae27a` is distinct from the
+  executed CH build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Refresh after
+  admission/state/recursive/physical/consumer/tool/helper/oracle/runtime changes
+  or capture loss. Corrected harness/oracle diagnostics are excluded;
+  same-lineage model review is correlated.
+- Confirmed frontier: remaining aggregate state laws/admission shells and
+  physical products, then native MV/projection writes and broader facade
+  decomposition. Next discriminator: source law plus a bounded stock state
+  fixture for the next family, not reader/writer agreement alone. Full goal
+  ACTIVE; memory/performance deferred; local commit only and no speed claim.
+
 ## Complete legacy JSON MAP admission through existing owners — W254
 
 - VERIFIED / root adversary ROBUST within the finite complete root Object

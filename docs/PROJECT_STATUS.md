@@ -1,6 +1,35 @@
 # CrystalClick project status
 
-Current qualification (W254, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W255, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite bitwise AggregateFunction storage target. The three exact unary,
+version-zero, zero-parameter groupBitOr/And/Xor identities admit the twelve bare
+integer types. One own-file argument policy plugs into existing descriptor and
+fixed-state owners; OR/XOR empty states are zero and AND is all ones. Existing
+recursive value/bulk/physical/Wide/table/offline owners are reused. No new
+container codec or contextual-guard relaxation is added.
+
+The same ordered 40-file affected roster passes 137 + 102 = 239 examples in
+each DEBUG/RELEASE mode, zero failures/errors/pending; both helpers build.
+Two fresh reciprocal cells establish stock direct/window/public-table/offline
+reads and library ATTACH/CHECK=1/exact schema/raw RowBinary state bytes for all
+36 root signatures and one ragged Array(Tuple) column. Actual empty aggregates,
+signed/wide asymmetric bits, P=[2,2,2]+EOF and Q=[3,1,2] are included.
+Root independently checks 41 streams per part across four stock/library parts.
+All 90 generated files / 18,553 bytes per mode match by actual bytes. The 392
+fixed-fixture raw audit controls, ten forged-green nonzero-exit controls and
+six raw CHECK=0 controls reject; unmodified acceptance and captures are unchanged.
+These audit controls do not certify exhaustive production corruption handling;
+native CHECK supplies checksum acceptance.
+
+This does not close other aggregate state grammars/shells/combinators, arbitrary
+recursive layouts, Compact writing, RE2/SKIP REGEXP, native MV/projection writes,
+broader facade decomposition or speed parity. Source comparison uses fresh
+shallow `ed30948f095ecb70679986d7d60e27ad770ae27a`, distinct from the pinned
+executed CH build. See the [W255 frontier](AGGREGATE_FUNCTION_BITWISE_FRONTIER.md)
+and [root-owned evidence](../.landmark/evidence/aggregate-bitwise-w255.json).
+Overall goal ACTIVE; memory/performance deferred; local commit only, no push.
+
+Previous qualification (W254, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite complete root JSON Object V1/V2 Wide/MAP target. Existing recursive
 value codecs and stream owners are reused. One shared layout gate admits wire
 versions 0/2 with MAP/one bucket, while statistics reconstruction preserves
@@ -3211,9 +3240,12 @@ source/runtime identities and executed evidence.
    canonical argument profiles, not every recursive argument product. W223
    adds finite Sum-family state storage; W224-W226 add source-eligible static,
    Variant and generic Dynamic composition. W227 adds Avg over source-valid
-   leaf kinds with 148 finite paired root profiles. Other AggregateFunction
-   states and unqualified outer/storage products/layouts remain outside their
-   certificates. Broader
+   leaf kinds with 148 finite paired root profiles. W237 adds finite unary
+   Min/Max state grammars over admitted static arguments. W255 adds the 36
+   bare-integer groupBitOr/And/Xor root signatures and one named Array(Tuple)
+   native witness, reusing existing recursive codecs. Other AggregateFunction
+   states, admission shells/combinators and unqualified outer/storage products/
+   layouts remain outside these certificates. Broader
    SimpleAggregateFunction carriers/functions/parameters/aliases remain
    unqualified; aggregate states and ordinary stored values are not
    interchangeable capabilities. W163 extends W161's nine canonical unary,
@@ -3421,7 +3453,8 @@ source/runtime identities and executed evidence.
    logical codecs, parts and consumers, not the broader AggregateFunction
    state family. A stored-value wrapper does not certify aggregate execution.
    W223-W227 add finite Sum/Avg families and recursive static/Variant/Dynamic
-   composition; remaining state families and physical products still require
+   composition; W237 adds Min/Max and W255 adds bare-integer bitwise states.
+   Remaining state families, admission shells and physical products still require
    distinct source laws and native witnesses, not a generic opaque-blob fallback.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
@@ -3434,8 +3467,9 @@ The current bounded comparison checkout is
 `/private/tmp/clickhouse-w254-upstream.AqeqyC`, revision
 `ed30948f095ecb70679986d7d60e27ad770ae27a` (2026-10-10), rechecked clean and
 shallow after the official depth-1 sparse fetch. W254 compares selected
-Object/MAP/statistics/settings owners, not every upstream change. This is not
-a continuing upstream freshness claim.
+Object/MAP/statistics/settings owners; W255 compares bitwise dispatch/state and
+the wide-number parser, not every upstream change. This is not a continuing
+upstream freshness claim or the identity of the executed runtime build.
 [CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records
 the previous snapshots, six-directory comparison and earlier identities. In that prior
 October 5 inventory, root independently
