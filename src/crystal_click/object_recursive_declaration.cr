@@ -6,6 +6,14 @@ module CrystalClick
   module ObjectRecursiveDeclaration
     DEFAULT_LIMITS = ObjectDocumentCodec::DEFAULT_LIMITS
 
+    # The Object JSON declaration grammar stays the default. Dynamic BinaryBulk
+    # callers opt into only the recursive Nested and static Map-key edges owned
+    # by that storage route.
+    enum AdmissionProfile
+      ObjectJson
+      DynamicBulk
+    end
+
     struct Metrics
       getter byte_size : UInt64
       getter descriptor_node_count : UInt64
@@ -61,6 +69,7 @@ module CrystalClick
       getter first : Int32
       getter after : Int32
       getter limits : BinaryCodecLimits
+      getter profile : AdmissionProfile
 
       def initialize(
         @byte_size : UInt64,
@@ -78,6 +87,7 @@ module CrystalClick
         @first : Int32,
         @after : Int32,
         @limits : BinaryCodecLimits,
+        @profile : AdmissionProfile = AdmissionProfile::ObjectJson,
       )
       end
 
@@ -194,8 +204,9 @@ module CrystalClick
       after : Int32,
       limits : BinaryCodecLimits = DEFAULT_LIMITS,
       root_depth : Int = 1,
+      profile : AdmissionProfile = AdmissionProfile::ObjectJson,
     ) : Preflight?
-      ObjectRecursiveDeclarationText.preflight_slice(bytes, first, after, limits, root_depth)
+      ObjectRecursiveDeclarationText.preflight_slice(bytes, first, after, limits, root_depth, profile)
     end
 
     # Bounded direct-descriptor walk used before schema path/declaration

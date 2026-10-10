@@ -1,0 +1,472 @@
+{
+  "format": "crystal_click_w249_evidence_index_v1",
+  "date": "2026-10-10",
+  "baseline_commit": "a5a02c8a4b9d317d5266814683df3871fbe66dc5",
+  "overall_goal": "ACTIVE; legal read/write types and MV/projections before memory/performance",
+  "scope": "JSON-free Dynamic-bearing nominal Nested recursively under Array, Tuple, Nested and BASIC Map(UInt64, value); N-column writer and direct/public-table/offline consumers, finite reciprocal Wide stock qualification.",
+  "implementation": {
+    "production_files": [
+      "src/crystal_click/dynamic_bulk_column_declaration.cr",
+      "src/crystal_click/object_recursive_declaration.cr",
+      "src/crystal_click/object_recursive_declaration_text.cr"
+    ],
+    "admission": "Replace root-only Nested rewriting with explicit DynamicBulk admission on bounded borrowed recursive preflight. Carry immutable profile through revalidation and materialization; charge descriptor root exactly once; check inherited child-depth arithmetic. ObjectJson defaults remain unchanged.",
+    "reused_serde": true,
+    "no_per_product_codec": true,
+    "legacy": "Bare Dynamic and specialized nominal owners retain their routes; retained Nested identity is never normalized to Array(Tuple).",
+    "risk": "CAUTION: persisted-format/public consumer admission",
+    "rollback": "One atomic local feature commit; preserve unrelated work. No push/history rewrite."
+  },
+  "guard": {
+    "command_prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh ",
+    "timeout_seconds": 600,
+    "memory_limit_mib": 12288,
+    "minimum_free_memory_percent": 50,
+    "crystal_workers": 1,
+    "compiler_flags": [
+      "--single-module",
+      "--threads",
+      "1",
+      "--link-flags=-fuse-ld=ld",
+      "--error-trace",
+      "--verbose"
+    ],
+    "release_extra_flags": [
+      "--release",
+      "--no-debug"
+    ],
+    "native_max_threads": 1,
+    "native_max_memory_usage_bytes": 536870912
+  },
+  "falsifier": {
+    "red": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_recursive_handoff_w249_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit": 1,
+      "examples": 4,
+      "failures": 1,
+      "errors": 1,
+      "pending": 0,
+      "meaning": "Direct recursive read/write and exact descriptor controls passed before a declaration nil result and public typed admission failure. Baseline production was frozen."
+    },
+    "frozen_file_sha256": {
+      "head": "a5a02c8a4b9d317d5266814683df3871fbe66dc5",
+      "fixture": "6dbb1305fa116fc2caa9a78c59be72c0b90d14ef5f904774b9a0f6c01e8dd9b4",
+      "spec": "ab4b2752250682763cbc87f166f0fe5457bd35c8b8b025505ca01e8f217f6699",
+      "production": {
+        "object_recursive_declaration.cr": "01343f0eb216df1a54c6f32b9d1416e5217746f36b6ee160385e9b73a4529c6b",
+        "object_recursive_declaration_text.cr": "8c329148dff16f7d1a7c376860ce1e7edbcaa0cfe65de85494426f2220d94e1e",
+        "dynamic_bulk_column_declaration.cr": "f08425e0db3ac9b4d81e7d87a1d09833b61fa525e5655904f6edec9a7cf2cba9"
+      }
+    }
+  },
+  "source_comparison": {
+    "root": "/private/tmp/clickhouse-w249-upstream-P7bxRQ",
+    "revision": "fe0f91b6c3de9e1efa33a1bce4ca9bcbfb4c509d",
+    "commit_time_utc": "2026-10-10T09:01:51Z",
+    "shallow_depth": 1,
+    "examined_files_unchanged_from": "f25eb93a0b890a3b87df05eb34e2af1f933b4089",
+    "examined_file_count": 15,
+    "source_runtime_identity_separate": true,
+    "latest_at_completion_claim": false,
+    "examined_paths": [
+      "src/DataTypes/DataTypeNested.cpp",
+      "src/DataTypes/DataTypeNested.h",
+      "src/DataTypes/DataTypeArray.cpp",
+      "src/DataTypes/DataTypeArray.h",
+      "src/DataTypes/DataTypeTuple.cpp",
+      "src/DataTypes/DataTypeTuple.h",
+      "src/DataTypes/DataTypeMap.cpp",
+      "src/DataTypes/DataTypeDynamic.cpp",
+      "src/DataTypes/DataTypeDynamic.h",
+      "src/DataTypes/IDataType.cpp",
+      "src/DataTypes/Serializations/SerializationArray.cpp",
+      "src/DataTypes/Serializations/SerializationTuple.cpp",
+      "src/DataTypes/Serializations/SerializationMap.cpp",
+      "src/DataTypes/Serializations/SerializationDynamic.cpp",
+      "src/DataTypes/Serializations/SerializationInfoTuple.cpp"
+    ],
+    "final_source_hash_refresh": "Root raw audit rehashed every runtime source pin and source closure in all four cells."
+  },
+  "spec_roster": [
+    [
+      "spec/dynamic_recursive_handoff_w249_spec.cr",
+      "spec/dynamic_table_consumer_w211_spec.cr",
+      "spec/dynamic_table_budget_w211_spec.cr",
+      "spec/dynamic_bulk_part_w203_spec.cr",
+      "spec/multi_column_part_writer_w245_spec.cr",
+      "spec/multi_column_tuple_dynamic_w246_spec.cr",
+      "spec/static_binary_bulk_table_w247_spec.cr",
+      "spec/static_nested_handoff_w248_spec.cr",
+      "spec/storage_read_budget_w245_spec.cr"
+    ],
+    [
+      "spec/object_recursive_w140_root_spec.cr",
+      "spec/object_document_schema_w140_spec.cr",
+      "spec/object_recursive_consumers_w140_spec.cr",
+      "spec/object_declared_low_cardinality_w146_spec.cr",
+      "spec/object_declared_variant_w151_spec.cr",
+      "spec/object_declared_nested_w236_spec.cr",
+      "spec/object_recursive_dynamic_w159_spec.cr",
+      "spec/object_recursive_dynamic_w159_adversary_spec.cr",
+      "spec/object_declared_dynamic_w158_adversary_spec.cr"
+    ]
+  ],
+  "adversary": {
+    "source_review": "Luna Max read-only peer review found no profile propagation/default escape, Dynamic Map-key bypass or post-preflight depth overflow; same-lineage, correlated evidence.",
+    "executed_controls": [
+      "Explicit ObjectJson/default refusal remains while DynamicBulk admits recursive Nested.",
+      "Metrics-correct public Preflight with a disallowed profile rejects before budget charging.",
+      "Borrowed same-size canonical edit is accepted as current source; malformed edit rejects before charging.",
+      "Illegal Nullable/LowCardinality/Variant Dynamic edges and Dynamic/Nullable Map keys remain refused.",
+      "Exact inherited depth/node/element/wire/name limits and Int32 maximum depth fail closed.",
+      "Complete selected grids, corrupt LC state, logical retained/read budgets, staged publication cleanup and exclusive no-overwrite remain guarded."
+    ],
+    "observed_verdict": "ROBUST within the finite tested target after root diff/source inspection, negative roster and independent raw literal/actual-type/byte audit"
+  },
+  "residuals": [
+    "Not every admitted recursive product has a stock witness; unusual static Map key shapes remain unqualified.",
+    "No nominal JSON-bearing declaration, new JSON/Dynamic/Variant/LowCardinality layout/version or all Dynamic actual families are admitted by this slice.",
+    "Bulk Dynamic and Map qualification are BASIC; ordinary single/sized String profiles do not imply sized SharedVariant support.",
+    "No native projection/MV write/read interop or general key/partition metadata closure.",
+    "Offline catalog copy is synthetic and byte-identical, not stock-root discovery or server Active-state proof.",
+    "Logical retained-value limits do not bound transient allocations/RSS; no performance claim or optimization.",
+    "Public Preflight profile is a selector, not unforgeable provenance; canonical same-metric borrowed edits intentionally represent current source.",
+    "No whole-suite, all-types, latest-at-completion or immutable execution provenance claim."
+  ],
+  "decay": {
+    "triggers": [
+      "Relevant parser/admission/codec/plan/budget/consumer/source/compiler/helper/fixture/oracle/runtime/profile changes",
+      "Capture loss or file/hash mismatch"
+    ],
+    "refresh": "Reexecute the frozen roster in both modes, both helper builds and four fresh reciprocal cells; root inspect raw captures and negative controls.",
+    "failure_policy": "Reopen the scoped claim; infrastructure/resource/source/capture failure is inconclusive, not evidence of compatibility."
+  },
+  "lineage": {
+    "heavy_work": "Luna Max production, fixtures/specs and probe implementation; root scope, serialized guards, source/diff review and final execution/audits.",
+    "model_agreement": "Same-lineage review is correlated, not independent evidence."
+  },
+  "claim": {
+    "level": "VERIFIED",
+    "root_adversary": "ROBUST within the finite declared target; not all-layout/all-types closure",
+    "observed_at_utc": "2026-10-10T10:59:22Z"
+  },
+  "gates": [
+    {
+      "mode": "debug",
+      "batch": 0,
+      "examples": 52,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_recursive_handoff_w249_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/multi_column_part_writer_w245_spec.cr spec/multi_column_tuple_dynamic_w246_spec.cr spec/static_binary_bulk_table_w247_spec.cr spec/static_nested_handoff_w248_spec.cr spec/storage_read_budget_w245_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit": 0,
+      "observed_tail": [
+        "",
+        "Finished in 36.28 seconds",
+        "52 examples, 0 failures, 0 errors, 0 pending",
+        "[EXIT: 0] after ~74s"
+      ]
+    },
+    {
+      "mode": "debug",
+      "batch": 1,
+      "examples": 65,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_recursive_w140_root_spec.cr spec/object_document_schema_w140_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/object_declared_low_cardinality_w146_spec.cr spec/object_declared_variant_w151_spec.cr spec/object_declared_nested_w236_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit": 0,
+      "observed_tail": [
+        "",
+        "Finished in 304.75 milliseconds",
+        "65 examples, 0 failures, 0 errors, 0 pending",
+        "[EXIT: 0] after ~42s"
+      ]
+    },
+    {
+      "mode": "release",
+      "batch": 0,
+      "examples": 52,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_recursive_handoff_w249_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/multi_column_part_writer_w245_spec.cr spec/multi_column_tuple_dynamic_w246_spec.cr spec/static_binary_bulk_table_w247_spec.cr spec/static_nested_handoff_w248_spec.cr spec/storage_read_budget_w245_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit": 0,
+      "observed_tail": [
+        "",
+        "Finished in 4.47 seconds",
+        "52 examples, 0 failures, 0 errors, 0 pending",
+        "[EXIT: 0] after ~179s"
+      ]
+    },
+    {
+      "mode": "release",
+      "batch": 1,
+      "examples": 65,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_recursive_w140_root_spec.cr spec/object_document_schema_w140_spec.cr spec/object_recursive_consumers_w140_spec.cr spec/object_declared_low_cardinality_w146_spec.cr spec/object_declared_variant_w151_spec.cr spec/object_declared_nested_w236_spec.cr spec/object_recursive_dynamic_w159_spec.cr spec/object_recursive_dynamic_w159_adversary_spec.cr spec/object_declared_dynamic_w158_adversary_spec.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit": 0,
+      "observed_tail": [
+        "",
+        "Finished in 224.67 milliseconds",
+        "65 examples, 0 failures, 0 errors, 0 pending",
+        "[EXIT: 0] after ~86s"
+      ]
+    }
+  ],
+  "helper_builds": [
+    {
+      "mode": "debug",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_dynamic_recursive_handoff_w249.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose -o /private/tmp/crystal-click-w249.1tb9gE/helper-debug",
+      "exit": 0,
+      "observed_tail": [
+        "[PREFLIGHT] System memory free 64% > 50%",
+        "cc _main.o0.o -o /private/tmp/crystal-click-w249.1tb9gE/helper-debug -fuse-ld=ld -rdynamic -L/opt/homebrew/Cellar/crystal/1.21.0/bin/../../../../lib -lc -lzstd -L/opt/homebrew/Cellar/pcre2/10.47_1/lib -lpcre2-8 -L/opt/homebrew/Cellar/bdw-gc/8.2.12/lib -lgc -liconv",
+        "[EXIT: 0] after ~40s"
+      ]
+    },
+    {
+      "mode": "release",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_dynamic_recursive_handoff_w249.cr --release --no-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose -o /private/tmp/crystal-click-w249.1tb9gE/helper-release",
+      "exit": 0,
+      "observed_tail": [
+        "[PREFLIGHT] System memory free 64% > 50%",
+        "cc _main.o3.o -o /private/tmp/crystal-click-w249.1tb9gE/helper-release -fuse-ld=ld -rdynamic -L/opt/homebrew/Cellar/crystal/1.21.0/bin/../../../../lib -lc -lzstd -L/opt/homebrew/Cellar/pcre2/10.47_1/lib -lpcre2-8 -L/opt/homebrew/Cellar/bdw-gc/8.2.12/lib -lgc -liconv",
+        "[EXIT: 0] after ~79s"
+      ]
+    }
+  ],
+  "final_light_checks": {
+    "format": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 4096 tool format --check src/crystal_click/dynamic_bulk_column_declaration.cr src/crystal_click/object_recursive_declaration.cr src/crystal_click/object_recursive_declaration_text.cr spec/dynamic_table_consumer_w211_spec.cr spec/dynamic_recursive_handoff_w249_spec.cr scripts/support/dynamic_recursive_handoff_w249_fixture.cr scripts/check_dynamic_recursive_handoff_w249.cr",
+      "exit": 0,
+      "observed_tail": [
+        "[PREFLIGHT] System memory free 64% > 50%",
+        "[EXIT: 0] after ~0s"
+      ]
+    },
+    "ruby_syntax": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 -c scripts/probe_dynamic_recursive_handoff_w249.rb",
+      "exit": 0,
+      "observed_tail": [
+        "[PREFLIGHT] System memory free 64% > 50%",
+        "Syntax OK",
+        "[EXIT: 0] after ~0s"
+      ]
+    },
+    "source_git": {
+      "command": "git -C /private/tmp/clickhouse-w249-upstream-P7bxRQ rev-parse --is-shallow-repository; git -C /private/tmp/clickhouse-w249-upstream-P7bxRQ log -1 --format='%H%n%cI'; git -C /private/tmp/clickhouse-w249-upstream-P7bxRQ status --short; git diff --check",
+      "exit": 0,
+      "observed_output": "true\nfe0f91b6c3de9e1efa33a1bce4ca9bcbfb4c509d\n2026-10-10T09:01:51Z\n"
+    }
+  },
+  "final_file_sha256": [
+    {
+      "path": "src/crystal_click/dynamic_bulk_column_declaration.cr",
+      "sha256": "cb6fa83c55ad023aa58e7a1c702af94328f7cd1a37d80c9828e449b4bc36f049"
+    },
+    {
+      "path": "src/crystal_click/object_recursive_declaration.cr",
+      "sha256": "6cf4194d76340e3ed9be098f847607a1c2608da36bbf3b72f2483d09bbefb0a1"
+    },
+    {
+      "path": "src/crystal_click/object_recursive_declaration_text.cr",
+      "sha256": "3aa9f974e56424699a40c752b4ca03f66b3ea7ec9448dd5c6e80d41fcff3f34c"
+    },
+    {
+      "path": "spec/dynamic_table_consumer_w211_spec.cr",
+      "sha256": "0d9fb83126c7ee53c67020c35b65c2d427393476f2227d7f4f76a7881447ec1d"
+    },
+    {
+      "path": "spec/dynamic_recursive_handoff_w249_spec.cr",
+      "sha256": "85bff1a6d5d9d06701f5d628d60960217698e4ed9832a45ce531a0e8b6678015"
+    },
+    {
+      "path": "scripts/support/dynamic_recursive_handoff_w249_fixture.cr",
+      "sha256": "4c6fca316204bb4208364a9918288baff5d6214fe3ba241add4849cc62b5c17c"
+    },
+    {
+      "path": "scripts/check_dynamic_recursive_handoff_w249.cr",
+      "sha256": "179b0ae477cb0988a68acee506d7e22d4f0f0b31a781365b65b36b5510f2d287"
+    },
+    {
+      "path": "scripts/probe_dynamic_recursive_handoff_w249.rb",
+      "sha256": "c0c9a3e276b28ad0342a8770c2dd920125c355404635206c4f193b15c848159f"
+    },
+    {
+      "path": "/private/tmp/crystal-click-w249.1tb9gE/helper-debug",
+      "sha256": "344f2f0a99c1a0365450cb92ae8ca5790eb2a60eaf47d67f430225a89bf2da84"
+    },
+    {
+      "path": "/private/tmp/crystal-click-w249.1tb9gE/helper-release",
+      "sha256": "ac37e35c2ea25a57a797bc70c5e009da61c8bd8f4247502c17c9ba681c1d5ad8"
+    },
+    {
+      "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+    }
+  ],
+  "native_cells": [
+    {
+      "mode": "debug",
+      "profile": "single",
+      "root": "/private/tmp/crystal-click-w249-qualified-debug-single.v5iVz0",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_dynamic_recursive_handoff_w249.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w249.1tb9gE/helper-debug --evidence-root /private/tmp/crystal-click-w249-qualified-debug-single.v5iVz0 --string-profile single --helper-mode debug",
+      "exit": 0,
+      "observed_tail": [
+        "[PREFLIGHT] System memory free 64% > 50%",
+        "W249 status=paired_dynamic_recursive_handoff_observed profile=single helper_mode=debug evidence=/private/tmp/crystal-click-w249-qualified-debug-single.v5iVz0",
+        "[EXIT: 0] after ~3s"
+      ],
+      "summary_path": "/private/tmp/crystal-click-w249-qualified-debug-single.v5iVz0/summary.json",
+      "summary_sha256": "ee522bfa6e2879b7fa8f1d3070f0c1263ef24069d4d2e24065b8821e407e9fd0"
+    },
+    {
+      "mode": "debug",
+      "profile": "sized",
+      "root": "/private/tmp/crystal-click-w249-debug-sized.uizdQk",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_dynamic_recursive_handoff_w249.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w249.1tb9gE/helper-debug --evidence-root /private/tmp/crystal-click-w249-debug-sized.uizdQk --string-profile sized --helper-mode debug",
+      "exit": 0,
+      "observed_tail": [
+        "[PREFLIGHT] System memory free 64% > 50%",
+        "W249 status=paired_dynamic_recursive_handoff_observed profile=sized helper_mode=debug evidence=/private/tmp/crystal-click-w249-debug-sized.uizdQk",
+        "[EXIT: 0] after ~3s"
+      ],
+      "summary_path": "/private/tmp/crystal-click-w249-debug-sized.uizdQk/summary.json",
+      "summary_sha256": "1cc5de3f3ca2fcb93214031b0441118526213b970e17e4af923ebc882b89af91"
+    },
+    {
+      "mode": "release",
+      "profile": "single",
+      "root": "/private/tmp/crystal-click-w249-release-single.6jAiKL",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_dynamic_recursive_handoff_w249.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w249.1tb9gE/helper-release --evidence-root /private/tmp/crystal-click-w249-release-single.6jAiKL --string-profile single --helper-mode release",
+      "exit": 0,
+      "observed_tail": [
+        "[PREFLIGHT] System memory free 64% > 50%",
+        "W249 status=paired_dynamic_recursive_handoff_observed profile=single helper_mode=release evidence=/private/tmp/crystal-click-w249-release-single.6jAiKL",
+        "[EXIT: 0] after ~3s"
+      ],
+      "summary_path": "/private/tmp/crystal-click-w249-release-single.6jAiKL/summary.json",
+      "summary_sha256": "40b2ec6463b05438590187158b3b7d2745db0bfe439d0e7575c7a1439a64e003"
+    },
+    {
+      "mode": "release",
+      "profile": "sized",
+      "root": "/private/tmp/crystal-click-w249-release-sized.6viDRD",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_dynamic_recursive_handoff_w249.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w249.1tb9gE/helper-release --evidence-root /private/tmp/crystal-click-w249-release-sized.6viDRD --string-profile sized --helper-mode release",
+      "exit": 0,
+      "observed_tail": [
+        "[PREFLIGHT] System memory free 64% > 50%",
+        "W249 status=paired_dynamic_recursive_handoff_observed profile=sized helper_mode=release evidence=/private/tmp/crystal-click-w249-release-sized.6viDRD",
+        "[EXIT: 0] after ~3s"
+      ],
+      "summary_path": "/private/tmp/crystal-click-w249-release-sized.6viDRD/summary.json",
+      "summary_sha256": "e2ad141e89126b087487548077e07e3e00ae812db92fefe126cd1f008f9e7459"
+    }
+  ],
+  "root_raw_audit": {
+    "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 4096 - /private/tmp/crystal-click-w249-qualified-debug-single.v5iVz0 /private/tmp/crystal-click-w249-debug-sized.uizdQk /private/tmp/crystal-click-w249-release-single.6jAiKL /private/tmp/crystal-click-w249-release-sized.6viDRD <<'RUBY'\nrequire 'json'\nrequire 'digest'\ndef need(ok, message)\n  raise message unless ok\nend\nschema = [\n ['pk','UInt64'],\n ['root_nested','Nested(d Dynamic(max_types=1), label LowCardinality(Nullable(String)))'],\n ['array_nested','Array(Nested(d Dynamic(max_types=1), label String))'],\n ['tuple_parent','Tuple(id UInt64, records Array(Nested(d Dynamic(max_types=1), label String)))'],\n ['recursive_nested','Nested(d Dynamic(max_types=1), child Nested(d Dynamic(max_types=1), tags Array(String)))'],\n ['map_parent','Map(UInt64, Nested(d Dynamic(max_types=1), label String))']\n]\nrows = [\n {'pk'=>1,'root_nested'=>[],'array_nested'=>[],'tuple_parent'=>[1,[]],'recursive_nested'=>[],'map_parent'=>[]},\n {'pk'=>2,'root_nested'=>[],'array_nested'=>[],'tuple_parent'=>[2,[]],'recursive_nested'=>[],'map_parent'=>[]},\n {'pk'=>3,'root_nested'=>[[['Int64',7],'root-a'],[['NULL',nil],nil],[['String','root-shared'],'root-b']],\n  'array_nested'=>[[[['Int64',9],'array-a'],[['String','array-shared'],'array-b']]],\n  'tuple_parent'=>[3,[[[['Int64',11],'tuple-a'],[['NULL',nil],'tuple-null']]]],\n  'recursive_nested'=>[[['Int64',13],[[['NULL',nil],['x']],[['String','child-shared'],[]]]]],\n  'map_parent'=>[[17,[[['Int64',19],'map-a'],[['String','map-shared'],'map-b']]]]},\n {'pk'=>4,'root_nested'=>[],'array_nested'=>[[]],'tuple_parent'=>[4,[]],'recursive_nested'=>[],'map_parent'=>[]},\n {'pk'=>5,'root_nested'=>[[['String','root-tail'],'tail'],[['Int64',23],nil]],\n  'array_nested'=>[[[['NULL',nil],'array-null']],[],[[['Int64',29],'array-tail']]],\n  'tuple_parent'=>[5,[[[['Int64',31],'tuple-tail'],[['String','tuple-shared-tail'],'tuple-spill']]]],\n  'recursive_nested'=>[[['NULL',nil],[]],[['String','parent-shared'],[[['Int64',37],[]],[['NULL',nil],['tail','tags']]]]],\n  'map_parent'=>[[41,[[['NULL',nil],'map-null']]],[43,[]]]}\n]\nplain_records = ->(a) { a.map { |p,label| {'d'=>p[1],'label'=>label} } }\ntypes = ->(a) { a.map { |p,_| p[0] } }\nexpected_native = rows.map do |r|\n [r['pk'], plain_records.call(r['root_nested']),\n  r['array_nested'].map { |a| plain_records.call(a) },\n  {'id'=>r['tuple_parent'][0], 'records'=>r['tuple_parent'][1].map { |a| plain_records.call(a) }},\n  r['recursive_nested'].map { |p,ch| {'d'=>p[1], 'child'=>ch.map { |cp,tags| {'d'=>cp[1],'tags'=>tags} }} },\n  r['map_parent'].map(&:first), r['map_parent'].map { |_,a| plain_records.call(a) },\n  types.call(r['root_nested']), r['array_nested'].map { |a| types.call(a) },\n  r['tuple_parent'][1].map { |a| types.call(a) },\n  r['recursive_nested'].map { |p,_| p[0] },\n  r['recursive_nested'].map { |_,ch| types.call(ch) },\n  r['map_parent'].map { |_,a| types.call(a) }]\nend\npin = \"__W241_PIN__\\t26.10.1.1201\\td9bcb5ab007f0f6299f7f973f2642245bab3d028\"\nruntime_sha = 'bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2'\nlabels = %w[helper_write_library_part native_create_input native_attach_check_rows native_create_stock_write native_stock_write_check_rows helper_read_stock_part]\nresults = []\nARGV.each do |root|\n summary_file = File.join(root,'summary.json')\n s = JSON.parse(File.binread(summary_file))\n need(s['format']=='dynamic_recursive_handoff_w249_native_capture_v1' && s['status']=='paired_dynamic_recursive_handoff_observed' && s['fatal_error'].nil?, 'summary status')\n need(s['schema'].map { |c| [c['name'],c['type']] }==schema && s['keys']==[1,2,3,4,5] && s['mark_row_counts']==[2,2,1], 'nominal schema/grid')\n need(s['invocations'].map { |r| r['label'] }==labels, 'invocation roster')\n need(Digest::SHA256.file(s['runtime']['path']).hexdigest==runtime_sha && s['runtime']['sha256']==runtime_sha,'runtime pin')\n need(Digest::SHA256.file(s['helper']['path']).hexdigest==s['helper']['sha256'],'helper binary pin')\n s['source_closures'].values.flatten.each { |e| need(Digest::SHA256.file(e['path']).hexdigest==e['sha256'],\"source closure #{e['path']}\") }\n s['runtime']['source_pins'].each do |tree|\n   tree['files'].each { |e| need(Digest::SHA256.file(File.join(tree['root'],e['path'])).hexdigest==e['sha256'],\"stock source #{e['path']}\") }\n end\n current=s['runtime']['source_pins'].find { |e| e['tree']=='clickhouse-2026-10-10-depth1' }\n need(current && current['revision']=='fe0f91b6c3de9e1efa33a1bce4ca9bcbfb4c509d' && current['commit_time_utc']=='2026-10-10T09:01:51Z' && current['files'].size==15,'current source identity')\n s['invocations'].each do |record|\n   r=JSON.parse(File.binread(File.join(root,'invocations',record['label']+'.json')))\n   need(r==record,'raw record/summary agreement')\n   need(r['exit']==0 && r['signal'].nil? && !r['timed_out'] && r['process_classification']=='success','process exit')\n   %w[spawn_error stdin_write_error stdout_read_error stderr_read_error].each { |key| need(r[key].nil?,key) }\n   %w[argv stdin stdout stderr].each do |key|\n     path=File.join(root,'invocations',r[key+'_file'])\n     need(File.file?(path) && !File.symlink?(path),'raw file kind')\n     bytes=File.binread(path)\n     need(Digest::SHA256.hexdigest(bytes)==r[key+'_sha256'],'raw SHA '+key)\n     need(bytes.bytesize==r[key+'_bytes'], 'raw length '+key) unless key=='argv'\n     need(JSON.parse(bytes)==r['argv'],'argv contents') if key=='argv'\n   end\n   need(r['stderr_bytes']==0 && r['binary_sha_before']==r['expected_binary_sha256'] && r['binary_sha_after']==r['expected_binary_sha256'],'empty stderr/stable process binary')\n   stdout=File.binread(File.join(root,'invocations',r['stdout_file']))\n   if r['process_kind']=='clickhouse-local'\n     need(r['expected_binary_sha256']==runtime_sha && r['argv'].include?('--max_threads=1') && r['argv'].include?('--max_memory_usage=536870912'),'native argv guards')\n     lines=stdout.lines.map(&:chomp)\n     need(lines.select { |l| l.start_with?(\"__W241_PIN__\\t\") }==[pin],'raw runtime build/version')\n     if %w[native_attach_check_rows native_stock_write_check_rows].include?(r['label'])\n       need(lines.include?(\"all_1_1_0\\t1\\t\"),'raw CHECK=1')\n       sr=lines.select { |l| l.start_with?(\"__W249_SCHEMA__\\t\") }.map { |l| l.split(\"\\t\",-1).drop(1) }\n       need(sr==schema,'raw exact ordered nominal schema')\n       pr=lines.select { |l| l.start_with?(\"__W249_PART__\\t\") }.map { |l| l.split(\"\\t\",-1) }\n       need(pr.size==1 && pr.first.values_at(2,4,5,6)==['all_1_1_0','Wide','5','4'],'raw Wide part/row/mark witness')\n       nr=lines.select { |l| l.start_with?(\"__W249_ROWS__\\t\") }.map do |l|\n         f=l.split(\"\\t\",-1); need(f.size==14,'native row width')\n         [Integer(f[1])]+f.drop(2).map { |v| need(v.match?(/\\A(?:[0-9a-fA-F]{2})*\\z/),'hex'); JSON.parse([v].pack('H*')) }\n       end\n       need(nr==expected_native,'raw literal values and all six Dynamic type traces')\n     end\n   else\n     report=JSON.parse(stdout)\n     need(report['format']=='dynamic_recursive_handoff_w249_helper_v1' && report['expected_rows']==rows,'helper literal bedrock')\n     need(report['keys']==[1,2,3,4,5] && report['mark_row_counts']==[2,2,1] && report['profile']==s['string_profile'],'helper grid/profile')\n     obs=report['observed']\n     need(obs['direct_reader']==rows,'raw direct reader typed values')\n     if report['action']=='read'\n       need(obs['table_full_scan']==rows && obs['offline_values']==rows,'raw public/offline typed values')\n       need(obs['table_window']==rows.select { |v| [3,4].include?(v['pk']) },'raw selected window')\n       need(obs['table_candidate_marks']==rows.select { |v| [1,2,5].include?(v['pk']) },'raw selected granules')\n     end\n   end\n end\n %w[library_generated native_attached stock_written].each do |name|\n   part=s['parts'][name]\n   names=Dir.children(part['path']).sort\n   need(names==part['files'].map { |e| e['path'] }.sort,'part complete roster')\n   part['files'].each do |e|\n     file=File.join(part['path'],e['path'])\n     need(File.file?(file) && !File.symlink?(file) && File.size(file)==e['size'] && Digest::SHA256.file(file).hexdigest==e['sha256'],'part file kind/size/SHA')\n   end\n end\n generated=s['parts']['library_generated']; attached=s['parts']['native_attached']\n need(attached['files'].reject { |e| e['path']=='invalidated_system_columns.txt' }==generated['files'],'ATTACH preserved every generated file')\n need(File.binread(File.join(attached['path'],'invalidated_system_columns.txt'))==\"_block_offset\\n_block_number\\n\",'exact ATTACH marker')\n offline=s['parts']['offline_catalog_copy']; stock=s['parts']['stock_written']\n need(offline['part_files']==stock['files'],'offline copy identity inventory')\n copies=Dir.glob(File.join(offline['root'],'store','*','*','all_1_1_0'))\n need(copies.size==1,'one offline copied part')\n stock['files'].each { |e| need(File.binread(File.join(copies[0],e['path']))==File.binread(File.join(stock['path'],e['path'])),'actual offline copied bytes') }\n results << {'root'=>root,'mode'=>s['helper_mode'],'profile'=>s['string_profile'],'native_calls'=>4,'helper_calls'=>2,\n   'files'=>generated['files'].size,'bytes'=>generated['files'].sum { |e| e['size'] },'summary_sha256'=>Digest::SHA256.file(summary_file).hexdigest}\nend\nneed(results.map { |r| [r['mode'],r['profile']] }.sort==[['debug','single'],['debug','sized'],['release','single'],['release','sized']].sort,'four exact cells')\n%w[single sized].each do |profile|\n pair=results.select { |r| r['profile']==profile }\n a=JSON.parse(File.binread(File.join(pair[0]['root'],'summary.json')))['parts']['library_generated']\n b=JSON.parse(File.binread(File.join(pair[1]['root'],'summary.json')))['parts']['library_generated']\n need(a['files']==b['files'],'debug/release complete generated inventory')\n a['files'].each { |e| need(File.binread(File.join(a['path'],e['path']))==File.binread(File.join(b['path'],e['path'])),'debug/release actual bytes') }\nend\nputs JSON.pretty_generate({'status'=>'root_raw_audit_passed','cells'=>results,'native_calls'=>16,'helper_calls'=>8,'generated_files_per_mode'=>results.select { |r| r['mode']=='debug' }.sum { |r| r['files'] },'generated_bytes_per_mode'=>results.select { |r| r['mode']=='debug' }.sum { |r| r['bytes'] },'scope'=>'Read-only root raw status/hash/schema/CHECK/literal values/all six actual type traces/typed consumer/part identity/actual-byte audit. This does not establish immutable execution provenance or every forged-capture refusal.'})\n\nRUBY",
+    "exit": 0,
+    "observed_result": {
+      "status": "root_raw_audit_passed",
+      "cells": [
+        {
+          "root": "/private/tmp/crystal-click-w249-qualified-debug-single.v5iVz0",
+          "mode": "debug",
+          "profile": "single",
+          "native_calls": 4,
+          "helper_calls": 2,
+          "files": 94,
+          "bytes": 14487,
+          "summary_sha256": "ee522bfa6e2879b7fa8f1d3070f0c1263ef24069d4d2e24065b8821e407e9fd0"
+        },
+        {
+          "root": "/private/tmp/crystal-click-w249-debug-sized.uizdQk",
+          "mode": "debug",
+          "profile": "sized",
+          "native_calls": 4,
+          "helper_calls": 2,
+          "files": 114,
+          "bytes": 17534,
+          "summary_sha256": "1cc5de3f3ca2fcb93214031b0441118526213b970e17e4af923ebc882b89af91"
+        },
+        {
+          "root": "/private/tmp/crystal-click-w249-release-single.6jAiKL",
+          "mode": "release",
+          "profile": "single",
+          "native_calls": 4,
+          "helper_calls": 2,
+          "files": 94,
+          "bytes": 14487,
+          "summary_sha256": "40b2ec6463b05438590187158b3b7d2745db0bfe439d0e7575c7a1439a64e003"
+        },
+        {
+          "root": "/private/tmp/crystal-click-w249-release-sized.6viDRD",
+          "mode": "release",
+          "profile": "sized",
+          "native_calls": 4,
+          "helper_calls": 2,
+          "files": 114,
+          "bytes": 17534,
+          "summary_sha256": "e2ad141e89126b087487548077e07e3e00ae812db92fefe126cd1f008f9e7459"
+        }
+      ],
+      "native_calls": 16,
+      "helper_calls": 8,
+      "generated_files_per_mode": 208,
+      "generated_bytes_per_mode": 32021,
+      "scope": "Read-only root raw status/hash/schema/CHECK/literal values/all six actual type traces/typed consumer/part identity/actual-byte audit. This does not establish immutable execution provenance or every forged-capture refusal."
+    },
+    "independent_literal_oracle": true,
+    "scope": "Read-only root raw status/hash/schema/CHECK/literal values/all six actual type traces/typed consumer/part identity/actual-byte audit. This does not establish immutable execution provenance or every forged-capture refusal."
+  },
+  "inconclusive_diagnostics": [
+    {
+      "kind": "Ruby 2.6 API mismatch; zero native calls",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_dynamic_recursive_handoff_w249.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w249.1tb9gE/helper-debug --evidence-root /private/tmp/crystal-click-w249-debug-single.zQqpjH --string-profile single --helper-mode debug",
+      "evidence_root": "/private/tmp/crystal-click-w249-debug-single.zQqpjH",
+      "exit": 1,
+      "qualification": false,
+      "observed_output": "[PREFLIGHT] System memory free 64% > 50%\n=== STDERR ===\nW249 inconclusive: NoMethodError: undefined method `filter_map' for #<Array:0x0000000a85c250a8>\nDid you mean?  filter\n[EXIT: 1] after ~1s\n"
+    },
+    {
+      "kind": "Non-adaptive test settings; forward attach/read passed, reciprocal read not reached",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w249.1tb9gE/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_dynamic_recursive_handoff_w249.rb --binary /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped --helper /private/tmp/crystal-click-w249.1tb9gE/helper-debug --evidence-root /private/tmp/crystal-click-w249-final-debug-single.jHXKdV --string-profile single --helper-mode debug",
+      "evidence_root": "/private/tmp/crystal-click-w249-final-debug-single.jHXKdV",
+      "exit": 1,
+      "qualification": false,
+      "observed_output": "[PREFLIGHT] System memory free 64% > 50%\n=== STDERR ===\nW249 inconclusive: ProbeDynamicRecursiveHandoffW249::Failure: W249: stock output is not one five-row Wide part\n[EXIT: 1] after ~3s\n"
+    },
+    {
+      "kind": "Root audit had incorrect 4-GiB argv expectation; raw record/source confirmed existing stricter 512-MiB limit",
+      "exit": 1,
+      "qualification": false,
+      "observed_output": "[PREFLIGHT] System memory free 64% > 50%\n=== STDERR ===\n-:4:in `need': native argv guards (RuntimeError)\n\tfrom -:77:in `block (2 levels) in <main>'\n\tfrom -:61:in `each'\n\tfrom -:61:in `block in <main>'\n\tfrom -:47:in `each'\n\tfrom -:47:in `<main>'\n[EXIT: 1] after ~0s\n",
+      "correction": "Expectation corrected in the read-only root audit; native captures and library source unchanged."
+    }
+  ],
+  "native_layout": {
+    "part_type": "adaptive Wide",
+    "mark_type": "mrk2",
+    "grid": [
+      2,
+      2,
+      1,
+      0
+    ],
+    "serialization": "BASIC Dynamic and Map",
+    "ordinary_string_profiles": [
+      "single",
+      "sized"
+    ],
+    "shared_variant_profile": "single",
+    "attaching_sidecar": {
+      "path": "invalidated_system_columns.txt",
+      "exact_bytes": "_block_offset\n_block_number\n",
+      "original_generated_files_unchanged": true
+    },
+    "offline": "Synthetic Atomic lab.events copy, byte-identical to the stock part; not real server Active state."
+  }
+}

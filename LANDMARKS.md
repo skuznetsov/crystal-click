@@ -1,5 +1,39 @@
 # Crystal Click landmarks
 
+## Recursive Dynamic nominal Nested declaration handoff — W249
+
+- Status: VERIFIED / root adversary ROBUST within the finite target over clean
+  baseline `a5a02c8a4b9d317d5266814683df3871fbe66dc5`. Behavioral RED separated
+  already-working direct recursive serde from a declaration/public handoff
+  failure. The fix is explicit DynamicBulk admission on the existing bounded
+  borrowed preflight, not a codec per product or root-only Nested rewriting.
+  Default ObjectJson, aggregate budgets, nominal identity and legacy routes stay.
+- The same ordered 18-file roster passes 117 examples per DEBUG/RELEASE mode,
+  zero failures/errors/pending. Both helpers, seven-file formatting, Ruby syntax
+  and independent root raw audit pass. Four fresh reciprocal stock cells cover
+  root Nested+Dynamic+LC(Nullable(String)), Array(Nested), Tuple(Array(Nested)),
+  recursive Nested and BASIC Map(UInt64, Nested), six Dynamic sites, empty first
+  mark, NULL and shared overflow. P=[2,2,1,EOF0]; two ordinary String profiles.
+  Sixteen native and eight helper calls establish ATTACH/CHECK=1/exact schemas,
+  literal values/types and stock-part direct/table/window/candidate/offline reads.
+  Actual bytes of 208 generated files / 32,021 bytes per mode match exactly.
+- Wrong-profile forged preflight, borrowed edits, illegal constructor/key edges,
+  exact aggregate limits and extreme inherited depth are tested. Same-lineage
+  peer review is correlated, not independent proof. Two initial harness failures
+  and one incorrect root audit argv expectation are preserved as diagnostics,
+  not qualification; corrected final runs retain the same guard and assertions.
+- Source comparison: shallow `fe0f91b6c3de9e1efa33a1bce4ca9bcbfb4c509d`, commit
+  time 2026-10-10T09:01:51Z; 15 examined sources unchanged from the pinned earlier
+  tree. Separately pinned runtime: CH 26.10.1.1201 / build
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Source snapshot is not runtime source
+  identity or a latest-at-completion claim.
+- Return pointers: [W249 frontier](docs/DYNAMIC_RECURSIVE_DECLARATION_FRONTIER.md),
+  [root-owned evidence index](.landmark/evidence/dynamic-recursive-handoff-w249.json).
+  Other layouts, nominal JSON-containing declarations, actual families, general
+  keys/partitions and native MV/projection interop remain open. Refresh after
+  parser/codec/admission/budget/consumer/compiler/helper/fixture/oracle/runtime
+  changes or capture loss. Full goal ACTIVE; performance deferred; no push.
+
 ## Recursive static nominal Nested N-column handoff — W248
 
 - Status: VERIFIED / root adversary ROBUST within the finite target over clean

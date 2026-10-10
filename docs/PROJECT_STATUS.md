@@ -1,6 +1,33 @@
 # CrystalClick project status
 
-Current qualification (W248, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W249, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite recursive Dynamic declaration/public-handoff target. A shared bounded
+preflight now has an explicit DynamicBulk profile. The root-only Nested rewrite
+is removed; ObjectJson defaults, inherited aggregate budgets, exact nominal
+identity and bare Dynamic's legacy route remain. Existing recursive serde is
+reused, not a codec per type product.
+
+The same ordered 18-file roster passed 52 + 65 = 117 examples in DEBUG and 117
+in RELEASE, zero failures/errors/pending. Both helper builds, seven-file Crystal
+formatting, final Ruby syntax and the independent root raw audit passed. Four
+fresh reciprocal cells (DEBUG/RELEASE x single/sized String) qualify five
+Nested/Dynamic families, six Dynamic sites and BASIC Map(UInt64, Nested).
+Sixteen stock calls establish library-write -> ATTACH/CHECK=1/exact nominal
+schema, values and actual types, then stock-write -> direct/full-table/window/
+candidate-mark/offline library reads. All 208 generated files / 32,021 bytes per
+mode agree by actual bytes (single 94 / 14,487; sized 114 / 17,534).
+
+The evidence excludes two corrected harness diagnostics (Ruby 2.6 API and
+non-adaptive test settings) and one corrected root audit argv expectation.
+The target stays adaptive Wide/BASIC; nominal JSON-containing declarations,
+other layouts/versions/actual families and native MV/projection interop remain
+open. Offline synthetic catalog reads do not prove server Active state;
+logical value guards do not bound heap/RSS. Same-lineage review is correlated.
+See the [W249 frontier](DYNAMIC_RECURSIVE_DECLARATION_FRONTIER.md) and
+[root-owned evidence index](../.landmark/evidence/dynamic-recursive-handoff-w249.json).
+Overall goal ACTIVE; memory/performance deferred; no push authorized.
+
+Previous qualification (W248, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite static nominal Nested target. The N-column/public-consumer boundary
 removes three over-broad predicates across two admission-owner boundaries;
 the existing generic BinaryBulk declaration owner and recursive codecs are

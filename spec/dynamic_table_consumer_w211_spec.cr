@@ -296,13 +296,22 @@ private def w211_write_single_dynamic_part(part : String, actual_type : CrystalC
 end
 
 class CrystalClick::DynamicBulkColumnDeclaration
-  # Parser-only seam keeps the root-Nested inherited wire-byte boundary
-  # separate from canonical SQL-name temporary accounting.
-  def self.w211_test_parse_root_nested(
+  # Parser-only seam keeps whole-descriptor recursive accounting separate
+  # from canonical SQL-name temporary accounting.
+  def self.w211_test_dynamic_preflight_account(
     source : String,
     limits : BinaryCodecLimits,
+    root_depth : Int = 1,
   ) : BinaryDataType?
-    parse_root_nested(source.to_slice, 1, limits)
+    bytes = source.to_slice
+    preflight = ObjectRecursiveDeclaration.preflight_slice(
+      bytes, 0, bytes.size, limits, root_depth,
+      ObjectRecursiveDeclaration::AdmissionProfile::DynamicBulk,
+    ) || return nil
+    budget = BinaryCodecBudget.new(limits, true)
+    budget.visit_node(root_depth)
+    preflight.account(budget)
+    preflight.materialize
   end
 end
 
@@ -435,7 +444,7 @@ describe "W211 generic Dynamic table batches" do
 end
 
 describe CrystalClick::DynamicBulkColumnDeclaration do
-  it "adapts only canonical root Nested through one implicit named Tuple" do
+  it "recursively admits Dynamic below nominal Nested while preserving its implicit named Tuple" do
     dynamic = CrystalClick::BinaryDataType.dynamic(max_types: 1)
     array = CrystalClick::BinaryDataType.array(dynamic)
     source = "Nested(a Dynamic(max_types=1), b Array(Dynamic(max_types=1)))"
@@ -472,13 +481,62 @@ describe CrystalClick::DynamicBulkColumnDeclaration do
     CrystalClick::DynamicBulkColumnDeclaration.parse("Nested()").should be_nil
     CrystalClick::DynamicBulkColumnDeclaration.parse("Nested(Dynamic(max_types=1))").should be_nil
     CrystalClick::DynamicBulkColumnDeclaration.parse("Nested(a Dynamic(max_types=1),b Array(Dynamic(max_types=1)))").should be_nil
-    CrystalClick::DynamicBulkColumnDeclaration.parse("Array(Nested(a Dynamic(max_types=1)))").should be_nil
+    wrapped = CrystalClick::DynamicBulkColumnDeclaration.parse("Array(Nested(a Dynamic(max_types=1)))").not_nil!
+    wrapped.tag.should eq(CrystalClick::BinaryDataType::TAG_ARRAY)
+    wrapped.child_at(0).tag.should eq(CrystalClick::BinaryDataType::TAG_NESTED)
+    wrapped.child_at(0).child_at(0).field_names.should eq(["a"])
+    wrapped_nested = CrystalClick::DynamicBulkColumnDeclaration.parse(
+      "Tuple(records Array(Nested(d Dynamic(max_types=1))))"
+    ).not_nil!
+    wrapped_nested.tag.should eq(CrystalClick::BinaryDataType::TAG_NAMED_TUPLE)
+    wrapped_nested.child_at(0).child_at(0).tag.should eq(CrystalClick::BinaryDataType::TAG_NESTED)
+    wrapped_nested.child_at(0).child_at(0).child_at(0).children[0].tag.should eq(CrystalClick::BinaryDataType::TAG_DYNAMIC)
+    map_parent = CrystalClick::DynamicBulkColumnDeclaration.parse(
+      "Map(UInt64, Nested(d Dynamic(max_types=1)))"
+    ).not_nil!
+    map_parent.child_at(0).tag.should eq(CrystalClick::BinaryDataType::TAG_UINT64)
+    map_parent.child_at(1).tag.should eq(CrystalClick::BinaryDataType::TAG_NESTED)
+
+    # ObjectJson remains the default, including its String-key-only Map and
+    # no-Dynamic-under-Nested grammar.
+    object_limits = CrystalClick::ObjectRecursiveDeclaration::DEFAULT_LIMITS
+    CrystalClick::ObjectRecursiveDeclaration.preflight_slice(
+      "Nested(a Dynamic(max_types=1))".to_slice, 0,
+      "Nested(a Dynamic(max_types=1))".bytesize, object_limits
+    ).should be_nil
+    CrystalClick::ObjectRecursiveDeclaration.preflight_slice(
+      "Map(UInt64, String)".to_slice, 0, "Map(UInt64, String)".bytesize,
+      object_limits
+    ).should be_nil
+    CrystalClick::ObjectRecursiveDeclaration.preflight_slice(
+      "Map(String, UInt64)".to_slice, 0, "Map(String, UInt64)".bytesize,
+      object_limits
+    ).should_not be_nil
+
+    CrystalClick::DynamicBulkColumnDeclaration.parse(
+      "Map(Dynamic(max_types=1), String)"
+    ).should be_nil
+    CrystalClick::DynamicBulkColumnDeclaration.parse(
+      "Map(Nullable(UInt64), Nested(d Dynamic(max_types=1)))"
+    ).should be_nil
+    CrystalClick::DynamicBulkColumnDeclaration.parse(
+      "Map(LowCardinality(Nullable(UInt64)), Nested(d Dynamic(max_types=1)))"
+    ).should be_nil
+    CrystalClick::DynamicBulkColumnDeclaration.parse(
+      "Nested(a Nullable(Dynamic(max_types=1)))"
+    ).should be_nil
+    CrystalClick::DynamicBulkColumnDeclaration.parse(
+      "Nested(a LowCardinality(Dynamic(max_types=1)))"
+    ).should be_nil
+    CrystalClick::DynamicBulkColumnDeclaration.parse(
+      "Nested(a Variant(Dynamic(max_types=1), String), d Dynamic(max_types=1))"
+    ).should be_nil
     CrystalClick::DynamicBulkColumnDeclaration.parse("Dynamic").should be_nil
     CrystalClick::DynamicBulkColumnDeclaration.parse(dynamic.name).should eq(dynamic)
     CrystalClick::DynamicBulkColumnDeclaration.parse(w211_json_fixture[:json_used].name).should be_nil
   end
 
-  it "honors exact inherited depth, node, element and rendered-byte boundaries for root Nested" do
+  it "honors exact inherited depth, node, element and rendered-byte boundaries for recursive Nested" do
     source = "Nested(a Dynamic(max_types=1))"
     descriptor_limits = CrystalClick::BinaryCodecLimits.new(
       max_depth: 3,
@@ -504,17 +562,15 @@ describe CrystalClick::DynamicBulkColumnDeclaration do
       CrystalClick::DynamicBulkColumnDeclaration.parse(source, root_depth: 2, limits: descriptor_limits)
     end
 
-    # At the declaration parser boundary, the adapted Tuple is one byte
-    # shorter than Nested, but its inherited accounting must charge that
-    # spelling delta in addition to Object's byte_size + 1 allowance and the
-    # two retained copies of the field name.
+    # The whole Nested declaration is charged before materialization: the
+    # borrowed wire allowance is byte_size + 1 plus both retained name copies.
     parser_exact = CrystalClick::BinaryCodecLimits.new(
       max_depth: 3,
       max_nodes: 4,
       max_elements: 3,
       max_bytes: (source.bytesize.to_u64 + 3_u64).to_i,
     )
-    CrystalClick::DynamicBulkColumnDeclaration.w211_test_parse_root_nested(source, parser_exact).should_not be_nil
+    CrystalClick::DynamicBulkColumnDeclaration.w211_test_dynamic_preflight_account(source, parser_exact).should_not be_nil
     parser_one_short = CrystalClick::BinaryCodecLimits.new(
       max_depth: 3,
       max_nodes: 4,
@@ -522,7 +578,7 @@ describe CrystalClick::DynamicBulkColumnDeclaration do
       max_bytes: (source.bytesize.to_u64 + 2_u64).to_i,
     )
     expect_raises(CrystalClick::UnsupportedFormatError) do
-      CrystalClick::DynamicBulkColumnDeclaration.w211_test_parse_root_nested(source, parser_one_short)
+      CrystalClick::DynamicBulkColumnDeclaration.w211_test_dynamic_preflight_account(source, parser_one_short)
     end
 
     # Public parse also builds the canonical SQL name under its own stronger
@@ -557,9 +613,31 @@ describe CrystalClick::DynamicBulkColumnDeclaration do
       max_elements: 512,
       max_bytes: 32,
     )
-    CrystalClick::DynamicBulkColumnDeclaration.w211_test_parse_root_nested(
-      oversized_source, tiny_source_limit
-    ).should be_nil
+    expect_raises(CrystalClick::UnsupportedFormatError) do
+      CrystalClick::DynamicBulkColumnDeclaration.w211_test_dynamic_preflight_account(
+        oversized_source, tiny_source_limit
+      )
+    end
+
+    # DynamicBulk's checked child-depth increment must never wrap Int32. The
+    # root guard remains mode-specific; the ObjectJson grammar is unchanged.
+    max_depth_limits = CrystalClick::BinaryCodecLimits.new(
+      max_depth: Int32::MAX,
+      max_nodes: 16,
+      max_elements: 16,
+      max_bytes: 4_096,
+    )
+    [
+      {"Nested(a Dynamic(max_types=1))", Int32::MAX},
+      {"Array(Nested(a Dynamic(max_types=1)))", Int32::MAX},
+      {"Nested(a Dynamic(max_types=1))", Int32::MAX - 1},
+    ].each do |descriptor, inherited_root_depth|
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        CrystalClick::DynamicBulkColumnDeclaration.w211_test_dynamic_preflight_account(
+          descriptor, max_depth_limits, inherited_root_depth
+        )
+      end
+    end
   end
 end
 

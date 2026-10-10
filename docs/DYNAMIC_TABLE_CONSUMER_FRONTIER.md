@@ -13,6 +13,16 @@ and the affected corpus qualify this extension; see
 [DYNAMIC_JSON_RECURSIVE_FRONTIER.md](DYNAMIC_JSON_RECURSIVE_FRONTIER.md).
 The historical W211 evidence below remains scoped to its original admission.
 
+W249 extension (2026-10-10): the declaration owner now uses explicit bounded
+`DynamicBulk` preflight admission instead of a root-only Nested rewrite.
+Nominal Nested containing Dynamic composes under Array, Tuple, another Nested
+and BASIC Map with static keys; a UInt64 key has reciprocal stock witnesses.
+ObjectJson defaults, aggregate budgets and legacy bare Dynamic routing remain
+unchanged. Direct/public-table/offline consumers share the existing recursive
+serde. The finite five-family, six-Dynamic-site qualification and remaining
+layout boundaries are recorded in
+[DYNAMIC_RECURSIVE_DECLARATION_FRONTIER.md](DYNAMIC_RECURSIVE_DECLARATION_FRONTIER.md).
+
 ## Scope and design laws
 
 W213 extension (2026-10-07): the same accessor now consumes admitted inline
@@ -21,19 +31,19 @@ native table witnesses qualify root and outer Array(Dynamic) carriers in two
 String profiles; no separate table codec or all-layout admission is added.
 See [DYNAMIC_SHARED_JSON_FRONTIER.md](DYNAMIC_SHARED_JSON_FRONTIER.md).
 
-This slice propagates existing Dynamic bulk storage into `WidePartTable`.
+The original W211 slice propagated existing Dynamic bulk storage into `WidePartTable`.
 It does not add a new leaf codec or change physical serialization admission.
-Use the bounded `ObjectRecursiveDeclaration` parser already used by physical
-readers, including its inherited declaration restrictions. A separate table
-declaration owner may adapt canonical root Nested through its implicit named
-Tuple, with inherited depth/budget and exact nominal render-back. Do not widen
-the Object parser or normalize retained Nested identity to Array(Tuple).
+It used the bounded `ObjectRecursiveDeclaration` parser already used by physical
+readers, including its inherited restrictions. Its separate table declaration
+owner adapted canonical root Nested through its implicit named Tuple. W249
+replaces that root-only adaptation with an explicit contextual profile; the
+Object default remains unchanged and retained Nested is not normalized to
+Array(Tuple).
 A parsed nominal
 descriptor must contain Dynamic, contain no nominal JSON, and retain exact
 canonical declaration/source identity. Root, Array, Tuple and Nested carriers
-compose through the same reader, not product-specific codecs. Nested buried
-inside other nominal wrappers remains deferred where the inherited grammar
-does not admit it.
+compose through the same reader, not product-specific codecs. The historical
+deferral of Nested below wrappers is superseded by the scoped W249 admission.
 
 The admitted accessor is
 `WidePartTableBatch#dynamic_bulk_values_for(column) : Slice(BinaryValue)`.
@@ -58,7 +68,7 @@ all BinaryValue descendants atomically before exposure. This is logical
 ownership accounting, not a transient allocator/RSS bound. Existing codec and
 transport limits remain in force during decode.
 
-## Rejected and deferred
+## Historical W211 rejected and deferred
 
 - Nominal JSON-bearing BinaryBulk declarations and currently rejected actual
   combinations stay rejected, including unbound JSON inside Object path
@@ -66,7 +76,8 @@ transport limits remain in force during decode.
   scalar inline SharedVariant JSON, not every wrapper/layout product.
 - Numeric-only scans, UInt64-only scans and typed projections cannot silently
   accept this new reader. Projection/MV consumer propagation is separate.
-- Owned `OfflineColumn.values` materialization is not admitted by a batch API.
+- Owned `OfflineColumn.values` materialization was not admitted by the W211
+  batch slice; later consumer work and W249 independently qualify it.
 - No live-server system-table, Active-state, filesystem snapshot, whole-file
   checksum-hash, all-layout, memory optimization or performance claim.
 

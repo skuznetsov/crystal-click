@@ -95,6 +95,7 @@ module CrystalClick
       after : Int32,
       limits : BinaryCodecLimits = ObjectRecursiveDeclaration::DEFAULT_LIMITS,
       root_depth : Int = 1,
+      profile : ObjectRecursiveDeclaration::AdmissionProfile = ObjectRecursiveDeclaration::AdmissionProfile::ObjectJson,
     ) : ObjectRecursiveDeclaration::Preflight?
       return nil if first < 0 || after < first || after > bytes.size
       if root_depth <= 0 || root_depth > Int32::MAX
@@ -105,7 +106,7 @@ module CrystalClick
       end
 
       totals = ObjectRecursiveDeclaration::ScanTotals.new
-      byte_size = scan_type(bytes, first, after, root_depth.to_i32, limits, totals, true) || return nil
+      byte_size = scan_type(bytes, first, after, root_depth.to_i32, limits, totals, true, profile) || return nil
       # Only exactly canonical source survives: the measured rendered size is
       # the borrowed slice size and Tuple-name spellings have already been
       # proven byte-canonical by ObjectTupleFieldName.shape.
@@ -140,6 +141,7 @@ module CrystalClick
         first,
         after,
         limits,
+        profile,
       )
     end
 
@@ -151,6 +153,7 @@ module CrystalClick
       limits : BinaryCodecLimits,
       totals : ObjectRecursiveDeclaration::ScanTotals,
       allow_declared_dynamic : Bool,
+      profile : ObjectRecursiveDeclaration::AdmissionProfile,
     ) : UInt64?
       totals.visit_node(depth, limits)
       if allow_declared_dynamic
@@ -170,7 +173,7 @@ module CrystalClick
         child_after = after - 1
         return nil if child_first >= child_after
         totals.child_edge(limits)
-        child_size = scan_type(bytes, child_first, child_after, depth + 1, limits, totals, allow_declared_dynamic) || return nil
+        child_size = scan_type(bytes, child_first, child_after, recursive_child_depth(depth, profile), limits, totals, allow_declared_dynamic, profile) || return nil
         return ObjectRecursiveDeclaration.checked_add("Array(".bytesize.to_u64 + 1_u64, child_size)
       end
 
@@ -182,7 +185,7 @@ module CrystalClick
         child_tag = tag_for_slice(bytes, child_first, child_after) || return nil
         return nil if child_tag == BinaryDataType::TAG_ARRAY || child_tag == BinaryDataType::TAG_MAP || child_tag == BinaryDataType::TAG_NULLABLE || child_tag == BinaryDataType::TAG_LOW_CARDINALITY || child_tag == BinaryDataType::TAG_VARIANT || child_tag == BinaryDataType::TAG_DYNAMIC || child_tag == BinaryDataType::TAG_NESTED
         totals.child_edge(limits)
-        child_size = scan_type(bytes, child_first, child_after, depth + 1, limits, totals, allow_declared_dynamic) || return nil
+        child_size = scan_type(bytes, child_first, child_after, recursive_child_depth(depth, profile), limits, totals, allow_declared_dynamic, profile) || return nil
         return ObjectRecursiveDeclaration.checked_add("Nullable(".bytesize.to_u64 + 1_u64, child_size)
       end
 
@@ -193,7 +196,7 @@ module CrystalClick
         return nil if child_first >= child_after
         return nil unless admitted_low_cardinality_child_slice?(bytes, child_first, child_after)
         totals.child_edge(limits)
-        child_size = scan_type(bytes, child_first, child_after, depth + 1, limits, totals, false) || return nil
+        child_size = scan_type(bytes, child_first, child_after, recursive_child_depth(depth, profile), limits, totals, false, profile) || return nil
         return ObjectRecursiveDeclaration.checked_add("LowCardinality(".bytesize.to_u64 + 1_u64, child_size)
       end
 
@@ -216,7 +219,7 @@ module CrystalClick
             total_size = ObjectRecursiveDeclaration.checked_add(total_size, 2_u64)
           end
           totals.child_edge(limits)
-          arm_size = scan_type(bytes, variant_arm_range.first, variant_arm_range.after, depth + 1, limits, totals, allow_declared_dynamic) || return nil
+          arm_size = scan_type(bytes, variant_arm_range.first, variant_arm_range.after, recursive_child_depth(depth, profile), limits, totals, allow_declared_dynamic, profile) || return nil
           total_size = ObjectRecursiveDeclaration.checked_add(total_size, arm_size)
           previous = variant_arm_range
           current = variant_cursor.next_range
@@ -233,14 +236,14 @@ module CrystalClick
         separator = top_level_separator(bytes, body_first, body_after) || return nil
         comma, second_comma = separator
         return nil if second_comma
-        return nil unless slice_equals?(bytes, body_first, comma, "String")
+        return nil unless admitted_map_key_slice?(bytes, body_first, comma, profile)
         value_first = comma + 2
         return nil if value_first >= body_after
         totals.child_edge(limits)
-        key_size = scan_type(bytes, body_first, comma, depth + 1, limits, totals, false) || return nil
-        return nil unless key_size == "String".bytesize
+        key_size = scan_type(bytes, body_first, comma, recursive_child_depth(depth, profile), limits, totals, false, profile) || return nil
+        return nil if profile == ObjectRecursiveDeclaration::AdmissionProfile::ObjectJson && key_size != "String".bytesize
         totals.child_edge(limits)
-        value_size = scan_type(bytes, value_first, body_after, depth + 1, limits, totals, allow_declared_dynamic) || return nil
+        value_size = scan_type(bytes, value_first, body_after, recursive_child_depth(depth, profile), limits, totals, allow_declared_dynamic, profile) || return nil
         prefix_size = ObjectRecursiveDeclaration.checked_add("Map(".bytesize.to_u64, key_size)
         middle_size = ObjectRecursiveDeclaration.checked_add(", ".bytesize.to_u64, value_size)
         return ObjectRecursiveDeclaration.checked_add(ObjectRecursiveDeclaration.checked_add(prefix_size, middle_size), 1_u64)
@@ -251,7 +254,7 @@ module CrystalClick
         body_first = first + "Nested(".bytesize
         body_after = after - 1
         return nil if body_first >= body_after
-        tuple_depth = depth + 1
+        tuple_depth = recursive_child_depth(depth, profile)
         totals.child_edge(limits)
         totals.visit_node(tuple_depth, limits)
         nested_cursor = TopLevelCursor.new(bytes, body_first, body_after)
@@ -267,7 +270,8 @@ module CrystalClick
           return nil if decoded_size == 0_u64 || ObjectTupleFieldName.null?(bytes, name_first, name_after)
           totals.tuple_metadata(1_u64, decoded_size, tuple_depth, limits)
           totals.child_edge(limits)
-          child_size = scan_type(bytes, child_first, nested_field_range.after, tuple_depth + 1, limits, totals, false) || return nil
+          nested_child_dynamic = profile == ObjectRecursiveDeclaration::AdmissionProfile::DynamicBulk && allow_declared_dynamic
+          child_size = scan_type(bytes, child_first, nested_field_range.after, recursive_child_depth(tuple_depth, profile), limits, totals, nested_child_dynamic, profile) || return nil
           total_size = ObjectRecursiveDeclaration.checked_add(total_size, rendered_size)
           total_size = ObjectRecursiveDeclaration.checked_add(total_size, 1_u64)
           total_size = ObjectRecursiveDeclaration.checked_add(total_size, child_size)
@@ -299,14 +303,14 @@ module CrystalClick
             return nil if decoded_size == 0_u64 || ObjectTupleFieldName.null?(bytes, name_first, name_after)
             totals.tuple_metadata(1_u64, decoded_size, depth, limits)
             totals.child_edge(limits)
-            child_size = scan_type(bytes, child_first, range.after, depth + 1, limits, totals, allow_declared_dynamic) || return nil
+            child_size = scan_type(bytes, child_first, range.after, recursive_child_depth(depth, profile), limits, totals, allow_declared_dynamic, profile) || return nil
             total_size = ObjectRecursiveDeclaration.checked_add(total_size, rendered_size)
             total_size = ObjectRecursiveDeclaration.checked_add(total_size, 1_u64)
             total_size = ObjectRecursiveDeclaration.checked_add(total_size, child_size)
           else
             return nil if ObjectTupleFieldName.prefix(bytes, range.first, range.after)
             totals.child_edge(limits)
-            child_size = scan_type(bytes, range.first, range.after, depth + 1, limits, totals, allow_declared_dynamic) || return nil
+            child_size = scan_type(bytes, range.first, range.after, recursive_child_depth(depth, profile), limits, totals, allow_declared_dynamic, profile) || return nil
             total_size = ObjectRecursiveDeclaration.checked_add(total_size, child_size)
           end
           total_size = ObjectRecursiveDeclaration.checked_add(total_size, 2_u64) if field_count > 0_u64
@@ -318,6 +322,39 @@ module CrystalClick
       end
 
       nil
+    end
+
+    private def self.recursive_child_depth(
+      depth : Int32,
+      profile : ObjectRecursiveDeclaration::AdmissionProfile,
+    ) : Int32
+      if profile == ObjectRecursiveDeclaration::AdmissionProfile::DynamicBulk && depth == Int32::MAX
+        raise UnsupportedFormatError.new("binary codec depth limit exceeded")
+      end
+      depth + 1
+    end
+
+    private def self.admitted_map_key_slice?(
+      bytes : Bytes,
+      first : Int32,
+      after : Int32,
+      profile : ObjectRecursiveDeclaration::AdmissionProfile,
+    ) : Bool
+      if profile == ObjectRecursiveDeclaration::AdmissionProfile::ObjectJson
+        return slice_equals?(bytes, first, after, "String")
+      end
+
+      tag = tag_for_slice(bytes, first, after) || return false
+      return false if tag == BinaryDataType::TAG_NULLABLE
+      if tag == BinaryDataType::TAG_LOW_CARDINALITY
+        child_tag = tag_for_slice(
+          bytes,
+          first + "LowCardinality(".bytesize,
+          after - 1,
+        ) || return false
+        return false if child_tag == BinaryDataType::TAG_NULLABLE
+      end
+      true
     end
 
     def self.account_slice(preflight : ObjectRecursiveDeclaration::Preflight, budget : BinaryCodecBudget) : Nil
@@ -333,10 +370,11 @@ module CrystalClick
         preflight.after,
         preflight.limits,
         preflight.root_depth,
+        preflight.profile,
       ) || raise ArgumentError.new("recursive Object declaration changed after preflight")
       unless ObjectRecursiveDeclaration.same_metrics?(current.metrics, preflight.metrics) &&
              current.first == preflight.first && current.after == preflight.after &&
-             current.root_depth == preflight.root_depth
+             current.root_depth == preflight.root_depth && current.profile == preflight.profile
         raise ArgumentError.new("recursive Object declaration metadata changed after preflight")
       end
       current
@@ -498,13 +536,19 @@ module CrystalClick
       preflight_slice(bytes, first, after, limits, depth) ||
         raise UnsupportedFormatError.new("typed JSON schema admits only supported Object recursive types")
       validate_tuple_names_admitted(bytes, first, after, depth, limits)
-      materialize_admitted_slice(bytes, first, after, depth, limits, true)
+      materialize_admitted_slice(
+        bytes, first, after, depth, limits, true,
+        ObjectRecursiveDeclaration::AdmissionProfile::ObjectJson,
+      )
     end
 
     def self.materialize_preflight(preflight : ObjectRecursiveDeclaration::Preflight) : BinaryDataType
       current = revalidate_preflight(preflight)
       validate_tuple_names_admitted(current.source, current.first, current.after, current.root_depth, current.limits)
-      materialize_admitted_slice(current.source, current.first, current.after, current.root_depth, current.limits, true)
+      materialize_admitted_slice(
+        current.source, current.first, current.after, current.root_depth, current.limits, true,
+        current.profile,
+      )
     end
 
     private def self.materialize_admitted_slice(
@@ -514,6 +558,7 @@ module CrystalClick
       depth : Int32,
       limits : BinaryCodecLimits,
       allow_declared_dynamic : Bool,
+      profile : ObjectRecursiveDeclaration::AdmissionProfile,
     ) : BinaryDataType
       raise UnsupportedFormatError.new("binary codec depth limit exceeded") if depth > limits.max_depth
       if allow_declared_dynamic
@@ -525,33 +570,34 @@ module CrystalClick
         return leaf.materialize
       end
       if slice_equals?(bytes, first, first + "Array(".bytesize, "Array(")
-        BinaryDataType.array(materialize_admitted_slice(bytes, first + "Array(".bytesize, after - 1, depth + 1, limits, allow_declared_dynamic))
+        BinaryDataType.array(materialize_admitted_slice(bytes, first + "Array(".bytesize, after - 1, depth + 1, limits, allow_declared_dynamic, profile))
       elsif slice_equals?(bytes, first, first + "Nullable(".bytesize, "Nullable(")
-        BinaryDataType.nullable(materialize_admitted_slice(bytes, first + "Nullable(".bytesize, after - 1, depth + 1, limits, allow_declared_dynamic))
+        BinaryDataType.nullable(materialize_admitted_slice(bytes, first + "Nullable(".bytesize, after - 1, depth + 1, limits, allow_declared_dynamic, profile))
       elsif slice_equals?(bytes, first, first + "LowCardinality(".bytesize, "LowCardinality(")
-        BinaryDataType.low_cardinality(materialize_admitted_slice(bytes, first + "LowCardinality(".bytesize, after - 1, depth + 1, limits, false))
+        BinaryDataType.low_cardinality(materialize_admitted_slice(bytes, first + "LowCardinality(".bytesize, after - 1, depth + 1, limits, false, profile))
       elsif slice_equals?(bytes, first, first + "Map(".bytesize, "Map(")
         body_first = first + "Map(".bytesize
         comma, _ = top_level_separator(bytes, body_first, after - 1).not_nil!
-        key = materialize_admitted_slice(bytes, body_first, comma, depth + 1, limits, false)
-        value = materialize_admitted_slice(bytes, comma + 2, after - 1, depth + 1, limits, allow_declared_dynamic)
+        key = materialize_admitted_slice(bytes, body_first, comma, depth + 1, limits, false, profile)
+        value = materialize_admitted_slice(bytes, comma + 2, after - 1, depth + 1, limits, allow_declared_dynamic, profile)
         BinaryDataType.map(key, value)
       elsif slice_equals?(bytes, first, first + "Nested(".bytesize, "Nested(")
         nested_cursor = TopLevelCursor.new(bytes, first + "Nested(".bytesize, after - 1)
         children = Array(BinaryDataType).new
         names = Array(String).new
         tuple_depth = depth + 1
+        nested_child_dynamic = profile == ObjectRecursiveDeclaration::AdmissionProfile::DynamicBulk && allow_declared_dynamic
         while nested_field_range = nested_cursor.next_range
           name_first, name_after, child_first = ObjectTupleFieldName.prefix(bytes, nested_field_range.first, nested_field_range.after).not_nil!
           names << ObjectTupleFieldName.decode(bytes, name_first, name_after)
-          children << materialize_admitted_slice(bytes, child_first, nested_field_range.after, tuple_depth + 1, limits, false)
+          children << materialize_admitted_slice(bytes, child_first, nested_field_range.after, tuple_depth + 1, limits, nested_child_dynamic, profile)
         end
         BinaryDataType.nested(children, names)
       elsif slice_equals?(bytes, first, first + "Variant(".bytesize, "Variant(")
         variant_cursor = TopLevelCursor.new(bytes, first + "Variant(".bytesize, after - 1)
         arms = Array(BinaryDataType).new
         while variant_arm_range = variant_cursor.next_range
-          arms << materialize_admitted_slice(bytes, variant_arm_range.first, variant_arm_range.after, depth + 1, limits, allow_declared_dynamic)
+          arms << materialize_admitted_slice(bytes, variant_arm_range.first, variant_arm_range.after, depth + 1, limits, allow_declared_dynamic, profile)
         end
         BinaryDataType.variant_from_canonical_object_declaration(arms)
       else
@@ -568,9 +614,9 @@ module CrystalClick
           if named
             name_first, name_after, child_first = ObjectTupleFieldName.prefix(bytes, current.first, current.after).not_nil!
             names.not_nil! << ObjectTupleFieldName.decode(bytes, name_first, name_after)
-            children << materialize_admitted_slice(bytes, child_first, current.after, depth + 1, limits, allow_declared_dynamic)
+            children << materialize_admitted_slice(bytes, child_first, current.after, depth + 1, limits, allow_declared_dynamic, profile)
           else
-            children << materialize_admitted_slice(bytes, current.first, current.after, depth + 1, limits, allow_declared_dynamic)
+            children << materialize_admitted_slice(bytes, current.first, current.after, depth + 1, limits, allow_declared_dynamic, profile)
           end
           range = cursor.next_range
         end
