@@ -1,7 +1,7 @@
 module CrystalClick
   class OfflineTable
     # Owns the public .values result for admitted static BinaryBulk families
-    # using the generic reader while preserving their nominal declaration
+    # using the format-neutral reader while preserving nominal declaration
     # owners. The shared budget accounts retained BinaryValue trees plus known
     # reader/grid workspace; it is logical ownership accounting, not an RSS bound.
     private class StaticBulkValuesMaterializer
@@ -53,7 +53,7 @@ module CrystalClick
         # Open and validate every part before allocating the retained result.
         # Each reader owns only one part's selected physical grid.
         candidates.each do |candidate|
-          reader = BinaryBulkColumnReader.open(candidate.path, column, type)
+          reader = TypedBinaryBulkColumnReader.open(candidate.path, column, type)
           mark_rows = reader.mark_row_counts
           validate_reader!(reader, candidate, mark_rows, type, expected_rows)
           workspace = full_part_workspace_bytes(reader, mark_rows, candidate, column)
@@ -66,14 +66,25 @@ module CrystalClick
         # Reopen one candidate at a time and commit each complete parent mark
         # under the shared descendant and active-workspace budget.
         candidates.each do |candidate|
-          reader = BinaryBulkColumnReader.open(candidate.path, column, type)
+          reader = TypedBinaryBulkColumnReader.open(candidate.path, column, type)
           mark_rows = reader.mark_row_counts
           validate_reader!(reader, candidate, mark_rows, type, expected_rows)
           workspace = full_part_workspace_bytes(reader, mark_rows, candidate, column)
 
           mark_rows.each_with_index do |expected_mark_rows, mark_index|
             budget.ensure_workspace(workspace)
-            selected = reader.read_marks(mark_index, 1)
+            peak_extra_workspace = 0_u64
+            workspace_observer = ->(current_extra_workspace : UInt64) do
+              if current_extra_workspace > UInt64::MAX - workspace
+                raise BoundsError.new("static BinaryBulk workspace charge overflows UInt64")
+              end
+              budget.ensure_workspace(workspace + current_extra_workspace)
+              if current_extra_workspace > peak_extra_workspace
+                peak_extra_workspace = current_extra_workspace
+              end
+              nil
+            end
+            selected = reader.read_marks(mark_index, 1, workspace_observer)
             unless selected.size == 1 && selected[0].size.to_u64 == expected_mark_rows
               raise CorruptPartError.new("static BinaryBulk catalog mark row count changed during materialization")
             end
@@ -88,7 +99,10 @@ module CrystalClick
               end
             end
 
-            budget.charge_binary_values(mark_values, workspace)
+            if peak_extra_workspace > UInt64::MAX - workspace
+              raise BoundsError.new("static BinaryBulk workspace charge overflows UInt64")
+            end
+            budget.charge_binary_values(mark_values, workspace + peak_extra_workspace)
             mark_values.each do |value|
               values << value
               observed_rows += 1_u64
@@ -103,7 +117,7 @@ module CrystalClick
       end
 
       private def self.validate_reader!(
-        reader : BinaryBulkColumnReader,
+        reader : TypedBinaryBulkColumnReader,
         candidate : OfflinePartCandidate,
         mark_rows : Array(UInt64),
         type : BinaryDataType,
@@ -136,16 +150,12 @@ module CrystalClick
       end
 
       private def self.full_part_workspace_bytes(
-        reader : BinaryBulkColumnReader,
+        reader : TypedBinaryBulkColumnReader,
         mark_rows : Array(UInt64),
         candidate : OfflinePartCandidate,
         column : String,
       ) : UInt64
-        bytes = reader.logical_read_bytes
-        bytes = checked_add(bytes, instance_sizeof(BinaryBulkColumnReader).to_u64)
-        bytes = checked_add(bytes, instance_sizeof(BinaryBulkPhysicalPlan).to_u64)
-        bytes = checked_add(bytes, instance_sizeof(PartStreamSource).to_u64)
-        bytes = checked_add(bytes, reader.retained_grid_workspace_bytes)
+        bytes = checked_add(reader.logical_read_bytes, reader.retained_workspace_bytes)
 
         mark_count = mark_rows.size.to_u64
         mark_slots = checked_multiply(mark_count, sizeof(UInt64).to_u64)

@@ -3,7 +3,7 @@ module CrystalClick
   # Batches borrow their value buffers and are valid only for the callback.
   # The handle is not a transaction or proof of what the caller computes.
   class OfflinePartTransformInput
-    @reader : WidePartTable
+    @reader : WidePartTable | TypedPartTable
     @column_names : Array(String)
     @column_types : Array(Tuple(String, String))
     @row_count : UInt64
@@ -18,18 +18,58 @@ module CrystalClick
       @row_count : UInt64,
       @batch_rows : Int32,
     )
+      metadata = normalized_metadata(column_names, column_types)
+      @column_names = metadata[0]
+      @column_types = metadata[1]
+    end
+
+    # Additive typed facade constructor. Keep the original Wide constructor
+    # above so existing callers and source compatibility remain unchanged.
+    def initialize(
+      @reader : TypedPartTable,
+      column_names : Array(String),
+      column_types : Array(Tuple(String, String)),
+      @row_count : UInt64,
+      @batch_rows : Int32,
+    )
+      metadata = normalized_metadata(column_names, column_types)
+      @column_names = metadata[0]
+      @column_types = metadata[1]
+    end
+
+    # The catalog resolver currently returns a union so the transform seam
+    # accepts the same two concrete constructors without erasing the public
+    # Wide overload. Crystal dispatches concrete callers to the overloads
+    # above; this one handles the statically union-typed coordinator result.
+    def initialize(
+      @reader : WidePartTable | TypedPartTable,
+      column_names : Array(String),
+      column_types : Array(Tuple(String, String)),
+      @row_count : UInt64,
+      @batch_rows : Int32,
+    )
+      metadata = normalized_metadata(column_names, column_types)
+      @column_names = metadata[0]
+      @column_types = metadata[1]
+    end
+
+    private def normalized_metadata(
+      column_names : Array(String),
+      column_types : Array(Tuple(String, String)),
+    ) : Tuple(Array(String), Array(Tuple(String, String)))
       if column_names.empty? || column_names.size != column_types.size
         raise ArgumentError.new("transform input columns and declarations must be nonempty and aligned")
       end
       raise ArgumentError.new("transform input batch size must be positive") if @batch_rows <= 0
 
-      @column_names = column_names.map { |name| String.new(name.to_slice) }
-      @column_types = column_types.map do |name, declaration|
+      copied_names = column_names.map { |name| String.new(name.to_slice) }
+      copied_types = column_types.map do |name, declaration|
         {String.new(name.to_slice), String.new(declaration.to_slice)}
       end
-      unless @column_names == @column_types.map(&.[0])
+      unless copied_names == copied_types.map(&.[0])
         raise ArgumentError.new("transform input declarations must preserve selected column order")
       end
+      {copied_names, copied_types}
     end
 
     def column_names : Array(String)

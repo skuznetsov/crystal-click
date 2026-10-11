@@ -1,4 +1,18 @@
 module CrystalClick
+  # Concrete union for values installed by BinaryValueTypedBatchAdapter.
+  # Crystal cannot store Reference as a generic type argument; this keeps the
+  # exact carrier owners alive without erasing their types.
+  alias BinaryValueTypedBatchOwner = Array(UInt64) |
+                                     Array(String) |
+                                     Array(UInt64?) |
+                                     Array(Array(UInt64?)) |
+                                     Array(VariantStringUInt64Value) |
+                                     Array(Tuple(UInt64, String)) |
+                                     Array(Array(Tuple(UInt64, String))) |
+                                     Array(Array(Tuple(String, Array(UInt64?)))) |
+                                     Array(WideTupleRow) |
+                                     Array(WideArrayTupleRow)
+
   # A callback view over aligned selected columns from one bounded table batch.
   # Column slices alias per-mark arrays and are valid only until the callback
   # returns; callers that need to retain values must copy them.
@@ -26,6 +40,10 @@ module CrystalClick
     @array_object_documents : Hash(String, Slice(Array(ObjectDocument))) = Hash(String, Slice(Array(ObjectDocument))).new
     @recursive_values : Hash(String, Slice(StorageColumnValue)) = Hash(String, Slice(StorageColumnValue)).new
     @binary_bulk_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
+    # Compact's shared typed adapter builds legacy carrier arrays from the
+    # decoded BinaryValue owner. Keep those arrays alive for the same lifetime
+    # as this batch's typed slices and row handles.
+    @binary_value_typed_owners : Array(BinaryValueTypedBatchOwner) = [] of BinaryValueTypedBatchOwner
     @nullable_qbit_values : Hash(String, Slice(QBitValue?))
     @aggregate_count_state_values : Hash(String, Slice(BinaryValue)) = Hash(String, Slice(BinaryValue)).new
     @string_values : Hash(String, Slice(String))
@@ -386,10 +404,117 @@ module CrystalClick
       @column_names.dup
     end
 
+    # Rebase only the source identity for a batch emitted by a one-part
+    # backend. The typed facade supplies the absolute table-order part index
+    # and source-row offset after every candidate has been preflighted. Mark
+    # and part-local coordinates and all borrowed carrier slices remain
+    # unchanged.
+    def rebase_coordinates!(part_index : Int32, source_row_offset : UInt64) : Nil
+      raise BoundsError.new("part index must be nonnegative") if part_index < 0
+      @part_index = part_index
+      @source_row_offset = source_row_offset
+      nil
+    end
+
     # Return the exact declaration for a selected column. Semantic values such
     # as DateTime64 ticks need this metadata to retain their precision label.
     def column_type_for(column : String) : String
       @column_types[column_index(column)]
+    end
+
+    # Retain a carrier owner created by BinaryValueTypedBatchAdapter. Slice
+    # fields in this batch alias that array, so retaining the owner here keeps
+    # callback-batch lifetimes identical to the existing Wide carriers.
+    def retain_binary_value_typed_owner(owner : BinaryValueTypedBatchOwner) : Nil
+      @binary_value_typed_owners << owner
+      nil
+    end
+
+    # Internal exact-carrier installers for the Compact BinaryValue bridge.
+    # These deliberately do not relax the generic BinaryBulk accessor gate.
+    def install_compact_uint64_values(column : String, values : Slice(UInt64), expected_rows : Int32) : Nil
+      index = column_index(column)
+      raise CorruptPartError.new("Compact UInt64 carrier received a different declaration") unless @column_types[index] == "UInt64"
+      raise CorruptPartError.new("Compact UInt64 carrier row count mismatch") unless values.size == expected_rows
+      @typed_numeric_values[column] = values.as(WidePartNumericSlice)
+      nil
+    end
+
+    def install_compact_string_values(column : String, type_name : String, values : Slice(String), expected_rows : Int32) : Nil
+      index = column_index(column)
+      unless (type_name == "String" || type_name == "LowCardinality(String)") && @column_types[index] == type_name
+        raise CorruptPartError.new("Compact String carrier received a different declaration")
+      end
+      raise CorruptPartError.new("Compact String carrier row count mismatch") unless values.size == expected_rows
+      @string_values[column] = values
+      nil
+    end
+
+    def install_compact_nullable_uint64_values(column : String, values : Slice(UInt64?), expected_rows : Int32) : Nil
+      index = column_index(column)
+      raise CorruptPartError.new("Compact Nullable(UInt64) carrier received a different declaration") unless @column_types[index] == "Nullable(UInt64)"
+      raise CorruptPartError.new("Compact Nullable(UInt64) carrier row count mismatch") unless values.size == expected_rows
+      @nullable_values[column] = values.as(WidePartNullableSlice)
+      nil
+    end
+
+    def install_compact_array_nullable_uint64_values(column : String, values : Slice(Array(UInt64?)), expected_rows : Int32) : Nil
+      index = column_index(column)
+      raise CorruptPartError.new("Compact Array(Nullable(UInt64)) carrier received a different declaration") unless @column_types[index] == "Array(Nullable(UInt64))"
+      raise CorruptPartError.new("Compact Array(Nullable(UInt64)) carrier row count mismatch") unless values.size == expected_rows
+      @array_nullable_uint64_values[column] = values
+      @array_nullable_numeric_values[column] = values.as(WidePartArrayNullableNumericSlice)
+      nil
+    end
+
+    def install_compact_variant_string_uint64_values(column : String, values : Slice(VariantStringUInt64Value), expected_rows : Int32) : Nil
+      index = column_index(column)
+      raise CorruptPartError.new("Compact Variant carrier received a different declaration") unless @column_types[index] == WideVariantStringUInt64TypePlan::TYPE
+      raise CorruptPartError.new("Compact Variant carrier row count mismatch") unless values.size == expected_rows
+      @variant_string_uint64_values[column] = values
+      nil
+    end
+
+    def install_compact_tuple_uint64_string_values(column : String, values : Slice(Tuple(UInt64, String)), expected_rows : Int32) : Nil
+      index = column_index(column)
+      raise CorruptPartError.new("Compact Tuple carrier received a different declaration") unless WidePart.supports_tuple_uint64_string_type?(@column_types[index])
+      raise CorruptPartError.new("Compact Tuple carrier row count mismatch") unless values.size == expected_rows
+      @tuple_string_values[column] = values
+      nil
+    end
+
+    def install_compact_array_tuple_uint64_string_values(column : String, values : Slice(Array(Tuple(UInt64, String))), expected_rows : Int32) : Nil
+      index = column_index(column)
+      raise CorruptPartError.new("Compact Array(Tuple) carrier received a different declaration") unless @column_types[index] == WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_STRING
+      raise CorruptPartError.new("Compact Array(Tuple) carrier row count mismatch") unless values.size == expected_rows
+      @array_tuple_uint64_string_values[column] = values
+      nil
+    end
+
+    def install_compact_tuple_rows(column : String, values : Slice(WideTupleRow), expected_rows : Int32) : Nil
+      index = column_index(column)
+      type_name = @column_types[index]
+      unless WideTupleTypePlan.for_type(type_name) && !WidePart.supports_tuple_uint64_string_type?(type_name)
+        raise CorruptPartError.new("Compact Tuple carrier received an unsupported declaration")
+      end
+      raise CorruptPartError.new("Compact Tuple carrier row count mismatch") unless values.size == expected_rows
+      @tuple_row_values[column] = values
+      nil
+    end
+
+    def install_compact_array_tuple_rows(column : String, values : Slice(WideArrayTupleRow), expected_rows : Int32) : Nil
+      install_array_tuple_rows(column, values, expected_rows)
+      nil
+    end
+
+    def install_compact_map_string_array_nullable_uint64_values(column : String, values : Slice(Array(Tuple(String, Array(UInt64?)))), expected_rows : Int32) : Nil
+      index = column_index(column)
+      unless WidePart.supports_map_string_array_nullable_uint64_type?(@column_types[index])
+        raise CorruptPartError.new("Compact Map carrier received an unsupported declaration")
+      end
+      raise CorruptPartError.new("Compact Map carrier row count mismatch") unless values.size == expected_rows
+      @map_string_array_nullable_uint64_values[column] = values
+      nil
     end
 
     def qbits_for(column : String) : Slice(QBitValue)

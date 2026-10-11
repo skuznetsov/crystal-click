@@ -1,6 +1,61 @@
 # CrystalClick project status
 
-Current qualification (W259, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W260, 2026-10-11): VERIFIED / root adversary ROBUST within
+the finite static Compact plain-mark typed-reader target. `TypedPartTable`
+routes existing typed carriers across Wide and Compact candidates; the Compact
+backend normalizes recursive prefix/body/suffix events into the existing
+BinaryBulk decoder rather than adding serializers per type combination.
+Own-file lifecycle/profile/lane/cursor/reader/facade owners expose ordinary
+offline `.values`, typed scans, conservative UInt64-PK candidate pruning and
+caller-run Compact source -> detached Wide transform output. Schema, complete
+row grids and immutable requested schedules are checked before the first
+callback; this is not authentication of every future payload.
+
+The exact 84-path affected roster is commanded in DEBUG and RELEASE;
+392 executed examples pass per mode, zero failures/errors/pending, in 28 DEBUG
+and 46 RELEASE serial cohorts under the unchanged 12-GiB process-tree guard.
+Original final RELEASE cohort
+20 was killed before examples; its three files and the remaining tail were
+requalified singly without source or guard changes. Both final helpers build.
+Each fresh stock native cell passes the 11-part matrix: one Wide control,
+eight Compact String-v0/v1 and Variant-BASIC/COMPACT combinations, and two
+nested Array(LC)/Array(Variant) witnesses with zero and unequal child counts.
+Literal values, windows/EOF, coordinates, catalog values, conservative PK
+candidates plus a separate exact caller predicate, and detached transform
+output readback pass. Root audits two positives and 56 actual-capture negative
+controls; originals stay unchanged, native bytes and helper semantics agree
+between modes. Each cell contains 174 native files / 60,888 bytes and 105
+copied source files / 50,868 bytes. The audit reuses the pinned runner oracle,
+not a second native codec. Root-authored normalizer controls and all 25
+affected Crystal format checks also pass. Fixture-gated W177/W221 invocations
+without examples are compile-only, not fresh native Count/SAF consumer checks.
+This is not a full-suite claim.
+
+Observer propagation, all-resident-reader baseline accounting and direct
+metadata-owner census were repaired against root-observed REDs before the
+final 108-input seal. The inherited empty-table bare `Nothing` refusal failure
+was reproduced at exact HEAD and repaired at the shared table/catalog gate;
+codec placeholder recursion remains unchanged. Lower-level Wide codec grammar
+and recursive Nothing predicates are not native-storable-type validation.
+
+Context-owned Compact JSON/Dynamic, aggregate states, SimpleAggregateFunction,
+QBit and custom Geo, compressed Compact marks and Compact writing remain open.
+Inherited Wide N-column Array(Tuple)/Map owner restrictions, parent `.proj`
+reader authentication, transform/projection composition, general keys and
+partitions, and broader facade decomposition also remain open. Existing Wide
+projection publication and bounded caller-run MV composition are not native
+MV SQL execution, triggers or freshness. Quiescent parts and trusted ancestry
+remain assumptions; logical budgets are not total heap/RSS or caller-snapshot
+bounds. Overall goal ACTIVE; memory/performance and the <=10% speed target
+remain deferred and unqualified.
+
+Comparison source `ed30948f095ecb70679986d7d60e27ad770ae27a` is separately pinned
+from executed CH build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. See the
+[W260 frontier](COMPACT_TYPED_READER_FRONTIER.md) and
+[root evidence](../.landmark/evidence/compact-typed-reader-w260.json).
+Local atomic commit only; no push or speed claim.
+
+Previous qualification (W259, 2026-10-10): VERIFIED / root adversary ROBUST within
 the qualified top-level Compact plain-mark physical-window target. The new
 `CompactPartPhysicalContext` exposes owned per-column/granule shards from actual
 `.mrk3` and `.mrk4` parts. Ten own-file physical, metadata and detached carrier

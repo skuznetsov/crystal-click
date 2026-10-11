@@ -24,5 +24,11 @@ module CrystalClick
     def granules : Array(CompactPartPhysicalGranule)
       @granules.map(&.detached_copy)
     end
+
+    # Nonallocating descriptor count for workspace preflight before asking for
+    # an owned granule snapshot.
+    def mark_count : Int32
+      @granules.size
+    end
   end
 end

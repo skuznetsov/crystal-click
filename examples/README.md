@@ -481,12 +481,13 @@ crystal run examples/scan_uint64_pk_range.cr -- /var/lib/clickhouse lab events p
 The selected key and value columns must both be exact `UInt64` columns, and
 the key must be the table's one supported ascending `UInt64` `ORDER BY` key.
 The reader selects whole candidate granules from adaptive Wide parts
-(`.mrk2`/`.cmrk2`); the example applies the exact inclusive row predicate
+(`.mrk2`/`.cmrk2`) or admitted plain adaptive Compact parts (`.mrk3`/`.mrk4`
+with an explicit zero-row EOF record); the example applies the exact inclusive row predicate
 before printing each row. Candidate pruning is not a SQL result or proof that
 the files represent the server's current table.
 
 The reader is read-only and supports only its bounded Atomic metadata and
 physical-part subset. It does not handle arbitrary SQL, composite or
-descending keys, legacy fixed-granularity Wide marks, Compact parts, or
+descending keys, legacy fixed-granularity Wide marks, compressed Compact marks, or
 secondary/remote storage. The primary-index path relies on immutable
 ClickHouse-produced parts; it does not verify content hashes.

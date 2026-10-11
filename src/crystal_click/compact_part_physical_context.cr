@@ -93,6 +93,69 @@ module CrystalClick
       @columns_substreams.roster
     end
 
+    # Logical retained non-grid owner census. The borrowed budget object is
+    # charged conservatively for each context even when several contexts share
+    # one instance; capacities and allocator/RSS overhead are excluded.
+    def retained_workspace_bytes : UInt64
+      bytes = instance_sizeof(CompactPartPhysicalContext).to_u64
+      bytes = checked_add(bytes, @columns_substreams.retained_workspace_bytes)
+      bytes = checked_add(bytes, @data_input.retained_string_workspace_bytes)
+      checked_add(bytes, instance_sizeof(CompressedStreamBudget).to_u64)
+    end
+
+    def retained_lookup_index_workspace_bytes : UInt64
+      @columns_substreams.retained_lookup_index_workspace_bytes
+    end
+
+    def retained_grid_workspace_bytes : UInt64
+      @mark_index.retained_grid_workspace_bytes
+    end
+
+    # Detached parent-row grid validated while the Compact mark index was
+    # opened. Typed consumers use the same grid as the physical windows; this
+    # snapshot does not read or authenticate payload bytes.
+    def mark_row_counts : Array(UInt64)
+      count = @mark_index.mark_count.to_i64
+      @budget.preflight_records(count)
+      @budget.reserve_records(count)
+      Array(UInt64).new(@mark_index.mark_count) do |index|
+        @mark_index.row_count_at(index)
+      end
+    end
+
+    # Logical payload span for one selected column, derived only from its
+    # validated per-mark slot intervals. Compact coordinates are interleaved
+    # across columns, so subtracting a selected slot's first coordinate from
+    # its terminal coordinate would include unrelated columns (and summing
+    # those spans would double-count). This does not open or authenticate data
+    # payload frames.
+    def logical_bytes_for(column_name : String) : UInt64
+      count = @columns_substreams.slot_count_for(column_name).to_i64
+      @budget.preflight_records(count)
+      @budget.reserve_records(count)
+      slots = @columns_substreams.slots_for(column_name)
+      total = 0_u64
+      @mark_index.mark_count.times do |mark|
+        slots.each do |slot|
+          first = @mark_index.position_at(mark, slot.index)
+          finish = if slot.index + 1 < @mark_index.slot_count
+                     @mark_index.position_at(mark, slot.index + 1)
+                   else
+                     @mark_index.position_at(mark + 1, 0)
+                   end
+          if finish < first
+            raise CorruptPartError.new("Compact selected logical span has descending coordinates")
+          end
+          size = (finish - first).to_u64
+          if size > UInt64::MAX - total
+            raise CorruptPartError.new("Compact selected logical span overflows UInt64")
+          end
+          total += size
+        end
+      end
+      total
+    end
+
     def read_window(
       column_name : String,
       first_mark : Int,
@@ -195,6 +258,13 @@ module CrystalClick
         offset += rows
       end
       offset
+    end
+
+    private def checked_add(left : UInt64, right : UInt64) : UInt64
+      if right > UInt64::MAX - left
+        raise CorruptPartError.new("Compact physical context workspace estimate overflows UInt64")
+      end
+      left + right
     end
   end
 end

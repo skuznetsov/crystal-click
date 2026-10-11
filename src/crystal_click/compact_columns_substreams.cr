@@ -66,6 +66,58 @@ module CrystalClick
       slots.size.to_i32
     end
 
+    # Logical retained-owner census from the stored metadata, without creating
+    # detached public snapshots. Capacities and allocator/RSS overhead are not
+    # included.
+    def retained_workspace_bytes : UInt64
+      bytes = instance_sizeof(CompactColumnsSubstreams).to_u64
+      bytes = checked_add(bytes, instance_sizeof(Array({String, String})).to_u64)
+      bytes = checked_add(
+        bytes,
+        checked_multiply(@columns.size.to_u64, sizeof(Tuple(String, String)).to_u64),
+      )
+      @columns.each do |name, type|
+        bytes = checked_add(bytes, string_owner_bytes(name))
+        bytes = checked_add(bytes, string_owner_bytes(type))
+      end
+
+      bytes = checked_add(bytes, instance_sizeof(Array(CompactPhysicalSlot)).to_u64)
+      bytes = checked_add(
+        bytes,
+        checked_multiply(@slots.size.to_u64, sizeof(Pointer(CompactPhysicalSlot)).to_u64),
+      )
+      @slots.each do |slot|
+        bytes = checked_add(bytes, instance_sizeof(CompactPhysicalSlot).to_u64)
+        bytes = checked_add(bytes, string_owner_bytes(slot.column_name))
+        if stream_name = slot.stream_name
+          bytes = checked_add(bytes, string_owner_bytes(stream_name))
+        end
+      end
+
+      checked_add(bytes, retained_lookup_index_workspace_bytes)
+    end
+
+    # Separate subtotal for the retained column -> callback-slot lookup. Each
+    # Hash entry is modeled as its two references plus a fixed control/hash
+    # word; each per-column Array is charged by logical size, not capacity.
+    def retained_lookup_index_workspace_bytes : UInt64
+      bytes = instance_sizeof(Hash(String, Array(CompactPhysicalSlot))).to_u64
+      hash_entry_bytes = checked_add(
+        checked_add(sizeof(Pointer(String)).to_u64, sizeof(Pointer(Array(CompactPhysicalSlot))).to_u64),
+        8_u64,
+      )
+      bytes = checked_add(bytes, checked_multiply(@columns.size.to_u64, hash_entry_bytes))
+      @columns.each do |name, _type|
+        slots = @slots_by_column[name]? || raise(CorruptPartError.new("Compact lookup index lost a column"))
+        bytes = checked_add(bytes, instance_sizeof(Array(CompactPhysicalSlot)).to_u64)
+        bytes = checked_add(
+          bytes,
+          checked_multiply(slots.size.to_u64, sizeof(Pointer(CompactPhysicalSlot)).to_u64),
+        )
+      end
+      bytes
+    end
+
     private def validate_structure(
       columns : Array({String, String}),
       substreams : Array({String, Array(String)})?,
@@ -120,6 +172,22 @@ module CrystalClick
       slot = CompactPhysicalSlot.new(@slots.size.to_i32, column_name, stream_name)
       @slots << slot
       @slots_by_column[column_name] << slot
+    end
+
+    private def string_owner_bytes(value : String) : UInt64
+      checked_add(instance_sizeof(String).to_u64, checked_add(value.bytesize.to_u64, 1_u64))
+    end
+
+    private def checked_add(left : UInt64, right : UInt64) : UInt64
+      raise CorruptPartError.new("Compact roster workspace estimate overflows UInt64") if right > UInt64::MAX - left
+      left + right
+    end
+
+    private def checked_multiply(left : UInt64, right : UInt64) : UInt64
+      if left > 0_u64 && right > UInt64::MAX // left
+        raise CorruptPartError.new("Compact roster workspace estimate overflows UInt64")
+      end
+      left * right
     end
   end
 end

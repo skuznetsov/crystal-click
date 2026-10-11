@@ -1677,7 +1677,7 @@ module CrystalClick
       part_name : String,
       columns : Array(String),
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
-    ) : Tuple(OfflinePartCandidate, WidePartTable)
+    ) : Tuple(OfflinePartCandidate, WidePartTable | TypedPartTable)
       raise BoundsError.new("source part name is empty or exceeds limit") if part_name.empty? || part_name.bytesize > WidePartTable::MAX_PART_NAME_BYTES
       candidates = resolved_scan_parts
       selected = candidates.select { |candidate| candidate.name == part_name }
@@ -1777,7 +1777,7 @@ module CrystalClick
       row_limit : Int,
       row_limit_label : String,
       candidate_scope : Array(OfflinePartCandidate)? = nil,
-    ) : WidePartTable?
+    ) : (WidePartTable | TypedPartTable)?
       reject_materialized_view_data_access!
       raise UnsupportedFormatError.new("offline scan supports exact MergeTree engine only") unless @engine == "MergeTree"
       raise BoundsError.new("no columns selected") if columns.empty?
@@ -1836,7 +1836,7 @@ module CrystalClick
     private def open_offline_typed_reader(
       candidates : Array(OfflinePartCandidate),
       columns : Array(String),
-    ) : WidePartTable
+    ) : WidePartTable | TypedPartTable
       if binding = @flattened_nested_binding
         context = binding.context
         WidePartTable.open_selected_flattened_nested_typed(
@@ -1847,7 +1847,7 @@ module CrystalClick
           context.type_name
         )
       else
-        WidePartTable.open_selected_typed(candidates.map(&.path), columns)
+        TypedPartTable.open_selected_typed(candidates.map(&.path), columns)
       end
     end
 

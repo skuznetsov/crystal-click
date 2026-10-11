@@ -1,0 +1,3473 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W260",
+  "title": "Recursive Compact lifecycle normalization, typed facade, owned offline values and caller-run MV source composition",
+  "recorded_date": "2026-10-11",
+  "baseline_commit": "62f0e2cdf320d0900a91aebe470a38b127a68981",
+  "claim": {
+    "level": "VERIFIED",
+    "root_adversary": "ROBUST within the finite qualified static Compact/plain-mark target and explicitly scoped table/catalog admission",
+    "global_goal": "ACTIVE; all remaining types/layouts, MV/projections and subsequent <=10% speed goal are not closed",
+    "meaning": "Curated index to executed guarded commands, source/capture identities and observed discriminators. Hashes, field presence and correlated model agreement are not behavioral proof."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "boundary": "Persistent Compact framing, recursive lifecycle, consumer routing and logical budget accounting",
+    "rollback": "One exact-path local atomic feature commit after DoD; no push, dependency change, history rewrite or unrelated staging."
+  },
+  "admitted": {
+    "api": [
+      "TypedPartTable.open_selected_typed(parts, columns) yields existing WidePartTableBatch carriers",
+      "CompactPartTable typed backend; TypedBinaryBulkColumnReader format-neutral bulk seam",
+      "Offline catalog .values, typed scans, UInt64-PK conservative granule pruning and caller-run Compact MV source to detached Wide output"
+    ],
+    "profiles": [
+      "Plain adaptive Compact data.mrk3 or data.mrk4 with explicit zero-row EOF",
+      "String v0 or metadata-qualified v1; BASIC Map; LC v1 with no global dictionary and validated additional keys/update; Variant BASIC or COMPACT"
+    ],
+    "laws": [
+      "Fresh prefix/body/suffix state per column/granule; Tuple child phases preserve declaration order",
+      "Array derives Q from P counts; Nullable has P null bytes and nested values; Variant derives Q_i, including Q_i=0 callbacks",
+      "Normalize physical callbacks into existing recursive BinaryBulk streams and leaf codecs, not per-product serializers",
+      "Preflight every candidate's selected schema, complete row grid and immutable requested schedule before first callback",
+      "Preserve legacy typed scalar/container carriers and established generic BinaryValue owners; detached outputs do not borrow mmap slices",
+      "Known logical reader baseline is preflighted across all already-live selected readers before first read and charged once; transient/decoded owners remain additive",
+      "Metadata census reads stored owners without detached getters and includes lookup Hash, per-column Arrays/references, copied input names/paths and normalizer column String",
+      "Table/catalog bare Nothing refusal restored without removing placeholder codec grammar; lower-level Wide codec and recursive Nothing predicate scope remain explicitly broader than native storage validity"
+    ],
+    "finite_native_matrix": {
+      "parts_per_mode": 11,
+      "wide_control": 1,
+      "compact_schema_a": 8,
+      "compact_schema_b": 2,
+      "parent_rows_per_part": 8,
+      "real_mark_rows": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "terminal_rows": 0,
+      "schema_a": [
+        "pk UInt64",
+        "s String",
+        "n Nullable(UInt64)",
+        "arr Array(Nullable(UInt64))",
+        "pair Tuple(left String,right String,code UInt64)",
+        "seq Array(Tuple(label String,value Nullable(UInt64)))",
+        "lookup Map(String,Array(Nullable(UInt64)))",
+        "lc LowCardinality(String)",
+        "v Variant(String,UInt64)"
+      ],
+      "schema_b": [
+        "pk UInt64",
+        "label String",
+        "pair Tuple(l Array(LowCardinality(UInt64)),v Array(Variant(String,UInt64)))"
+      ],
+      "public_seams": "Direct/facade full/first/middle/last/EOF and candidate marks; catalog all Compact column values; conservative PK candidates plus separate caller exact filter; mixed Wide/Compact coordinates and early schedule refusal; one-row caller-run MV source batches and literal detached Wide target readback"
+    }
+  },
+  "source_contract": {
+    "comparison_path": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+    "comparison_revision": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+    "runtime_build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "source_runtime_equivalence": false,
+    "latest_upstream_claim": false,
+    "anchors": [
+      "MergeTreeDataPartWriterCompact.cpp:174-228 fresh lifecycle",
+      "SerializationTuple.cpp:794-862 child phases",
+      "SerializationArray.cpp:329-395 zero children",
+      "SerializationNullable.cpp:114-137 P alignment",
+      "SerializationMap.cpp:756-784,1335-1365 BASIC/bucketed",
+      "SerializationString.cpp:506-521,928-1002 versioned streams",
+      "SerializationLowCardinality.cpp:72-171,271-314,534-626 prefix/flags/keys",
+      "SerializationVariant.cpp:199-246,301-357,417-523 and SerializationVariant.h:54-70,178-182 discriminator envelopes",
+      "DataTypeNothing.h and IDataTypeDummy.h cannotBeStoredInTables; SerializationNothing.cpp internal serde is not table admission"
+    ]
+  },
+  "falsifier_lineage": {
+    "initial_and_workspace": {
+      "root-baseline-red.json": {
+        "format": "compact_typed_w260_root_baseline_v1",
+        "source_revision": "62f0e2cdf320d0900a91aebe470a38b127a68981",
+        "helper_source_sha256": "c969164384e3381ee86341bd4b10bd5b5d4dccecc6b0aaf6200261ba1490409c",
+        "helper_executable": "/private/tmp/crystal-click-w260.lQZKil/baseline-helper",
+        "helper_executable_sha256": "4cae4b1eb1e776b78d5ebe734bfe8feb614bb38763d2f8b17e5dd543c25297f4",
+        "guard_sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+        "minimum_free_ram_percent": 50,
+        "tree_rss_limit_mib": 12288,
+        "runtime_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+        "command": [
+          "env",
+          "COGNI_RUN_SAFE_MIN_FREE_PCT=50",
+          "CRYSTAL_WORKERS=1",
+          "RUN_SAFE_PASSTHROUGH_STDIO=1",
+          "TMPDIR=/private/tmp",
+          "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+          "/private/tmp/crystal-click-w260.lQZKil/baseline-helper",
+          "180",
+          "12288",
+          "roundtrip",
+          "/private/tmp/crystal-click-w259-native-debug-sealed.inObat/stores/native/store/ec1/ec15f773-1409-4713-b1a7-8c1cb96688bf/all_1_1_0",
+          "/private/tmp/crystal-click-w259-native-debug-sealed.inObat/stores/native/store/d47/d47b9550-241a-42b6-8cd7-4140e1b81b2f/all_1_1_0",
+          "/private/tmp/crystal-click-w259-native-debug-sealed.inObat/stores/native/store/ede/ede94186-d8e5-4766-8a2a-d64ae9a9696d/all_1_1_0"
+        ],
+        "exit_code": 1,
+        "wide_control": {
+          "status": "ok",
+          "literal_full_rows": 8,
+          "literal_middle_rows": 4,
+          "real_mark_rows": [
+            [
+              2,
+              2,
+              2,
+              2
+            ]
+          ]
+        },
+        "compact_mrk3": {
+          "status": "rejected",
+          "stage": "open",
+          "error": "CrystalClick::UnsupportedFormatError: columns_substreams.txt is required for multi-column parts"
+        },
+        "compact_mrk4": {
+          "status": "rejected",
+          "stage": "open",
+          "error": "CrystalClick::InvalidPartError: selected numeric stream files not found"
+        },
+        "instrumentation_failure_excluded": "First helper build had a rescue-stage nilability error. Repaired helper was compiled and executed before behavioral RED classification.",
+        "capture_origin": "Root tool execution and observed process output; existing W259 pinned native part captures, not fresh W260 native qualification."
+      },
+      "workspace-observer-red.json": {
+        "status": "behavioral_red",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "pre_source_identity": "ba1d26b1795e514621a27a439d970be68eba448c20e7867d5c53b57395710a28  src/crystal_click/compact_part_table.cr\nae62a8dfb56c063440b519748545044a972074634c1845bf8e2c0b8ddaf13287  spec/compact_typed_w260_spec.cr\n06f524999a152b9558c3ae20842b3e811a2c10af57ed91a0bb12f772a5c5e0fc  /private/tmp/crystal-click-w260.lQZKil/root-native-audit.rb\n698:  def w260_test_inject_logical_read_bytes!(bytes : UInt64) : Nil\n699:    @logical_read_bytes = bytes\n704:  def w260_test_inject_logical_read_bytes!(bytes : UInt64) : Nil\n706:      entry[3].w260_test_inject_logical_read_bytes!(bytes)\n725:      table.w260_test_inject_logical_read_bytes!(injected_logical_bytes)\n",
+        "exit": 1,
+        "scope": "Tiny authored Compact fixture with conservative logical-byte estimate injection; observer propagation only, not RSS/allocation-cap qualification. Production repair not yet applied.",
+        "summary": {
+          "examples": 18,
+          "failures": 1,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      "workspace-observer-green.json": {
+        "status": "focused_green",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit": 0,
+        "production_sha256": "cac3fc6a655441a6561af23d98be191903ec2e00e11b411447a0b941e3ca9b90",
+        "spec_sha256": "ae62a8dfb56c063440b519748545044a972074634c1845bf8e2c0b8ddaf13287",
+        "scope": "Observer propagation and focused lifecycle/carrier guards; logical accounting only. Final native/regression runs still required.",
+        "summary": {
+          "examples": 18,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      "resident-baseline-red.json": {
+        "phase": "w260_resident_reader_baseline_red",
+        "baseline_head": "62f0e2cdf320d0900a91aebe470a38b127a68981",
+        "production_and_spec_sha256": "cac3fc6a655441a6561af23d98be191903ec2e00e11b411447a0b941e3ca9b90  src/crystal_click/compact_part_table.cr\neaaaf524c037710bd253035a8ea0e847d89308fc67ee4ea966e3f1e5e5e79145  spec/compact_typed_w260_spec.cr\n",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_typed_w260_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 1,
+        "examples": 14,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0,
+        "discriminator": "Each of two real selected-reader contexts is individually below 64 MiB but their synthetic conservative retained-workspace sum exceeds it. The old sequential charge refuses before callbacks but has already invoked read_marks once; regression requires zero read_marks.",
+        "scope": "Synthetic logical retained-owner estimate only; no 64 MiB payload allocation or RSS assertion."
+      },
+      "resident-baseline-green.json": {
+        "phase": "w260_resident_reader_baseline_green",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "production_and_spec_sha256": "3dd9cf92efb7b797f9d9d6e709fc0bc6322981e26f5c77431a26d32170431576  src/crystal_click/compact_part_table.cr\n28b21224d75a3a2d9ec44031ceed647ae311ca386b875d080423f608fa338e4a  spec/compact_typed_w260_spec.cr\n",
+        "exit_code": 0,
+        "examples": 20,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "signal": "The aggregate over-limit case refuses before any read_marks call; the below-limit 24 MiB per-reader positive returns the exact empty Array and baseline=7 with exactly two reads. Existing transient observer and adversary cases remain green.",
+        "scope": "Focused logical accounting proof only; full native and sealed affected-roster reruns still required."
+      },
+      "metadata-census-red.json": {
+        "slice": "W260",
+        "stage": "retained-metadata-census-red",
+        "baseline_head": "62f0e2cdf320d0900a91aebe470a38b127a68981",
+        "observed_utc": "2026-10-11 04:55:27 UTC",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_typed_w260_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "result": {
+          "exit_code": 1,
+          "output_witness": "Raw output retained in /private/tmp/crystal-click-w260.lQZKil/metadata-census-red.json"
+        },
+        "spec_sha256": "342cd8ec1621d57e0180ef1026b792832206779fd423d1eecccc16a55fc12284",
+        "production_sha256": {
+          "columns": "c092c4d80500bab31df2e9de249ae831e1dfda6c0614068c8173c7f79cabd9b6",
+          "grid": "e4e32e760155239a58c539f492b39c4c280b557601ce100bfee8a17a0cc0ee31",
+          "input": "2733de1e8d8a7e9035b9aaf3e62f61487c9c97cc0865344b22c827e37f019c6c",
+          "context": "7b17e09e29a8fe7d120778aeeeae8c41f8ba4d4424448a7d0682c59c76fe641a",
+          "reader": "e8f393025d80c800a154183fb5dd52258a6fc67aba6a9c7913a3ad4a8b21a2a4",
+          "normalizer": "4ef308a12f9ed020bb363a0ba734528208a85665aef27877a6ce7fc63312f278"
+        },
+        "observed": {
+          "examples": 16,
+          "failures": 1,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      "metadata-census-green.json": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "observed": {
+          "examples": 23,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        },
+        "seal": {
+          "recorded_source_seal": "Source identities retained in temporary metadata-census-green.json"
+        },
+        "scope": "Focused runtime clone-census RED/GREEN, logical lookup-index mrk3/mrk4 cardinality checks, existing observer/baseline-once/carrier/profile adversaries; no all-heap or RSS claim"
+      }
+    },
+    "preexisting_nothing_head_control": {
+      "slice": "W260",
+      "stage": "preexisting-nothing-guard-head-control",
+      "source_revision": "62f0e2cdf320d0900a91aebe470a38b127a68981",
+      "archive_root": "/private/tmp/crystal-click-w260-head-control.fRulQK",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_owned_values_w220_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "result": {
+        "exit_code": 1,
+        "counts": {
+          "examples": 10,
+          "failures": 1,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      "discriminator": "Same unchanged W220 Nothing assertion fails on exact HEAD, before W260 sources. Numbered shared spec identifies line465 as Nothing; preceding whitespace Dynamic guard passes.",
+      "scope": "Observed runtime preexisting admission failure, not a compile/RSS diagnostic."
+    },
+    "preexisting_nothing_census_failure": {
+      "slice": "W260",
+      "phase": "dynamic-legacy-values-guard-red",
+      "baseline_head": "62f0e2cdf320d0900a91aebe470a38b127a68981",
+      "source_seal": "2026-10-11 04:59:47 UTC",
+      "source_identities": [
+        {
+          "path": "src/crystal_click.cr",
+          "sha256": "52b36c51b3377ca5a4a4e76107592e34d1b480969c13bb9cf194f882817af662"
+        },
+        {
+          "path": "src/crystal_click/compact_part_physical_context.cr",
+          "sha256": "93d21a6f5063de6b57009e44fba080d352842d4ad0cf4365a6d08569d44c30f4"
+        },
+        {
+          "path": "src/crystal_click/compact_part_physical_window.cr",
+          "sha256": "3fc634c7287c43d71d8b8b47e8517cd8812f6628b522339f80177b493cd7fbea"
+        },
+        {
+          "path": "src/crystal_click/offline_part_transform_input.cr",
+          "sha256": "a8d423d4f30c2236f6e21f636d04c3ceb38c24383e58c731063e28c0256c394b"
+        },
+        {
+          "path": "src/crystal_click/offline_table.cr",
+          "sha256": "9c9d932a9808e50c90fea62206aa2d157de4532f2d431066bef0a088a8e5fe72"
+        },
+        {
+          "path": "src/crystal_click/offline_table/static_bulk_values_materializer.cr",
+          "sha256": "d2bc912328b0b404934caa3e1a930c4acc1d2206d61fbd07230b22a26a2bf0da"
+        },
+        {
+          "path": "src/crystal_click/wide_part_table/wide_part_table_batch.cr",
+          "sha256": "16f4d1f0061653eef7d33255f51df164a077d7d197bb90151db06d2ebb72e9c1"
+        },
+        {
+          "path": "src/crystal_click/binary_value_typed_batch_adapter.cr",
+          "sha256": "698cd114ad20431eeffe30c6d0a8c3fb5d97a1e6d38ac0bd21f63c6292853b67"
+        },
+        {
+          "path": "src/crystal_click/compact_binary_bulk_column_reader.cr",
+          "sha256": "33c8eb87ae3f243a7d6c9a7812fca8a341a212a2f0dbede14792eef57b63f44d"
+        },
+        {
+          "path": "src/crystal_click/compact_binary_bulk_granule_cursor.cr",
+          "sha256": "f89cf96c822b71ca513595dd4d76c1e410f60f06c9c57ebee4cc3383786b18d8"
+        },
+        {
+          "path": "src/crystal_click/compact_binary_bulk_lane_builder.cr",
+          "sha256": "ad55c9264158618a9bdf2ffa223e2ce319e4a661a2161b3bb25bb5472a6c85e8"
+        },
+        {
+          "path": "src/crystal_click/compact_binary_bulk_normalizer.cr",
+          "sha256": "e13ed357130052de674a54248a2a1a3ab360c703ecf970e1d8c9fc1bb60d7569"
+        },
+        {
+          "path": "src/crystal_click/compact_part_table.cr",
+          "sha256": "3dd9cf92efb7b797f9d9d6e709fc0bc6322981e26f5c77431a26d32170431576"
+        },
+        {
+          "path": "src/crystal_click/compact_serialization_profile.cr",
+          "sha256": "fbd28f1ce372a167a7fcdbc90985e09bcff2c4e2c680f704674f2ddf43985ee5"
+        },
+        {
+          "path": "src/crystal_click/typed_binary_bulk_column_reader.cr",
+          "sha256": "0513f4dc0b700bb54e2f883fab4878a4d82f2a9385d8eb596d5c1c2472203b14"
+        },
+        {
+          "path": "src/crystal_click/typed_part_reader_entry.cr",
+          "sha256": "67b03396600c46eb0d9df80962d2e6e71b1fee0b2ea1f889e50786dc4cf9ae52"
+        },
+        {
+          "path": "src/crystal_click/typed_part_table.cr",
+          "sha256": "e144aeb06e21f6a05bb5a24ae2d51ec3005cd517212af701b8f3132f61d7aa84"
+        },
+        {
+          "path": "scripts/check_compact_typed_w260.cr",
+          "sha256": "fc798aa66ce10605ff5b999975570430eaf481e343a82dd9c6be16ece5694646"
+        },
+        {
+          "path": "scripts/probe_compact_typed_w260.rb",
+          "sha256": "d4f7954802edd76c01f72f7550e196354dc9dfe28bd59732217c3c81a00af158"
+        },
+        {
+          "path": "scripts/support/compact_typed_w260_fixture.cr",
+          "sha256": "14c539522ce344685ee9d9c3efbe0811be46ac7ac7a3a00143cd91f999456cdb"
+        },
+        {
+          "path": "spec/binary_bulk_discriminator_framing_w189_spec.cr",
+          "sha256": "fff1a615dbc493466508c92e8b2f3e1c8f52e498ec0603c5cb7d9164ab0c524d"
+        },
+        {
+          "path": "spec/binary_bulk_physical_prefix_w151_spec.cr",
+          "sha256": "f2ea9b1a97308e8633c018a9cb9b7efca89bbd87360befc7115a891714b53f7c"
+        },
+        {
+          "path": "spec/binary_bulk_w122_spec.cr",
+          "sha256": "ffbb607f96fa020426150e284972b6daa951b6da5d8e8f7400cb7c1a1d112e8d"
+        },
+        {
+          "path": "spec/binary_low_cardinality_storage_w142_spec.cr",
+          "sha256": "5f6a48dd61a6d5e1bca4ac38232be795edd06388d8c7be9a435fd4259462a3cf"
+        },
+        {
+          "path": "spec/compact_physical_context_w259_adversary_spec.cr",
+          "sha256": "20f4adc0b88e19a3349e2dbbe768901a9a55f331b066ed98cbc272f75f80e31f"
+        },
+        {
+          "path": "spec/compact_physical_context_w259_spec.cr",
+          "sha256": "1c83b7149841b91b115cbd2590b630ccd779988d1422c34c08b7657493766f72"
+        },
+        {
+          "path": "spec/offline_catalog_projection_w87_spec.cr",
+          "sha256": "14effe3dd9497b733752c3a2609723671e1070c12111b66ad51c7929b68cf3ea"
+        },
+        {
+          "path": "spec/offline_catalog_spec.cr",
+          "sha256": "342dac47ac104c7b0301c6fdccee9bfe78316134a7bcc92ba238f9947840c227"
+        },
+        {
+          "path": "spec/offline_catalog_w27_spec.cr",
+          "sha256": "3540c54d9c524eadd65bfd20b06383ed186ec83449378927abe9a3f1821f7f69"
+        },
+        {
+          "path": "spec/offline_catalog_w28_spec.cr",
+          "sha256": "65769c73a98e407cb1cf7ebb0f9cbf119d778ba1d3d869db78ceb9e700b90129"
+        },
+        {
+          "path": "spec/offline_catalog_w29_spec.cr",
+          "sha256": "555d7a77347bb767546d5e79ea6750cea40ff374550811721e276292bd53f01d"
+        },
+        {
+          "path": "spec/offline_catalog_w53_spec.cr",
+          "sha256": "2fb9cc554aa702e0e6bc651a3f6f7d53ba88aab04a96407fccaa631ed7dc5462"
+        },
+        {
+          "path": "spec/offline_catalog_w54_spec.cr",
+          "sha256": "8ecc3acf311985d919045d2d777dc19e86d1164a5871b3fde0d227fa7c2ed610"
+        },
+        {
+          "path": "spec/offline_catalog_w60_spec.cr",
+          "sha256": "b496d9facb5768b21ac8381db71c6e8b0b28762e3a1be0c0cc649cee0886c3c2"
+        },
+        {
+          "path": "spec/offline_catalog_w63_spec.cr",
+          "sha256": "f83cbd642479f9cf01da26e7d07704d53102f01ba18299a86cb0688a59e878d5"
+        },
+        {
+          "path": "spec/offline_catalog_w68_spec.cr",
+          "sha256": "774b9bbc3703b4ece27c85ae7d9cd7e578e4e22345e1322af9a30749dac1350f"
+        },
+        {
+          "path": "spec/offline_catalog_w69_spec.cr",
+          "sha256": "7c83996d2620b1a136450a270b508335426f6b8f7ee2e3a344851438c005c1f0"
+        },
+        {
+          "path": "spec/offline_catalog_w70_spec.cr",
+          "sha256": "27cecb8d4bd2f6f723f19a4dc34f9144ac343b8f3b6082364cd773348d2c1166"
+        },
+        {
+          "path": "spec/offline_catalog_w71_spec.cr",
+          "sha256": "49b918e186f392eaba6bff373456011ee61688f0584c8266ad9b7e2779156226"
+        },
+        {
+          "path": "spec/offline_catalog_w73_spec.cr",
+          "sha256": "0cf35e9b09bbe00a21e40fb3b501a8fd74483b2ede25c528715053b3e56d5294"
+        },
+        {
+          "path": "spec/offline_catalog_w76_spec.cr",
+          "sha256": "9e4de9f81963a5a328158311b2ef1dfa1e44c3018716744f3d562495e1426882"
+        },
+        {
+          "path": "spec/offline_catalog_w77_spec.cr",
+          "sha256": "2ad5636ca811744c49ecd80383c7cb57cd27919545733ef6d71721933ba17e62"
+        },
+        {
+          "path": "spec/offline_catalog_w78_spec.cr",
+          "sha256": "1fd4fefd3805f6166e30bfcc0fb3d6a24f21722a3b67685e70d4f827abaf8bfa"
+        },
+        {
+          "path": "spec/offline_catalog_w79_spec.cr",
+          "sha256": "4c72a84ef18b68979dcd027dd8f1acd4eca0fd0223b3431ffaa89c934ffdda2c"
+        },
+        {
+          "path": "spec/offline_catalog_w80_spec.cr",
+          "sha256": "351db6931f464646eb8040493a1c438855a109c8402a579be5b6185e0c7d0bc8"
+        },
+        {
+          "path": "spec/offline_catalog_w81_spec.cr",
+          "sha256": "1c1ee5882be3431061a66b5c02e5e4b0e921e19b46cf854eb39732604089af80"
+        },
+        {
+          "path": "spec/offline_catalog_w82_spec.cr",
+          "sha256": "8bd7e02936750bf16add8b5d2749e98134931c8ff7b5474b9431654797c43882"
+        },
+        {
+          "path": "spec/offline_catalog_w83_spec.cr",
+          "sha256": "4ca789e5d954870fd1fab93c761708047f6254abf7b0770147821614dd5e3303"
+        },
+        {
+          "path": "spec/offline_catalog_w84_spec.cr",
+          "sha256": "a5d63d88e84c27af659aa4798e73c6025a21085aaa1938dfeaf4b768efbf452b"
+        },
+        {
+          "path": "spec/offline_catalog_w85_spec.cr",
+          "sha256": "96c535ee10cec90ff2aab6adaa4a4f4302a88b54df5250f61cf3657b5f0c4fc8"
+        },
+        {
+          "path": "spec/offline_catalog_w86_spec.cr",
+          "sha256": "e9f867f468333a5ca436020251eae2ceebca18eee0064578d82db4343e3b3a93"
+        },
+        {
+          "path": "spec/offline_catalog_w95_tuple_values_spec.cr",
+          "sha256": "f4ef95d1c1c64259971db865e35ef3d7b28d8f2bd802599074550e28567e66c0"
+        },
+        {
+          "path": "spec/offline_materialized_view_transform_w257_spec.cr",
+          "sha256": "1643f952a5b5a7e3821b30a7ff25a10ed85f8e8dae89fac06e259eaf7f7f3055"
+        },
+        {
+          "path": "spec/offline_materialized_view_w228_spec.cr",
+          "sha256": "cd52ccace248bb07dda4ffe3080fe5b132326b1ff36197d954be71777a31ea5c"
+        },
+        {
+          "path": "spec/offline_mv_materialization_w88_spec.cr",
+          "sha256": "36611d0368036525559e8c443ae9567f94d5f52b61c9d09ff1f8dbe96b5c236b"
+        },
+        {
+          "path": "spec/recursive_storage_array_w187_spec.cr",
+          "sha256": "9d7b6e6e0ea9dbd85d69de92fff49d9437f6aae259d0db9886f520fac5937e2f"
+        },
+        {
+          "path": "spec/recursive_storage_column_w186_spec.cr",
+          "sha256": "c2f2e352d602bb7e7978dbaad3b9b78e6a7ad04cfa00ad70d781a06b29bcef81"
+        },
+        {
+          "path": "spec/recursive_storage_compact_w188_spec.cr",
+          "sha256": "781b3a132b665e43dfce92227475db4a954dc6d896bd03a0f4b94a154d50cbc8"
+        },
+        {
+          "path": "spec/recursive_storage_reader_budget_w186_spec.cr",
+          "sha256": "a7d6b040a421a45b5a944356f9293436507fb3924fda4698290a469948f9610a"
+        },
+        {
+          "path": "spec/recursive_storage_table_w186_spec.cr",
+          "sha256": "da8379ce577c6915b6c4f9fadf58246ae52e4aef15366ab7fe1f532a89b566e3"
+        },
+        {
+          "path": "spec/recursive_storage_values_budget_w186_spec.cr",
+          "sha256": "ff52cf684bbfbdf65f84a0f9a9b26937d726ff128ed89b599e5125b1109c505d"
+        },
+        {
+          "path": "spec/static_binary_bulk_table_w247_spec.cr",
+          "sha256": "9374ff849a0ef0e5d41415e626f366a20da08f1c6eb8ebd05e8848185d5b3cd3"
+        },
+        {
+          "path": "spec/wide_part_table_low_cardinality_cache_spec.cr",
+          "sha256": "fd6a7e9e9239a9d50372678fb61bbb30648deb3f1a22ca699c292b3ab883e637"
+        },
+        {
+          "path": "spec/wide_part_table_projection_w87_spec.cr",
+          "sha256": "feabb162ea7a778c1c7638721826ffa42067c0eaf46de043dd0651d85250c5aa"
+        },
+        {
+          "path": "spec/wide_part_table_w53_spec.cr",
+          "sha256": "6082b8f48acb1106324f449ec62510fc86945b0fb704e21a3137d3182b1faf65"
+        },
+        {
+          "path": "spec/wide_part_table_w54_spec.cr",
+          "sha256": "b4285a28fcd57674e6ee54a552ffa3420ddd975d07449f6d739faaced1f5cf35"
+        },
+        {
+          "path": "spec/wide_part_table_w59_spec.cr",
+          "sha256": "e09e36c3a6df37a0135bf27b2e3f8f35d02dd8930da2f65deb2477561f90aaa7"
+        },
+        {
+          "path": "spec/wide_part_table_w61_spec.cr",
+          "sha256": "af87e7dcff0f6cb9bc343888524d4649b01b456843e68e7661e2311d2695c7c1"
+        },
+        {
+          "path": "spec/wide_part_table_w62_spec.cr",
+          "sha256": "edcbdd7d735a3713abad28e1d3ac57277b989627cef0aeeba8e267277d2a9228"
+        },
+        {
+          "path": "spec/wide_part_table_w63_spec.cr",
+          "sha256": "e2928881084b9c072d2f9541e8bd1b97bab8f06409c00248b3d6b3909ca7334d"
+        },
+        {
+          "path": "spec/wide_part_table_w64_spec.cr",
+          "sha256": "5f3def63fc2df949c549b7debf4ed5556eb8f93559c8e5143c07bada666d1530"
+        },
+        {
+          "path": "spec/wide_part_table_w68_spec.cr",
+          "sha256": "5e9a79e67d377c6d4314c69e3dbf41440e437f28c49557a3f6c4a334143064ae"
+        },
+        {
+          "path": "spec/wide_part_table_w69_spec.cr",
+          "sha256": "dddf8b18aff49339cf648556ce860a5acb4725e00c6ce0242370ea53f4d40342"
+        },
+        {
+          "path": "spec/wide_part_table_w70_spec.cr",
+          "sha256": "97f4fc4f1f0f6929664e3bdfa6e7c7a2ae503a2b3cd2949480fa27ccfdf7dd75"
+        },
+        {
+          "path": "spec/wide_part_table_w71_spec.cr",
+          "sha256": "7b5fa35149fcd99fd07c612abac35037000367d45822bd3738ae4f6a856ad2ad"
+        },
+        {
+          "path": "spec/wide_part_table_w73_spec.cr",
+          "sha256": "0c2122a879c92a76ccd3628550a37154e5f57b063f4b9f484dc054ba89338c8b"
+        },
+        {
+          "path": "spec/wide_part_table_w76_spec.cr",
+          "sha256": "ee002e36bed1de636517ae652f9d9e91c2509ec317c9e7887ceb80e356fc10ed"
+        },
+        {
+          "path": "spec/wide_part_table_w77_spec.cr",
+          "sha256": "afc8eaa881e6c82b66a12c88a5fd99fd1341e955f64602cfd9c4eda6c901a868"
+        },
+        {
+          "path": "spec/wide_part_table_w78_spec.cr",
+          "sha256": "0a690af66b9f2f435bfac9afd31cbeb1210f27320f85876b24084f381dac0ac9"
+        },
+        {
+          "path": "spec/wide_part_table_w79_spec.cr",
+          "sha256": "e09ebb04b81a74d99c84b656ac9722c89b2a7e0dcb33dc525c92f787797bddb8"
+        },
+        {
+          "path": "spec/wide_part_table_w80_spec.cr",
+          "sha256": "3e73010898278fb810022ab2afe6852ac9ff8a05c64f7078d4285057b62f9a3d"
+        },
+        {
+          "path": "spec/wide_part_table_w81_spec.cr",
+          "sha256": "dcade318b1a0a3e1652329b24d9533c3ba0d3a134703c77b1f24aafde9adfb04"
+        },
+        {
+          "path": "spec/wide_part_table_w82_spec.cr",
+          "sha256": "add0b3a51cd06fdbf437b4c1715002eac68417c50b47df893e5c8144071e5551"
+        },
+        {
+          "path": "spec/wide_part_table_w83_spec.cr",
+          "sha256": "0ff5eb7220792f5652b60edfc7ae4662ae3dc18e8b6a1d93c3facc43bda0bf0b"
+        },
+        {
+          "path": "spec/wide_part_table_w84_spec.cr",
+          "sha256": "94eff4aadf16fe187d73b80745bde82a79fa7ad9602fb0fd4188a4b627434058"
+        },
+        {
+          "path": "spec/wide_part_table_w85_spec.cr",
+          "sha256": "cf1a2083bc4c3ead0f09fea4e7bad719d338271df20541f82f0ae43af7f13e2f"
+        },
+        {
+          "path": "spec/wide_part_table_w95_tuple_spec.cr",
+          "sha256": "e17346289dedba52c26227c013c01efd2f9bf29101469579da57ebe9cecc11f9"
+        },
+        {
+          "path": "spec/dynamic_recursive_handoff_w249_spec.cr",
+          "sha256": "85bff1a6d5d9d06701f5d628d60960217698e4ed9832a45ce531a0e8b6678015"
+        },
+        {
+          "path": "spec/dynamic_owned_values_w220_spec.cr",
+          "sha256": "cd0e874ba41eaa9557382e18b153dcd3ba07bc619c3c3932cc25fb8cd69f38f6"
+        },
+        {
+          "path": "spec/recursive_qbit_static_parts_w231_spec.cr",
+          "sha256": "bf1f4e409ff4234be9751ef2334068f1da165bd5da55f5e0d56c83216997b8a8"
+        },
+        {
+          "path": "spec/recursive_qbit_parts_w230_spec.cr",
+          "sha256": "d6c98f558de67507971c8bc0d70ab3eef8612b2580f24d89fd5ccced272bc20e"
+        },
+        {
+          "path": "spec/aggregate_count_offline_w177_spec.cr",
+          "sha256": "c1cd3a544a324475c6c6b335c1a17d37b4e5bf2662030e30012a5656ec179bee"
+        },
+        {
+          "path": "spec/aggregate_recursive_w224_consumers_spec.cr",
+          "sha256": "88490075248a764da48d5c265265ef5c2d05667c9cd85681543a94da6bce6786"
+        },
+        {
+          "path": "spec/aggregate_variant_w225_consumers_spec.cr",
+          "sha256": "6ee677d962f218d38b51c7eb745a9cfaeebf57fe5f00ff28646173ca81e9800d"
+        },
+        {
+          "path": "spec/aggregate_variant_w225_adversary_spec.cr",
+          "sha256": "80476e35c4ff53b08a8884474bf3f2c092d03f35755ba80928025a329365ca98"
+        },
+        {
+          "path": "spec/aggregate_sum_w223_consumers_spec.cr",
+          "sha256": "9dfa5a1aefdd5427a0cfa211c912713335a8f8105996cd0f929c464e504ea3d4"
+        },
+        {
+          "path": "spec/aggregate_avg_w227_consumers_spec.cr",
+          "sha256": "8f1befe9fe910d6a5878b9d20bb2ea10b45dc77e4dca130f59786d8d3d9cb157"
+        },
+        {
+          "path": "spec/simple_aggregate_bulk_consumers_w221_native_spec.cr",
+          "sha256": "8b37cd11edd6b78c924b90bf7ae42b2063024bd46e4868cb04f19d7156d5e292"
+        },
+        {
+          "path": "spec/simple_aggregate_recursive_w222_part_spec.cr",
+          "sha256": "35cf6d260a3ff284d2e46b3a77deab90354861d54476dbcd79ac192e9c4a98c0"
+        },
+        {
+          "path": "spec/geometry_recursive_w239_consumers_spec.cr",
+          "sha256": "966448bb5e99b9d6207cfb7dcbaf7aab83a67266c9cdcb3637154b58e15a274a"
+        },
+        {
+          "path": "spec/object_offline_table_w130_spec.cr",
+          "sha256": "01c97d1ce1813ae91fb8aacde270fcbd8f4794c34574e9e3e63f96e561b0bb84"
+        },
+        {
+          "path": "spec/compact_typed_w260_spec.cr",
+          "sha256": "6e5de344910fdca84e16aefa342d59da16c5251dbb703727f0c84e6c884aafa9"
+        },
+        {
+          "path": "spec/compact_typed_w260_adversary_spec.cr",
+          "sha256": "d0f1b597df455c8c674679a9cdd9bcc8531520f4ef8b6d706dd4e560aa42cc1a"
+        },
+        {
+          "path": "src/crystal_click/compact_columns_substreams.cr",
+          "sha256": "ed09d708548700429f164e3e9d0642e1933406dae1d13472830f157c33decb33"
+        },
+        {
+          "path": "src/crystal_click/compact_mark_index.cr",
+          "sha256": "9d4c82f8f6bbc8792c8db330e5aead7c4df3fd0ae4e5ddd0b148e61e5e9adc58"
+        },
+        {
+          "path": "src/crystal_click/part_physical_input.cr",
+          "sha256": "e7ece2738741547e07113d1cd55d9eba50796d2722ab44ab0a3c0eeee5028ea3"
+        }
+      ],
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w95_tuple_spec.cr spec/dynamic_recursive_handoff_w249_spec.cr spec/dynamic_owned_values_w220_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "result": {
+        "counts": {
+          "examples": 24,
+          "failures": 1,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      "failure": "W220 spec/dynamic_owned_values_w220_spec.cr:465 Nothing selected .values returned empty instead of UnsupportedFormatError. Noncanonical Array( Dynamic ) assertion before it passed.",
+      "correction": "Earlier root whitespace hypothesis was refuted by numbered source and source-only reviewer; line465 is Nothing."
+    },
+    "nothing_new_test_instrumentation": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_owned_values_w220_spec.cr spec/compact_typed_w260_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit_code": 1,
+      "scope": "Focused W220 plus W260 adversary test. Ten unchanged W220 examples passed; new Dynamic parser assertion is a test instrumentation error, not production regression.",
+      "counts": {
+        "examples": 16,
+        "failures": 1,
+        "errors": 0,
+        "pending": 0
+      },
+      "failure": "Exact legacy Dynamic intentionally yields nil from DynamicBulkColumnDeclaration.parse; new test expected nonnil."
+    },
+    "nothing_focused_green": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_owned_values_w220_spec.cr spec/compact_typed_w260_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "exit_code": 0,
+      "counts": {
+        "examples": 16,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      "scope": "Unchanged W220 refusal and new gate/sibling controls; final 84-file checks separately qualify final inputs"
+    },
+    "correction": "Initial whitespace hypothesis refuted: noncanonical Array( Dynamic ) refusal passed; actual failure was bare Nothing empty .values, reproduced at exact baseline HEAD before W260.",
+    "source_review_scope": {
+      "verdict": "ROBUST for scoped table/catalog admission; VULNERABLE if expanded to every low-level bulk factory",
+      "finding": "Wide BinaryBulkColumnReader and TypedBinaryBulkColumnReader Wide dispatch retain codec grammar and can accept root Nothing; scoped contract now explicitly excludes universal storage validity.",
+      "recursive_nothing": "Array/Nullable Nothing remain locally admitted, not native stored-profile qualification.",
+      "dynamic_test": "Test-only contradictory expectation corrected to nil; exact legacy Dynamic typed route remains admitted.",
+      "review": "/root/w258_final_hostile_review source-only review; root independently inspected factory/admission paths."
+    },
+    "resource_diagnostics": {
+      "six_file_compile_before_examples": {
+        "mode": "debug",
+        "index": 10,
+        "paths": [
+          "spec/wide_part_table_w71_spec.cr",
+          "spec/wide_part_table_w73_spec.cr",
+          "spec/wide_part_table_w76_spec.cr",
+          "spec/wide_part_table_w77_spec.cr",
+          "spec/wide_part_table_w78_spec.cr",
+          "spec/wide_part_table_w79_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w71_spec.cr spec/wide_part_table_w73_spec.cr spec/wide_part_table_w76_spec.cr spec/wide_part_table_w77_spec.cr spec/wide_part_table_w78_spec.cr spec/wide_part_table_w79_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 1,
+        "counts": null,
+        "diagnostic": "[PREFLIGHT] System memory free 74% > 50%\n[KILL] Memory limit for process tree: 12707088KB > 12288MB after ~26s\n"
+      },
+      "classification": "Inconclusive compiler resource kill, not decoder failure; serial cohorts at most three files, with a singleton final RELEASE tail, do not raise the guard or omit final paths.",
+      "final_guard_release_three_file_compile": {
+        "mode": "RELEASE",
+        "index": 20,
+        "paths": [
+          "spec/wide_part_table_w77_spec.cr",
+          "spec/wide_part_table_w78_spec.cr",
+          "spec/wide_part_table_w79_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w77_spec.cr spec/wide_part_table_w78_spec.cr spec/wide_part_table_w79_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+        "exit_code": 1,
+        "counts": null,
+        "classification": "Inconclusive process-tree memory kill before any examples; final inputs unchanged",
+        "diagnostic": "[PREFLIGHT] System memory free 75% > 50%\n[KILL] Memory limit for process tree: 12586336KB > 12288MB after ~219s\n"
+      }
+    }
+  },
+  "qualification_inputs": {
+    "sealed_at_utc": "2026-10-11 05:35:27 UTC",
+    "count": 108,
+    "production_paths": 21,
+    "support_helper_runner_paths": 3,
+    "spec_paths": 84,
+    "other_imports": "No unrelated paths in the final pre-promotion name-only inspection; imported baseline files unchanged.",
+    "source_test_harness_identities": [
+      {
+        "path": "src/crystal_click.cr",
+        "sha256": "52b36c51b3377ca5a4a4e76107592e34d1b480969c13bb9cf194f882817af662"
+      },
+      {
+        "path": "src/crystal_click/compact_part_physical_context.cr",
+        "sha256": "93d21a6f5063de6b57009e44fba080d352842d4ad0cf4365a6d08569d44c30f4"
+      },
+      {
+        "path": "src/crystal_click/compact_part_physical_window.cr",
+        "sha256": "3fc634c7287c43d71d8b8b47e8517cd8812f6628b522339f80177b493cd7fbea"
+      },
+      {
+        "path": "src/crystal_click/offline_part_transform_input.cr",
+        "sha256": "a8d423d4f30c2236f6e21f636d04c3ceb38c24383e58c731063e28c0256c394b"
+      },
+      {
+        "path": "src/crystal_click/offline_table.cr",
+        "sha256": "9c9d932a9808e50c90fea62206aa2d157de4532f2d431066bef0a088a8e5fe72"
+      },
+      {
+        "path": "src/crystal_click/offline_table/static_bulk_values_materializer.cr",
+        "sha256": "d2bc912328b0b404934caa3e1a930c4acc1d2206d61fbd07230b22a26a2bf0da"
+      },
+      {
+        "path": "src/crystal_click/wide_part_table/wide_part_table_batch.cr",
+        "sha256": "16f4d1f0061653eef7d33255f51df164a077d7d197bb90151db06d2ebb72e9c1"
+      },
+      {
+        "path": "src/crystal_click/binary_value_typed_batch_adapter.cr",
+        "sha256": "698cd114ad20431eeffe30c6d0a8c3fb5d97a1e6d38ac0bd21f63c6292853b67"
+      },
+      {
+        "path": "src/crystal_click/compact_binary_bulk_column_reader.cr",
+        "sha256": "33c8eb87ae3f243a7d6c9a7812fca8a341a212a2f0dbede14792eef57b63f44d"
+      },
+      {
+        "path": "src/crystal_click/compact_binary_bulk_granule_cursor.cr",
+        "sha256": "f89cf96c822b71ca513595dd4d76c1e410f60f06c9c57ebee4cc3383786b18d8"
+      },
+      {
+        "path": "src/crystal_click/compact_binary_bulk_lane_builder.cr",
+        "sha256": "ad55c9264158618a9bdf2ffa223e2ce319e4a661a2161b3bb25bb5472a6c85e8"
+      },
+      {
+        "path": "src/crystal_click/compact_binary_bulk_normalizer.cr",
+        "sha256": "e13ed357130052de674a54248a2a1a3ab360c703ecf970e1d8c9fc1bb60d7569"
+      },
+      {
+        "path": "src/crystal_click/compact_part_table.cr",
+        "sha256": "3dd9cf92efb7b797f9d9d6e709fc0bc6322981e26f5c77431a26d32170431576"
+      },
+      {
+        "path": "src/crystal_click/compact_serialization_profile.cr",
+        "sha256": "fbd28f1ce372a167a7fcdbc90985e09bcff2c4e2c680f704674f2ddf43985ee5"
+      },
+      {
+        "path": "src/crystal_click/typed_binary_bulk_column_reader.cr",
+        "sha256": "0513f4dc0b700bb54e2f883fab4878a4d82f2a9385d8eb596d5c1c2472203b14"
+      },
+      {
+        "path": "src/crystal_click/typed_part_reader_entry.cr",
+        "sha256": "67b03396600c46eb0d9df80962d2e6e71b1fee0b2ea1f889e50786dc4cf9ae52"
+      },
+      {
+        "path": "src/crystal_click/typed_part_table.cr",
+        "sha256": "e144aeb06e21f6a05bb5a24ae2d51ec3005cd517212af701b8f3132f61d7aa84"
+      },
+      {
+        "path": "scripts/check_compact_typed_w260.cr",
+        "sha256": "fc798aa66ce10605ff5b999975570430eaf481e343a82dd9c6be16ece5694646"
+      },
+      {
+        "path": "scripts/probe_compact_typed_w260.rb",
+        "sha256": "d4f7954802edd76c01f72f7550e196354dc9dfe28bd59732217c3c81a00af158"
+      },
+      {
+        "path": "scripts/support/compact_typed_w260_fixture.cr",
+        "sha256": "14c539522ce344685ee9d9c3efbe0811be46ac7ac7a3a00143cd91f999456cdb"
+      },
+      {
+        "path": "spec/binary_bulk_discriminator_framing_w189_spec.cr",
+        "sha256": "fff1a615dbc493466508c92e8b2f3e1c8f52e498ec0603c5cb7d9164ab0c524d"
+      },
+      {
+        "path": "spec/binary_bulk_physical_prefix_w151_spec.cr",
+        "sha256": "f2ea9b1a97308e8633c018a9cb9b7efca89bbd87360befc7115a891714b53f7c"
+      },
+      {
+        "path": "spec/binary_bulk_w122_spec.cr",
+        "sha256": "ffbb607f96fa020426150e284972b6daa951b6da5d8e8f7400cb7c1a1d112e8d"
+      },
+      {
+        "path": "spec/binary_low_cardinality_storage_w142_spec.cr",
+        "sha256": "5f6a48dd61a6d5e1bca4ac38232be795edd06388d8c7be9a435fd4259462a3cf"
+      },
+      {
+        "path": "spec/compact_physical_context_w259_adversary_spec.cr",
+        "sha256": "20f4adc0b88e19a3349e2dbbe768901a9a55f331b066ed98cbc272f75f80e31f"
+      },
+      {
+        "path": "spec/compact_physical_context_w259_spec.cr",
+        "sha256": "1c83b7149841b91b115cbd2590b630ccd779988d1422c34c08b7657493766f72"
+      },
+      {
+        "path": "spec/offline_catalog_projection_w87_spec.cr",
+        "sha256": "14effe3dd9497b733752c3a2609723671e1070c12111b66ad51c7929b68cf3ea"
+      },
+      {
+        "path": "spec/offline_catalog_spec.cr",
+        "sha256": "342dac47ac104c7b0301c6fdccee9bfe78316134a7bcc92ba238f9947840c227"
+      },
+      {
+        "path": "spec/offline_catalog_w27_spec.cr",
+        "sha256": "3540c54d9c524eadd65bfd20b06383ed186ec83449378927abe9a3f1821f7f69"
+      },
+      {
+        "path": "spec/offline_catalog_w28_spec.cr",
+        "sha256": "65769c73a98e407cb1cf7ebb0f9cbf119d778ba1d3d869db78ceb9e700b90129"
+      },
+      {
+        "path": "spec/offline_catalog_w29_spec.cr",
+        "sha256": "555d7a77347bb767546d5e79ea6750cea40ff374550811721e276292bd53f01d"
+      },
+      {
+        "path": "spec/offline_catalog_w53_spec.cr",
+        "sha256": "2fb9cc554aa702e0e6bc651a3f6f7d53ba88aab04a96407fccaa631ed7dc5462"
+      },
+      {
+        "path": "spec/offline_catalog_w54_spec.cr",
+        "sha256": "8ecc3acf311985d919045d2d777dc19e86d1164a5871b3fde0d227fa7c2ed610"
+      },
+      {
+        "path": "spec/offline_catalog_w60_spec.cr",
+        "sha256": "b496d9facb5768b21ac8381db71c6e8b0b28762e3a1be0c0cc649cee0886c3c2"
+      },
+      {
+        "path": "spec/offline_catalog_w63_spec.cr",
+        "sha256": "f83cbd642479f9cf01da26e7d07704d53102f01ba18299a86cb0688a59e878d5"
+      },
+      {
+        "path": "spec/offline_catalog_w68_spec.cr",
+        "sha256": "774b9bbc3703b4ece27c85ae7d9cd7e578e4e22345e1322af9a30749dac1350f"
+      },
+      {
+        "path": "spec/offline_catalog_w69_spec.cr",
+        "sha256": "7c83996d2620b1a136450a270b508335426f6b8f7ee2e3a344851438c005c1f0"
+      },
+      {
+        "path": "spec/offline_catalog_w70_spec.cr",
+        "sha256": "27cecb8d4bd2f6f723f19a4dc34f9144ac343b8f3b6082364cd773348d2c1166"
+      },
+      {
+        "path": "spec/offline_catalog_w71_spec.cr",
+        "sha256": "49b918e186f392eaba6bff373456011ee61688f0584c8266ad9b7e2779156226"
+      },
+      {
+        "path": "spec/offline_catalog_w73_spec.cr",
+        "sha256": "0cf35e9b09bbe00a21e40fb3b501a8fd74483b2ede25c528715053b3e56d5294"
+      },
+      {
+        "path": "spec/offline_catalog_w76_spec.cr",
+        "sha256": "9e4de9f81963a5a328158311b2ef1dfa1e44c3018716744f3d562495e1426882"
+      },
+      {
+        "path": "spec/offline_catalog_w77_spec.cr",
+        "sha256": "2ad5636ca811744c49ecd80383c7cb57cd27919545733ef6d71721933ba17e62"
+      },
+      {
+        "path": "spec/offline_catalog_w78_spec.cr",
+        "sha256": "1fd4fefd3805f6166e30bfcc0fb3d6a24f21722a3b67685e70d4f827abaf8bfa"
+      },
+      {
+        "path": "spec/offline_catalog_w79_spec.cr",
+        "sha256": "4c72a84ef18b68979dcd027dd8f1acd4eca0fd0223b3431ffaa89c934ffdda2c"
+      },
+      {
+        "path": "spec/offline_catalog_w80_spec.cr",
+        "sha256": "351db6931f464646eb8040493a1c438855a109c8402a579be5b6185e0c7d0bc8"
+      },
+      {
+        "path": "spec/offline_catalog_w81_spec.cr",
+        "sha256": "1c1ee5882be3431061a66b5c02e5e4b0e921e19b46cf854eb39732604089af80"
+      },
+      {
+        "path": "spec/offline_catalog_w82_spec.cr",
+        "sha256": "8bd7e02936750bf16add8b5d2749e98134931c8ff7b5474b9431654797c43882"
+      },
+      {
+        "path": "spec/offline_catalog_w83_spec.cr",
+        "sha256": "4ca789e5d954870fd1fab93c761708047f6254abf7b0770147821614dd5e3303"
+      },
+      {
+        "path": "spec/offline_catalog_w84_spec.cr",
+        "sha256": "a5d63d88e84c27af659aa4798e73c6025a21085aaa1938dfeaf4b768efbf452b"
+      },
+      {
+        "path": "spec/offline_catalog_w85_spec.cr",
+        "sha256": "96c535ee10cec90ff2aab6adaa4a4f4302a88b54df5250f61cf3657b5f0c4fc8"
+      },
+      {
+        "path": "spec/offline_catalog_w86_spec.cr",
+        "sha256": "e9f867f468333a5ca436020251eae2ceebca18eee0064578d82db4343e3b3a93"
+      },
+      {
+        "path": "spec/offline_catalog_w95_tuple_values_spec.cr",
+        "sha256": "f4ef95d1c1c64259971db865e35ef3d7b28d8f2bd802599074550e28567e66c0"
+      },
+      {
+        "path": "spec/offline_materialized_view_transform_w257_spec.cr",
+        "sha256": "1643f952a5b5a7e3821b30a7ff25a10ed85f8e8dae89fac06e259eaf7f7f3055"
+      },
+      {
+        "path": "spec/offline_materialized_view_w228_spec.cr",
+        "sha256": "cd52ccace248bb07dda4ffe3080fe5b132326b1ff36197d954be71777a31ea5c"
+      },
+      {
+        "path": "spec/offline_mv_materialization_w88_spec.cr",
+        "sha256": "36611d0368036525559e8c443ae9567f94d5f52b61c9d09ff1f8dbe96b5c236b"
+      },
+      {
+        "path": "spec/recursive_storage_array_w187_spec.cr",
+        "sha256": "9d7b6e6e0ea9dbd85d69de92fff49d9437f6aae259d0db9886f520fac5937e2f"
+      },
+      {
+        "path": "spec/recursive_storage_column_w186_spec.cr",
+        "sha256": "c2f2e352d602bb7e7978dbaad3b9b78e6a7ad04cfa00ad70d781a06b29bcef81"
+      },
+      {
+        "path": "spec/recursive_storage_compact_w188_spec.cr",
+        "sha256": "781b3a132b665e43dfce92227475db4a954dc6d896bd03a0f4b94a154d50cbc8"
+      },
+      {
+        "path": "spec/recursive_storage_reader_budget_w186_spec.cr",
+        "sha256": "a7d6b040a421a45b5a944356f9293436507fb3924fda4698290a469948f9610a"
+      },
+      {
+        "path": "spec/recursive_storage_table_w186_spec.cr",
+        "sha256": "da8379ce577c6915b6c4f9fadf58246ae52e4aef15366ab7fe1f532a89b566e3"
+      },
+      {
+        "path": "spec/recursive_storage_values_budget_w186_spec.cr",
+        "sha256": "ff52cf684bbfbdf65f84a0f9a9b26937d726ff128ed89b599e5125b1109c505d"
+      },
+      {
+        "path": "spec/static_binary_bulk_table_w247_spec.cr",
+        "sha256": "9374ff849a0ef0e5d41415e626f366a20da08f1c6eb8ebd05e8848185d5b3cd3"
+      },
+      {
+        "path": "spec/wide_part_table_low_cardinality_cache_spec.cr",
+        "sha256": "fd6a7e9e9239a9d50372678fb61bbb30648deb3f1a22ca699c292b3ab883e637"
+      },
+      {
+        "path": "spec/wide_part_table_projection_w87_spec.cr",
+        "sha256": "feabb162ea7a778c1c7638721826ffa42067c0eaf46de043dd0651d85250c5aa"
+      },
+      {
+        "path": "spec/wide_part_table_w53_spec.cr",
+        "sha256": "6082b8f48acb1106324f449ec62510fc86945b0fb704e21a3137d3182b1faf65"
+      },
+      {
+        "path": "spec/wide_part_table_w54_spec.cr",
+        "sha256": "b4285a28fcd57674e6ee54a552ffa3420ddd975d07449f6d739faaced1f5cf35"
+      },
+      {
+        "path": "spec/wide_part_table_w59_spec.cr",
+        "sha256": "e09e36c3a6df37a0135bf27b2e3f8f35d02dd8930da2f65deb2477561f90aaa7"
+      },
+      {
+        "path": "spec/wide_part_table_w61_spec.cr",
+        "sha256": "af87e7dcff0f6cb9bc343888524d4649b01b456843e68e7661e2311d2695c7c1"
+      },
+      {
+        "path": "spec/wide_part_table_w62_spec.cr",
+        "sha256": "edcbdd7d735a3713abad28e1d3ac57277b989627cef0aeeba8e267277d2a9228"
+      },
+      {
+        "path": "spec/wide_part_table_w63_spec.cr",
+        "sha256": "e2928881084b9c072d2f9541e8bd1b97bab8f06409c00248b3d6b3909ca7334d"
+      },
+      {
+        "path": "spec/wide_part_table_w64_spec.cr",
+        "sha256": "5f3def63fc2df949c549b7debf4ed5556eb8f93559c8e5143c07bada666d1530"
+      },
+      {
+        "path": "spec/wide_part_table_w68_spec.cr",
+        "sha256": "5e9a79e67d377c6d4314c69e3dbf41440e437f28c49557a3f6c4a334143064ae"
+      },
+      {
+        "path": "spec/wide_part_table_w69_spec.cr",
+        "sha256": "dddf8b18aff49339cf648556ce860a5acb4725e00c6ce0242370ea53f4d40342"
+      },
+      {
+        "path": "spec/wide_part_table_w70_spec.cr",
+        "sha256": "97f4fc4f1f0f6929664e3bdfa6e7c7a2ae503a2b3cd2949480fa27ccfdf7dd75"
+      },
+      {
+        "path": "spec/wide_part_table_w71_spec.cr",
+        "sha256": "7b5fa35149fcd99fd07c612abac35037000367d45822bd3738ae4f6a856ad2ad"
+      },
+      {
+        "path": "spec/wide_part_table_w73_spec.cr",
+        "sha256": "0c2122a879c92a76ccd3628550a37154e5f57b063f4b9f484dc054ba89338c8b"
+      },
+      {
+        "path": "spec/wide_part_table_w76_spec.cr",
+        "sha256": "ee002e36bed1de636517ae652f9d9e91c2509ec317c9e7887ceb80e356fc10ed"
+      },
+      {
+        "path": "spec/wide_part_table_w77_spec.cr",
+        "sha256": "afc8eaa881e6c82b66a12c88a5fd99fd1341e955f64602cfd9c4eda6c901a868"
+      },
+      {
+        "path": "spec/wide_part_table_w78_spec.cr",
+        "sha256": "0a690af66b9f2f435bfac9afd31cbeb1210f27320f85876b24084f381dac0ac9"
+      },
+      {
+        "path": "spec/wide_part_table_w79_spec.cr",
+        "sha256": "e09ebb04b81a74d99c84b656ac9722c89b2a7e0dcb33dc525c92f787797bddb8"
+      },
+      {
+        "path": "spec/wide_part_table_w80_spec.cr",
+        "sha256": "3e73010898278fb810022ab2afe6852ac9ff8a05c64f7078d4285057b62f9a3d"
+      },
+      {
+        "path": "spec/wide_part_table_w81_spec.cr",
+        "sha256": "dcade318b1a0a3e1652329b24d9533c3ba0d3a134703c77b1f24aafde9adfb04"
+      },
+      {
+        "path": "spec/wide_part_table_w82_spec.cr",
+        "sha256": "add0b3a51cd06fdbf437b4c1715002eac68417c50b47df893e5c8144071e5551"
+      },
+      {
+        "path": "spec/wide_part_table_w83_spec.cr",
+        "sha256": "0ff5eb7220792f5652b60edfc7ae4662ae3dc18e8b6a1d93c3facc43bda0bf0b"
+      },
+      {
+        "path": "spec/wide_part_table_w84_spec.cr",
+        "sha256": "94eff4aadf16fe187d73b80745bde82a79fa7ad9602fb0fd4188a4b627434058"
+      },
+      {
+        "path": "spec/wide_part_table_w85_spec.cr",
+        "sha256": "cf1a2083bc4c3ead0f09fea4e7bad719d338271df20541f82f0ae43af7f13e2f"
+      },
+      {
+        "path": "spec/wide_part_table_w95_tuple_spec.cr",
+        "sha256": "e17346289dedba52c26227c013c01efd2f9bf29101469579da57ebe9cecc11f9"
+      },
+      {
+        "path": "spec/dynamic_recursive_handoff_w249_spec.cr",
+        "sha256": "85bff1a6d5d9d06701f5d628d60960217698e4ed9832a45ce531a0e8b6678015"
+      },
+      {
+        "path": "spec/dynamic_owned_values_w220_spec.cr",
+        "sha256": "cd0e874ba41eaa9557382e18b153dcd3ba07bc619c3c3932cc25fb8cd69f38f6"
+      },
+      {
+        "path": "spec/recursive_qbit_static_parts_w231_spec.cr",
+        "sha256": "bf1f4e409ff4234be9751ef2334068f1da165bd5da55f5e0d56c83216997b8a8"
+      },
+      {
+        "path": "spec/recursive_qbit_parts_w230_spec.cr",
+        "sha256": "d6c98f558de67507971c8bc0d70ab3eef8612b2580f24d89fd5ccced272bc20e"
+      },
+      {
+        "path": "spec/aggregate_count_offline_w177_spec.cr",
+        "sha256": "c1cd3a544a324475c6c6b335c1a17d37b4e5bf2662030e30012a5656ec179bee"
+      },
+      {
+        "path": "spec/aggregate_recursive_w224_consumers_spec.cr",
+        "sha256": "88490075248a764da48d5c265265ef5c2d05667c9cd85681543a94da6bce6786"
+      },
+      {
+        "path": "spec/aggregate_variant_w225_consumers_spec.cr",
+        "sha256": "6ee677d962f218d38b51c7eb745a9cfaeebf57fe5f00ff28646173ca81e9800d"
+      },
+      {
+        "path": "spec/aggregate_variant_w225_adversary_spec.cr",
+        "sha256": "80476e35c4ff53b08a8884474bf3f2c092d03f35755ba80928025a329365ca98"
+      },
+      {
+        "path": "spec/aggregate_sum_w223_consumers_spec.cr",
+        "sha256": "9dfa5a1aefdd5427a0cfa211c912713335a8f8105996cd0f929c464e504ea3d4"
+      },
+      {
+        "path": "spec/aggregate_avg_w227_consumers_spec.cr",
+        "sha256": "8f1befe9fe910d6a5878b9d20bb2ea10b45dc77e4dca130f59786d8d3d9cb157"
+      },
+      {
+        "path": "spec/simple_aggregate_bulk_consumers_w221_native_spec.cr",
+        "sha256": "8b37cd11edd6b78c924b90bf7ae42b2063024bd46e4868cb04f19d7156d5e292"
+      },
+      {
+        "path": "spec/simple_aggregate_recursive_w222_part_spec.cr",
+        "sha256": "35cf6d260a3ff284d2e46b3a77deab90354861d54476dbcd79ac192e9c4a98c0"
+      },
+      {
+        "path": "spec/geometry_recursive_w239_consumers_spec.cr",
+        "sha256": "966448bb5e99b9d6207cfb7dcbaf7aab83a67266c9cdcb3637154b58e15a274a"
+      },
+      {
+        "path": "spec/object_offline_table_w130_spec.cr",
+        "sha256": "01c97d1ce1813ae91fb8aacde270fcbd8f4794c34574e9e3e63f96e561b0bb84"
+      },
+      {
+        "path": "spec/compact_typed_w260_spec.cr",
+        "sha256": "6e5de344910fdca84e16aefa342d59da16c5251dbb703727f0c84e6c884aafa9"
+      },
+      {
+        "path": "spec/compact_typed_w260_adversary_spec.cr",
+        "sha256": "4a9f69dfc02fdf4a0bbd42e98bd9a2d6696e2d098edd9181af3235e7e367fb68"
+      },
+      {
+        "path": "src/crystal_click/compact_columns_substreams.cr",
+        "sha256": "ed09d708548700429f164e3e9d0642e1933406dae1d13472830f157c33decb33"
+      },
+      {
+        "path": "src/crystal_click/compact_mark_index.cr",
+        "sha256": "9d4c82f8f6bbc8792c8db330e5aead7c4df3fd0ae4e5ddd0b148e61e5e9adc58"
+      },
+      {
+        "path": "src/crystal_click/part_physical_input.cr",
+        "sha256": "e7ece2738741547e07113d1cd55d9eba50796d2722ab44ab0a3c0eeee5028ea3"
+      },
+      {
+        "path": "src/crystal_click/wide_part.cr",
+        "sha256": "90deb4b71cf9175a99122b0279a1ba41253eb147ba82f2431e150afdce717122"
+      },
+      {
+        "path": "spec/static_nested_handoff_w248_spec.cr",
+        "sha256": "bd4824497d1ae8c579eff7fb0454ae4ee08539e982040f61a4739906bcacd213"
+      }
+    ],
+    "tool_identities": [
+      {
+        "path": "/opt/homebrew/bin/crystal",
+        "sha256": "40cffa1b29b572c064b4a397c6b82c7a84c55a146685d0971dab816f855eb836"
+      },
+      {
+        "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+        "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w260.lQZKil/root-normalizer-probe.cr",
+        "sha256": "ef3809464f2adaeda93036302a414d7f8273c643a4b48ae8f6a1ff95cd6c2e32"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w260.lQZKil/root-native-audit.rb",
+        "sha256": "50e1b9a9759051ac4c9226dabe9496894eadec19ab0940c578b504b829620570"
+      }
+    ],
+    "command_roster_revision": {
+      "at_utc": "2026-10-11 06:51:50 UTC",
+      "input_seal_unchanged": "2026-10-11 05:35:27 UTC",
+      "input_count": 108,
+      "diagnostic": {
+        "mode": "RELEASE",
+        "index": 20,
+        "paths": [
+          "spec/wide_part_table_w77_spec.cr",
+          "spec/wide_part_table_w78_spec.cr",
+          "spec/wide_part_table_w79_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w77_spec.cr spec/wide_part_table_w78_spec.cr spec/wide_part_table_w79_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+        "exit_code": 1,
+        "counts": null,
+        "classification": "Inconclusive process-tree memory kill before any examples; final inputs unchanged",
+        "diagnostic": "[PREFLIGHT] System memory free 75% > 50%\n[KILL] Memory limit for process tree: 12586336KB > 12288MB after ~219s\n"
+      },
+      "source_changes": false,
+      "guard_changes": false,
+      "ordered_paths_unchanged": true,
+      "debug_cohorts": 28,
+      "release_cohorts": 46,
+      "release_first_nineteen_groups_of_three_reused": true,
+      "release_tail_singleton_files": 27
+    }
+  },
+  "verification": {
+    "guard": {
+      "minimum_free_ram_percent": 50,
+      "crystal_workers": 1,
+      "process_tree_rss_limit_mib": 12288,
+      "compiler_timeout_seconds": 600,
+      "serial": true
+    },
+    "affected_specs": {
+      "modes": {
+        "DEBUG": {
+          "files": 84,
+          "cohorts": 28,
+          "examples": 392,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        },
+        "RELEASE": {
+          "files": 84,
+          "cohorts": 46,
+          "examples": 392,
+          "failures": 0,
+          "errors": 0,
+          "pending": 0
+        }
+      },
+      "full_repository_suite": false,
+      "ordered_paths_per_mode": [
+        "spec/binary_bulk_discriminator_framing_w189_spec.cr",
+        "spec/binary_bulk_physical_prefix_w151_spec.cr",
+        "spec/binary_bulk_w122_spec.cr",
+        "spec/binary_low_cardinality_storage_w142_spec.cr",
+        "spec/compact_physical_context_w259_adversary_spec.cr",
+        "spec/compact_physical_context_w259_spec.cr",
+        "spec/offline_catalog_projection_w87_spec.cr",
+        "spec/offline_catalog_spec.cr",
+        "spec/offline_catalog_w27_spec.cr",
+        "spec/offline_catalog_w28_spec.cr",
+        "spec/offline_catalog_w29_spec.cr",
+        "spec/offline_catalog_w53_spec.cr",
+        "spec/offline_catalog_w54_spec.cr",
+        "spec/offline_catalog_w60_spec.cr",
+        "spec/offline_catalog_w63_spec.cr",
+        "spec/offline_catalog_w68_spec.cr",
+        "spec/offline_catalog_w69_spec.cr",
+        "spec/offline_catalog_w70_spec.cr",
+        "spec/offline_catalog_w71_spec.cr",
+        "spec/offline_catalog_w73_spec.cr",
+        "spec/offline_catalog_w76_spec.cr",
+        "spec/offline_catalog_w77_spec.cr",
+        "spec/offline_catalog_w78_spec.cr",
+        "spec/offline_catalog_w79_spec.cr",
+        "spec/offline_catalog_w80_spec.cr",
+        "spec/offline_catalog_w81_spec.cr",
+        "spec/offline_catalog_w82_spec.cr",
+        "spec/offline_catalog_w83_spec.cr",
+        "spec/offline_catalog_w84_spec.cr",
+        "spec/offline_catalog_w85_spec.cr",
+        "spec/offline_catalog_w86_spec.cr",
+        "spec/offline_catalog_w95_tuple_values_spec.cr",
+        "spec/offline_materialized_view_transform_w257_spec.cr",
+        "spec/offline_materialized_view_w228_spec.cr",
+        "spec/offline_mv_materialization_w88_spec.cr",
+        "spec/recursive_storage_array_w187_spec.cr",
+        "spec/recursive_storage_column_w186_spec.cr",
+        "spec/recursive_storage_compact_w188_spec.cr",
+        "spec/recursive_storage_reader_budget_w186_spec.cr",
+        "spec/recursive_storage_table_w186_spec.cr",
+        "spec/recursive_storage_values_budget_w186_spec.cr",
+        "spec/static_binary_bulk_table_w247_spec.cr",
+        "spec/wide_part_table_low_cardinality_cache_spec.cr",
+        "spec/wide_part_table_projection_w87_spec.cr",
+        "spec/wide_part_table_w53_spec.cr",
+        "spec/wide_part_table_w54_spec.cr",
+        "spec/wide_part_table_w59_spec.cr",
+        "spec/wide_part_table_w61_spec.cr",
+        "spec/wide_part_table_w62_spec.cr",
+        "spec/wide_part_table_w63_spec.cr",
+        "spec/wide_part_table_w64_spec.cr",
+        "spec/wide_part_table_w68_spec.cr",
+        "spec/wide_part_table_w69_spec.cr",
+        "spec/wide_part_table_w70_spec.cr",
+        "spec/wide_part_table_w71_spec.cr",
+        "spec/wide_part_table_w73_spec.cr",
+        "spec/wide_part_table_w76_spec.cr",
+        "spec/wide_part_table_w77_spec.cr",
+        "spec/wide_part_table_w78_spec.cr",
+        "spec/wide_part_table_w79_spec.cr",
+        "spec/wide_part_table_w80_spec.cr",
+        "spec/wide_part_table_w81_spec.cr",
+        "spec/wide_part_table_w82_spec.cr",
+        "spec/wide_part_table_w83_spec.cr",
+        "spec/wide_part_table_w84_spec.cr",
+        "spec/wide_part_table_w85_spec.cr",
+        "spec/wide_part_table_w95_tuple_spec.cr",
+        "spec/static_nested_handoff_w248_spec.cr",
+        "spec/dynamic_recursive_handoff_w249_spec.cr",
+        "spec/dynamic_owned_values_w220_spec.cr",
+        "spec/recursive_qbit_static_parts_w231_spec.cr",
+        "spec/recursive_qbit_parts_w230_spec.cr",
+        "spec/aggregate_count_offline_w177_spec.cr",
+        "spec/aggregate_recursive_w224_consumers_spec.cr",
+        "spec/aggregate_variant_w225_consumers_spec.cr",
+        "spec/aggregate_variant_w225_adversary_spec.cr",
+        "spec/aggregate_sum_w223_consumers_spec.cr",
+        "spec/aggregate_avg_w227_consumers_spec.cr",
+        "spec/simple_aggregate_bulk_consumers_w221_native_spec.cr",
+        "spec/simple_aggregate_recursive_w222_part_spec.cr",
+        "spec/geometry_recursive_w239_consumers_spec.cr",
+        "spec/object_offline_table_w130_spec.cr",
+        "spec/compact_typed_w260_spec.cr",
+        "spec/compact_typed_w260_adversary_spec.cr"
+      ],
+      "cohorts": [
+        {
+          "mode": "DEBUG",
+          "index": 1,
+          "paths": [
+            "spec/binary_bulk_discriminator_framing_w189_spec.cr",
+            "spec/binary_bulk_physical_prefix_w151_spec.cr",
+            "spec/binary_bulk_w122_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_bulk_discriminator_framing_w189_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_bulk_w122_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 13,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 2,
+          "paths": [
+            "spec/binary_low_cardinality_storage_w142_spec.cr",
+            "spec/compact_physical_context_w259_adversary_spec.cr",
+            "spec/compact_physical_context_w259_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_low_cardinality_storage_w142_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_physical_context_w259_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 49,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 3,
+          "paths": [
+            "spec/offline_catalog_projection_w87_spec.cr",
+            "spec/offline_catalog_spec.cr",
+            "spec/offline_catalog_w27_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_projection_w87_spec.cr spec/offline_catalog_spec.cr spec/offline_catalog_w27_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 57,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 4,
+          "paths": [
+            "spec/offline_catalog_w28_spec.cr",
+            "spec/offline_catalog_w29_spec.cr",
+            "spec/offline_catalog_w53_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w28_spec.cr spec/offline_catalog_w29_spec.cr spec/offline_catalog_w53_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 5,
+          "paths": [
+            "spec/offline_catalog_w54_spec.cr",
+            "spec/offline_catalog_w60_spec.cr",
+            "spec/offline_catalog_w63_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w54_spec.cr spec/offline_catalog_w60_spec.cr spec/offline_catalog_w63_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 4,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 6,
+          "paths": [
+            "spec/offline_catalog_w68_spec.cr",
+            "spec/offline_catalog_w69_spec.cr",
+            "spec/offline_catalog_w70_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w68_spec.cr spec/offline_catalog_w69_spec.cr spec/offline_catalog_w70_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 4,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 7,
+          "paths": [
+            "spec/offline_catalog_w71_spec.cr",
+            "spec/offline_catalog_w73_spec.cr",
+            "spec/offline_catalog_w76_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w71_spec.cr spec/offline_catalog_w73_spec.cr spec/offline_catalog_w76_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 8,
+          "paths": [
+            "spec/offline_catalog_w77_spec.cr",
+            "spec/offline_catalog_w78_spec.cr",
+            "spec/offline_catalog_w79_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w77_spec.cr spec/offline_catalog_w78_spec.cr spec/offline_catalog_w79_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 9,
+          "paths": [
+            "spec/offline_catalog_w80_spec.cr",
+            "spec/offline_catalog_w81_spec.cr",
+            "spec/offline_catalog_w82_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w80_spec.cr spec/offline_catalog_w81_spec.cr spec/offline_catalog_w82_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 10,
+          "paths": [
+            "spec/offline_catalog_w83_spec.cr",
+            "spec/offline_catalog_w84_spec.cr",
+            "spec/offline_catalog_w85_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w83_spec.cr spec/offline_catalog_w84_spec.cr spec/offline_catalog_w85_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 11,
+          "paths": [
+            "spec/offline_catalog_w86_spec.cr",
+            "spec/offline_catalog_w95_tuple_values_spec.cr",
+            "spec/offline_materialized_view_transform_w257_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w86_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr spec/offline_materialized_view_transform_w257_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 23,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 12,
+          "paths": [
+            "spec/offline_materialized_view_w228_spec.cr",
+            "spec/offline_mv_materialization_w88_spec.cr",
+            "spec/recursive_storage_array_w187_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_materialized_view_w228_spec.cr spec/offline_mv_materialization_w88_spec.cr spec/recursive_storage_array_w187_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 29,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 13,
+          "paths": [
+            "spec/recursive_storage_column_w186_spec.cr",
+            "spec/recursive_storage_compact_w188_spec.cr",
+            "spec/recursive_storage_reader_budget_w186_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_compact_w188_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 11,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 14,
+          "paths": [
+            "spec/recursive_storage_table_w186_spec.cr",
+            "spec/recursive_storage_values_budget_w186_spec.cr",
+            "spec/static_binary_bulk_table_w247_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_storage_table_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/static_binary_bulk_table_w247_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 16,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 15,
+          "paths": [
+            "spec/wide_part_table_low_cardinality_cache_spec.cr",
+            "spec/wide_part_table_projection_w87_spec.cr",
+            "spec/wide_part_table_w53_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_low_cardinality_cache_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/wide_part_table_w53_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 9,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 16,
+          "paths": [
+            "spec/wide_part_table_w54_spec.cr",
+            "spec/wide_part_table_w59_spec.cr",
+            "spec/wide_part_table_w61_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w54_spec.cr spec/wide_part_table_w59_spec.cr spec/wide_part_table_w61_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 6,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 17,
+          "paths": [
+            "spec/wide_part_table_w62_spec.cr",
+            "spec/wide_part_table_w63_spec.cr",
+            "spec/wide_part_table_w64_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w62_spec.cr spec/wide_part_table_w63_spec.cr spec/wide_part_table_w64_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 7,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 18,
+          "paths": [
+            "spec/wide_part_table_w68_spec.cr",
+            "spec/wide_part_table_w69_spec.cr",
+            "spec/wide_part_table_w70_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w68_spec.cr spec/wide_part_table_w69_spec.cr spec/wide_part_table_w70_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 8,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 19,
+          "paths": [
+            "spec/wide_part_table_w71_spec.cr",
+            "spec/wide_part_table_w73_spec.cr",
+            "spec/wide_part_table_w76_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w71_spec.cr spec/wide_part_table_w73_spec.cr spec/wide_part_table_w76_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 7,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 20,
+          "paths": [
+            "spec/wide_part_table_w77_spec.cr",
+            "spec/wide_part_table_w78_spec.cr",
+            "spec/wide_part_table_w79_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w77_spec.cr spec/wide_part_table_w78_spec.cr spec/wide_part_table_w79_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 7,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 21,
+          "paths": [
+            "spec/wide_part_table_w80_spec.cr",
+            "spec/wide_part_table_w81_spec.cr",
+            "spec/wide_part_table_w82_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w80_spec.cr spec/wide_part_table_w81_spec.cr spec/wide_part_table_w82_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 10,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 22,
+          "paths": [
+            "spec/wide_part_table_w83_spec.cr",
+            "spec/wide_part_table_w84_spec.cr",
+            "spec/wide_part_table_w85_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w83_spec.cr spec/wide_part_table_w84_spec.cr spec/wide_part_table_w85_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 6,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 23,
+          "paths": [
+            "spec/wide_part_table_w95_tuple_spec.cr",
+            "spec/static_nested_handoff_w248_spec.cr",
+            "spec/dynamic_recursive_handoff_w249_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w95_tuple_spec.cr spec/static_nested_handoff_w248_spec.cr spec/dynamic_recursive_handoff_w249_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 20,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 24,
+          "paths": [
+            "spec/dynamic_owned_values_w220_spec.cr",
+            "spec/recursive_qbit_static_parts_w231_spec.cr",
+            "spec/recursive_qbit_parts_w230_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_owned_values_w220_spec.cr spec/recursive_qbit_static_parts_w231_spec.cr spec/recursive_qbit_parts_w230_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 24,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 25,
+          "paths": [
+            "spec/aggregate_count_offline_w177_spec.cr",
+            "spec/aggregate_recursive_w224_consumers_spec.cr",
+            "spec/aggregate_variant_w225_consumers_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_offline_w177_spec.cr spec/aggregate_recursive_w224_consumers_spec.cr spec/aggregate_variant_w225_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 16,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 26,
+          "paths": [
+            "spec/aggregate_variant_w225_adversary_spec.cr",
+            "spec/aggregate_sum_w223_consumers_spec.cr",
+            "spec/aggregate_avg_w227_consumers_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_variant_w225_adversary_spec.cr spec/aggregate_sum_w223_consumers_spec.cr spec/aggregate_avg_w227_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 10,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 27,
+          "paths": [
+            "spec/simple_aggregate_bulk_consumers_w221_native_spec.cr",
+            "spec/simple_aggregate_recursive_w222_part_spec.cr",
+            "spec/geometry_recursive_w239_consumers_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_bulk_consumers_w221_native_spec.cr spec/simple_aggregate_recursive_w222_part_spec.cr spec/geometry_recursive_w239_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 15,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "DEBUG",
+          "index": 28,
+          "paths": [
+            "spec/object_offline_table_w130_spec.cr",
+            "spec/compact_typed_w260_spec.cr",
+            "spec/compact_typed_w260_adversary_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_offline_table_w130_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+          "exit_code": 0,
+          "counts": {
+            "examples": 26,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 1,
+          "paths": [
+            "spec/binary_bulk_discriminator_framing_w189_spec.cr",
+            "spec/binary_bulk_physical_prefix_w151_spec.cr",
+            "spec/binary_bulk_w122_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_bulk_discriminator_framing_w189_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_bulk_w122_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 13,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 2,
+          "paths": [
+            "spec/binary_low_cardinality_storage_w142_spec.cr",
+            "spec/compact_physical_context_w259_adversary_spec.cr",
+            "spec/compact_physical_context_w259_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/binary_low_cardinality_storage_w142_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_physical_context_w259_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 49,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 3,
+          "paths": [
+            "spec/offline_catalog_projection_w87_spec.cr",
+            "spec/offline_catalog_spec.cr",
+            "spec/offline_catalog_w27_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_projection_w87_spec.cr spec/offline_catalog_spec.cr spec/offline_catalog_w27_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 57,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 4,
+          "paths": [
+            "spec/offline_catalog_w28_spec.cr",
+            "spec/offline_catalog_w29_spec.cr",
+            "spec/offline_catalog_w53_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w28_spec.cr spec/offline_catalog_w29_spec.cr spec/offline_catalog_w53_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 5,
+          "paths": [
+            "spec/offline_catalog_w54_spec.cr",
+            "spec/offline_catalog_w60_spec.cr",
+            "spec/offline_catalog_w63_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w54_spec.cr spec/offline_catalog_w60_spec.cr spec/offline_catalog_w63_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 4,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 6,
+          "paths": [
+            "spec/offline_catalog_w68_spec.cr",
+            "spec/offline_catalog_w69_spec.cr",
+            "spec/offline_catalog_w70_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w68_spec.cr spec/offline_catalog_w69_spec.cr spec/offline_catalog_w70_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 4,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 7,
+          "paths": [
+            "spec/offline_catalog_w71_spec.cr",
+            "spec/offline_catalog_w73_spec.cr",
+            "spec/offline_catalog_w76_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w71_spec.cr spec/offline_catalog_w73_spec.cr spec/offline_catalog_w76_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 8,
+          "paths": [
+            "spec/offline_catalog_w77_spec.cr",
+            "spec/offline_catalog_w78_spec.cr",
+            "spec/offline_catalog_w79_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w77_spec.cr spec/offline_catalog_w78_spec.cr spec/offline_catalog_w79_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 9,
+          "paths": [
+            "spec/offline_catalog_w80_spec.cr",
+            "spec/offline_catalog_w81_spec.cr",
+            "spec/offline_catalog_w82_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w80_spec.cr spec/offline_catalog_w81_spec.cr spec/offline_catalog_w82_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 10,
+          "paths": [
+            "spec/offline_catalog_w83_spec.cr",
+            "spec/offline_catalog_w84_spec.cr",
+            "spec/offline_catalog_w85_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w83_spec.cr spec/offline_catalog_w84_spec.cr spec/offline_catalog_w85_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 11,
+          "paths": [
+            "spec/offline_catalog_w86_spec.cr",
+            "spec/offline_catalog_w95_tuple_values_spec.cr",
+            "spec/offline_materialized_view_transform_w257_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w86_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr spec/offline_materialized_view_transform_w257_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 23,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 12,
+          "paths": [
+            "spec/offline_materialized_view_w228_spec.cr",
+            "spec/offline_mv_materialization_w88_spec.cr",
+            "spec/recursive_storage_array_w187_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_materialized_view_w228_spec.cr spec/offline_mv_materialization_w88_spec.cr spec/recursive_storage_array_w187_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 29,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 13,
+          "paths": [
+            "spec/recursive_storage_column_w186_spec.cr",
+            "spec/recursive_storage_compact_w188_spec.cr",
+            "spec/recursive_storage_reader_budget_w186_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_storage_column_w186_spec.cr spec/recursive_storage_compact_w188_spec.cr spec/recursive_storage_reader_budget_w186_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 11,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 14,
+          "paths": [
+            "spec/recursive_storage_table_w186_spec.cr",
+            "spec/recursive_storage_values_budget_w186_spec.cr",
+            "spec/static_binary_bulk_table_w247_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_storage_table_w186_spec.cr spec/recursive_storage_values_budget_w186_spec.cr spec/static_binary_bulk_table_w247_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 16,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 15,
+          "paths": [
+            "spec/wide_part_table_low_cardinality_cache_spec.cr",
+            "spec/wide_part_table_projection_w87_spec.cr",
+            "spec/wide_part_table_w53_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_low_cardinality_cache_spec.cr spec/wide_part_table_projection_w87_spec.cr spec/wide_part_table_w53_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 9,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 16,
+          "paths": [
+            "spec/wide_part_table_w54_spec.cr",
+            "spec/wide_part_table_w59_spec.cr",
+            "spec/wide_part_table_w61_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w54_spec.cr spec/wide_part_table_w59_spec.cr spec/wide_part_table_w61_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 6,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 17,
+          "paths": [
+            "spec/wide_part_table_w62_spec.cr",
+            "spec/wide_part_table_w63_spec.cr",
+            "spec/wide_part_table_w64_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w62_spec.cr spec/wide_part_table_w63_spec.cr spec/wide_part_table_w64_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 7,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 18,
+          "paths": [
+            "spec/wide_part_table_w68_spec.cr",
+            "spec/wide_part_table_w69_spec.cr",
+            "spec/wide_part_table_w70_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w68_spec.cr spec/wide_part_table_w69_spec.cr spec/wide_part_table_w70_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 8,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 19,
+          "paths": [
+            "spec/wide_part_table_w71_spec.cr",
+            "spec/wide_part_table_w73_spec.cr",
+            "spec/wide_part_table_w76_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w71_spec.cr spec/wide_part_table_w73_spec.cr spec/wide_part_table_w76_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 7,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 20,
+          "paths": [
+            "spec/wide_part_table_w77_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w77_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 21,
+          "paths": [
+            "spec/wide_part_table_w78_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w78_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 2,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 22,
+          "paths": [
+            "spec/wide_part_table_w79_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w79_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 2,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 23,
+          "paths": [
+            "spec/wide_part_table_w80_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w80_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 24,
+          "paths": [
+            "spec/wide_part_table_w81_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w81_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 4,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 25,
+          "paths": [
+            "spec/wide_part_table_w82_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w82_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 26,
+          "paths": [
+            "spec/wide_part_table_w83_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w83_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 2,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 27,
+          "paths": [
+            "spec/wide_part_table_w84_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w84_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 28,
+          "paths": [
+            "spec/wide_part_table_w85_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w85_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 1,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 29,
+          "paths": [
+            "spec/wide_part_table_w95_tuple_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w95_tuple_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 7,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 30,
+          "paths": [
+            "spec/static_nested_handoff_w248_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/static_nested_handoff_w248_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 6,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 31,
+          "paths": [
+            "spec/dynamic_recursive_handoff_w249_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_recursive_handoff_w249_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 7,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 32,
+          "paths": [
+            "spec/dynamic_owned_values_w220_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/dynamic_owned_values_w220_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 10,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 33,
+          "paths": [
+            "spec/recursive_qbit_static_parts_w231_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_static_parts_w231_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 8,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 34,
+          "paths": [
+            "spec/recursive_qbit_parts_w230_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/recursive_qbit_parts_w230_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 6,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 35,
+          "paths": [
+            "spec/aggregate_count_offline_w177_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_count_offline_w177_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 0,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 36,
+          "paths": [
+            "spec/aggregate_recursive_w224_consumers_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_recursive_w224_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 7,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 37,
+          "paths": [
+            "spec/aggregate_variant_w225_consumers_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_variant_w225_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 9,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 38,
+          "paths": [
+            "spec/aggregate_variant_w225_adversary_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_variant_w225_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 5,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 39,
+          "paths": [
+            "spec/aggregate_sum_w223_consumers_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_sum_w223_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 2,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 40,
+          "paths": [
+            "spec/aggregate_avg_w227_consumers_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/aggregate_avg_w227_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 3,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 41,
+          "paths": [
+            "spec/simple_aggregate_bulk_consumers_w221_native_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_bulk_consumers_w221_native_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 0,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 42,
+          "paths": [
+            "spec/simple_aggregate_recursive_w222_part_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/simple_aggregate_recursive_w222_part_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 13,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 43,
+          "paths": [
+            "spec/geometry_recursive_w239_consumers_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/geometry_recursive_w239_consumers_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 2,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 44,
+          "paths": [
+            "spec/object_offline_table_w130_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/object_offline_table_w130_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 2,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 45,
+          "paths": [
+            "spec/compact_typed_w260_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_typed_w260_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 18,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        },
+        {
+          "mode": "RELEASE",
+          "index": 46,
+          "paths": [
+            "spec/compact_typed_w260_adversary_spec.cr"
+          ],
+          "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_typed_w260_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release",
+          "exit_code": 0,
+          "counts": {
+            "examples": 6,
+            "failures": 0,
+            "errors": 0,
+            "pending": 0
+          }
+        }
+      ],
+      "coverage_meaning": "Exact 84-path command roster per mode and 392 executed examples. Two fixture-gated singleton RELEASE commands have zero examples and are compile-only, not native Count/SAF behavior."
+    },
+    "helpers": {
+      "DEBUG": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_compact_typed_w260.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -o /private/tmp/crystal-click-w260.lQZKil/check_compact_typed_w260_debug",
+        "exit_code": 0
+      },
+      "RELEASE": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_compact_typed_w260.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release -o /private/tmp/crystal-click-w260.lQZKil/check_compact_typed_w260_release",
+        "exit_code": 0
+      }
+    },
+    "native": {
+      "DEBUG": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/probe_compact_typed_w260.rb --helper /private/tmp/crystal-click-w260.lQZKil/check_compact_typed_w260_debug --root /private/tmp/crystal-click-w260-native-debug-final.y5WngH --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+        "exit_code": 0
+      },
+      "RELEASE": {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/probe_compact_typed_w260.rb --helper /private/tmp/crystal-click-w260.lQZKil/check_compact_typed_w260_release --root /private/tmp/crystal-click-w260-native-release-final.JZqsxI --clickhouse /private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+        "exit_code": 0
+      },
+      "raw_audit_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 /private/tmp/crystal-click-w260.lQZKil/root-native-audit.rb /private/tmp/crystal-click-w260-native-debug-final.y5WngH /private/tmp/crystal-click-w260-native-release-final.JZqsxI",
+      "raw_audit_exit": 0,
+      "report": {
+        "status": "passed",
+        "cells": [
+          {
+            "root": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH",
+            "summary": {
+              "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/summary.json",
+              "bytes": 537378,
+              "sha256": "76eeb9ec18485cfead6325077cf76239b016c80f027662e8351e5da3c2aac409"
+            },
+            "runtime": {
+              "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+              "expected_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+              "sha256_before": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+              "sha256_after": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+            },
+            "helper": {
+              "path": "/private/tmp/crystal-click-w260.lQZKil/check_compact_typed_w260_debug",
+              "sha256_before": "9435f82f62d735247f4351b40122e427f73cad39184a28969a6fe9c2433540d8",
+              "sha256_after": "9435f82f62d735247f4351b40122e427f73cad39184a28969a6fe9c2433540d8"
+            },
+            "source_snapshot": {
+              "path": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+              "revision": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+              "runtime_provenance_claimed": false
+            },
+            "processes": [
+              {
+                "kind": "clickhouse local",
+                "argv": {
+                  "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/invocations/native_source.argv.json",
+                  "bytes": 334,
+                  "sha256": "fae24a250e3578cbb3473dadd5455c9ca4628ba68f1dedf8f9d13b91ed4fc9a3"
+                },
+                "stdin": {
+                  "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/invocations/native_source.stdin.sql",
+                  "bytes": 64190,
+                  "sha256": "4dc56f35e6b62455dd2daae0046daf9a74acfa5fd0e8bfad280c20aa747de26f"
+                },
+                "stdout": {
+                  "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/invocations/native_source.stdout",
+                  "bytes": 28131,
+                  "sha256": "d22b2e1f38cd77c715c8f25d5c1f6a2b3b37bf3886422198f8e36f209c77e932"
+                },
+                "stderr": {
+                  "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/invocations/native_source.stderr",
+                  "bytes": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "process_record": {
+                  "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/invocations/native_source.json",
+                  "bytes": 1552,
+                  "sha256": "4f89f53d27b80db3ce0d4228d05a4e51bb8832485efbfc76e19a9a865ead86c4"
+                }
+              },
+              {
+                "kind": "prebuilt Crystal helper",
+                "argv": {
+                  "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/invocations/typed_public_reader_probe.argv.json",
+                  "bytes": 330,
+                  "sha256": "8fe0e162f1bf71a95b46493eca79cfc700702854d2cf44ff5424c11d42113386"
+                },
+                "stdin": {
+                  "path": "(implicit empty helper stdin)",
+                  "bytes": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "stdout": {
+                  "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/invocations/typed_public_reader_probe.stdout",
+                  "bytes": 176385,
+                  "sha256": "e2943090a3c81985e9e563df8f3c87b9102bd1b3bca7262192b770cd4a0a7616"
+                },
+                "stderr": {
+                  "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/invocations/typed_public_reader_probe.stderr",
+                  "bytes": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "process_record": {
+                  "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/invocations/typed_public_reader_probe.json",
+                  "bytes": 1395,
+                  "sha256": "a1309756431cada9ff74e8ae1d44c38ad2353b4cedf3badbbf680cd5d58aa33e"
+                }
+              }
+            ],
+            "source_files": [
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_array_json_parts_w185.rb",
+                "sha256": "a71366bf4e87ed7649373c0c251b865e75ac6cbe67263605a6ceb576ec4b1451"
+              },
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_compact_typed_w260.cr",
+                "sha256": "fc798aa66ce10605ff5b999975570430eaf481e343a82dd9c6be16ece5694646"
+              },
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_typed_w260.rb",
+                "sha256": "d4f7954802edd76c01f72f7550e196354dc9dfe28bd59732217c3c81a00af158"
+              },
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/stock_part_probe_support_w191.rb",
+                "sha256": "f8302039adc306c4d94d0d4ea28919616eb1dc50ca2c7540c0d861e0282009e1"
+              },
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/support/compact_typed_w260_fixture.cr",
+                "sha256": "14c539522ce344685ee9d9c3efbe0811be46ac7ac7a3a00143cd91f999456cdb"
+              }
+            ],
+            "native_parts": {
+              "wide_control": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/bfa/bfa9749d-758a-4120-b0e4-3a5613cbed3f/all_1_1_0",
+                "file_count": 69,
+                "bytes": 10020,
+                "inventory_sha256": "b8822b6ee430b7c2df3295e14ef9580322b591f4dd0521c3b14fcc2b755c44f4"
+              },
+              "a_mrk3_s0_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/2d7/2d7bc389-d203-4b05-a5bc-2accb6d09a87/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4519,
+                "inventory_sha256": "4d04d63fb3f55176572c808b223e86662ea3756b04fcae96de1831f3f1d9592b"
+              },
+              "a_mrk3_s0_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/41c/41cf13c8-cf8e-438c-b4e5-89628031526f/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4532,
+                "inventory_sha256": "29a95ad93404b26269e82f443ce6c6b88b1acea5fa2d36e92b1d010a37b51907"
+              },
+              "a_mrk3_s1_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/4d6/4d6fcdc0-3f27-4633-8fc6-4afddae9fc16/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4623,
+                "inventory_sha256": "faaccb80638eb399a399fc222ce5b540b1faae6a7c14b5f8c66eab12773ef839"
+              },
+              "a_mrk3_s1_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/4e9/4e9cb7e3-6ba1-4317-bba1-3967f93388ee/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4635,
+                "inventory_sha256": "63c4e2037f50e2b451c6e3b07887f9b673f68ec24cfd923ed9c50e64ca256b66"
+              },
+              "a_mrk4_s0_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/7e0/7e079f95-66b0-419d-9524-f9a1b8f4a6dc/all_1_1_0",
+                "file_count": 11,
+                "bytes": 6515,
+                "inventory_sha256": "1a5c400435ccfb22f8c952372369e628504fcfb47dfa39a4b77f4dd17b581d73"
+              },
+              "a_mrk4_s0_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/388/388aa712-010f-40a3-a73d-cdec7db0161f/all_1_1_0",
+                "file_count": 11,
+                "bytes": 6528,
+                "inventory_sha256": "1ae970e0f2012be621f4596e281916f3fa6b1904bdf9801b0269435cba780556"
+              },
+              "a_mrk4_s1_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/718/718dc8a9-2f7b-47e8-a682-d2b8d631d6f4/all_1_1_0",
+                "file_count": 11,
+                "bytes": 7197,
+                "inventory_sha256": "e916fddd984978457a05634e179702ee98537775e8081ce51ad393d207647aa8"
+              },
+              "a_mrk4_s1_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/edc/edc073cc-59b8-411f-aa8a-98bdfba118e6/all_1_1_0",
+                "file_count": 11,
+                "bytes": 7209,
+                "inventory_sha256": "8f6701d22f551884f10699e91526ea3880ad0d0c5da5140fbd927d44027ddb5a"
+              },
+              "b_mrk3": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/bfd/bfd262b2-7403-45be-a6e9-eb32a0a0a040/all_1_1_0",
+                "file_count": 10,
+                "bytes": 1980,
+                "inventory_sha256": "d8c6b7f2861b8ad35547dd55fcf05681bf3c770a22b81878d6fcb8982eda23b1"
+              },
+              "b_mrk4": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/stores/native/store/bae/baebd627-fcb9-4522-a121-459b29ac9680/all_1_1_0",
+                "file_count": 11,
+                "bytes": 3130,
+                "inventory_sha256": "eb2a4603800ab50cc4c19a58cc378055af00af6391d6e2b42194ac3968855731"
+              }
+            },
+            "copied_source_parts": {
+              "a_mrk3_s0_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-3f2aa9adf221/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4519,
+                "inventory_sha256": "4d04d63fb3f55176572c808b223e86662ea3756b04fcae96de1831f3f1d9592b"
+              },
+              "a_mrk3_s0_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-e96434c7a2e0/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4532,
+                "inventory_sha256": "29a95ad93404b26269e82f443ce6c6b88b1acea5fa2d36e92b1d010a37b51907"
+              },
+              "a_mrk3_s1_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-2a5508a8f9f6/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4623,
+                "inventory_sha256": "faaccb80638eb399a399fc222ce5b540b1faae6a7c14b5f8c66eab12773ef839"
+              },
+              "a_mrk3_s1_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-75b1964a6c62/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4635,
+                "inventory_sha256": "63c4e2037f50e2b451c6e3b07887f9b673f68ec24cfd923ed9c50e64ca256b66"
+              },
+              "a_mrk4_s0_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-f2527e2c63a8/all_1_1_0",
+                "file_count": 11,
+                "bytes": 6515,
+                "inventory_sha256": "1a5c400435ccfb22f8c952372369e628504fcfb47dfa39a4b77f4dd17b581d73"
+              },
+              "a_mrk4_s0_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-d26ee5df2375/all_1_1_0",
+                "file_count": 11,
+                "bytes": 6528,
+                "inventory_sha256": "1ae970e0f2012be621f4596e281916f3fa6b1904bdf9801b0269435cba780556"
+              },
+              "a_mrk4_s1_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-f59507cd566b/all_1_1_0",
+                "file_count": 11,
+                "bytes": 7197,
+                "inventory_sha256": "e916fddd984978457a05634e179702ee98537775e8081ce51ad393d207647aa8"
+              },
+              "a_mrk4_s1_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-37000ea8d707/all_1_1_0",
+                "file_count": 11,
+                "bytes": 7209,
+                "inventory_sha256": "8f6701d22f551884f10699e91526ea3880ad0d0c5da5140fbd927d44027ddb5a"
+              },
+              "b_mrk3": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-c193e32e231a/all_1_1_0",
+                "file_count": 10,
+                "bytes": 1980,
+                "inventory_sha256": "d8c6b7f2861b8ad35547dd55fcf05681bf3c770a22b81878d6fcb8982eda23b1"
+              },
+              "b_mrk4": {
+                "path": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH/offline_catalog/store/260/26000000-0000-4000-8000-5cf069910c67/all_1_1_0",
+                "file_count": 11,
+                "bytes": 3130,
+                "inventory_sha256": "eb2a4603800ab50cc4c19a58cc378055af00af6391d6e2b42194ac3968855731"
+              }
+            },
+            "positive_control": "actual raw native/helper capture accepted",
+            "negative_controls": [
+              {
+                "name": "nonzero exit",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "signal",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "timeout",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "I/O error",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "summary and rows share an unpinned timeout",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "summary and rows share an unpinned termination grace",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "native argv duplicate safety override",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "changed native stdin",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "raw CHECK=0",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "duplicate pin",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "wrong exact native literal",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "missing native inventory entry",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "changed native inventory digest",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "wrong full coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong window coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong candidate coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong source name",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong candidate values",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong PK candidate callback rows",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong PK candidate filtered keys",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong PK candidate mark indices",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong conservative PK candidate keys",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed full coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed window coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed candidate coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed candidate values",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed schedule_mutated false",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong MV destination",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              }
+            ],
+            "original_capture_unchanged": true
+          },
+          {
+            "root": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI",
+            "summary": {
+              "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/summary.json",
+              "bytes": 537480,
+              "sha256": "65bc1dc41d43ea606493ed01c53d9eab68d67da0c51c712861b22f023bf92c65"
+            },
+            "runtime": {
+              "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+              "expected_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+              "sha256_before": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+              "sha256_after": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+            },
+            "helper": {
+              "path": "/private/tmp/crystal-click-w260.lQZKil/check_compact_typed_w260_release",
+              "sha256_before": "3405fac113da159405cb7e690fad8e4836deb1cde0a0096b4dce87c5b818d78f",
+              "sha256_after": "3405fac113da159405cb7e690fad8e4836deb1cde0a0096b4dce87c5b818d78f"
+            },
+            "source_snapshot": {
+              "path": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+              "revision": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+              "runtime_provenance_claimed": false
+            },
+            "processes": [
+              {
+                "kind": "clickhouse local",
+                "argv": {
+                  "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/invocations/native_source.argv.json",
+                  "bytes": 336,
+                  "sha256": "1f0a1c053715ff8f4866c6f3816cd3ad3285fee851c449b7b69848160ccc6a17"
+                },
+                "stdin": {
+                  "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/invocations/native_source.stdin.sql",
+                  "bytes": 64190,
+                  "sha256": "4dc56f35e6b62455dd2daae0046daf9a74acfa5fd0e8bfad280c20aa747de26f"
+                },
+                "stdout": {
+                  "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/invocations/native_source.stdout",
+                  "bytes": 28153,
+                  "sha256": "c7fd71ad47568639cc1fa1d4e8dfed6f74b9e75aab33d238bf6aa3a45a85662b"
+                },
+                "stderr": {
+                  "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/invocations/native_source.stderr",
+                  "bytes": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "process_record": {
+                  "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/invocations/native_source.json",
+                  "bytes": 1554,
+                  "sha256": "5b8d6a5f1e46fbaaf1bca6a34076fd193297b6c6cb346cd6f6d9dc4d30769b99"
+                }
+              },
+              {
+                "kind": "prebuilt Crystal helper",
+                "argv": {
+                  "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/invocations/typed_public_reader_probe.argv.json",
+                  "bytes": 336,
+                  "sha256": "62f61132988c391fbac8763726cdfa65fd25f3a7648bf723e7fc7621697df20c"
+                },
+                "stdin": {
+                  "path": "(implicit empty helper stdin)",
+                  "bytes": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "stdout": {
+                  "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/invocations/typed_public_reader_probe.stdout",
+                  "bytes": 176387,
+                  "sha256": "13973412622d464e00350588d735d0da2a5bcaf8f0d78f83e6cf14e6285f540b"
+                },
+                "stderr": {
+                  "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/invocations/typed_public_reader_probe.stderr",
+                  "bytes": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "process_record": {
+                  "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/invocations/typed_public_reader_probe.json",
+                  "bytes": 1401,
+                  "sha256": "a50df47ecb680764625925973285d56540e2484fa34891ba7a490838b5cb9404"
+                }
+              }
+            ],
+            "source_files": [
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_array_json_parts_w185.rb",
+                "sha256": "a71366bf4e87ed7649373c0c251b865e75ac6cbe67263605a6ceb576ec4b1451"
+              },
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/check_compact_typed_w260.cr",
+                "sha256": "fc798aa66ce10605ff5b999975570430eaf481e343a82dd9c6be16ece5694646"
+              },
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_typed_w260.rb",
+                "sha256": "d4f7954802edd76c01f72f7550e196354dc9dfe28bd59732217c3c81a00af158"
+              },
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/stock_part_probe_support_w191.rb",
+                "sha256": "f8302039adc306c4d94d0d4ea28919616eb1dc50ca2c7540c0d861e0282009e1"
+              },
+              {
+                "path": "/Users/sergey/Projects/Crystal/crystal-click/scripts/support/compact_typed_w260_fixture.cr",
+                "sha256": "14c539522ce344685ee9d9c3efbe0811be46ac7ac7a3a00143cd91f999456cdb"
+              }
+            ],
+            "native_parts": {
+              "wide_control": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/da4/da448420-4000-4eaf-b39f-586952588cc8/all_1_1_0",
+                "file_count": 69,
+                "bytes": 10020,
+                "inventory_sha256": "b8822b6ee430b7c2df3295e14ef9580322b591f4dd0521c3b14fcc2b755c44f4"
+              },
+              "a_mrk3_s0_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/7b3/7b3985d4-4fb0-439b-98fb-957b5253c9ee/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4519,
+                "inventory_sha256": "4d04d63fb3f55176572c808b223e86662ea3756b04fcae96de1831f3f1d9592b"
+              },
+              "a_mrk3_s0_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/68d/68d64476-fa2d-4d36-bcb7-19238578bf37/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4532,
+                "inventory_sha256": "29a95ad93404b26269e82f443ce6c6b88b1acea5fa2d36e92b1d010a37b51907"
+              },
+              "a_mrk3_s1_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/8be/8bea50bf-344f-42cf-b79c-19401eb06e62/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4623,
+                "inventory_sha256": "faaccb80638eb399a399fc222ce5b540b1faae6a7c14b5f8c66eab12773ef839"
+              },
+              "a_mrk3_s1_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/745/7450a8fc-10bc-428c-a811-d648da65d4b4/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4635,
+                "inventory_sha256": "63c4e2037f50e2b451c6e3b07887f9b673f68ec24cfd923ed9c50e64ca256b66"
+              },
+              "a_mrk4_s0_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/2bd/2bd5f1dd-a8f5-4b53-bfd6-bce1569b2a34/all_1_1_0",
+                "file_count": 11,
+                "bytes": 6515,
+                "inventory_sha256": "1a5c400435ccfb22f8c952372369e628504fcfb47dfa39a4b77f4dd17b581d73"
+              },
+              "a_mrk4_s0_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/71b/71b11f83-bd39-41ba-94cf-18f1cd4f76d8/all_1_1_0",
+                "file_count": 11,
+                "bytes": 6528,
+                "inventory_sha256": "1ae970e0f2012be621f4596e281916f3fa6b1904bdf9801b0269435cba780556"
+              },
+              "a_mrk4_s1_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/23f/23f08238-44dc-45c7-8393-66aeb0cabeaf/all_1_1_0",
+                "file_count": 11,
+                "bytes": 7197,
+                "inventory_sha256": "e916fddd984978457a05634e179702ee98537775e8081ce51ad393d207647aa8"
+              },
+              "a_mrk4_s1_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/7d4/7d49fba9-4b7d-4f73-9cf8-789a1fa92946/all_1_1_0",
+                "file_count": 11,
+                "bytes": 7209,
+                "inventory_sha256": "8f6701d22f551884f10699e91526ea3880ad0d0c5da5140fbd927d44027ddb5a"
+              },
+              "b_mrk3": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/8ec/8ecfbe6f-7c8f-4387-b663-e900386f1224/all_1_1_0",
+                "file_count": 10,
+                "bytes": 1980,
+                "inventory_sha256": "d8c6b7f2861b8ad35547dd55fcf05681bf3c770a22b81878d6fcb8982eda23b1"
+              },
+              "b_mrk4": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/stores/native/store/fb9/fb9117bc-3b1f-4123-a8e1-08c7a22ffbe1/all_1_1_0",
+                "file_count": 11,
+                "bytes": 3130,
+                "inventory_sha256": "eb2a4603800ab50cc4c19a58cc378055af00af6391d6e2b42194ac3968855731"
+              }
+            },
+            "copied_source_parts": {
+              "a_mrk3_s0_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-978f040edfe5/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4519,
+                "inventory_sha256": "4d04d63fb3f55176572c808b223e86662ea3756b04fcae96de1831f3f1d9592b"
+              },
+              "a_mrk3_s0_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-748ec0205758/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4532,
+                "inventory_sha256": "29a95ad93404b26269e82f443ce6c6b88b1acea5fa2d36e92b1d010a37b51907"
+              },
+              "a_mrk3_s1_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-998200111806/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4623,
+                "inventory_sha256": "faaccb80638eb399a399fc222ce5b540b1faae6a7c14b5f8c66eab12773ef839"
+              },
+              "a_mrk3_s1_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-daa5c05205c8/all_1_1_0",
+                "file_count": 10,
+                "bytes": 4635,
+                "inventory_sha256": "63c4e2037f50e2b451c6e3b07887f9b673f68ec24cfd923ed9c50e64ca256b66"
+              },
+              "a_mrk4_s0_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-70a1559ca9b2/all_1_1_0",
+                "file_count": 11,
+                "bytes": 6515,
+                "inventory_sha256": "1a5c400435ccfb22f8c952372369e628504fcfb47dfa39a4b77f4dd17b581d73"
+              },
+              "a_mrk4_s0_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-62a9cab01452/all_1_1_0",
+                "file_count": 11,
+                "bytes": 6528,
+                "inventory_sha256": "1ae970e0f2012be621f4596e281916f3fa6b1904bdf9801b0269435cba780556"
+              },
+              "a_mrk4_s1_vbasic": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-a6aee5b4deb9/all_1_1_0",
+                "file_count": 11,
+                "bytes": 7197,
+                "inventory_sha256": "e916fddd984978457a05634e179702ee98537775e8081ce51ad393d207647aa8"
+              },
+              "a_mrk4_s1_vcompact": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-3a886d05b7c6/all_1_1_0",
+                "file_count": 11,
+                "bytes": 7209,
+                "inventory_sha256": "8f6701d22f551884f10699e91526ea3880ad0d0c5da5140fbd927d44027ddb5a"
+              },
+              "b_mrk3": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-d14ef4053b53/all_1_1_0",
+                "file_count": 10,
+                "bytes": 1980,
+                "inventory_sha256": "d8c6b7f2861b8ad35547dd55fcf05681bf3c770a22b81878d6fcb8982eda23b1"
+              },
+              "b_mrk4": {
+                "path": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI/offline_catalog/store/260/26000000-0000-4000-8000-120b18a07f57/all_1_1_0",
+                "file_count": 11,
+                "bytes": 3130,
+                "inventory_sha256": "eb2a4603800ab50cc4c19a58cc378055af00af6391d6e2b42194ac3968855731"
+              }
+            },
+            "positive_control": "actual raw native/helper capture accepted",
+            "negative_controls": [
+              {
+                "name": "nonzero exit",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "signal",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "timeout",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "I/O error",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "summary and rows share an unpinned timeout",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "summary and rows share an unpinned termination grace",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "native argv duplicate safety override",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "changed native stdin",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "raw CHECK=0",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "duplicate pin",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "wrong exact native literal",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "missing native inventory entry",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "changed native inventory digest",
+                "rejected_by": "W260RootNativeAudit::Refusal"
+              },
+              {
+                "name": "wrong full coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong window coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong candidate coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong source name",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong candidate values",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong PK candidate callback rows",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong PK candidate filtered keys",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong PK candidate mark indices",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong conservative PK candidate keys",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed full coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed window coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed candidate coordinates",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed candidate values",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "mixed schedule_mutated false",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              },
+              {
+                "name": "wrong MV destination",
+                "rejected_by": "ProbeCompactTypedW260::Failure"
+              }
+            ],
+            "original_capture_unchanged": true
+          }
+        ],
+        "control_counts": {
+          "positive": 2,
+          "negative": 56
+        },
+        "debug_release_native_file_bytes_equal": true,
+        "debug_release_helper_semantics_equal": true,
+        "uuid_paths_ignored_for_native_inventory_comparison": true,
+        "oracle_reuse": "ProbeCompactTypedW260::Probe parse/assert methods; reused, not an independent native or helper oracle",
+        "scope": "two actual W260 captures; exact 11-part sealed matrix, raw process artifacts, native/copy part inventories, helper values and coordinates; no general Compact compatibility claim"
+      },
+      "inventory_totals": [
+        {
+          "root": "/private/tmp/crystal-click-w260-native-debug-final.y5WngH",
+          "native": {
+            "files": 174,
+            "bytes": 60888
+          },
+          "copied": {
+            "files": 105,
+            "bytes": 50868
+          }
+        },
+        {
+          "root": "/private/tmp/crystal-click-w260-native-release-final.JZqsxI",
+          "native": {
+            "files": 174,
+            "bytes": 60888
+          },
+          "copied": {
+            "files": 105,
+            "bytes": 50868
+          }
+        }
+      ]
+    },
+    "root_normalizer": {
+      "build_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build /private/tmp/crystal-click-w260.lQZKil/root-normalizer-probe.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -o /private/tmp/crystal-click-w260.lQZKil/root-normalizer-probe",
+      "run_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /private/tmp/crystal-click-w260.lQZKil/root-normalizer-probe 180 12288 /private/tmp/crystal-click-w259-native-debug-sealed.inObat/stores/native/store/d47/d47b9550-241a-42b6-8cd7-4140e1b81b2f/all_1_1_0 /private/tmp/crystal-click-w259-native-debug-sealed.inObat/stores/native/store/ede/ede94186-d8e5-4766-8a2a-d64ae9a9696d/all_1_1_0",
+      "build_exit": 0,
+      "run_exit": 0,
+      "native_modes": [
+        "Mrk3",
+        "Mrk4"
+      ],
+      "native_columns_per_mode": 7,
+      "synthetic_string_v0": [
+        "a",
+        ""
+      ],
+      "ordered_tuple_control": [
+        "T(S:\"a\",S:\"b\")"
+      ],
+      "zero_child_control": [
+        "A()"
+      ],
+      "rejected_reorder": true,
+      "rejected_omitted_zero_event": true,
+      "rejected_trailing_tape": true,
+      "borrowed_budget_consumptive": true,
+      "scope": "Root-authored literals/schedules over existing normalizer and decoder, not a second native codec"
+    },
+    "formatting": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 tool format --check src/crystal_click.cr src/crystal_click/compact_part_physical_context.cr src/crystal_click/compact_part_physical_window.cr src/crystal_click/offline_part_transform_input.cr src/crystal_click/offline_table.cr src/crystal_click/offline_table/static_bulk_values_materializer.cr src/crystal_click/wide_part_table/wide_part_table_batch.cr src/crystal_click/binary_value_typed_batch_adapter.cr src/crystal_click/compact_binary_bulk_column_reader.cr src/crystal_click/compact_binary_bulk_granule_cursor.cr src/crystal_click/compact_binary_bulk_lane_builder.cr src/crystal_click/compact_binary_bulk_normalizer.cr src/crystal_click/compact_part_table.cr src/crystal_click/compact_serialization_profile.cr src/crystal_click/typed_binary_bulk_column_reader.cr src/crystal_click/typed_part_reader_entry.cr src/crystal_click/typed_part_table.cr scripts/check_compact_typed_w260.cr scripts/support/compact_typed_w260_fixture.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr src/crystal_click/compact_columns_substreams.cr src/crystal_click/compact_mark_index.cr src/crystal_click/part_physical_input.cr src/crystal_click/wide_part.cr",
+      "exit_code": 0,
+      "crystal_paths": 25
+    },
+    "packet_fallback": {
+      "schema": "crystal-click-curated-evidence-v1",
+      "reason": "The skill's template and graph-validator paths were not available; use the existing W259 repository packet convention.",
+      "checks": "JSON syntax plus root inspection of actual commands/outputs and input/capture hashes; no claim that schema/field presence validates behavior."
+    },
+    "fixture_gated_spec_boundary": {
+      "source_scan": "Only two ENV fixture gates occur in the exact 84-path roster",
+      "paths": [
+        {
+          "path": "spec/aggregate_count_offline_w177_spec.cr",
+          "gate": "W177_STOCK_ROOT",
+          "observed_release_examples": 0
+        },
+        {
+          "path": "spec/simple_aggregate_bulk_consumers_w221_native_spec.cr",
+          "gate": "W221_PART_ROOT",
+          "observed_release_examples": 0
+        }
+      ],
+      "scope": "These fixture-gated examples are not admitted as executed behavioral evidence without nonzero results. Count/Wide SAF native regression is not claimed by W260.",
+      "zero_example_release_paths": [
+        "spec/aggregate_count_offline_w177_spec.cr",
+        "spec/simple_aggregate_bulk_consumers_w221_native_spec.cr"
+      ]
+    },
+    "identity_refresh": {
+      "command": "/usr/bin/shasum -a 256 'src/crystal_click.cr' 'src/crystal_click/compact_part_physical_context.cr' 'src/crystal_click/compact_part_physical_window.cr' 'src/crystal_click/offline_part_transform_input.cr' 'src/crystal_click/offline_table.cr' 'src/crystal_click/offline_table/static_bulk_values_materializer.cr' 'src/crystal_click/wide_part_table/wide_part_table_batch.cr' 'src/crystal_click/binary_value_typed_batch_adapter.cr' 'src/crystal_click/compact_binary_bulk_column_reader.cr' 'src/crystal_click/compact_binary_bulk_granule_cursor.cr' 'src/crystal_click/compact_binary_bulk_lane_builder.cr' 'src/crystal_click/compact_binary_bulk_normalizer.cr' 'src/crystal_click/compact_part_table.cr' 'src/crystal_click/compact_serialization_profile.cr' 'src/crystal_click/typed_binary_bulk_column_reader.cr' 'src/crystal_click/typed_part_reader_entry.cr' 'src/crystal_click/typed_part_table.cr' 'scripts/check_compact_typed_w260.cr' 'scripts/probe_compact_typed_w260.rb' 'scripts/support/compact_typed_w260_fixture.cr' 'spec/binary_bulk_discriminator_framing_w189_spec.cr' 'spec/binary_bulk_physical_prefix_w151_spec.cr' 'spec/binary_bulk_w122_spec.cr' 'spec/binary_low_cardinality_storage_w142_spec.cr' 'spec/compact_physical_context_w259_adversary_spec.cr' 'spec/compact_physical_context_w259_spec.cr' 'spec/offline_catalog_projection_w87_spec.cr' 'spec/offline_catalog_spec.cr' 'spec/offline_catalog_w27_spec.cr' 'spec/offline_catalog_w28_spec.cr' 'spec/offline_catalog_w29_spec.cr' 'spec/offline_catalog_w53_spec.cr' 'spec/offline_catalog_w54_spec.cr' 'spec/offline_catalog_w60_spec.cr' 'spec/offline_catalog_w63_spec.cr' 'spec/offline_catalog_w68_spec.cr' 'spec/offline_catalog_w69_spec.cr' 'spec/offline_catalog_w70_spec.cr' 'spec/offline_catalog_w71_spec.cr' 'spec/offline_catalog_w73_spec.cr' 'spec/offline_catalog_w76_spec.cr' 'spec/offline_catalog_w77_spec.cr' 'spec/offline_catalog_w78_spec.cr' 'spec/offline_catalog_w79_spec.cr' 'spec/offline_catalog_w80_spec.cr' 'spec/offline_catalog_w81_spec.cr' 'spec/offline_catalog_w82_spec.cr' 'spec/offline_catalog_w83_spec.cr' 'spec/offline_catalog_w84_spec.cr' 'spec/offline_catalog_w85_spec.cr' 'spec/offline_catalog_w86_spec.cr' 'spec/offline_catalog_w95_tuple_values_spec.cr' 'spec/offline_materialized_view_transform_w257_spec.cr' 'spec/offline_materialized_view_w228_spec.cr' 'spec/offline_mv_materialization_w88_spec.cr' 'spec/recursive_storage_array_w187_spec.cr' 'spec/recursive_storage_column_w186_spec.cr' 'spec/recursive_storage_compact_w188_spec.cr' 'spec/recursive_storage_reader_budget_w186_spec.cr' 'spec/recursive_storage_table_w186_spec.cr' 'spec/recursive_storage_values_budget_w186_spec.cr' 'spec/static_binary_bulk_table_w247_spec.cr' 'spec/wide_part_table_low_cardinality_cache_spec.cr' 'spec/wide_part_table_projection_w87_spec.cr' 'spec/wide_part_table_w53_spec.cr' 'spec/wide_part_table_w54_spec.cr' 'spec/wide_part_table_w59_spec.cr' 'spec/wide_part_table_w61_spec.cr' 'spec/wide_part_table_w62_spec.cr' 'spec/wide_part_table_w63_spec.cr' 'spec/wide_part_table_w64_spec.cr' 'spec/wide_part_table_w68_spec.cr' 'spec/wide_part_table_w69_spec.cr' 'spec/wide_part_table_w70_spec.cr' 'spec/wide_part_table_w71_spec.cr' 'spec/wide_part_table_w73_spec.cr' 'spec/wide_part_table_w76_spec.cr' 'spec/wide_part_table_w77_spec.cr' 'spec/wide_part_table_w78_spec.cr' 'spec/wide_part_table_w79_spec.cr' 'spec/wide_part_table_w80_spec.cr' 'spec/wide_part_table_w81_spec.cr' 'spec/wide_part_table_w82_spec.cr' 'spec/wide_part_table_w83_spec.cr' 'spec/wide_part_table_w84_spec.cr' 'spec/wide_part_table_w85_spec.cr' 'spec/wide_part_table_w95_tuple_spec.cr' 'spec/dynamic_recursive_handoff_w249_spec.cr' 'spec/dynamic_owned_values_w220_spec.cr' 'spec/recursive_qbit_static_parts_w231_spec.cr' 'spec/recursive_qbit_parts_w230_spec.cr' 'spec/aggregate_count_offline_w177_spec.cr' 'spec/aggregate_recursive_w224_consumers_spec.cr' 'spec/aggregate_variant_w225_consumers_spec.cr' 'spec/aggregate_variant_w225_adversary_spec.cr' 'spec/aggregate_sum_w223_consumers_spec.cr' 'spec/aggregate_avg_w227_consumers_spec.cr' 'spec/simple_aggregate_bulk_consumers_w221_native_spec.cr' 'spec/simple_aggregate_recursive_w222_part_spec.cr' 'spec/geometry_recursive_w239_consumers_spec.cr' 'spec/object_offline_table_w130_spec.cr' 'spec/compact_typed_w260_spec.cr' 'spec/compact_typed_w260_adversary_spec.cr' 'src/crystal_click/compact_columns_substreams.cr' 'src/crystal_click/compact_mark_index.cr' 'src/crystal_click/part_physical_input.cr' 'src/crystal_click/wide_part.cr' 'spec/static_nested_handoff_w248_spec.cr' '/opt/homebrew/bin/crystal' '/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh' '/private/tmp/crystal-click-w260.lQZKil/root-normalizer-probe.cr' '/private/tmp/crystal-click-w260.lQZKil/root-native-audit.rb' '/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped' '/private/tmp/crystal-click-w260.lQZKil/check_compact_typed_w260_debug' '/private/tmp/crystal-click-w260-native-debug-final.y5WngH/summary.json' '/private/tmp/crystal-click-w260.lQZKil/check_compact_typed_w260_release' '/private/tmp/crystal-click-w260-native-release-final.JZqsxI/summary.json'",
+      "exit_code": 0,
+      "qualified_inputs": 108,
+      "tool_runtime_helper_summary_identities": 9,
+      "all_match": true,
+      "utc": "2026-10-11 07:46:50 UTC"
+    },
+    "comparison_revision_refresh": {
+      "command": "git -C /private/tmp/clickhouse-w254-upstream.AqeqyC rev-parse HEAD",
+      "exit_code": 0,
+      "revision": "ed30948f095ecb70679986d7d60e27ad770ae27a"
+    },
+    "raw_audit_refresh": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 /private/tmp/crystal-click-w260.lQZKil/root-native-audit.rb /private/tmp/crystal-click-w260-native-debug-final.y5WngH /private/tmp/crystal-click-w260-native-release-final.JZqsxI",
+      "exit_code": 0,
+      "utc": "2026-10-11 07:46:15 UTC"
+    },
+    "ruby_syntax": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w260.lQZKil/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 -c scripts/probe_compact_typed_w260.rb",
+      "exit_code": 0,
+      "output": "[PREFLIGHT] System memory free 75% > 50%\nSyntax OK\n[EXIT: 0] after ~0s\n"
+    },
+    "intended_diff_pre_promotion": {
+      "command": "git status --porcelain=v1 -z --untracked-files=all",
+      "exit_code": 0,
+      "paths": [
+        "LANDMARKS.md",
+        "docs/COMPACT_TYPED_READER_FRONTIER.md",
+        "examples/README.md",
+        "scripts/check_compact_typed_w260.cr",
+        "scripts/probe_compact_typed_w260.rb",
+        "scripts/support/compact_typed_w260_fixture.cr",
+        "spec/compact_typed_w260_adversary_spec.cr",
+        "spec/compact_typed_w260_spec.cr",
+        "src/crystal_click.cr",
+        "src/crystal_click/binary_value_typed_batch_adapter.cr",
+        "src/crystal_click/compact_binary_bulk_column_reader.cr",
+        "src/crystal_click/compact_binary_bulk_granule_cursor.cr",
+        "src/crystal_click/compact_binary_bulk_lane_builder.cr",
+        "src/crystal_click/compact_binary_bulk_normalizer.cr",
+        "src/crystal_click/compact_columns_substreams.cr",
+        "src/crystal_click/compact_mark_index.cr",
+        "src/crystal_click/compact_part_physical_context.cr",
+        "src/crystal_click/compact_part_physical_window.cr",
+        "src/crystal_click/compact_part_table.cr",
+        "src/crystal_click/compact_serialization_profile.cr",
+        "src/crystal_click/offline_part_transform_input.cr",
+        "src/crystal_click/offline_table.cr",
+        "src/crystal_click/offline_table/static_bulk_values_materializer.cr",
+        "src/crystal_click/part_physical_input.cr",
+        "src/crystal_click/typed_binary_bulk_column_reader.cr",
+        "src/crystal_click/typed_part_reader_entry.cr",
+        "src/crystal_click/typed_part_table.cr",
+        "src/crystal_click/wide_part.cr",
+        "src/crystal_click/wide_part_table/wide_part_table_batch.cr"
+      ],
+      "intended_paths": 29,
+      "no_unrelated_paths": true
+    }
+  },
+  "root_adversary": {
+    "verdict": "ROBUST within scope",
+    "evidence": "Root inspected primary CH lifecycle and Nothing storage policy, typed-factory/table predicate distinction, actual raw native captures, complete inventories, finite negative controls and root-authored normalizer witnesses. Same-lineage Luna review is correlated.",
+    "narrowed_claim": "Bare Nothing refusal is table/catalog consumer policy, not every low-level factory or universal recursive native-storable validation.",
+    "fixture_gate_narrowing": "Bundled green counts do not establish registration/execution of fixture-gated examples. W177 Count and W221 native SAF are explicitly excluded from fresh native consumer qualification."
+  },
+  "residuals": [
+    "Context-owned Compact Dynamic/JSON, aggregate states, SimpleAggregateFunction, QBit and custom Geo remain guarded; no type ceiling expansion",
+    "Wide multi-column Array(Tuple)/Map owner restrictions remain inherited; stock Wide schema has nine columns but typed control retains seven",
+    "Flattened Nested and projection ownership routes remain Wide-only; parent .proj reader authentication and broader composition stay open",
+    "No Compact writer, compressed marks, native MV SQL execution, trigger/freshness semantics, general composite keys/partitions or speed parity qualification",
+    "Quiescent parts and trusted caller-selected ancestry; authentication covers touched frames, not every future/untouched payload before callback",
+    "Logical workspace census is not total heap/RSS: reader construction, shared parsed descriptor graph, whole multi-part facade, caller snapshots and allocator capacity are excluded; repeated shared alias/budget counts may be conservative",
+    "Recursive Nothing predicate forms and lower-level Wide codec grammar are not stock-storable-profile qualification",
+    "Native oracle is deliberately reused by the root auditor; controls are finite, not exhaustive corruption semantics",
+    "Fixture-gated W177 Count and W221 native SAF regression examples were not executed in this roster; zero-example commands are compile-only, and other synthetic/local consumer checks remain separate evidence."
+  ],
+  "decay": {
+    "triggers": [
+      "Qualified source/test/support/helper/oracle changes",
+      "Runtime/compiler/guard/provenance drift",
+      "Metadata/profile/lifecycle/physical-grid/callback laws change",
+      "Capture loss or mutation, command or roster changes"
+    ],
+    "refresh": "Refresh affected source/raw-capture/falsifier checks and exact DEBUG/RELEASE roster before promoting dependent claims.",
+    "failure_policy": "Fail closed on unknown physical/profile laws; retain scoped older decisions and reopen dependent qualification. Performance remains deferred."
+  }
+}

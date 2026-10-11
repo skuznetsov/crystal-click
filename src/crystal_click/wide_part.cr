@@ -1620,7 +1620,10 @@ module CrystalClick
     # reader cannot preserve its existing value contract. Keep this predicate
     # separate from supports_typed_type? so WidePart.open_typed remains strict.
     def self.supports_generic_static_binary_bulk_type?(type : String) : Bool
-      return false unless StaticBinaryBulkColumnDeclaration.parse(type)
+      parsed = StaticBinaryBulkColumnDeclaration.parse(type) || return false
+      # The recursive codec grammar retains root Nothing as a placeholder
+      # descriptor, but it is not an admitted table/catalog consumer type.
+      return false if parsed.tag == BinaryDataType::TAG_NOTHING
       !supports_typed_type?(type)
     end
 

@@ -1,5 +1,50 @@
 # Crystal Click landmarks
 
+## Recursive Compact typed facade and offline consumers — W260
+
+- VERIFIED / root adversary ROBUST within the finite static Compact/plain-mark
+  target over `62f0e2cdf320d0900a91aebe470a38b127a68981`. `TypedPartTable`
+  and the own-file Compact backend normalize recursive lifecycle events into
+  existing BinaryBulk codecs and established typed carriers. Offline values,
+  typed scans, UInt64-PK candidates and caller-run Compact-source/Wide-target
+  composition reuse that seam; no per-product serde or Compact writer.
+- Fresh per-column/granule prefix/body/suffix state preserves declared Tuple
+  order, P/Q/Q_i alignment, zero-child callbacks and exact mrk4 physical roster.
+  All candidates' metadata, grids and cloned schedules preflight before first
+  callback; touched-frame authentication is not whole-future-payload proof.
+- Final 108-input seal: exact 84-path command roster; 392 examples in each
+  DEBUG/RELEASE mode, zero failures/errors/pending, 28 DEBUG and 46 RELEASE
+  serial cohorts with the unchanged 12-GiB guard. Original RELEASE cohort 20
+  was killed before examples; the 27 remaining files were requalified singly.
+  Both helpers build. Fresh native cells each pass 11 parts covering String
+  v0/v1, LC, Variant BASIC/COMPACT and nested
+  zero/unequal child counts, literal values/coordinates and public seams.
+- Root actual-capture audit: two positives/56 negatives; original captures
+  unchanged, bytes/helper semantics equal. Per cell: 174 native files/60,888
+  bytes plus 105 copied source files/50,868 bytes. Auditor reuses the runner
+  oracle. Root-authored normalizer controls and 25-path format check pass;
+  finite controls do not establish every layout or the full repository suite.
+  Fixture-gated W177/W221 zero-example commands are compile-only, not native
+  Count/SAF consumer qualification.
+- Root-observed observer/resident-baseline/metadata-census REDs were repaired
+  before final sealing. Bare `Nothing` empty-table refusal reproduced at exact
+  HEAD; the narrow table/catalog guard does not alter placeholder codecs.
+  The refuted whitespace hypothesis and a new test-only Dynamic expectation
+  error are retained as diagnostics, not production compatibility failures.
+- Return pointers: [W260 frontier](docs/COMPACT_TYPED_READER_FRONTIER.md),
+  [root evidence](.landmark/evidence/compact-typed-reader-w260.json).
+  Separate source/runtime pins remain `ed30948f095ecb70679986d7d60e27ad770ae27a`
+  and `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Source/test/harness/tool/profile
+  drift or capture loss reopens dependent qualification; refresh affected
+  exact-mode rosters and native/falsifier checks.
+- Next frontier: context-owned Compact layouts and remaining type/state
+  products; inherited Wide N-column Array(Tuple)/Map restrictions; parent
+  `.proj` authentication and transform/projection composition; general keys,
+  partitions and facade decomposition. Logical budgets exclude construction,
+  shared parsed graph, facade/caller snapshots and allocator capacity; they
+  are not total heap/RSS. No native MV SQL/trigger/freshness or speed claim.
+  Full goal ACTIVE; performance deferred. Local atomic commit only, no push.
+
 ## Actual Compact physical windows and lifecycle roster — W259
 
 - VERIFIED / root adversary ROBUST within the qualified plain `.mrk3`/`.mrk4`

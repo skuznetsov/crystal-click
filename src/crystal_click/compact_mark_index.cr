@@ -140,6 +140,16 @@ module CrystalClick
       @rows[mark_index]
     end
 
+    # Logical retained-owner census for the validated coordinate and row-grid
+    # arrays. It uses their stored lengths and excludes allocator capacity.
+    def retained_grid_workspace_bytes : UInt64
+      bytes = instance_sizeof(CompactMarkIndex).to_u64
+      bytes = checked_add(bytes, instance_sizeof(Array(Int64)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(@positions.size.to_u64, sizeof(Int64).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
+      checked_add(bytes, checked_multiply(@rows.size.to_u64, sizeof(UInt64).to_u64))
+    end
+
     private def validate_mark_index(mark_index : Int, include_terminal : Bool) : Nil
       upper = include_terminal ? @mark_count : @mark_count - 1
       if mark_index < 0 || mark_index > upper
@@ -151,6 +161,18 @@ module CrystalClick
       if slot_index < 0 || slot_index >= @slot_count
         raise ArgumentError.new("Compact slot index is outside the roster")
       end
+    end
+
+    private def checked_add(left : UInt64, right : UInt64) : UInt64
+      raise CorruptPartError.new("Compact mark-grid workspace estimate overflows UInt64") if right > UInt64::MAX - left
+      left + right
+    end
+
+    private def checked_multiply(left : UInt64, right : UInt64) : UInt64
+      if left > 0_u64 && right > UInt64::MAX // left
+        raise CorruptPartError.new("Compact mark-grid workspace estimate overflows UInt64")
+      end
+      left * right
     end
 
     private def self.read_u64(bytes : Bytes, offset : Int) : UInt64
