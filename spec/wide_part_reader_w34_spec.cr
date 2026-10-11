@@ -257,7 +257,7 @@ describe CrystalClick::WidePart do
     reader.array_nullable_bool_mark_range_raw_bytes("maybe", 1, 2).should eq(10_u64)
   end
 
-  it "admits the keyed stock serializer variant only for the exact paired schema" do
+  it "admits the keyed stock serializer variant for Boolean arrays" do
     keyed_json = %({"columns":[{"kind":"Default","name":"pk","num_defaults":0,"num_rows":13}],"propagate_types_serialization_versions_to_nested_types":true,"types_serialization_versions":{"string":1},"version":1})
     File.read(File.join(W34_BOOL_KEYED_FIXTURE, "serialization.json")).should eq(keyed_json)
     CrystalClick::WidePart.open_typed(W34_BOOL_KEYED_FIXTURE, "plain")
@@ -272,7 +272,7 @@ describe CrystalClick::WidePart do
       FileUtils.cp_r(W34_BOOL_KEYED_FIXTURE, part)
       File.write(File.join(part, "serialization.json"), keyed_json.gsub(%("name":"pk"), %("name":"not_pk")))
       w34_refresh_checksums(part)
-      expect_raises(CrystalClick::UnsupportedFormatError) do
+      expect_raises(CrystalClick::CorruptPartError) do
         CrystalClick::WidePart.open_typed(part, "plain")
       end
     ensure

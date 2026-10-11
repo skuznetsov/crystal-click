@@ -1,6 +1,40 @@
 # CrystalClick project status
 
-Current qualification (W257, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W258, 2026-10-10): VERIFIED / root adversary ROBUST within
+the finite static typed Wide selected-column admission target. One own-file
+metadata owner removes unrelated two-column/unique-UInt64 constraints from
+already supported typed Array, named scalar Tuple, LowCardinality(String) and
+Variant(String, UInt64) readers. Exact sparse Default metadata and common
+recursive Tuple fields are checked before unsupported-profile classification;
+physical streams bind by unique exact identity, not roster listing order.
+Existing codecs, public typed carriers and owned offline `.values` are reused.
+Generic Array(Tuple), JSON/Dynamic layouts and public key policy are not widened.
+
+All 28 sealed spec files pass 180 examples in each DEBUG/RELEASE mode, zero
+failures/errors/pending; this is not the full repository suite. Both helpers
+build and fresh reciprocal native cells complete all three processes with exit
+0, empty stderr, no signal/timeout, raw CHECK=1, exact schema and full/middle
+literal values. The seven-column witness includes an empty first Array mark,
+nulls, duplicate LC values, both Variant arms and None; helper EOF/offline
+checks pass. Root separately checks complete file inventories and 16 mark
+streams per part. All 40 generated files / 6,517 bytes agree between modes.
+Fourteen controls over actual captures plus 14 mocked oracle and three None
+refusals pass; original captures remain unchanged. Harness/setup/environment
+diagnostics are retained, not counted as compatibility evidence.
+
+This is selected-column admission, not full type validation of every unselected
+non-UInt64 sibling roster or general product/layout compatibility. Actual
+top-level Compact event/mark framing, remaining aggregate/state laws, parent
+`.proj` reader authentication, transform/projection composition, general
+keys/partitions and broad facade decomposition remain open. Memory/performance
+is deferred; overall goal ACTIVE. Comparison source
+`ed30948f095ecb70679986d7d60e27ad770ae27a` is distinct from executed CH build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`. See the
+[W258 frontier](STATIC_RECURSIVE_SELECTED_METADATA_FRONTIER.md) and
+[root evidence](../.landmark/evidence/static-recursive-selected-metadata-w258.json).
+Local atomic commit only, no push or speed claim.
+
+Previous qualification (W257, 2026-10-10): VERIFIED / root adversary ROBUST within
 the bounded caller-run, one-source-part transform and publication path. A
 candidate-scoped typed scan feeds a caller callback; detached output keys and
 existing `WidePartColumn` owners are checked against an exact target DDL roster

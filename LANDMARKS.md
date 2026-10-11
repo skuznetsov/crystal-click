@@ -1,5 +1,51 @@
 # Crystal Click landmarks
 
+## Static typed selected-column metadata and physical identity — W258
+
+- VERIFIED / root adversary ROBUST within the finite declared Wide target over
+  baseline `24ff9a4e30dcf3c3f502ae672b768649b9d9bd85`. One own-file metadata
+  owner reuses typed Array, named scalar Tuple, LowCardinality(String) and
+  Variant(String, UInt64) readers, public batches and owned offline values.
+  Exact Default/String1/propagated-version metadata may omit a column record;
+  it does not require a two-column schema or unique UInt64 sibling.
+- Behavioral RED: ordinary N-column reads stopped at whole-part shape guards.
+  Subsequent falsifiers exposed physical roster-order coupling, fictitious
+  UInt64 sibling roles, unsupported records hiding malformed Tuple descendants,
+  and a narrower literal Tuple spelling check than the existing type plan.
+  The bounded common-field prepass and exact unique stream identity repair
+  retain hard corruption failures and at most one legacy metadata validation.
+  Generic Array(Tuple), arbitrary JSON/Dynamic products and key policy are not
+  widened; no per-product codec or performance rewrite is introduced.
+- All 28 sealed spec files: 180 examples per DEBUG/RELEASE mode, zero
+  failures/errors/pending. Both helpers build; two reciprocal native cells
+  complete all three actual processes with exit 0, empty stderr, raw CHECK=1,
+  exact schema and full/middle literal rows. The seven-column, eight-row
+  fixture has two-row marks plus EOF and an empty first Array mark. Public
+  typed EOF and offline values pass. The full repository suite was not run.
+- Root independently checks raw process/I/O records, complete file closure
+  and 16 mark streams per part. Generated DEBUG/RELEASE bytes agree in all
+  40 files / 6,517 bytes. Fourteen controls over actual captures reject nonzero
+  exits, raw CHECK=0 and file omissions; original captures remain unchanged.
+  Fourteen mocked oracle and three None refusals have positive controls.
+  These finite audits do not certify exhaustive production corruption behavior.
+- Retain startup, TSV-null, part-name, trailing-slash and process-guard
+  diagnostics separately from proof. The root auditor's own trailing-slash
+  mismatch was corrected without changing original captures or library sources.
+  Same-lineage Luna review is correlated; root's source/raw-byte checks supply
+  distinct evidence. Selected admission is not full declared-type validation
+  of every unselected non-UInt64 sibling roster; logical budgets are not RSS.
+- Return pointers: [W258 frontier](docs/STATIC_RECURSIVE_SELECTED_METADATA_FRONTIER.md),
+  [root evidence](.landmark/evidence/static-recursive-selected-metadata-w258.json).
+  Comparison `ed30948f095ecb70679986d7d60e27ad770ae27a` is distinct from executed
+  CH build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Refresh after metadata/
+  Tuple/codec/layout/consumer/helper/oracle/tool drift or capture loss.
+- Return frontier: the stock top-level Compact event/mark framing falsifier,
+  including empty-child Array marks, not new serde for each wrapper product.
+  Remaining aggregate state laws, parent `.proj` authentication, transform/
+  projection composition, general keys/partitions and facade decomposition stay
+  open. Full goal ACTIVE; memory/performance deferred; local commit only,
+  no push or <=10% speed claim.
+
 ## Catalog-bound caller-run materialized-view part transform — W257
 
 - VERIFIED / root adversary ROBUST within the bounded target over baseline

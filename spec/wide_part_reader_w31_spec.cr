@@ -429,19 +429,19 @@ describe CrystalClick::WidePart do
     end
   end
 
-  it "rejects empty array-serializer metadata outside the exact W31 eleven-column shape" do
+  it "reads the selected array when an unrelated sibling changes to a same-width type" do
     parent = File.tempname("crystal-click-w31-mixed-schema")
     Dir.mkdir(parent)
     begin
       mixed = w31_copy_fixture_part(parent, "mixed-schema")
       columns_path = File.join(mixed, "columns.txt")
       original = File.read(columns_path)
-      mutated = original.sub("`arr_f64` Array(Nullable(Float64))", "`arr_f64` Array(Nullable(UInt16))")
+      mutated = original.sub("`arr_f64` Array(Nullable(Float64))", "`arr_f64` Array(Nullable(UInt64))")
       mutated.should_not eq(original)
       File.write(columns_path, mutated)
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::WidePart.open_typed(mixed, "arr_u8")
-      end
+      reader = CrystalClick::WidePart.open_typed(mixed, "arr_u8")
+      reader.read_array_nullable_numeric_mark_range("arr_u8", 0, reader.mark_count, UInt8)
+        .should eq(w31_expected_values(UInt8))
     ensure
       FileUtils.rm_rf(parent)
     end

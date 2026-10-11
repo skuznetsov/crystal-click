@@ -309,7 +309,7 @@ describe "W56 paired Variant(String, UInt64) reader" do
     end
   end
 
-  it "rejects unsupported Variant declarations and reordered or missing streams" do
+  it "rejects unsupported Variant declarations and missing streams" do
     with_variant_type = w56_copy_fixture
     begin
       columns_path = File.join(with_variant_type, "columns.txt")
@@ -324,30 +324,43 @@ describe "W56 paired Variant(String, UInt64) reader" do
       w56_remove_fixture(with_variant_type)
     end
 
-    {"reordered", "missing"}.each do |mutation|
-      path = w56_copy_fixture
-      begin
-        metadata_path = File.join(path, "columns_substreams.txt")
-        original = File.read(metadata_path)
-        changed = if mutation == "reordered"
-                    original.sub(
-                      "\tpayload.variant_discr\n\tpayload.String.size\n\tpayload.String\n\tpayload.UInt64\n",
-                      "\tpayload.UInt64\n\tpayload.variant_discr\n\tpayload.String.size\n\tpayload.String\n"
-                    )
-                  else
-                    original.sub(
-                      "4 substreams for column `payload`:\n\tpayload.variant_discr\n\tpayload.String.size\n\tpayload.String\n\tpayload.UInt64\n",
-                      "3 substreams for column `payload`:\n\tpayload.variant_discr\n\tpayload.String.size\n\tpayload.String\n"
-                    )
-                  end
-        changed.should_not eq(original)
-        File.write(metadata_path, changed)
-        expect_raises(CrystalClick::UnsupportedFormatError) do
-          CrystalClick::WidePart.open_typed(path, "payload")
-        end
-      ensure
-        w56_remove_fixture(path)
+    path = w56_copy_fixture
+    begin
+      metadata_path = File.join(path, "columns_substreams.txt")
+      original = File.read(metadata_path)
+      changed = original.sub(
+        "4 substreams for column `payload`:\n\tpayload.variant_discr\n\tpayload.String.size\n\tpayload.String\n\tpayload.UInt64\n",
+        "3 substreams for column `payload`:\n\tpayload.variant_discr\n\tpayload.String.size\n\tpayload.String\n"
+      )
+      changed.should_not eq(original)
+      File.write(metadata_path, changed)
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        CrystalClick::WidePart.open_typed(path, "payload")
       end
+    ensure
+      w56_remove_fixture(path)
+    end
+  end
+
+  it "binds a reordered Variant roster by exact discriminator and child stream identity" do
+    path = w56_copy_fixture
+    begin
+      metadata_path = File.join(path, "columns_substreams.txt")
+      original = File.read(metadata_path)
+      changed = original.sub(
+        "\tpayload.variant_discr\n\tpayload.String.size\n\tpayload.String\n\tpayload.UInt64\n",
+        "\tpayload.UInt64\n\tpayload.variant_discr\n\tpayload.String.size\n\tpayload.String\n"
+      )
+      changed.should_not eq(original)
+      File.write(metadata_path, changed)
+
+      reader = CrystalClick::WidePart.open_typed(path, "payload")
+      reader.column_type.should eq(W56_TYPE)
+      reader.mark_row_counts.should eq([3_u64, 3_u64, 1_u64])
+      reader.read_variant_string_uint64_mark_range("payload", 0, reader.mark_count).should eq(W56_VALUES)
+      reader.read_variant_string_uint64_mark_range("payload", 1, 2).should eq(W56_VALUES[3, 4])
+    ensure
+      w56_remove_fixture(path)
     end
   end
 

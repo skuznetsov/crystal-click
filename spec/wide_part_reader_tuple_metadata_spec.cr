@@ -193,6 +193,12 @@ private def w93_expect_corrupt(part : String, message : String) : Nil
   end
 end
 
+private def w93_expect_corrupt_any(part : String) : Nil
+  expect_raises(CrystalClick::CorruptPartError) do
+    CrystalClick::WidePart.open_typed(part, "payload")
+  end
+end
+
 describe "W93 exact Tuple serialization metadata" do
   it "reads explicit Default serializers reordered by exact column name" do
     with_w93_tuple_part do |part|
@@ -209,35 +215,39 @@ describe "W93 exact Tuple serialization metadata" do
     end
   end
 
-  it "rejects missing, partial, duplicate, and unexpected top-level serializers" do
+  it "uses implicit Default metadata for an omitted selected Tuple record" do
     with_w93_tuple_part do |part|
       w93_write_serialization(part, [w93_key_record])
-      w93_expect_unsupported(part, "Tuple serialization requires exact key and payload entries")
+      w93_assert_tuple_reads(part)
     end
+  end
 
+  it "classifies partial, duplicate, and unmapped top-level records as corrupt" do
     with_w93_tuple_part do |part|
       partial_key = %({"kind":"Default","name":"id","num_rows":5})
       w93_write_serialization(part, [partial_key, w93_payload_record])
-      w93_expect_corrupt(part, "Tuple serializer default count is missing or malformed")
+      w93_expect_corrupt_any(part)
     end
 
     with_w93_tuple_part do |part|
       w93_write_serialization(part, [w93_key_record, w93_key_record])
-      w93_expect_unsupported_any(part)
+      w93_expect_corrupt_any(part)
     end
 
     with_w93_tuple_part do |part|
       unexpected = w93_key_record(name: "extra")
       w93_write_serialization(part, [w93_key_record, w93_payload_record, unexpected])
-      w93_expect_unsupported(part, "Tuple serialization requires exact key and payload entries")
+      w93_expect_corrupt_any(part)
     end
 
     with_w93_tuple_part do |part|
       unexpected_name = w93_key_record(name: "extra")
       w93_write_serialization(part, [w93_key_record, unexpected_name])
-      w93_expect_unsupported_any(part)
+      w93_expect_corrupt_any(part)
     end
+  end
 
+  it "keeps serialization metadata without a columns field outside the admitted profile" do
     with_w93_tuple_part do |part|
       w93_write_serialization(part, nil)
       w93_expect_unsupported(part, "unsupported Tuple serialization.json fields")
@@ -296,12 +306,12 @@ describe "W93 exact Tuple serialization metadata" do
   it "rejects invalid top-level and child row/default counts" do
     with_w93_tuple_part do |part|
       w93_write_serialization(part, [w93_key_record(rows: 4), w93_payload_record])
-      w93_expect_corrupt(part, "Tuple serializer row count does not match part")
+      w93_expect_corrupt_any(part)
     end
 
     with_w93_tuple_part do |part|
       w93_write_serialization(part, [w93_key_record, w93_payload_record(defaults: 6)])
-      w93_expect_corrupt(part, "Tuple serializer default count is invalid")
+      w93_expect_corrupt_any(part)
     end
 
     with_w93_tuple_part do |part|
@@ -314,6 +324,28 @@ describe "W93 exact Tuple serialization metadata" do
       children = [w93_child_record(defaults: 6), w93_child_record(defaults: 2)]
       w93_write_serialization(part, [w93_key_record, w93_payload_record(children: children)])
       w93_expect_corrupt(part, "Tuple child default count is invalid")
+    end
+  end
+
+  it "accepts optional exact_num_defaults Boolean flags on Tuple records" do
+    with_w93_tuple_part do |part|
+      key_with_flag = w93_key_record(extra: %(,"exact_num_defaults":true))
+      first_child = w93_child_record(defaults: 1, extra: %(,"exact_num_defaults":true))
+      second_child = w93_child_record(defaults: 2, extra: %(,"exact_num_defaults":false))
+      payload_with_flag = w93_payload_record(
+        children: [first_child, second_child],
+        extra: %(,"exact_num_defaults":false),
+      )
+      w93_write_serialization(part, [key_with_flag, payload_with_flag])
+      w93_assert_tuple_reads(part)
+    end
+  end
+
+  it "classifies a non-Boolean exact_num_defaults flag as corrupt" do
+    with_w93_tuple_part do |part|
+      payload_with_invalid_flag = w93_payload_record(extra: %(,"exact_num_defaults":"true"))
+      w93_write_serialization(part, [w93_key_record, payload_with_invalid_flag])
+      w93_expect_corrupt_any(part)
     end
   end
 
@@ -342,13 +374,13 @@ describe "W93 exact Tuple serialization metadata" do
     end
 
     with_w93_tuple_part do |part|
-      key_with_extra = w93_key_record(extra: %(,"exact_num_defaults":true))
+      key_with_extra = w93_key_record(extra: %(,"unexpected":true))
       w93_write_serialization(part, [key_with_extra, w93_payload_record])
       w93_expect_unsupported(part, "unsupported Tuple key serializer fields")
     end
   end
 
-  it "keeps the reversed Tuple child schema outside the exact admitted profile" do
+  it "reads reversed Tuple children by name without widening the exact pair accessor" do
     with_w93_tuple_part do |part|
       columns_path = File.join(part, "columns.txt")
       columns = File.read(columns_path)
@@ -357,8 +389,17 @@ describe "W93 exact Tuple serialization metadata" do
       File.write(columns_path, reversed)
       w93_refresh_checksums(part)
 
+      reader = CrystalClick::WidePart.open_typed(part, "payload")
+      data = reader.read_tuple_mark_range("payload", 0, 3)
+      data.type_name.should eq("Tuple(b String, a UInt64)")
+      rows = Array(Tuple(String, UInt64)).new(data.row_count) do |index|
+        row = data.row(index)
+        {row.value_as("b", String), row.value_as("a", UInt64)}
+      end
+      rows.should eq(W93_TUPLE_VALUES.map { |value| {value[1], value[0]} })
+
       expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::WidePart.open_typed(part, "payload")
+        reader.read_tuple_uint64_string_mark_range("payload", 0, 3)
       end
     end
   end

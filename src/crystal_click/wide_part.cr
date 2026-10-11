@@ -12162,12 +12162,19 @@ module CrystalClick
               raise UnsupportedFormatError.new("Dynamic physical substreams do not match a supported arm subset") unless valid_dynamic_substream_inventory?(column, streams)
             else
               expected_streams = expected_physical_streams(column, selected_type, escape_simple_uint64_column: true)
-              if selected_type == "String" || !WidePart.numeric_array_element_type(selected_type).nil?
-                # BinaryBulk metadata may present the exact String or
-                # primitive numeric-array roster in sorted name order, while
-                # the readers keep their canonical stream order for internal
-                # bindings. Names are unique-checked above; retain exact
-                # identity and return the canonical reader order after comparison.
+              generic_array_tuple = !WideArrayTupleTypePlan.for_type(selected_type).nil? &&
+                                    WideTypePlan.admitted(selected_type).nil?
+              unordered_roster = selected_type == "String" ||
+                                 !WidePart.numeric_array_element_type(selected_type).nil? ||
+                                 (!generic_array_tuple &&
+                                  (WidePart.supports_array_type?(selected_type) ||
+                                   selected_type == "LowCardinality(String)" ||
+                                   WidePart.supports_named_scalar_tuple_type?(selected_type) ||
+                                   WidePart.supports_variant_type?(selected_type)))
+              if unordered_roster
+                # These readers bind by stream name. Compare exact roster
+                # identity independent of metadata listing order, then return
+                # canonical reader order for their internal bindings.
                 unless streams.sort == expected_streams.sort
                   raise UnsupportedFormatError.new(physical_stream_shape_mismatch(column, selected_type, streams, expected_streams))
                 end
@@ -12213,9 +12220,13 @@ module CrystalClick
             raise UnsupportedFormatError.new("Array(Tuple) key column must have one plain UInt64 stream") unless streams == [column]
           end
         elsif WidePart.supports_named_scalar_tuple_type?(selected_type)
-          raise UnsupportedFormatError.new("Tuple key column must have one plain UInt64 stream") unless streams == [column]
+          if columns[index][1] == "UInt64"
+            raise UnsupportedFormatError.new("Tuple key column must have one plain UInt64 stream") unless streams == [column]
+          end
         elsif WidePart.supports_variant_type?(selected_type)
-          raise UnsupportedFormatError.new("Variant key column must have one plain UInt64 stream") unless streams == [column]
+          if columns[index][1] == "UInt64"
+            raise UnsupportedFormatError.new("Variant key column must have one plain UInt64 stream") unless streams == [column]
+          end
         elsif WidePart.supports_map_uint64_string_type?(selected_type) || WidePart.supports_map_uint64_uint64_type?(selected_type) ||
               WidePart.supports_numeric_map_type?(selected_type) || WidePart.supports_nullable_numeric_map_type?(selected_type) ||
               WidePart.supports_numeric_map_array_type?(selected_type) ||
@@ -12629,6 +12640,10 @@ module CrystalClick
       row_count : UInt64,
     ) : Nil
       generic_array_tuple = !WideArrayTupleTypePlan.for_type(type).nil? && WideTypePlan.admitted(type).nil?
+      if !generic_array_tuple && WidePart.supports_array_type?(type) &&
+         SelectedColumnSerializationMetadata.proven?(@path, columns, selected_column, type, row_count)
+        return
+      end
       if generic_array_tuple
         selected = columns.find { |name, column_type| name == selected_column && column_type == type }
         keys = columns.select { |name, column_type| name != selected_column && column_type == "UInt64" }
@@ -13086,6 +13101,10 @@ module CrystalClick
       selected_type : String,
       row_count : UInt64,
     ) : Nil
+      if WidePart.supports_named_scalar_tuple_type?(selected_type) &&
+         SelectedColumnSerializationMetadata.proven?(@path, columns, selected_column, selected_type, row_count)
+        return
+      end
       tuple_plan = WideTupleTypePlan.for_type(selected_type)
       keys = columns.select { |name, type| name != selected_column && type == "UInt64" }
       unless columns.size == 2 && keys.size == 1 && tuple_plan &&
@@ -13166,6 +13185,12 @@ module CrystalClick
       selected_column : String,
       row_count : UInt64,
     ) : Nil
+      if selected_type = columns.find { |name, _| name == selected_column }.try(&.[1])
+        if WidePart.supports_variant_type?(selected_type) &&
+           SelectedColumnSerializationMetadata.proven?(@path, columns, selected_column, selected_type, row_count)
+          return
+        end
+      end
       key_columns = columns.select { |name, type| name != selected_column && type == "UInt64" }
       unless columns.size == 2 && key_columns.size == 1 &&
              columns.any? { |name, type| name == selected_column && WidePart.supports_variant_type?(type) }
@@ -13252,6 +13277,12 @@ module CrystalClick
       selected_column : String,
       row_count : UInt64,
     ) : Nil
+      if columns.any? { |name, type| name == selected_column && type == "LowCardinality(String)" } &&
+         SelectedColumnSerializationMetadata.proven?(
+           @path, columns, selected_column, "LowCardinality(String)", row_count
+         )
+        return
+      end
       key_columns = columns.select { |name, type| name != selected_column && type == "UInt64" }
       unless columns.size == 2 && key_columns.size == 1 && columns.any? { |name, type| name == selected_column && type == "LowCardinality(String)" }
         raise UnsupportedFormatError.new("LowCardinality(String) requires one UInt64 key column")
