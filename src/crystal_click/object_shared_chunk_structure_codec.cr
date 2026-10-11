@@ -83,6 +83,31 @@ module CrystalClick
       suffix : Bytes,
       budget : BinaryCodecBudget,
     ) : Array(ObjectSharedChunkStructure)
+      read_split_records_core(prefix, suffix, budget) do |record, _, _|
+        record
+      end
+    end
+
+    # Reads the same callback-split representation as read_split_records,
+    # retaining each header's exact parser-observed interval in the original
+    # StructurePrefix callback. No per-record prefix or physical lane is
+    # synthesized.
+    def self.read_split_record_spans(
+      prefix : Bytes,
+      suffix : Bytes,
+      budget : BinaryCodecBudget,
+    ) : Array(ObjectSharedChunkStructureReadSpan)
+      read_split_records_core(prefix, suffix, budget) do |record, prefix_start, prefix_end|
+        ObjectSharedChunkStructureReadSpan.new(record, prefix_start, prefix_end)
+      end
+    end
+
+    private def self.read_split_records_core(
+      prefix : Bytes,
+      suffix : Bytes,
+      budget : BinaryCodecBudget,
+      &block : ObjectSharedChunkStructure, Int32, Int32 -> T
+    ) : Array(T) forall T
       unless !budget.writing?
         raise ArgumentError.new("split Object shared structure decode requires a read-direction budget")
       end
@@ -99,10 +124,12 @@ module CrystalClick
       budget.ensure_future_elements(record_count)
 
       context = BinaryCodecContext.new(budget.limits, prefix, false, budget, false)
-      records = Array(ObjectSharedChunkStructure).new(record_count.to_i)
+      records = Array(T).new(record_count.to_i)
       record_count.to_i.times do |index|
         context.visit_node(1)
+        prefix_start = context.input_offset
         row_count, paths = read_header(context, (record_count - index.to_u64) * TRANSPORT_SUFFIX_BYTES)
+        prefix_end = context.input_offset
         suffix_offset = index * TRANSPORT_SUFFIX_BYTES.to_i
         record_end = suffix_offset + TRANSPORT_SUFFIX_BYTES.to_i
         if record_end > suffix.size
@@ -111,11 +138,12 @@ module CrystalClick
         data_marks = read_pair(suffix, suffix_offset)
         paths_marks = read_pair(suffix, suffix_offset + 16)
         metadata_marks = read_pair(suffix, suffix_offset + 32)
-        begin
-          records << ObjectSharedChunkStructure.new(row_count, paths, data_marks, paths_marks, metadata_marks)
+        record = begin
+          ObjectSharedChunkStructure.new(row_count, paths, data_marks, paths_marks, metadata_marks)
         rescue ex : ArgumentError
           raise CorruptPartError.new("invalid split Object shared chunk structure: #{ex.message}")
         end
+        records << block.call(record, prefix_start, prefix_end)
       end
       context.ensure_consumed
       records

@@ -1,5 +1,22 @@
 # CrystalClick project status
 
+Current metadata prerequisite (W263, 2026-10-11): VERIFIED / root adversary
+ROBUST for exact callback-local split chunk-header spans only. One generic
+parser loop preserves the legacy `read_split_records` result, post-preflight
+allocation capacity and budget charges; the new span API records actual byte
+offsets without manufacturing one callback per chunk or rebasing mark pairs.
+Independent literal/multibyte/truncation and inherited prepaid-budget controls
+pass with the old 18-file cohort: 140 examples in each final serial DEBUG and
+RELEASE run, zero failures/errors/pending. Not the full suite or a native JSON
+reader result. The cohort source snapshot includes the separately uncommitted
+root-reader prefix seams; the exact evidence index records their hashes.
+
+The three native root-reader cases and the 48-cell recursive/public/offline
+gate remain open. The span value is metadata, not an authenticated physical
+interval. See the [span evidence](../.landmark/evidence/object-shared-chunk-spans-w263.json)
+and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md). Full goal ACTIVE;
+performance remains deferred and unqualified. Local atomic commit only, no push.
+
 Current prerequisite (W263, 2026-10-11): VERIFIED / root adversary ROBUST within
 the single-owner, already-preframed callback source and existing inline scope.
 Own-file callback source, keyless Object prefix and prefix reader reuse the

@@ -1,5 +1,27 @@
 # Crystal Click landmarks
 
+## Split Object chunk-header spans — W263
+
+- VERIFIED / root adversary ROBUST within the callback-local metadata seam
+  over `300dccb5bc86c6896ce25cc43baaaf859a8decd2`. The old record API and new
+  own-file span value share one generic parser; allocation capacity/order and
+  inherited budget charges remain unchanged. No per-chunk callback is invented.
+- Root observed missing-API compile RED before production edits. Independent
+  literals pin [0,2)/[2,16), multibyte [0,3)/[3,137), suffix pairs, truncation,
+  and caller-prepaid prefix + once-only suffix charges. Final serial 20-file
+  cohort passes 140 examples per DEBUG/RELEASE mode, zero failures/errors/
+  pending, with source hashes unchanged across both executions. The cohort
+  includes separately uncommitted reader-prefix seams, indexed explicitly.
+- Span offsets are within the one original StructurePrefix buffer. The value
+  alone does not authenticate a physical callback, grid or saved-pair target.
+  No CHUNKED value, root/native/public JSON, full-suite, RSS or speed claim.
+- Return pointers: [span evidence](.landmark/evidence/object-shared-chunk-spans-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Next: finish the
+  streams-only internal reader, then all three native roots and unchanged
+  48-cell recursive/public/offline gate. Goal ACTIVE; performance deferred,
+  local commit only, no push. Refresh after parser/budget/consumer/test drift
+  or scope widening; do not confuse missing raw captures with success.
+
 ## Preframed Object callback source and keyless prefix — W263
 
 - VERIFIED / root adversary ROBUST within single-owner preframed cursor and

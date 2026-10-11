@@ -1,0 +1,172 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W263-split-Object-chunk-header-spans",
+  "recorded_date": "2026-10-11",
+  "baseline_commit": "300dccb5bc86c6896ce25cc43baaaf859a8decd2",
+  "claim": {
+    "level": "VERIFIED",
+    "text": "A single shared split-structure parser returns exact callback-local header intervals without changing the legacy record API, allocation preflight or caller-owned budget charges.",
+    "scope": "Metadata only: one original StructurePrefix buffer and a whole positive 48-byte-record StructureSuffix roster.",
+    "root_adversary": "ROBUST within the executed literal, multibyte, truncation, inherited-budget and affected-regression scope",
+    "global_goal": "ACTIVE; three native root-reader witnesses, full recursive/public/offline JSON qualification, remaining types/MV/projection support and later speed work remain open",
+    "meaning": "Curated evidence index, not an independent codec or proof from packet shape."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "boundary": "Shared split Object chunk parser and exact header-byte retention",
+    "rollback": "One exact-path local atomic metadata commit over the baseline; no push or history rewrite."
+  },
+  "admitted": [
+    "New own-file ObjectSharedChunkStructureReadSpan holds the parsed record and parser-observed start/end offsets in the original prefix buffer.",
+    "Legacy and span APIs share a generic result parser; the legacy path creates no span wrappers.",
+    "The result array retains its original record-count capacity and post-roster/budget-preflight allocation point.",
+    "The separate suffix is charged once against the inherited read-direction budget; the prepaid prefix is not charged again.",
+    "Independent literal suffix pairs and one- and multibyte VarUInt headers distinguish byte boundaries from row counts or fabricated per-chunk callbacks."
+  ],
+  "verification": {
+    "guard": "COGNI_RUN_SAFE_MIN_FREE_PCT=50; CRYSTAL_WORKERS=1; run_safe.sh 180 12288; --threads 1; final DEBUG then RELEASE executed serially",
+    "debug": {
+      "examples": 140,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "exit": 0,
+      "start_tool_result": "2a02b3",
+      "tool_result": "5bd2f9",
+      "test_elapsed": "151.83 milliseconds"
+    },
+    "release": {
+      "examples": 140,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "exit": 0,
+      "start_tool_result": "ded3ef",
+      "tool_result": "f48e02",
+      "test_elapsed": "105.09 milliseconds"
+    },
+    "debug_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/object_shared_path_callback_source_w263_spec.cr spec/compact_object_shared_coordinate_w263_spec.cr spec/object_shared_inline_coordinate_w240_adversary_spec.cr spec/object_shared_inline_relocation_w240_adversary_spec.cr spec/object_shared_advanced_inline_w240_adversary_spec.cr spec/object_document_inline_framing_w240_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr spec/object_structure_inline_prefix_w240_adversary_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_document_callback_prefix_lifecycle_w263_spec.cr spec/object_shared_advanced_decoder_contract_w263_spec.cr spec/object_shared_chunk_structure_read_span_w263_spec.cr spec/object_shared_chunk_structure_split_budget_w240_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+    "release_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-release.f4Xdtp/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/object_shared_path_callback_source_w263_spec.cr spec/compact_object_shared_coordinate_w263_spec.cr spec/object_shared_inline_coordinate_w240_adversary_spec.cr spec/object_shared_inline_relocation_w240_adversary_spec.cr spec/object_shared_advanced_inline_w240_adversary_spec.cr spec/object_document_inline_framing_w240_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr spec/object_structure_inline_prefix_w240_adversary_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_document_callback_prefix_lifecycle_w263_spec.cr spec/object_shared_advanced_decoder_contract_w263_spec.cr spec/object_shared_chunk_structure_read_span_w263_spec.cr spec/object_shared_chunk_structure_split_budget_w240_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+    "spec_paths": [
+      "spec/object_shared_path_callback_source_w263_spec.cr",
+      "spec/compact_object_shared_coordinate_w263_spec.cr",
+      "spec/object_shared_inline_coordinate_w240_adversary_spec.cr",
+      "spec/object_shared_inline_relocation_w240_adversary_spec.cr",
+      "spec/object_shared_advanced_inline_w240_adversary_spec.cr",
+      "spec/object_document_inline_framing_w240_spec.cr",
+      "spec/object_shared_path_json_tape_w240_spec.cr",
+      "spec/compact_physical_context_w259_spec.cr",
+      "spec/compact_physical_context_w259_adversary_spec.cr",
+      "spec/compact_typed_w260_spec.cr",
+      "spec/compact_typed_w260_adversary_spec.cr",
+      "spec/compact_dynamic_w262_spec.cr",
+      "spec/compact_dynamic_w262_adversary_spec.cr",
+      "spec/object_structure_inline_prefix_w240_adversary_spec.cr",
+      "spec/object_document_inline_depth_w240_adversary_spec.cr",
+      "spec/object_shared_descendant_json_w243_spec.cr",
+      "spec/object_document_callback_prefix_lifecycle_w263_spec.cr",
+      "spec/object_shared_advanced_decoder_contract_w263_spec.cr",
+      "spec/object_shared_chunk_structure_read_span_w263_spec.cr",
+      "spec/object_shared_chunk_structure_split_budget_w240_spec.cr"
+    ],
+    "roster_meaning": "18 existing paths / 131 examples, six new span examples and three existing split-budget examples; not the full repository suite.",
+    "source_snapshot": "Precommit worktree over the baseline. The 20-file cohort also loaded the five separately uncommitted prefix/materializer files whose hashes are recorded below; those are not included in this metadata commit.",
+    "source_test_sha256": {
+      "src/crystal_click.cr": "e38f0035bc994d64ada693fd1263887d0bebae2444c8db9c33d53096e29df0a6",
+      "src/crystal_click/object_shared_chunk_structure_codec.cr": "f10bcf8f93577778f85a311ba4d7f520de401cac0d006c5cca2abcc6b59f5e87",
+      "src/crystal_click/object_shared_chunk_structure_read_span.cr": "7896f3549210ff08e9c8cb5cff72900b09c2739ce2103715ca50d3278377cb2a",
+      "spec/object_shared_chunk_structure_read_span_w263_spec.cr": "4422acbb119551f056107de2aa9bd308663e32c1c27efcbfffc5aac9424a1527",
+      "spec/object_shared_chunk_structure_split_budget_w240_spec.cr": "e166909933c0fbb419fb2c5b2c441c084a4c9d99743e9081b98bbecc1a7db34b",
+      "src/crystal_click/object_document_callback_prefix.cr": "dcc88f2a9bb4af826710d9eb2a1c85a31e08a9fc740412a232e36070068e1a2e",
+      "src/crystal_click/object_document_callback_prefix_reader.cr": "ecdb9bb0cef162b869c514fe79c2404158d47237c65e8b45bb9f566dc341a83e",
+      "src/crystal_click/object_document_inline_body_materializer.cr": "238190b4f15146c206dc3bfbc08398a830fdfeda9d2108819c1fd5b32096ff95",
+      "src/crystal_click/object_document_inline_plan_reader.cr": "6067959b14b54161c8d3780c24fbf46ed0d026f775d34519af6a9e573243afc9",
+      "src/crystal_click/object_shared_path_codec.cr": "10f99d01dffb11b62a6935c53f8a6caf8eedd15e26f2ae9baf5b55bf4d744f98"
+    },
+    "source_hashes_unchanged_across_final_modes": true,
+    "format_command": "/opt/homebrew/bin/crystal tool format --check src/crystal_click.cr src/crystal_click/object_shared_chunk_structure_codec.cr src/crystal_click/object_shared_chunk_structure_read_span.cr spec/object_shared_chunk_structure_read_span_w263_spec.cr",
+    "format_exit": 0,
+    "format_tool_result": "9b26c8",
+    "diff_check_command": "git diff --check",
+    "full_suite_claimed": false,
+    "native_reader_executed": false,
+    "review": "Luna implemented the seam; root inspected the actual generic parser and independently added/executed byte-boundary and inherited-budget counterexamples. Same-lineage review is correlated, not independent replication."
+  },
+  "falsifiers": {
+    "missing_api_red": {
+      "tool_result": "7b6388",
+      "exit": 1,
+      "meaning": "Undefined read_split_record_spans before production edits; compile discriminator, not a behavioral result."
+    },
+    "initial_syntax_diagnostic": "fa2120: invalid trailing comma on the block parameter; corrected before the seven-example run.",
+    "root_test_bound_diagnostic": "747e14/aebe0d: the new 137-byte literal exceeded its erroneous 96-byte per-input cap. Source confirmed the input guard; root corrected only that test cap, not production limits.",
+    "superseded_runs": "Intermediate eight-example and 139-example runs are not the final DoD. A newly started DEBUG overlapped the still-running superseded RELEASE; those outputs were excluded and both final 140-example modes were rerun serially.",
+    "executed_controls": [
+      "Independent [0,2)/[2,16) header spans and all six suffix coordinate pairs",
+      "Independent multibyte [0,3)/[3,137) spans and 128-byte path",
+      "Trailing/truncated prefix and incomplete/empty suffix rejection",
+      "Read-direction and inherited depth/node/element/byte limits",
+      "Actually prepaid 16-byte prefix plus once-only 96-byte suffix reaches 112",
+      "111-byte inherited cap refuses before suffix charge and record nodes",
+      "Unchanged old split-budget and W240/W259/W260/W262/W263 regressions"
+    ]
+  },
+  "boundaries": {
+    "allowed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/object_shared_chunk_structure_codec.cr",
+      "src/crystal_click/object_shared_chunk_structure_read_span.cr",
+      "spec/object_shared_chunk_structure_read_span_w263_spec.cr",
+      "docs/COMPACT_JSON_READER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/object-shared-chunk-spans-w263.json"
+    ],
+    "changed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/object_shared_chunk_structure_codec.cr",
+      "src/crystal_click/object_shared_chunk_structure_read_span.cr",
+      "spec/object_shared_chunk_structure_read_span_w263_spec.cr",
+      "docs/COMPACT_JSON_READER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/object-shared-chunk-spans-w263.json"
+    ],
+    "excluded_unfinished_paths": [
+      "src/crystal_click/object_document_callback_prefix.cr",
+      "src/crystal_click/object_document_callback_prefix_reader.cr",
+      "src/crystal_click/object_document_inline_body_materializer.cr",
+      "src/crystal_click/object_document_inline_plan_reader.cr",
+      "src/crystal_click/object_shared_path_codec.cr",
+      "src/crystal_click/compact_json_object_role_schedule.cr",
+      "src/crystal_click/compact_json_object_site_framer.cr",
+      "src/crystal_click/compact_static_json_prepared_context.cr",
+      "src/crystal_click/compact_static_json_site_manifest.cr",
+      "src/crystal_click/object_document_callback_body_materializer.cr",
+      "spec/compact_json_object_site_framer_w263_spec.cr",
+      "spec/compact_json_w263_native_spec.cr",
+      "spec/compact_static_json_internal_w263_spec.cr",
+      "spec/compact_static_json_root_w263_adversary_spec.cr"
+    ]
+  },
+  "rejected_or_unqualified": [
+    "A manually constructed span does not authenticate callback ownership, physical grid or saved-pair coordinates.",
+    "No one-header-per-callback framing, rebased coordinates or decoded CHUNKED-value cache is introduced or qualified.",
+    "No actual Compact JSON reader, three-root native gate, full 48-cell matrix or public/typed/offline admission is GREEN.",
+    "Failed parser budgets are not rolled back; discard failed enclosing operations.",
+    "No immutable/thread-safe owner proof, allocator/RSS, performance or <=10% parity claim."
+  ],
+  "assumptions": [
+    "The enclosing authenticated callback owns and keeps alive the prefix bytes.",
+    "The enclosing caller prepaid the prefix on the same operation budget.",
+    "Source snapshots, read-direction limits and exact suffix grammar remain unchanged."
+  ],
+  "refresh": "Parser/budget/consumer/test/tool drift or widening reopens dependent evidence. Rerun the exact modes and affected falsifiers; native physical admission needs the separately sealed witnesses.",
+  "links": [
+    "docs/COMPACT_JSON_READER_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "LANDMARKS.md",
+    ".landmark/evidence/compact-object-callback-prefix-w263.json"
+  ],
+  "validation_limit": "The protocol template was read, but this repository has no validate-landmark-graph.sh or local packet template. Its existing curated-evidence shape is preserved; JSON/path/hash checks do not execute the referenced DoD or confer numeric trust."
+}

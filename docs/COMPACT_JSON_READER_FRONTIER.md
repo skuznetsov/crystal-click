@@ -219,7 +219,9 @@ The keyless prefix and schedule seam are sealed as follows:
   `object_shared_advanced_inline_decoder.cr`. The inline callback-order owner
   may gain only the narrow role-provider seam required to preserve its existing
   Wide caller behavior. Root owns `src/crystal_click.cr` and this frontier; the core
-  worker owns the named implementation files and the internal-reader test.
+  worker owns the named implementation files. Root owns integration/requires,
+  native-literal specs, serial test execution and final review; test changes
+  need a separate ownership assignment and must not relax the literals.
 - Extract a keyless common parsed prefix owner. The old inline prefix retains
   its real `BinaryDynamicJsonLeafKey`; its PrefixMap and child Dynamic maps
   remain keyed only by actual Dynamic sites. Static IDs must never be fake
@@ -365,6 +367,107 @@ Refresh the exact cohort and affected falsifiers after source/test/profile/
 consumer drift or scope widening. Next: the sealed Compact framer/prepared
 reader, three actual native roots including multi-chunk SharedData, then the
 unchanged 48-cell recursive/public/offline target. Full goal ACTIVE; no push.
+
+### Executable root-reader continuation — 2026-10-11
+
+Risk: CAUTION. Rollback: prerequisite commit
+`300dccb5bc86c6896ce25cc43baaaf859a8decd2`, followed by one coherent local
+root-reader commit only after its declared gate passes; no push. The existing
+unfinished native specs remain outside the prerequisite commit.
+
+Root refreshed the exact internal-reader missing-API RED at that revision
+(`290fa7`, exit 1 at `CompactStaticJsonBulkColumnReader`). This is a compile
+discriminator, not behavioral/native compatibility evidence. The pinned
+runtime, 48-cell summary and native manifest hashes still match the baseline.
+
+1. **Grammar framing and prefix retention.** Core worker owns the sealed
+   Compact manifest, role-schedule and site-framer files. Extend only the
+   necessary shared prefix seams in `object_document_inline_plan_reader.cr`
+   and `object_shared_path_codec.cr`: parsing returns its consumed count and
+   retains that exact prefix span. Preframed sources still require exact
+   event consumption; the distinct Compact source bounds mrk3 grammar counts
+   and mrk4 named extents. Preserve same-source parser reservation. Consumers
+   are inventoried with `rg -n 'with_self_delimited|take_exact'` over those
+   prefix owners, TapeReader/JsonTapeCodec/InlinePrefix and the source spec:
+   two self-delimited production call sites plus fixed discriminator/LC lanes.
+   Guard: a prefix cannot swallow body bytes or discard named trailing bytes.
+2. **Complete body metadata.** Core worker owns the sealed common body
+   materializer and the indispensable existing materializer/Object codec seams.
+   Preserve actual Object/Dynamic statistics offsets instead of assigning the
+   end of a Complete prefix. Root's three stock-literal cases must decode via
+   existing value serde and original site-owned coordinates, including real
+   multi-chunk SharedData; no fake Wide registry or per-layout value decoder.
+   Guard: prefix-only Inline callers and their inherited-depth refusals remain
+   unchanged in the exact 18-file cohort.
+3. **Prepared internal root reader.** Core worker owns the sealed prepared
+   context and bulk-reader files. Reuse existing Compact precharge/cursor/grid
+   mechanisms once, prepare every selected mark even at EOF, and report retained
+   plus active logical workspace to the observer. Root integrates requires and
+   executes `spec/compact_static_json_internal_w263_spec.cr` with
+   `CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS`
+   in guarded DEBUG and RELEASE, followed by the unchanged 18-file cohort.
+   Expected: all three root cases, eight literal rows and four marks per case,
+   EOF-first validation and workspace assertions pass; zero failures/errors/
+   pending. This is finite internal admission, not the full 48-cell target.
+
+Root independently observed the selected native prefix bytes (`e7987a`, exit 0)
+after checking the summary/manifest pins and the 10/11/11-file inventories. A
+bounded Ruby/Fiddle LZ4 walk accepted 36 frames per file and compared actual
+saved mark/roster intervals to the capture report. Object statistics offsets
+are 22/21/23 for wire 0/2/4; note Dynamic offsets are 17/16/10 and sample
+Dynamic offsets are 16/15/10. The first Object prefix retains `[8,8]` and
+`zz_overflow:8`; first note/sample Dynamic prefixes retain `[0,8]` and `[4,4]`
+plus `Float64:4`, respectively. These are part statistics, not two-row granule
+counts. Legacy later prefixes contain `000000`; wire-4 later prefixes contain
+the single empty-statistics flag `00`. The mrk3 sequential prefix ends at byte
+102 on the first mark and byte 80 on later marks, before their bodies. This
+refutes the earlier granule-derived Dynamic count expectation. The raw probe
+checked exact LZ4 output lengths and stored-file SHA-256, not CityHash itself,
+value decoding, reader admission or source/runtime identity. Retention tests
+must use these observed offsets/tails rather than merely matching JSON values.
+
+Pre-mortem: a convenient raw-remainder or rebased-lane shortcut could produce
+correct-looking rows while losing callback/coordinate provenance. Root must
+check exact role/extent/grid owners and add a discriminating negative before
+claiming root-reader GREEN. Full recursive/public/offline admission, remaining
+types/MV/projections and subsequent performance work remain deferred to their
+own gates. Source and local inventory agents are read-only; root runs all heavy
+commands serially under the unchanged 50%-free, 180-second / 12-GiB guard.
+
+The next CHUNKED metadata prerequisite is separately design-sealed: add
+`object_shared_chunk_structure_read_span.cr` and a span-returning seam in
+`object_shared_chunk_structure_codec.cr`, preserving the existing
+`read_split_records` caller contract and budget charges. Each span records the
+parser-observed start/end within the one original StructurePrefix callback;
+it is not a separate physical callback or a rebased coordinate domain. The
+bounded `rg -n 'read_split_records' src spec -g '*.cr'` inventory finds the
+physical bucket decoder and the W240 split-budget spec. Root owns requires,
+execution and closure; the source worker now owns only these two production
+files. Its initial test-first spec is root-owned for the added counterexamples
+and final runs. Before
+production edits, root must observe its missing-API RED. The focused DoD is
+the new literal two-record span/truncation/budget falsifiers plus the existing
+W240 split-budget cases passing in DEBUG and RELEASE; the root-reader gate
+still requires all three native cases. Strongest failure: manufactured
+one-header-per-callback boundaries hide the actual stream-then-chunks order.
+This seam preserves the single callback and exact observed intervals; it does
+not admit CHUNKED values or public JSON by itself. Rollback remains `300dccb`.
+
+The span prerequisite is now VERIFIED / root adversary ROBUST within this
+metadata seam. Root observed missing-API compile RED before the worker edits;
+six independent-literal/span/truncation/budget examples plus the three existing
+split-budget examples pass in the final affected 20-file cohort: 140 examples
+in each serial DEBUG/RELEASE mode, zero failures/errors/pending. Multibyte
+VarUInt controls distinguish byte positions from field/row counts. An actual
+caller-prepaid prefix charge survives; the suffix adds once and an exhausted
+aggregate byte budget rejects before record nodes. One generic parser retains
+the old result capacity and post-preflight allocation point without span
+wrappers on the legacy path. The source/test hashes are unchanged across the
+two final runs. Separately uncommitted root-reader seams were loaded by the
+cohort and are indexed, not included in the narrow metadata commit. See
+[the scoped span evidence](../.landmark/evidence/object-shared-chunk-spans-w263.json).
+No root-reader case, public admission, physical authentication of a manually
+constructed span, full suite, allocation/RSS or speed result follows from this.
 
 Static JSON site identities remain separate from actual Dynamic keys. Offline
 materialization must use one logical
