@@ -2,14 +2,165 @@
 
 Document status: W263 six-layout/multi-chunk native baseline RED qualified; coordinate prerequisite
 VERIFIED within its focused scope; advanced inline preparation prerequisite
-VERIFIED; bounded internal V1 MRK3/MAP and V2 MRK4/MAP roots VERIFIED; complete three-root and
-recursive/public/offline native GREEN pending
+VERIFIED; bounded internal V1 MRK3/MAP, V2 MRK4/MAP and V3 MRK4/ADVANCED_CHUNKED
+roots VERIFIED; recursive/public/offline native GREEN pending
 (2026-10-11).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
 Current transition: bind persisted JSON/Object sites to the existing recursive
 Compact lifecycle, Object codecs and public selected-column consumers. The full
 types, MV/projection and subsequent memory/performance objective remains ACTIVE.
 This transition does not redefine completion or establish <=10% speed parity.
+
+## Bounded MRK4 ADVANCED_CHUNKED extension — qualified within the named stock cell
+
+Anchor: local MRK3/MAP checkpoint `5605a70259f2a03fe79c050593aee00c669bb62b`.
+The unchanged stock `obj_v3_dyn_v3_advanced_chunked_mrk4_s0_variant_basic`
+internal example was run with the explicit W263 capture. It fails during the
+initial EOF-only preparation at the MAP-only role-schedule guard (tool `81be2e`,
+exit 1; one example, zero failures, one `UnsupportedFormatError`). This is a
+missing-capability RED, not a compiler, fixture or value-oracle failure.
+
+Risk is CAUTION: plausible values could hide wrong callback coordinates,
+premature shared-value decoding or a holder retained across request budgets.
+Rollback is the clean local checkpoint above; the three existing untracked
+future-gate specs remain user-owned and unchanged. No push, public facade,
+recursive site, full 48-cell or speed-parity admission is authorized by this
+bounded transition.
+
+The target is the captured eight-row/four-two-row-mark V3/Dynamic-v3 root with
+ADVANCED_CHUNKED shared data, plain MRK4, String v0 and Variant BASIC. Its root
+has two buckets and two one-row chunks per bucket per mark. Each bucket has
+one StructurePrefix callback containing both headers, not one callback per
+chunk; each StructureSuffix callback contains two 48-byte records. Empty
+bucket callbacks remain events. The complete observed root roster has 30
+events (physical slots 12 through 41). Persisted suffix pairs remain in the
+original whole-`data.bin` compressed/decompressed coordinate domain.
+
+Design laws for this slice:
+
+1. Create one authenticated `CompactObjectSharedInlineCoordinateContext` from
+   the actual ordered root-site granule shards and the reader's physical
+   context. Callback slices carry cumulative path-relative intervals in that
+   same context. The context retains original physical shard intervals and
+   resolves saved pairs; neither the framer nor a reconstructed lane rebases
+   those pairs. MRK4 still requires the complete exact named event.
+2. Add a value-free materialization entry while preserving the legacy common
+   materializer's default eager behavior. A new sealed one-mark owner prepares
+   ordinary streams and `ObjectSharedAdvancedInlinePrepared` from the same
+   captured prefix, physical plan, grid, schedule and current budget. It also
+   validates the completed source framer's actual named bytes and authenticated
+   slices, not only a matching site label, and requires the identical capture
+   budget. Its factory accepts source inputs only, never caller-supplied raw
+   artifacts, prebuilt streams or a separate holder. No Compact getter exposes
+   either.
+3. Advanced preparation reauthenticates and prepares the entire selected-column
+   window on every `read_marks` request. All mark holders are request-local and
+   retain the exact request budget; implicit subsequent calls get new holders.
+   Explicit caller budgets remain cumulative. Do not rebind a holder or relax
+   its budget-identity check. MAP retains its qualified stream-only cache.
+4. Only selected marks decode shared values. The sealed owner may make an
+   ephemeral, non-mutating one-mark logical stream view with those decoded
+   rows for the existing `ObjectDocumentCodec`; it may not combine a holder
+   from source A with streams from source B. EOF/empty requests still finish
+   all structural preparation before publishing detached prefix metadata.
+5. Preserve full Object/ordinary Dynamic PREFIX/PREFIX_EMPTY statistics and
+   frozen path/arm/event rosters. Shared-path Dynamic payloads use their own
+   stats-free context. Account the live physical window, framer, ordinary
+   streams, all local holders and temporary selected output in the logical
+   workspace observer at named phase boundaries. After selected value decode,
+   census actual row/entry/path/value owners before retaining them or creating
+   the ephemeral defensive stream copy. Check the preparation census before
+   publishing detached metadata. This is pre-retention admission, not a
+   predecode byte ceiling, a complete decoder-internal transient-peak estimate
+   or an RSS bound. Codec node/element/wire counters are work limits, not byte
+   units; no raw-wire multiplier or limits-only reservation is admitted.
+   Do not add a stock-scalar-only type gate to disguise an unproved memory
+   formula. Missing descriptor-census coverage must be reported or narrowly
+   accounted rather than silently promoted to a general allocation claim.
+   Retained callback slices keep their Compact coordinate context and shard
+   buffers live after the physical window is dropped; include that chain and
+   count a shared context once. Parsed prefix/plan metadata, recursive type
+   descriptors and hash backing storage remain outside this logical census.
+
+Execution plan and ownership:
+
+- Luna engine owner: `compact_json_object_site_framer.cr`,
+  `compact_json_object_role_schedule.cr`,
+  `compact_static_json_prepared_context.cr`,
+  `object_document_callback_body_materializer.cr`,
+  `object_document_inline_body_materializer.cr`, and
+  `object_shared_advanced_inline_prepared.cr`, including completed-source
+  authentication and raw-holder ownership accounting.
+- Luna reader owner: `compact_static_json_bulk_column_reader.cr`, using the
+  source-only prepared-mark factory and request-local Advanced lifecycle.
+- Luna prepared-mark owner: the new
+  `compact_static_json_advanced_prepared_mark.cr`. Prefer an isolated copy
+  inside this owner to widening `ObjectDocumentCodec` or exposing streams.
+- Luna test owner: new MRK4 chunked native, adversary, budget, framer and sealed
+  mark-owner specs plus a separate `spec/support` fixture helper. Existing
+  native capture files, literal oracles and future-gate specs are not edited.
+- Root: require-list integration, source comparison, guarded serial execution,
+  hostile self-review, documentation/evidence and exact-path atomic commit.
+
+DoD: first execute the new focused discrimination specs against the unchanged
+production baseline. Then, under the existing serial `run_safe.sh` guard and
+explicit `CRYSTAL_CLICK_W263_EVIDENCE_ROOT`, run those specs, the 23-path
+155-example MRK3/MRK4 affected cohort, and the six-path eight-example native
+cohort in DEBUG and RELEASE. The original filtered V3 internal example must
+pass in both modes without changing its literal/statistics oracle. Format and
+`git diff --check` must pass. New cohort counts are evidence only after actual
+execution; full-suite or matrix GREEN is not inferred from this DoD.
+
+Required hostile discriminators: EOF preparation followed by a second
+implicit-budget read; a checksum-valid well-framed invalid inner shared value
+accepted by preparation but refused only when selected; a late structural
+corruption refused even by an EOF/empty read; actual callback ordering and
+empty/multi-header extents; original-coordinate and foreign-owner rejection;
+fully consumed but unfinished source refusal; forged body-role refusal with
+unchanged callback names and bytes; and a calibrated finite budget under which
+preparation and selected marks pass separately but their aggregate refuses. A
+per-mark budget-reset ablation must falsify the final aggregate assertion while
+preserving the same budget object and the positive calibration controls. A
+well-typed external constructor call combining source-A ordinary streams with
+a source-B holder must fail at private access, separately from runtime source
+controls. No value cache, caller raw-artifact minting seam, or skipped EOF work
+may be used to make these pass.
+
+Observed closure (2026-10-11): VERIFIED / root adversary ROBUST within this
+stock root. Root ran the five-path focused cohort (11 examples), the 23-path
+affected cohort (155 examples), and the six-path native MAP cohort (8 examples)
+in each serial DEBUG/RELEASE mode, zero failures/errors/pending. The unchanged
+original V3 filtered oracle passes one example in each mode. Formatting and
+diff checks pass; the three user-owned future-gate specs retain their hashes.
+
+Root also executed the well-typed cross-source constructor witness: production
+fails specifically at private `new`; an isolated copy removing only initializer
+privacy type-checks that identical call. The finite-limit-only same-object
+counter-reset ablation preserves calibration, EOF and per-mark controls but
+fails the final aggregate refusal with no exception. Neither attack changes
+production. Source substitution with the same budget, unfinished capture,
+forged caller roles and a pre-bound conflicting role schedule refuse at runtime.
+
+Before closure, the source validator's premature schedule lookup and finished
+MRK4 cursor query were repaired. A test-copy remap initially updated outer
+marks and suffix pairs but missed PathsMarks, metadata and SubstreamsMarks
+pointers; its resulting frame-boundary error was an instrument failure, not
+evidence of deferred value validation. The corrected helper verifies every
+saved pair's logical position and all physical slot intervals after reopen.
+The checksum-valid invalid inner Copy tag then prepares at EOF, leaves a later
+selected mark readable and refuses only when its poisoned mark is selected.
+
+This qualifies three named internal roots, not the complete 48-cell matrix,
+public selected-column/offline composition, nested JSON consumers or other
+profiles/layouts. The retained-owner census includes captured Compact shards
+but retains the exclusions above. Failed operations must be discarded; parts
+must remain quiescent. No predecode allocation ceiling, transient-peak/RSS,
+thread-safety or performance claim follows. Return pointer:
+[CHUNKED evidence](../.landmark/evidence/compact-static-json-mrk4-chunked-w263.json).
+Refresh on source, compiler, profile, consumer, capture or pin drift and before
+widening. Next: valid MRK3 NULL 255 and remaining representations, then the
+unchanged recursive/public/offline matrix. Full goal ACTIVE; memory/performance
+remains deferred; local atomic commit only, no push.
 
 ## Bounded MRK3 MAP extension — qualified within the named stock cell
 

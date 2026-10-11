@@ -1,8 +1,8 @@
 module CrystalClick
   # Direct reader for one static root JSON column in a plain Compact part.
-  # The bounded MAP checkpoints admit named mrk4 events and one unlabelled
-  # mrk3 root tape; both validate the complete selected mark grid at EOF before
-  # decoding any ObjectDocument value.
+  # The bounded checkpoints admit named mrk4 MAP/ADVANCED_CHUNKED events and
+  # one unlabelled mrk3 MAP root tape. Each validates the complete selected
+  # mark grid at EOF before decoding any ObjectDocument value.
   class CompactStaticJsonBulkColumnReader
     getter row_count : UInt64
     getter mark_count : Int32
@@ -26,6 +26,7 @@ module CrystalClick
     @selected_checksum_names : Array(String)
     @prepared_context : CompactStaticJsonPreparedContext?
     @frozen_event_names : Array(String)?
+    @advanced_layout : Bool?
 
     def self.open(
       part_path : String,
@@ -147,6 +148,7 @@ module CrystalClick
       @logical_read_bytes = @context.logical_bytes_for(@column_name)
       @prepared_context = nil
       @frozen_event_names = nil
+      @advanced_layout = nil
     end
 
     def schema_declaration : String
@@ -178,8 +180,9 @@ module CrystalClick
     end
 
     # Logical retained-owner estimate, not allocator capacity or RSS. During
-    # preparation the observer also receives conservative physical-window,
-    # framer, prefix/stream and decoded-output peaks from the same operation.
+    # preparation/decoding the observer receives conservative physical-window,
+    # framer, prefix/stream and output estimates at named phase boundaries,
+    # not a complete decoder-internal transient peak or predecode byte ceiling.
     def retained_workspace_bytes : UInt64
       bytes = instance_sizeof(CompactStaticJsonBulkColumnReader).to_u64
       bytes = checked_add(bytes, @context.retained_workspace_bytes)
@@ -224,22 +227,64 @@ module CrystalClick
       # operation. A caller-supplied budget remains cumulative across calls;
       # otherwise this is the fresh per-call budget.
       request_budget = @codec_budget || BinaryCodecBudget.new(@limits)
-      ensure_prepared!(request_budget, workspace_observer) unless @prepared_context
+      advanced_marks = nil.as(Array(CompactStaticJsonAdvancedPreparedMark)?)
+      if @advanced_layout == true || @prepared_context.nil?
+        advanced_marks = ensure_prepared!(request_budget, workspace_observer)
+      end
 
       prepared = @prepared_context || raise(CorruptPartError.new("Compact static JSON prepared context is missing"))
       selected_rows = selected_rows(first_mark, mark_count)
-      workspace_observer.call(checked_add(retained_workspace_bytes, checked_multiply(selected_rows, sizeof(Pointer(ObjectDocument)).to_u64)))
+      advanced_layout = @advanced_layout
+      if advanced_layout.nil?
+        raise CorruptPartError.new("Compact static JSON layout was not prepared")
+      end
+      advanced_layout = advanced_layout.not_nil!
+      request_owner_bytes = if advanced_layout
+                              owners = advanced_marks || raise(CorruptPartError.new("Advanced Compact request owners are missing"))
+                              advanced_request_workspace_bytes(owners)
+                            else
+                              0_u64
+                            end
+      output_reservation = checked_add(
+        instance_sizeof(Array(Array(ObjectDocument))).to_u64,
+        checked_add(
+          checked_multiply(mark_count.to_u64, sizeof(Pointer(Array(ObjectDocument))).to_u64),
+          checked_multiply(selected_rows, sizeof(Pointer(ObjectDocument)).to_u64),
+        ),
+      )
+      workspace_observer.call(checked_add(retained_workspace_bytes,
+        checked_add(request_owner_bytes, output_reservation)))
 
       output = Array(Array(ObjectDocument)).new(mark_count)
       mark_count.times do |selection_index|
         mark_index = first_mark + selection_index
-        output << prepared.decode_mark_with_budget(mark_index, request_budget, @ordinary_profile)
-        workspace_observer.call(checked_add(retained_workspace_bytes, documents_workspace_bytes(output)))
+        documents = if advanced_layout
+                      owners = advanced_marks || raise(CorruptPartError.new("Advanced Compact request owners are missing"))
+                      owner = owners[mark_index]?
+                      unless owner && owner.logical_row_count == prepared.mark_row_count_at(mark_index)
+                        raise CorruptPartError.new("Advanced Compact prepared mark differs from the validated row grid")
+                      end
+                      owner_observer = ->(owner_bytes : UInt64) do
+                        active = checked_add(retained_workspace_bytes, request_owner_bytes)
+                        active = checked_add(active, documents_workspace_bytes(output))
+                        workspace_observer.call(checked_add(active, owner_bytes))
+                        nil
+                      end
+                      owner.decode_with_budget(request_budget, owner_observer)
+                    else
+                      prepared.decode_mark_with_budget(mark_index, request_budget, @ordinary_profile)
+                    end
+        output << documents
+        active = checked_add(retained_workspace_bytes, request_owner_bytes)
+        workspace_observer.call(checked_add(active, documents_workspace_bytes(output)))
       end
       output
     end
 
-    private def ensure_prepared!(budget : BinaryCodecBudget, workspace_observer : Proc(UInt64, Nil)) : Nil
+    private def ensure_prepared!(
+      budget : BinaryCodecBudget,
+      workspace_observer : Proc(UInt64, Nil),
+    ) : Array(CompactStaticJsonAdvancedPreparedMark)?
       base_workspace = retained_workspace_bytes
       physical_workspace = physical_window_workspace_bytes
       workspace_observer.call(checked_add(base_workspace, @logical_read_bytes))
@@ -260,14 +305,21 @@ module CrystalClick
       object_statistics_offsets = Array(Int32).new(@mark_count)
       dynamic_prefixes = Array(Hash(String, Bytes)).new(@mark_count)
       dynamic_statistics_offsets = Array(Hash(String, Int32)).new(@mark_count)
+      advanced_marks = Array(CompactStaticJsonAdvancedPreparedMark).new(@mark_count)
+      advanced_layout = @advanced_layout
       typed_schema = nil.as(Hash(String, BinaryDataType)?)
-      frozen_names = nil.as(Array(String)?)
+      frozen_names = @frozen_event_names.try { |names| copy_strings(names) }
 
       granules.each_with_index do |granule, mark_index|
         unless granule.mark == mark_index && granule.row_count == @mark_row_counts[mark_index]
           raise CorruptPartError.new("Compact static JSON physical window differs from its validated mark grid")
         end
-        framer = CompactJsonObjectSiteFramer.new(@context.mode, granule.shards, budget)
+        site_identity = "#{@manifest.physical_prefix}:mark=#{mark_index}"
+        framer = if @context.mode.mrk4?
+                   CompactJsonObjectSiteFramer.new(@context.mode, granule.shards, budget, @context, site_identity)
+                 else
+                   CompactJsonObjectSiteFramer.new(@context.mode, granule.shards, budget)
+                 end
         observed_dynamic_offsets = Hash(String, Int32).new
         statistics_offset_observer = ->(name : String, offset : Int32) do
           if previous = observed_dynamic_offsets[name]?
@@ -306,7 +358,15 @@ module CrystalClick
         prefix.bind_physical_plan!(physical_plan)
 
         reject_nested_static_json_sites!(prefix, budget)
+        if @context.mode.mrk3? && prefix.plan.structures.object.shared_data_version >= 2_u64
+          raise UnsupportedFormatError.new("Compact mrk3 static JSON Advanced shared-data layouts are not admitted")
+        end
         schedule = CompactJsonObjectRoleSchedule.build(prefix, physical_plan, @ordinary_profile, budget)
+        if advanced_layout.nil?
+          advanced_layout = schedule.advanced
+        elsif schedule.advanced != advanced_layout.not_nil!
+          raise CorruptPartError.new("Compact static JSON shared-data layout changed between marks")
+        end
         if expected_names = frozen_names
           unless schedule.event_names == expected_names
             raise CorruptPartError.new("Compact static JSON callback schedule changed between marks")
@@ -314,7 +374,6 @@ module CrystalClick
         else
           frozen_names = copy_strings(schedule.event_names)
         end
-
         prefix.start_body_capture!
         if @context.mode.mrk3?
           CompactJsonObjectMapTapeFramer.capture_body!(
@@ -347,17 +406,54 @@ module CrystalClick
         observed_dynamic_offsets.each { |name, offset| complete_statistics_offsets[name] = offset }
         object_callback_name = PhysicalStreamName.append_literal(@manifest.callback_prefix, ".object_structure")
         complete_statistics_offsets[object_callback_name] = prefix.object_structure_statistics_offset
-        mark_streams = ObjectDocumentCallbackBodyMaterializer.materialize(
-          prefix,
-          physical_plan,
-          grid,
-          budget,
-          schedule.body_bindings,
-          schedule.body_pairs,
-          complete_statistics_offsets,
-        )
-        unless mark_streams.mark_count == 1 && mark_streams.row_count_at(0) == granule.row_count
-          raise CorruptPartError.new("Compact static JSON body materializer returned the wrong mark grid")
+        if schedule.advanced
+          owner_observer = ->(owner_bytes : UInt64) do
+            active_bytes = checked_add(base_workspace, physical_workspace)
+            active_bytes = checked_add(active_bytes, framer.retained_workspace_bytes)
+            active_bytes = checked_add(active_bytes, advanced_request_workspace_bytes(advanced_marks))
+            active_bytes = checked_add(active_bytes,
+              preparation_collections_workspace_bytes(
+                streams,
+                rows,
+                typed_schema,
+                object_prefixes,
+                object_statistics_offsets,
+                dynamic_prefixes,
+                dynamic_statistics_offsets,
+              ))
+            workspace_observer.call(checked_add(active_bytes, owner_bytes))
+            nil
+          end
+          mark_owner = CompactStaticJsonAdvancedPreparedMark.prepare_from_source(
+            prefix,
+            physical_plan,
+            grid,
+            budget,
+            schedule.body_bindings,
+            schedule.body_pairs,
+            complete_statistics_offsets,
+            @ordinary_profile,
+            framer,
+            owner_observer,
+          )
+          unless mark_owner.logical_row_count == granule.row_count
+            raise CorruptPartError.new("Advanced Compact prepared mark returned the wrong row count")
+          end
+          advanced_marks << mark_owner
+        else
+          mark_streams = ObjectDocumentCallbackBodyMaterializer.materialize(
+            prefix,
+            physical_plan,
+            grid,
+            budget,
+            schedule.body_bindings,
+            schedule.body_pairs,
+            complete_statistics_offsets,
+          )
+          unless mark_streams.mark_count == 1 && mark_streams.row_count_at(0) == granule.row_count
+            raise CorruptPartError.new("Compact static JSON body materializer returned the wrong mark grid")
+          end
+          streams << mark_streams
         end
 
         mark_typed_schema = prefix.typed_schema_for(budget)
@@ -375,7 +471,6 @@ module CrystalClick
           observed_dynamic_offsets,
           budget,
         )
-        streams << mark_streams
         rows << granule.row_count
         object_prefixes << retained_object_prefix[0]
         object_statistics_offsets << retained_object_prefix[1]
@@ -384,17 +479,38 @@ module CrystalClick
 
         active_bytes = checked_add(base_workspace, physical_workspace)
         active_bytes = checked_add(active_bytes, framer.retained_workspace_bytes)
-        active_bytes = checked_add(active_bytes, partial_stream_workspace_bytes(streams))
-        active_bytes = checked_add(active_bytes, prefix_metadata_workspace_bytes(
-          retained_object_prefix[0], retained_dynamic_prefixes[0],
-        ))
+        if schedule.advanced
+          active_bytes = checked_add(active_bytes, advanced_request_workspace_bytes(advanced_marks))
+        end
+        active_bytes = checked_add(active_bytes,
+          preparation_collections_workspace_bytes(
+            streams,
+            rows,
+            typed_schema,
+            object_prefixes,
+            object_statistics_offsets,
+            dynamic_prefixes,
+            dynamic_statistics_offsets,
+          ))
         workspace_observer.call(active_bytes)
       end
 
+      if advanced_layout.nil?
+        raise CorruptPartError.new("Compact static JSON layout was not observed")
+      end
+      is_advanced = advanced_layout.not_nil!
+      # Keep this value out of the preparation observer's closure-captured
+      # nilable accumulator. Empty schemas are valid; only the absent
+      # pre-publication state gets the empty fallback.
+      prepared_typed_schema = if schema = typed_schema
+                                schema
+                              else
+                                Hash(String, BinaryDataType).new
+                              end
       prepared_context = CompactStaticJsonPreparedContext.new(
-        streams,
+        is_advanced ? nil : streams,
         rows,
-        typed_schema || Hash(String, BinaryDataType).new,
+        prepared_typed_schema,
         object_prefixes,
         object_statistics_offsets,
         dynamic_prefixes,
@@ -402,10 +518,32 @@ module CrystalClick
         2_i32,
         2_i32,
       )
+
+      # This is the final preparation boundary. Run every potentially throwing
+      # observer call before publishing the new metadata/context, so a caller
+      # that rejects the logical workspace estimate cannot leave a partial
+      # cache behind.
+      active_bytes = checked_add(base_workspace, physical_workspace)
+      active_bytes = checked_add(active_bytes, prepared_context.retained_workspace_bytes)
+      if is_advanced
+        active_bytes = checked_add(active_bytes, advanced_request_workspace_bytes(advanced_marks))
+      end
+      active_bytes = checked_add(active_bytes,
+        preparation_collections_workspace_bytes(
+          streams,
+          rows,
+          typed_schema,
+          object_prefixes,
+          object_statistics_offsets,
+          dynamic_prefixes,
+          dynamic_statistics_offsets,
+        ))
+      workspace_observer.call(active_bytes)
+
       @prepared_context = prepared_context
       @frozen_event_names = frozen_names || [] of String
-      workspace_observer.call(checked_add(base_workspace, prepared_context.retained_workspace_bytes))
-      nil
+      @advanced_layout = is_advanced
+      is_advanced ? advanced_marks : nil
     end
 
     private def retain_prefix_metadata(
@@ -487,6 +625,67 @@ module CrystalClick
       checked_multiply(bytes, 2_u64)
     end
 
+    private def advanced_request_workspace_bytes(
+      values : Array(CompactStaticJsonAdvancedPreparedMark),
+    ) : UInt64
+      bytes = instance_sizeof(Array(CompactStaticJsonAdvancedPreparedMark)).to_u64
+      bytes = checked_add(bytes,
+        checked_multiply(values.size.to_u64, sizeof(Pointer(CompactStaticJsonAdvancedPreparedMark)).to_u64))
+      values.each { |owner| bytes = checked_add(bytes, owner.retained_workspace_bytes) }
+      bytes
+    end
+
+    private def preparation_collections_workspace_bytes(
+      streams : Array(ObjectDocumentStreams),
+      rows : Array(UInt64),
+      typed_schema : Hash(String, BinaryDataType)?,
+      object_prefixes : Array(Bytes),
+      object_statistics_offsets : Array(Int32),
+      dynamic_prefixes : Array(Hash(String, Bytes)),
+      dynamic_statistics_offsets : Array(Hash(String, Int32)),
+    ) : UInt64
+      bytes = partial_stream_workspace_bytes(streams)
+      bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(rows.size.to_u64, sizeof(UInt64).to_u64))
+      if schema = typed_schema
+        bytes = checked_add(bytes, instance_sizeof(Hash(String, BinaryDataType)).to_u64)
+        schema.each do |path, type|
+          bytes = checked_add(bytes, string_owner_bytes(path))
+          bytes = checked_add(bytes, instance_sizeof(BinaryDataType).to_u64)
+        end
+      end
+
+      bytes = checked_add(bytes, instance_sizeof(Array(Bytes)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(object_prefixes.size.to_u64, sizeof(Bytes).to_u64))
+      object_prefixes.each do |payload|
+        bytes = checked_add(bytes, checked_add(sizeof(Bytes).to_u64, payload.size.to_u64))
+      end
+
+      bytes = checked_add(bytes, instance_sizeof(Array(Int32)).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(object_statistics_offsets.size.to_u64, sizeof(Int32).to_u64))
+
+      bytes = checked_add(bytes, instance_sizeof(Array(Hash(String, Bytes))).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(dynamic_prefixes.size.to_u64, sizeof(Pointer(Hash(String, Bytes))).to_u64))
+      dynamic_prefixes.each do |entries|
+        bytes = checked_add(bytes, instance_sizeof(Hash(String, Bytes)).to_u64)
+        entries.each do |name, payload|
+          bytes = checked_add(bytes, string_owner_bytes(name))
+          bytes = checked_add(bytes, checked_add(sizeof(Bytes).to_u64, payload.size.to_u64))
+        end
+      end
+
+      bytes = checked_add(bytes, instance_sizeof(Array(Hash(String, Int32))).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(dynamic_statistics_offsets.size.to_u64, sizeof(Pointer(Hash(String, Int32))).to_u64))
+      dynamic_statistics_offsets.each do |entries|
+        bytes = checked_add(bytes, instance_sizeof(Hash(String, Int32)).to_u64)
+        entries.each_key { |name| bytes = checked_add(bytes, string_owner_bytes(name)) }
+      end
+      bytes
+    end
+
     private def structures_and_data_workspace_bytes(structure_bytes : UInt64, data : BinaryBulkStreams) : UInt64
       checked_add(instance_sizeof(BinaryDynamicBulkStreams).to_u64,
         checked_add(structure_bytes, bulk_stream_workspace_bytes(data)))
@@ -501,15 +700,6 @@ module CrystalClick
         stream = streams.stream(role)
         bytes = checked_add(bytes, instance_sizeof(BinaryBulkStream).to_u64)
         bytes = checked_add(bytes, checked_multiply(stream.offset_count.to_u64, sizeof(UInt64).to_u64))
-      end
-      bytes
-    end
-
-    private def prefix_metadata_workspace_bytes(object_prefix : Bytes, dynamics : Hash(String, Bytes)) : UInt64
-      bytes = checked_add(instance_sizeof(Hash(String, Bytes)).to_u64, object_prefix.size.to_u64)
-      dynamics.each do |name, payload|
-        bytes = checked_add(bytes, string_owner_bytes(name))
-        bytes = checked_add(bytes, checked_add(sizeof(Bytes).to_u64, payload.size.to_u64))
       end
       bytes
     end

@@ -1,5 +1,38 @@
 # Crystal Click landmarks
 
+## Bounded internal MRK4 ADVANCED_CHUNKED root JSON — W263
+
+- VERIFIED / root adversary ROBUST for the stock V3/Dynamic-v3/CHUNKED
+  MRK4/S0/BASIC root over `5605a70259f2a03fe79c050593aee00c669bb62b`:
+  eight literal rows, four two-row marks, two buckets and two chunks/bucket/mark.
+  Three named internal roots are now qualified; no general JSON/public admission.
+- One authenticated Compact context preserves the complete 30-event root roster,
+  empty callbacks, cumulative path intervals and original whole-data saved pairs.
+  The private-constructor owner derives ordinary streams and raw shared preparation
+  only from its completed source. Advanced holders are request-local: full-column
+  structural preparation repeats at EOF and across calls; only selected values
+  decode. MAP's qualified stream-only cache remains unchanged.
+- Root executes 11 focused, 155 affected and eight native MAP examples per
+  serial DEBUG/RELEASE mode, zero failures/errors/pending; the unchanged original
+  V3 oracle passes both. Same-budget foreign framer, unfinished capture, forged
+  supplied and retained roles refuse. Private `new` blocks a cross-source attack;
+  removing only privacy in a copy admits its type-check. The isolated same-object
+  finite-counter reset makes only the final aggregate-cap assertion fail.
+- A test-copy frame-boundary error came from missing nested saved-pair remaps,
+  not semantic preparation. The corrected helper verifies all rewritten pairs
+  and outer logical intervals. The well-framed inner Copy poison prepares at EOF,
+  leaves an unselected later mark readable and refuses on poisoned selection.
+- Retained-owner estimates count Compact capture slices/context/shards, not
+  complete transitive metadata/hash allocation, decoder peaks or RSS. No
+  allocation ceiling, thread-safety, full-suite/matrix or speed claim. Parts
+  remain quiescent; failed operations are discarded. Protected specs are unchanged.
+- Return pointers: [CHUNKED evidence](.landmark/evidence/compact-static-json-mrk4-chunked-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Next: valid MRK3 NULL
+  255 and remaining representations, then the unchanged recursive/public/offline
+  matrix, remaining types and MV/projections. Goal ACTIVE; optimization deferred;
+  local atomic commit only, no push. Refresh after source/compiler/profile/
+  consumer/capture/pin drift or widening. Same-lineage Luna review is correlated.
+
 ## Bounded internal MRK3 MAP root JSON extension — W263
 
 - VERIFIED / root adversary ROBUST for the stock V1/Dynamic-v1/MAP MRK3/S0/BASIC

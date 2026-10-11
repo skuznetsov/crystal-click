@@ -14,6 +14,7 @@ module CrystalClick
       role_bindings : Array(BodyBinding)? = nil,
       callback_pairs_override : Array(ObjectDocumentInlineCallbackOrder::CallbackPair)? = nil,
       statistics_offsets : Hash(String, Int32)? = nil,
+      defer_advanced_values : Bool = false,
     ) : ObjectDocumentStreams
       context = prefix.nested_context
       if budget.writing? || context.writing?
@@ -278,7 +279,7 @@ module CrystalClick
         offsets.each_value { |offset| raise CorruptPartError.new("inline typed Dynamic statistics offset is invalid") if offset < 0 }
       end
 
-      advanced_shared_rows = if advanced
+      advanced_shared_rows = if advanced && !defer_advanced_values
                                ObjectSharedAdvancedInlineDecoder.decode(
                                  prefix,
                                  physical_plan,

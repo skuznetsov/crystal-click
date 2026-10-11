@@ -8,13 +8,34 @@ module CrystalClick
     @event_index : Int32
     @logical_event_names : Array(String)
     @grammar_parser_active : Bool
+    @finished : Bool
     @tape_size : UInt64
+    @path_position : UInt64
+    @coordinate_context : CompactObjectSharedInlineCoordinateContext?
+    @budget : BinaryCodecBudget
 
     def initialize(
       mode : CompactMarkFormat,
       shards : Array(CompactPartPhysicalShard),
-      budget : BinaryCodecBudget,
+      @budget : BinaryCodecBudget,
+      physical_context : CompactPartPhysicalContext? = nil,
+      site_identity : String? = nil,
     )
+      if physical_context.nil? != site_identity.nil?
+        raise ArgumentError.new("Compact inline coordinate context requires both physical owner and site identity")
+      end
+      if physical_context && !mode.mrk4?
+        raise UnsupportedFormatError.new("authenticated Compact inline path coordinates require named mrk4 shards")
+      end
+      @coordinate_context = if physical = physical_context
+                              CompactObjectSharedInlineCoordinateContext.new(
+                                physical,
+                                site_identity || raise(ArgumentError.new("Compact inline site identity is missing")),
+                                shards,
+                              )
+                            else
+                              nil
+                            end
       @events = Array(Tuple(String, Bytes)).new(mode.mrk4? ? shards.size : 0)
       @tape_size = 0_u64
       if mode.mrk4?
@@ -38,8 +59,10 @@ module CrystalClick
       @event_index = 0
       @logical_event_names = [] of String
       @grammar_parser_active = false
+      @finished = false
+      @path_position = 0_u64
       @cursor = CompactBinaryBulkGranuleCursor.new(mode, shards, nil)
-      @cursor.charge_complete_wire_input!(budget)
+      @cursor.charge_complete_wire_input!(@budget)
     end
 
     protected def borrow_self_delimited(expected_name : String) : Bytes
@@ -63,6 +86,7 @@ module CrystalClick
       @cursor.advance_borrowed_prefix(consumed)
       @cursor.finish_event
       @event_index += 1
+      advance_path_position(consumed)
       @logical_event_names << expected_name
       nil
     end
@@ -97,6 +121,7 @@ module CrystalClick
         # rolled back.
         @cursor.advance_borrowed_prefix(consumed)
         observed = @cursor.consumed_slice(start)
+        advance_path_position(consumed)
         @logical_event_names << expected_name
         {value, observed}
       ensure
@@ -119,6 +144,7 @@ module CrystalClick
         observed = @cursor.read_exact(size)
         @cursor.finish_event
         @event_index += 1
+        advance_path_position(size)
       else
         observed = @cursor.read_exact(size)
       end
@@ -138,6 +164,7 @@ module CrystalClick
       @cursor.advance_borrowed_prefix(bytes.size)
       @cursor.finish_event
       @event_index += 1
+      advance_path_position(bytes.size)
       @logical_event_names << expected_name
       bytes
     end
@@ -147,13 +174,19 @@ module CrystalClick
       callback_name : String,
     ) : ObjectSharedInlineCallbackReadSlice
       bytes = take_inline_fragment(callback_name)
+      relative_start, relative_end = if @coordinate_context
+                                       {@path_position - bytes.size.to_u64, @path_position}
+                                     else
+                                       {0_u64, bytes.size.to_u64}
+                                     end
       ObjectSharedInlineCallbackReadSlice.new(
         canonical_name,
         callback_name,
-        0_u64,
-        bytes.size.to_u64,
+        relative_start,
+        relative_end,
         bytes,
-        nil,
+        @coordinate_context,
+        @coordinate_context ? @budget : nil,
       )
     end
 
@@ -174,6 +207,113 @@ module CrystalClick
         end
       end
       @cursor.finish_granule
+      @finished = true
+      nil
+    end
+
+    # Authenticate the completed prefix/body capture before an Advanced
+    # prepared owner binds a decoder holder to it. The event roster was
+    # detached from the selected physical shards at construction; here every
+    # parsed callback and captured body interval is compared back to that
+    # roster and, for body bytes, to this exact coordinate-context object.
+    def validate_prepared_source!(
+      prefix : ObjectDocumentCallbackPrefix,
+      physical_plan : ObjectDocumentPhysicalPlan,
+      role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding),
+      callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair),
+      budget : BinaryCodecBudget,
+    ) : Nil
+      unless @cursor.mrk4? && @finished
+        raise UnsupportedFormatError.new("prepared Compact Advanced source requires a successfully finished mrk4 capture")
+      end
+      unless @budget.same?(budget)
+        raise ArgumentError.new("prepared Compact source must retain its exact capture budget operation")
+      end
+      coordinate_context = @coordinate_context ||
+                           raise(CorruptPartError.new("prepared Compact source has no authenticated coordinate context"))
+      prefix.validate_physical_owner!(physical_plan)
+      unless ObjectDocumentInlineCallbackOrder.canonical_root_prefix(physical_plan) == prefix.physical_prefix
+        raise CorruptPartError.new("prepared Compact prefix differs from its bound physical plan")
+      end
+      unless prefix.statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+        raise UnsupportedFormatError.new("prepared Compact Advanced source requires complete Object statistics")
+      end
+
+      schedule = CompactJsonObjectRoleSchedule.build(
+        prefix,
+        physical_plan,
+        prefix.nested_context.profile,
+        budget,
+      )
+      unless schedule.body_bindings == role_bindings && schedule.body_pairs == callback_pairs
+        raise CorruptPartError.new("prepared Compact body roles differ from the parsed Object schedule")
+      end
+      prefix_pairs = schedule.prefix_pairs
+      unless prefix.prefix_callback_count == prefix_pairs.size
+        raise CorruptPartError.new("prepared Compact prefix callbacks differ from the parsed Object schedule")
+      end
+      body_count = prefix.body_callback_count
+      unless body_count == callback_pairs.size && prefix.body_callback_slice_count == body_count
+        raise CorruptPartError.new("prepared Compact body callbacks differ from the parsed Object schedule")
+      end
+      unless @event_index == @events.size && @logical_event_names == schedule.event_names
+        raise CorruptPartError.new("prepared Compact source did not consume its exact logical callback roster")
+      end
+      unless @events.size == prefix_pairs.size + callback_pairs.size
+        raise CorruptPartError.new("prepared Compact source roster has a different callback count")
+      end
+
+      path_position = 0_u64
+      event_index = 0
+      prefix_pairs.each_with_index do |pair, index|
+        parsed_name, parsed_bytes = prefix.prefix_callback_at(index, budget)
+        event_name, event_bytes = @events[event_index]? ||
+                                  raise(CorruptPartError.new("prepared Compact prefix callback is missing from its source"))
+        unless pair[1] == parsed_name && event_name == parsed_name && same_bytes?(event_bytes, parsed_bytes)
+          raise CorruptPartError.new("prepared Compact prefix bytes differ from their authenticated callback source")
+        end
+        path_position = checked_add(path_position, event_bytes.size.to_u64)
+        event_index += 1
+      end
+
+      callback_pairs.each_with_index do |pair, index|
+        parsed_name, parsed_bytes = prefix.body_callback_at(index, budget)
+        slice = prefix.body_callback_slice_at(index)
+        event_name, event_bytes = @events[event_index]? ||
+                                  raise(CorruptPartError.new("prepared Compact body callback is missing from its source"))
+        finish = checked_add(path_position, event_bytes.size.to_u64)
+        unless parsed_name == pair[0] && event_name == pair[1] &&
+               slice.canonical_name == pair[0] && slice.callback_name == pair[1] &&
+               same_bytes?(event_bytes, parsed_bytes) && same_bytes?(event_bytes, slice.bytes) &&
+               slice.context.same?(coordinate_context) && slice.relative_start == path_position &&
+               slice.relative_end == finish
+          raise CorruptPartError.new("prepared Compact body bytes or interval differ from their authenticated callback source")
+        end
+        # Revalidate with the same capture budget, not merely a new context
+        # with an equal site label or shard roster.
+        coordinate_context.validate_path_bytes!(slice.relative_start, slice.bytes, budget)
+        path_position = finish
+        event_index += 1
+      end
+      unless event_index == @events.size && path_position == @path_position &&
+             path_position == coordinate_context.path_data_size.to_u64
+        raise CorruptPartError.new("prepared Compact source intervals do not cover the authenticated callback path")
+      end
+
+      # Some direct-reader captures have not bound the Object body schedule
+      # onto the prefix. Bind only the schedule derived above, and only after
+      # the complete finished source has passed roster, byte, context, and
+      # interval validation. Existing bindings must match exactly; a repeated
+      # validation is therefore safe and does not attempt to bind twice.
+      begin
+        unless prefix.body_role_bindings == schedule.body_bindings &&
+               prefix.body_callback_pairs == schedule.body_pairs
+          raise CorruptPartError.new("prepared Compact prefix retained a different body-role binding")
+        end
+      rescue ex : ArgumentError
+        prefix.bind_body_schedule!(schedule.body_bindings, schedule.body_pairs)
+      end
+      nil
     end
 
     def position : Int32
@@ -197,6 +337,10 @@ module CrystalClick
       bytes = checked_add(bytes, event_roster_workspace_bytes)
       bytes = checked_add(bytes, instance_sizeof(CompactBinaryBulkGranuleCursor).to_u64)
       bytes = checked_add(bytes, event_roster_workspace_bytes)
+      if context = @coordinate_context
+        bytes = checked_add(bytes, context.retained_workspace_bytes)
+      end
+      bytes = checked_add(bytes, sizeof(UInt64).to_u64)
       bytes = checked_add(bytes, instance_sizeof(Array(String)).to_u64)
       bytes = checked_add(bytes, checked_multiply(@logical_event_names.size.to_u64, sizeof(Pointer(String)).to_u64))
       bytes
@@ -211,9 +355,29 @@ module CrystalClick
       event
     end
 
+    private def same_bytes?(left : Bytes, right : Bytes) : Bool
+      return false unless left.size == right.size
+      left.each_with_index do |byte, index|
+        return false unless byte == right[index]
+      end
+      true
+    end
+
     private def ensure_no_active_grammar_parser! : Nil
       if @grammar_parser_active
         raise CorruptPartError.new("Compact mrk3 grammar source rejects re-entrant reads while reserved by a parser")
+      end
+      nil
+    end
+
+    private def advance_path_position(consumed : Int32) : Nil
+      return unless @coordinate_context
+      if consumed < 0 || consumed.to_u64 > UInt64::MAX - @path_position
+        raise CorruptPartError.new("Compact inline callback path position overflows")
+      end
+      @path_position += consumed.to_u64
+      if @path_position > @coordinate_context.not_nil!.path_data_size.to_u64
+        raise CorruptPartError.new("Compact inline callback path exceeds its authenticated shard extent")
       end
       nil
     end

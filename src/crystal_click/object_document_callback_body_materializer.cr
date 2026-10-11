@@ -12,6 +12,7 @@ module CrystalClick
       role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding),
       callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair),
       statistics_offsets : Hash(String, Int32),
+      defer_advanced_values : Bool = false,
     ) : ObjectDocumentStreams
       prefix.validate_physical_owner!(physical_plan)
       prefix.bind_body_schedule!(role_bindings, callback_pairs)
@@ -23,6 +24,7 @@ module CrystalClick
         role_bindings,
         callback_pairs,
         statistics_offsets,
+        defer_advanced_values,
       )
     end
   end

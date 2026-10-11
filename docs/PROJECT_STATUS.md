@@ -1,34 +1,42 @@
 # CrystalClick project status
 
 Current bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
-root adversary ROBUST for two stock root JSON cells: V1/Dynamic-v1/MAP MRK3 and
-V2/Dynamic-v2/MAP MRK4, both String-v0/Variant-BASIC with eight rows and four
-two-row marks. MRK3 derives callback extents from descriptor/count grammar
-without inventing physical substream names; MRK4 retains exact named extents.
-Own-file owners reuse recursive codecs, retain complete prefix statistics,
-prepare the full selected column at EOF first and decode only selected marks.
-There is no public facade, recursive or offline admission yet.
+root adversary ROBUST for three stock root JSON cells: V1/Dynamic-v1/MAP MRK3,
+V2/Dynamic-v2/MAP MRK4 and V3/Dynamic-v3/ADVANCED_CHUNKED MRK4, all
+String-v0/Variant-BASIC with eight rows and four two-row marks. MRK3 derives
+callback extents from descriptor/count grammar without inventing physical
+substream names; MRK4 retains exact named extents and original saved-pair
+coordinates. Own-file owners reuse recursive codecs, retain complete prefix
+statistics, prepare the full selected column at EOF first and decode only
+selected marks. There is no public facade, recursive or offline admission yet.
 
-The final affected 23-path cohort passes 155 examples in each serial
-DEBUG/RELEASE; eight explicit native examples pass in each mode, zero
-failures/errors/pending. The unchanged original V1 filtered oracle also passes
-one example in each mode.
+The final five-path CHUNKED cohort passes 11 examples, the affected 23-path
+cohort passes 155 examples and the six-path native MAP cohort passes eight
+examples in each serial DEBUG/RELEASE mode, zero failures/errors/pending.
+The unchanged original V3 filtered oracle also passes one example in each mode.
 Independent literal rows/Float64 bits, exact statistics offsets, late selected
 checksum corruption, valid-metadata callback reorder and detached prefix checks
-pass. One request budget spans preparation and all selected marks; a temporary
-reset-budget ablation makes the aggregate-cap guard fail, then the source is
-restored exactly. Workspace reports are estimates, not RSS or enforced combined
-transient ceilings. See the [MRK3 MAP evidence](../.landmark/evidence/compact-static-json-mrk3-map-w263.json),
+pass. Advanced holders are source-only and request-local; every request,
+including EOF, reauthenticates the full column. Implicit budgets are fresh per
+request; explicit budgets remain cumulative. A same-object finite-limit
+counter-reset ablation fails only the final aggregate-cap assertion. Runtime
+foreign-source/role/unfinished guards and an explicit private-constructor
+compile witness pass; removing privacy only in a copy type-checks the same
+attack. Well-framed inner shared corruption is deferred to selected decoding;
+late structural corruption refuses even at EOF before metadata publication.
+Workspace reports include retained Compact callback/context/shard ownership
+but exclude transitive prefix/plan/type metadata, hash capacity, decoder-internal
+peaks and RSS. See the [CHUNKED evidence](../.landmark/evidence/compact-static-json-mrk4-chunked-w263.json),
+[MRK3 MAP evidence](../.landmark/evidence/compact-static-json-mrk3-map-w263.json),
 [earlier MRK4 MAP evidence](../.landmark/evidence/compact-static-json-mrk4-map-w263.json)
 and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md).
 
-Only two of three mandatory native roots are qualified. The MRK3 body walker
-currently rejects valid Dynamic NULL discriminator 255 as corruption; support
-and corrected exception taxonomy remain required. Shared MAP preparation checks
-outer String framing, not nested value semantics; well-framed semantic errors
-may fail only on selected decoding. General combinations remain unqualified.
-Advanced multi-chunk root preparation and its cross-call budget lifetime are
-next; the full 48-cell recursive/public/offline gate stays open.
+All three mandatory stock internal roots are qualified, not all combinations.
+The MRK3 body walker currently rejects valid Dynamic NULL discriminator 255 as
+corruption; support and corrected exception taxonomy remain required. Shared
+MAP preparation checks outer String framing, not nested value semantics;
+well-framed semantic errors may fail only on selected decoding. Remaining
+profiles/layouts and the full 48-cell recursive/public/offline gate stay open.
 Remaining types/layouts, MV/projection composition and later performance remain
 required. Full goal ACTIVE; no speed/full-suite claim, local atomic commit only,
 no push.

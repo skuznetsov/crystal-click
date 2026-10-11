@@ -4,11 +4,11 @@ module CrystalClick
   # inspect complete native prefix bytes/statistics metadata after preparation,
   # then decode only a requested mark window.
   #
-  # The top-level streams array is copied, but its ObjectDocumentStreams
-  # elements are retained by reference. A direct constructor caller must not
-  # mutate supplied streams after handoff; this API never returns those streams.
+  # MAP checkpoints retain private streams for the qualified stream-only cache.
+  # Advanced checkpoints retain metadata only and keep request-scoped prepared
+  # holders outside this public metadata owner.
   class CompactStaticJsonPreparedContext
-    @streams : Array(ObjectDocumentStreams)
+    @streams : Array(ObjectDocumentStreams)?
     @mark_rows : Array(UInt64)
     @typed_schema : Hash(String, BinaryDataType)
     @object_prefixes : Array(Bytes)
@@ -19,7 +19,7 @@ module CrystalClick
     @inferred_actual_root_depth : Int32
 
     def initialize(
-      streams : Array(ObjectDocumentStreams),
+      streams : Array(ObjectDocumentStreams)?,
       mark_rows : Array(UInt64),
       typed_schema : Hash(String, BinaryDataType),
       object_prefixes : Array(Bytes),
@@ -29,16 +29,24 @@ module CrystalClick
       @typed_descriptor_root_depth : Int32,
       @inferred_actual_root_depth : Int32,
     )
-      count = streams.size
-      unless mark_rows.size == count &&
-             object_prefixes.size == count &&
+      count = mark_rows.size
+      if retained_streams = streams
+        unless retained_streams.size == count
+          raise ArgumentError.new("Compact static JSON retained streams differ from its mark grid")
+        end
+      end
+      unless object_prefixes.size == count &&
              object_statistics_offsets.size == count &&
              dynamic_prefixes.size == count &&
              dynamic_statistics_offsets.size == count
         raise ArgumentError.new("Compact static JSON prepared metadata differs from its mark grid")
       end
 
-      @streams = streams.dup
+      # The MAP constructor is a quiescent handoff: Array#dup detaches only
+      # the outer collection, not mutable stream objects or their borrowed
+      # cursors. Callers must not mutate those owners concurrently or after
+      # transfer. Advanced metadata-only contexts keep this field nil.
+      @streams = streams.try(&.dup)
       @mark_rows = mark_rows.dup
       @typed_schema = Hash(String, BinaryDataType).new(initial_capacity: typed_schema.size)
       typed_schema.each do |path, type|
@@ -63,7 +71,7 @@ module CrystalClick
     end
 
     def mark_count : Int32
-      @streams.size
+      @mark_rows.size
     end
 
     def mark_row_count_at(index : Int) : UInt64
@@ -87,14 +95,15 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile,
     ) : Array(ObjectDocument)
-      unless index >= 0 && index < @streams.size
+      streams = @streams || raise(UnsupportedFormatError.new("Advanced Compact marks require a request-scoped prepared value owner"))
+      unless index >= 0 && index < streams.size
         raise ArgumentError.new("Compact static JSON mark index is outside the prepared grid")
       end
 
       typed_schema = typed_schema_for(budget)
       decoded = ObjectDocumentCodec.decode_with_budget(
         typed_schema,
-        @streams[index],
+        streams[index],
         budget,
         first_mark: 0,
         mark_count: 1,
@@ -153,12 +162,16 @@ module CrystalClick
         raise(KeyError.new("Compact static JSON Dynamic statistics offset not found: #{callback_name.inspect}"))
     end
 
-    # Logical retained-owner census for streams, exact prefixes and offsets.
-    # It excludes decoded values and allocator capacity/RSS.
+    # Logical retained-owner census for optional private streams, exact prefixes
+    # and offsets. Advanced decoded values/holders are operation-local and not
+    # part of this published metadata object; this is not RSS.
     def retained_workspace_bytes : UInt64
       bytes = instance_sizeof(CompactStaticJsonPreparedContext).to_u64
-      bytes = checked_add(bytes, checked_multiply(@streams.size.to_u64, sizeof(Pointer(ObjectDocumentStreams)).to_u64))
-      @streams.each { |streams| bytes = checked_add(bytes, stream_workspace_bytes(streams)) }
+      if streams = @streams
+        bytes = checked_add(bytes, instance_sizeof(Array(ObjectDocumentStreams)).to_u64)
+        bytes = checked_add(bytes, checked_multiply(streams.size.to_u64, sizeof(Pointer(ObjectDocumentStreams)).to_u64))
+        streams.each { |value| bytes = checked_add(bytes, stream_workspace_bytes(value)) }
+      end
       bytes = checked_add(bytes, checked_multiply(@mark_rows.size.to_u64, sizeof(UInt64).to_u64))
       bytes = checked_add(bytes, checked_multiply(@object_statistics_offsets.size.to_u64, sizeof(Int32).to_u64))
       # Bytes is Slice(UInt8): Array(Bytes) stores each slice descriptor inline,
