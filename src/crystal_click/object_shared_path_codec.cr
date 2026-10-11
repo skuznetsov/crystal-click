@@ -246,7 +246,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       nested_context : ObjectSharedNestedSerializationContext,
       profile : BinaryBulkProfile = COMPACT_PROFILE,
-      coordinate_context : ObjectSharedInlineDataCoordinateContext? = nil,
+      coordinate_context : ObjectSharedInlineCoordinateContext? = nil,
     ) : ObjectSharedPathDecodeResult
       unless !budget.writing? && !nested_context.writing?
         raise ArgumentError.new("Object shared JSON path decode requires read-direction contexts")

@@ -1,6 +1,24 @@
 # CrystalClick project status
 
-Current qualification (W262, 2026-10-11): VERIFIED / root adversary ROBUST within
+Current prerequisite (W263, 2026-10-11): VERIFIED / root adversary ROBUST within
+the saved-pair and piecewise Compact Object path scope. A common coordinate
+contract preserves Wide coordinates; its own-file Compact implementation binds
+original whole-data pairs to authenticated ordered shards without rebasing.
+Exact slot/grid/payload checks, callback endpoints and logical retained-owner
+accounting pass four focused examples and the exact 12-file regression cohort:
+90 examples in each DEBUG/RELEASE mode, zero failures/errors/pending. Not the
+full suite, Compact JSON admission or a memory/performance qualification.
+
+Compact JSON/Object remains IN_PROGRESS: the 48-cell stock baseline records
+the current public refusals, and the internal-reader missing-API RED is observed.
+The next reader must consume full static Object statistics and Compact's actual
+multi-chunk schedule, reuse existing codecs and preserve independent child grids.
+See the [W263 frontier](COMPACT_JSON_READER_FRONTIER.md) and
+[coordinate evidence](../.landmark/evidence/compact-object-coordinate-w263.json).
+Full all-types/MV/projection goal ACTIVE; performance and <=10% parity deferred.
+This prerequisite is a local atomic commit only; no push.
+
+Current public-reader qualification (W262, 2026-10-11): VERIFIED / root adversary ROBUST within
 the finite Default-profile/plain-mark Compact Dynamic target, after the
 live-baseline accounting falsifier and final two-mode refresh. New own-file
 prefix traversal, immutable prepared-context and reader owners bind learned

@@ -7,12 +7,14 @@ module CrystalClick
 
     @positions : Array(Int64)
     @rows : Array(UInt64)
+    @frame_index : CompressedFrameIndex
 
     private def initialize(
       @mark_count : Int32,
       @slot_count : Int32,
       @positions : Array(Int64),
       @rows : Array(UInt64),
+      @frame_index : CompressedFrameIndex,
     )
     end
 
@@ -123,7 +125,7 @@ module CrystalClick
           unless row_sum == expected_row_count
             raise CorruptPartError.new("Compact mark rows do not sum to count.txt")
           end
-          result = new((actual_count - 1).to_i32, slot_count, positions, rows)
+          result = new((actual_count - 1).to_i32, slot_count, positions, rows, frame_index)
         end
       end
       result.not_nil!
@@ -140,6 +142,11 @@ module CrystalClick
       @rows[mark_index]
     end
 
+    def logical_position(pair : Tuple(UInt64, UInt64)) : Int64
+      terminal = pair[0] == @frame_index.data_size.to_u64 && pair[1] == 0_u64
+      @frame_index.logical_position(pair[0], pair[1], terminal)
+    end
+
     # Logical retained-owner census for the validated coordinate and row-grid
     # arrays. It uses their stored lengths and excludes allocator capacity.
     def retained_grid_workspace_bytes : UInt64
@@ -147,7 +154,14 @@ module CrystalClick
       bytes = checked_add(bytes, instance_sizeof(Array(Int64)).to_u64)
       bytes = checked_add(bytes, checked_multiply(@positions.size.to_u64, sizeof(Int64).to_u64))
       bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
-      checked_add(bytes, checked_multiply(@rows.size.to_u64, sizeof(UInt64).to_u64))
+      bytes = checked_add(bytes, checked_multiply(@rows.size.to_u64, sizeof(UInt64).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(CompressedFrameIndex).to_u64)
+      bytes = checked_add(bytes, instance_sizeof(Array(CompressedFrameDescriptor)).to_u64)
+      bytes = checked_add(
+        bytes,
+        checked_multiply(@frame_index.frames.size.to_u64, sizeof(CompressedFrameDescriptor).to_u64),
+      )
+      bytes
     end
 
     private def validate_mark_index(mark_index : Int, include_terminal : Bool) : Nil

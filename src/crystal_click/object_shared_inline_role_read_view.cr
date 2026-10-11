@@ -183,13 +183,10 @@ module CrystalClick
     # Only the final segment admits its terminal coordinate; non-final segment
     # endpoints are not silently treated as a following role's start.
     def logical_position(pair : Tuple(UInt64, UInt64)) : Int64
-      first = @segments[0]
-      context = first.context
-      absolute = context.resolve_path_position(pair)
       logical_base = 0_u64
       @segments.each_with_index do |segment, index|
         allow_terminal = index == @segments.size - 1
-        if local = segment.local_position_for_absolute(absolute, allow_terminal)
+        if local = segment.local_position_for_pair(pair, allow_terminal)
           position = logical_base + local.to_u64
           if position > Int32::MAX.to_u64
             raise CorruptPartError.new("inline role coordinate exceeds the supported logical byte domain")
@@ -201,7 +198,7 @@ module CrystalClick
       raise CorruptPartError.new("inline coordinate is outside the authenticated #{@role_name} role segments")
     end
 
-    def same_context?(context : ObjectSharedInlineDataCoordinateContext) : Bool
+    def same_context?(context : ObjectSharedInlineCoordinateContext) : Bool
       @segments.all? { |segment| segment.context_matches_context?(context) }
     end
   end

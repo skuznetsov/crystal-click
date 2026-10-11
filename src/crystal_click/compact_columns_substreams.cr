@@ -61,6 +61,17 @@ module CrystalClick
       @slots.size.to_i32
     end
 
+    # Internal physical binding check that avoids exposing mutable retained
+    # String owners or allocating a full detached roster snapshot.
+    def slot_matches?(index : Int, stream_name : String?) : Bool
+      return false if index < 0
+      if slot = @slots[index]?
+        slot.stream_name == stream_name
+      else
+        false
+      end
+    end
+
     def slot_count_for(column_name : String) : Int32
       slots = @slots_by_column[column_name]? || raise(ArgumentError.new("unknown Compact column"))
       slots.size.to_i32

@@ -1,0 +1,130 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W263-coordinate-prerequisite",
+  "title": "Original Compact Object saved-pair coordinates over authenticated piecewise shards",
+  "recorded_date": "2026-10-11",
+  "baseline_commit": "efb84e8d96a378e4833b8ca63a9f5fa16743d78e",
+  "claim": {
+    "level": "VERIFIED",
+    "root_adversary": "ROBUST within the executed finite saved-pair/piecewise-path scope",
+    "global_goal": "ACTIVE; Compact JSON reader GREEN, remaining types/MV/projections and subsequent <=10% speed qualification are not closed",
+    "meaning": "Curated index to root-observed commands and source review; packet shape, hashes and correlated model output are not behavioral proof."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "boundary": "Physical coordinate provenance and Object shared callback consumers; public JSON guards are unchanged",
+    "rollback": "One exact-path local atomic prerequisite commit; no push or history rewrite"
+  },
+  "admitted": [
+    "Retained Compact frame headers resolve persisted pairs in the original whole-data domain; frame headers alone are not payload authentication.",
+    "A piecewise path verifies each shard's own roster slot, exact saved interval and freshly authenticated bytes before retaining provenance.",
+    "Ordered non-contiguous and multi-slot paths preserve empty intervals and explicit detached site identity.",
+    "Callback resolution narrows to exact relative bounds; source endpoints are admitted only as the designated final terminal.",
+    "The common coordinate contract preserves the concrete Wide API and excludes fake Wide coordinates for Compact.",
+    "Logical retained census includes stored frame descriptors and retained shard objects/bytes/names; it is not allocator-capacity or RSS accounting."
+  ],
+  "verification": {
+    "guard": "COGNI_RUN_SAFE_MIN_FREE_PCT=50; CRYSTAL_WORKERS=1; --threads 1; run_safe.sh 180 12288; serial DEBUG/RELEASE",
+    "focused": {"examples": 4, "failures": 0, "errors": 0, "pending": 0, "exit": 0, "tool_result": "88a258"},
+    "debug": {"examples": 90, "failures": 0, "errors": 0, "pending": 0, "exit": 0, "tool_result": "25ddf2"},
+    "release": {"examples": 90, "failures": 0, "errors": 0, "pending": 0, "exit": 0, "tool_result": "511f57"},
+    "debug_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-coordinate-green.is5ecs/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/compact_object_shared_coordinate_w263_spec.cr spec/object_shared_inline_coordinate_w240_adversary_spec.cr spec/object_shared_inline_relocation_w240_adversary_spec.cr spec/object_shared_advanced_inline_w240_adversary_spec.cr spec/object_document_inline_framing_w240_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+    "release_command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-coordinate-release.pL2L0c/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/compact_object_shared_coordinate_w263_spec.cr spec/object_shared_inline_coordinate_w240_adversary_spec.cr spec/object_shared_inline_relocation_w240_adversary_spec.cr spec/object_shared_advanced_inline_w240_adversary_spec.cr spec/object_document_inline_framing_w240_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+    "spec_paths": [
+      "spec/compact_object_shared_coordinate_w263_spec.cr",
+      "spec/object_shared_inline_coordinate_w240_adversary_spec.cr",
+      "spec/object_shared_inline_relocation_w240_adversary_spec.cr",
+      "spec/object_shared_advanced_inline_w240_adversary_spec.cr",
+      "spec/object_document_inline_framing_w240_spec.cr",
+      "spec/object_shared_path_json_tape_w240_spec.cr",
+      "spec/compact_physical_context_w259_spec.cr",
+      "spec/compact_physical_context_w259_adversary_spec.cr",
+      "spec/compact_typed_w260_spec.cr",
+      "spec/compact_typed_w260_adversary_spec.cr",
+      "spec/compact_dynamic_w262_spec.cr",
+      "spec/compact_dynamic_w262_adversary_spec.cr"
+    ],
+    "full_suite_claimed": false
+  },
+  "falsifiers": {
+    "coordinate_red": "Root observed exit 1 at missing CompactPartPhysicalContext.logical_position before production edits; compile RED, not behavioral qualification.",
+    "executed_controls": ["descriptor census", "non-contiguous source intervals", "ordered multi-slot paths", "empty/final versus non-final terminals", "foreign site identity", "fabricated shard payload", "altered callback bytes", "retained shard census"],
+    "instrument_failures": ["Abstract Tuple(Int, Int) rejected by Crystal generic restriction; narrowed to Int32.", "Test mutation through read-only String slice raised before assertion; test-only pointer mutation preserves identity ownership checks."],
+    "core_reader_red": "Root guarded internal reader test exited 1 at missing CompactStaticJsonBulkColumnReader; no Compact JSON read claim."
+  },
+  "boundaries": {
+    "changed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/compact_columns_substreams.cr",
+      "src/crystal_click/compact_mark_index.cr",
+      "src/crystal_click/compact_part_physical_context.cr",
+      "src/crystal_click/compact_part_physical_shard.cr",
+      "src/crystal_click/object_shared_inline_coordinate_context.cr",
+      "src/crystal_click/compact_object_shared_inline_coordinate_context.cr",
+      "src/crystal_click/object_shared_advanced_copy_layout.cr",
+      "src/crystal_click/object_shared_advanced_inline_decoder.cr",
+      "src/crystal_click/object_shared_inline_callback_read_slice.cr",
+      "src/crystal_click/object_shared_inline_data_coordinate_context.cr",
+      "src/crystal_click/object_shared_inline_role_read_view.cr",
+      "src/crystal_click/object_shared_path_codec.cr",
+      "src/crystal_click/object_shared_path_streams.cr",
+      "src/crystal_click/object_shared_path_tape_reader.cr",
+      "spec/compact_object_shared_coordinate_w263_spec.cr",
+      "docs/COMPACT_JSON_READER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-object-coordinate-w263.json"
+    ],
+    "allowed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/compact_columns_substreams.cr",
+      "src/crystal_click/compact_mark_index.cr",
+      "src/crystal_click/compact_part_physical_context.cr",
+      "src/crystal_click/compact_part_physical_shard.cr",
+      "src/crystal_click/object_shared_inline_coordinate_context.cr",
+      "src/crystal_click/compact_object_shared_inline_coordinate_context.cr",
+      "src/crystal_click/object_shared_advanced_copy_layout.cr",
+      "src/crystal_click/object_shared_advanced_inline_decoder.cr",
+      "src/crystal_click/object_shared_inline_callback_read_slice.cr",
+      "src/crystal_click/object_shared_inline_data_coordinate_context.cr",
+      "src/crystal_click/object_shared_inline_role_read_view.cr",
+      "src/crystal_click/object_shared_path_codec.cr",
+      "src/crystal_click/object_shared_path_streams.cr",
+      "src/crystal_click/object_shared_path_tape_reader.cr",
+      "spec/compact_object_shared_coordinate_w263_spec.cr",
+      "docs/COMPACT_JSON_READER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-object-coordinate-w263.json"
+    ],
+    "source_test_sha256": {
+      "src/crystal_click.cr": "f3d58aad4c7f55e223389246f2b903079cce4c141e1424c5471443edc064a76f",
+      "src/crystal_click/compact_columns_substreams.cr": "db35f985efa0a65ff4cca3513132633fc677e4aac0acc5bdc928b9e2d3d97c50",
+      "src/crystal_click/compact_mark_index.cr": "cac40cbcdd4c77e8e42780ccc58c437f507ea6e20693612168ee2504715b4417",
+      "src/crystal_click/compact_part_physical_context.cr": "5b010fac72d1932034bc57b9930daedd6690de80b0220e73ef4aff6e163614dc",
+      "src/crystal_click/compact_part_physical_shard.cr": "104d8c209bf7860f2dbb61556746f5531255c7e9f8ac7f8a554755c934aa187d",
+      "src/crystal_click/object_shared_inline_coordinate_context.cr": "222b6edb099c520cf64394f16f26c2fb3748b1db288a401b5930873249225d51",
+      "src/crystal_click/compact_object_shared_inline_coordinate_context.cr": "425f0d9de5461da1e93df6f2d8cfe1f48436ef97e21768e2760e7b0ae13e71ab",
+      "src/crystal_click/object_shared_advanced_copy_layout.cr": "bdf6c576286e2ab86e07a176941b9af9e01d8159a80c64df683f0a734db89607",
+      "src/crystal_click/object_shared_advanced_inline_decoder.cr": "1ff12f6490212ec9aed654a062fef79147a70c8d2d8a42da4aec91521605746f",
+      "src/crystal_click/object_shared_inline_callback_read_slice.cr": "86c22a99888cb77491925db383c17baec1e9a3883a572a63037c9d214eec7e4b",
+      "src/crystal_click/object_shared_inline_data_coordinate_context.cr": "a2bdce3cec35fdfbb22fd1f32e1e4a34c153e26e3aa6b5ea2ee511ecd577664f",
+      "src/crystal_click/object_shared_inline_role_read_view.cr": "f5b4b5d44475154ac41d3f83d3f9705df55d0ce1bb74ce87f672664fee9e19c7",
+      "src/crystal_click/object_shared_path_codec.cr": "91014cb79a49a23fc7a42f50b56cc7c1831944147422c01cf9650b426ff2acfd",
+      "src/crystal_click/object_shared_path_streams.cr": "db55db2cd3fbf8102e57082c1240031a98de0333d437d692b67940639fb99aa8",
+      "src/crystal_click/object_shared_path_tape_reader.cr": "a60c037e3251cb65ed89112aaf9449b6bf48422a913c7f07f99439a0ed0701b3",
+      "spec/compact_object_shared_coordinate_w263_spec.cr": "e60016cdd0cff4eb3fd4f459a9d6438ea43f02446ba79393642ac517869e0fa9"
+    }
+  },
+  "rejected_or_unqualified": [
+    "Compact JSON typed/public/offline reading remains unqualified; no public guard is widened.",
+    "Callback pairs alone do not prove a universal serializer callback/roster bijection.",
+    "The full 48-cell JSON GREEN and new collector's multi-chunk observations remain pending.",
+    "Quiescent physical files and trusted ancestry remain assumptions.",
+    "Logical estimates do not qualify heap/RSS, allocator capacity, speed, lazy access or cross-part caching.",
+    "Compressed Compact marks/writing and the remaining all-types/MV/projection objective remain open."
+  ],
+  "refresh": "Source, tests, coordinate consumers, tool/profile drift, widening or capture loss reopens dependent evidence; rerun exact modes and affected negative controls.",
+  "links": ["docs/COMPACT_JSON_READER_FRONTIER.md", "docs/PROJECT_STATUS.md", "LANDMARKS.md"],
+  "validation_limit": "Repository lacks the skill-referenced packet template and validate-landmark-graph.sh; the existing curated-evidence shape is reused. JSON/path/hash checks do not execute the referenced DoD."
+}

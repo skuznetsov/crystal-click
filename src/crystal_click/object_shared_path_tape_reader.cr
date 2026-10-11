@@ -8,7 +8,7 @@ module CrystalClick
     @data : Bytes
     @events : Array(ObjectSharedPathSubstreamEvent)
     @budget : BinaryCodecBudget
-    @coordinate_context : ObjectSharedInlineDataCoordinateContext?
+    @coordinate_context : ObjectSharedInlineCoordinateContext?
     @cursor : UInt64
     @event_index : Int32
     @structure_bytes : Hash(String, Bytes)
@@ -21,7 +21,7 @@ module CrystalClick
       @data : Bytes,
       @events : Array(ObjectSharedPathSubstreamEvent),
       @budget : BinaryCodecBudget,
-      @coordinate_context : ObjectSharedInlineDataCoordinateContext? = nil,
+      @coordinate_context : ObjectSharedInlineCoordinateContext? = nil,
     )
       @cursor = 0_u64
       @event_index = 0_i32

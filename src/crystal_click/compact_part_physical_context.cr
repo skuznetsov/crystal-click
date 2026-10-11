@@ -1,7 +1,8 @@
 module CrystalClick
   # Schema-neutral reader for a complete plain Compact physical mark grid.
-  # It retains only detached metadata/grid coordinates and a borrowed,
-  # consumptive budget; every payload read builds a fresh frame index.
+  # It retains detached metadata, coordinates and frame headers plus a
+  # borrowed, consumptive budget; payload reads still authenticate selected
+  # frames through the paired physical reader.
   class CompactPartPhysicalContext
     getter mode : CompactMarkFormat
     getter row_count : UInt64
@@ -109,6 +110,62 @@ module CrystalClick
 
     def retained_grid_workspace_bytes : UInt64
       @mark_index.retained_grid_workspace_bytes
+    end
+
+    # Resolve a persisted mark pair in the original whole data.bin coordinate
+    # domain. The retained index is header metadata only; callers must still
+    # bind detached bytes through exact authenticated shard provenance.
+    def logical_position(pair : Tuple(UInt64, UInt64)) : Int64
+      @mark_index.logical_position(pair)
+    end
+
+    # Rejects public/fabricated shard values unless both their slot interval
+    # and detached bytes match this part's authenticated physical source.
+    def validate_shard_provenance!(shards : Array(CompactPartPhysicalShard)) : Nil
+      if shards.empty? || shards.size > Int32::MAX
+        raise CorruptPartError.new("Compact shard provenance roster is empty or oversized")
+      end
+
+      record_count = shards.size.to_i64
+      # The exact range tape and path-owned shard/path-start descriptors are
+      # all allocated below. Reserve their known cardinality first; the paired
+      # reader separately charges its own temporary frame/output descriptors.
+      if record_count > Int64::MAX // 3_i64
+        raise CorruptPartError.new("Compact shard provenance descriptor count overflows")
+      end
+      @budget.preflight_records(record_count * 3_i64)
+      @budget.reserve_records(record_count * 3_i64)
+      ranges = Array({Int64, Int64}).new(shards.size)
+      previous_end = -1_i64
+      shards.each do |shard|
+        unless @columns_substreams.slot_matches?(shard.slot_index, shard.stream_name)
+          raise CorruptPartError.new("Compact shard stream identity differs from the physical roster")
+        end
+        if shard.logical_start < previous_end
+          raise CorruptPartError.new("Compact path shard intervals overlap or are out of source order")
+        end
+        unless grid_contains_interval?(shard.slot_index, shard.logical_start, shard.logical_end)
+          raise CorruptPartError.new("Compact shard interval is not a saved physical mark-slot interval")
+        end
+        ranges << {shard.logical_start, shard.logical_end}
+        previous_end = shard.logical_end
+      end
+
+      authenticated = CompressedMarkReader.read_ranges(
+        @data_input.data_path,
+        @data_input.data_size,
+        ranges,
+        @budget,
+      )
+      unless authenticated.size == shards.size
+        raise CorruptPartError.new("Compact shard provenance reader returned an incomplete byte set")
+      end
+      shards.each_with_index do |shard, index|
+        unless shard.matches_bytes?(authenticated[index])
+          raise CorruptPartError.new("Compact shard bytes differ from their authenticated physical source")
+        end
+      end
+      nil
     end
 
     # Detached parent-row grid validated while the Compact mark index was
@@ -258,6 +315,20 @@ module CrystalClick
         offset += rows
       end
       offset
+    end
+
+    private def grid_contains_interval?(slot_index : Int, start : Int64, finish : Int64) : Bool
+      return false if start < 0 || finish < start
+      @mark_index.mark_count.times do |mark|
+        saved_start = @mark_index.position_at(mark, slot_index)
+        saved_finish = if slot_index + 1 < @mark_index.slot_count
+                         @mark_index.position_at(mark, slot_index + 1)
+                       else
+                         @mark_index.position_at(mark + 1, 0)
+                       end
+        return true if saved_start == start && saved_finish == finish
+      end
+      false
     end
 
     private def checked_add(left : UInt64, right : UInt64) : UInt64

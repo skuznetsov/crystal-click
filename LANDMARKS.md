@@ -1,5 +1,36 @@
 # Crystal Click landmarks
 
+## Compact Object saved-pair coordinate prerequisite — W263
+
+- VERIFIED / root adversary ROBUST within the finite piecewise-path scope over
+  `efb84e8d96a378e4833b8ca63a9f5fa16743d78e`. The common coordinate contract
+  keeps the concrete Wide API; the own-file Compact owner resolves original
+  data.bin pairs without rebasing or inventing a Wide lane.
+- Exact slot, saved grid interval and fresh payload authentication reject
+  fabricated shards. Ordered non-contiguous and multi-slot paths, empty
+  intervals, foreign site identity, altered callback bytes and final/non-final
+  terminals are exercised. Logical census includes retained frame descriptors
+  and shard objects/bytes/names, not allocator capacity or RSS.
+- Four focused examples pass; the exact 12-spec W240/W259/W260/W262/W263 cohort
+  passes 90 examples in both DEBUG and RELEASE under the unchanged serial
+  180-second / 12-GiB guard, zero failures/errors/pending. Not the full suite.
+  Root fixed two instrument/compiler issues before GREEN: abstract Int in a
+  generic Tuple and mutation through a read-only String slice. Neither initial
+  failure qualified coordinate behavior.
+- Compact JSON/Object remains rejected publicly. The new internal-reader
+  test gives the exact missing-API compile RED. The 48-part/504-file native
+  baseline was authenticated live; new multi-chunk collector execution and
+  full-statistics Object reader GREEN remain open. Array/Tuple forwards the
+  Compact PREFIX/PREFIX_EMPTY settings to static child Object sites; the
+  stats-free inline Dynamic-JSON parser is not the static Compact parser.
+- Return pointers: [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md),
+  [coordinate evidence](.landmark/evidence/compact-object-coordinate-w263.json).
+  Source/test/tool/coordinate-consumer drift, capture loss or widening reopens
+  dependent evidence; refresh exact modes and the affected falsifiers.
+- Next: keyless common Object prefix, a genuinely Compact callback framer and
+  prepared reader, then recursive/public/offline qualification over all 48
+  native cells. Full goal ACTIVE, performance deferred; no push or speed claim.
+
 ## Context-owned recursive Compact Dynamic reader — W262
 
 - VERIFIED / root adversary ROBUST within the finite Default/plain-mark target

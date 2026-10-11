@@ -3,13 +3,13 @@ module CrystalClick
   class ObjectSharedPathStreams
     @data : Bytes
     @events : Array(ObjectSharedPathSubstreamEvent)
-    @coordinate_context : ObjectSharedInlineDataCoordinateContext?
+    @coordinate_context : ObjectSharedInlineCoordinateContext?
     @callback_relocations : Array(ObjectSharedInlineCallbackRelocation)
 
     def initialize(
       data : Bytes,
       events : Array(ObjectSharedPathSubstreamEvent),
-      @coordinate_context : ObjectSharedInlineDataCoordinateContext? = nil,
+      @coordinate_context : ObjectSharedInlineCoordinateContext? = nil,
       callback_relocations : Array(ObjectSharedInlineCallbackRelocation) = [] of ObjectSharedInlineCallbackRelocation,
       provenance_budget : BinaryCodecBudget? = nil,
     )
@@ -56,7 +56,7 @@ module CrystalClick
     # Retains the authenticated physical Data resolver and exact path interval
     # alongside the detached Data bytes. Ordinary/encoder-created streams do
     # not have physical provenance and therefore return nil.
-    def coordinate_context : ObjectSharedInlineDataCoordinateContext?
+    def coordinate_context : ObjectSharedInlineCoordinateContext?
       @coordinate_context
     end
 

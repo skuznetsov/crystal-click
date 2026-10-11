@@ -8,7 +8,7 @@ module CrystalClick
     @relative_start : UInt64
     @relative_end : UInt64
     @bytes : Bytes
-    @context : ObjectSharedInlineDataCoordinateContext?
+    @context : ObjectSharedInlineCoordinateContext?
 
     def initialize(
       canonical_name : String,
@@ -16,7 +16,7 @@ module CrystalClick
       @relative_start : UInt64,
       @relative_end : UInt64,
       @bytes : Bytes,
-      @context : ObjectSharedInlineDataCoordinateContext?,
+      @context : ObjectSharedInlineCoordinateContext?,
       provenance_budget : BinaryCodecBudget? = nil,
     )
       if canonical_name.empty? || callback_name.empty?
@@ -66,26 +66,25 @@ module CrystalClick
       !@context.nil?
     end
 
-    def context : ObjectSharedInlineDataCoordinateContext
+    def context : ObjectSharedInlineCoordinateContext
       @context || raise(CorruptPartError.new("inline callback slice has no authenticated coordinate context"))
     end
 
     def resolve_pair(pair : Tuple(UInt64, UInt64)) : Int64
       context = @context || raise(CorruptPartError.new("inline callback slice has no authenticated coordinate context"))
-      absolute = context.resolve_path_position(pair)
-      slice_start = context.absolute_path_offset(@relative_start)
-      slice_end = context.absolute_path_offset(@relative_end)
-      unless absolute >= slice_start && absolute <= slice_end
-        raise CorruptPartError.new("inline coordinate is outside the named callback slice")
-      end
-      absolute - slice_start
+      context.callback_position(pair, @relative_start, @relative_end, true) ||
+        raise(CorruptPartError.new("inline coordinate is outside the named callback slice"))
     end
 
     def resolve_absolute_position(pair : Tuple(UInt64, UInt64)) : Int64
       context = @context || raise(CorruptPartError.new("inline callback slice has no authenticated coordinate context"))
-      absolute = context.resolve_path_position(pair)
-      slice_start = context.absolute_path_offset(@relative_start)
-      slice_end = context.absolute_path_offset(@relative_end)
+      unless context.is_a?(ObjectSharedInlineDataCoordinateContext)
+        raise UnsupportedFormatError.new("absolute inline positions are only defined for Wide Data coordinates")
+      end
+      wide_context = context.as(ObjectSharedInlineDataCoordinateContext)
+      absolute = wide_context.resolve_path_position(pair)
+      slice_start = wide_context.absolute_path_offset(@relative_start)
+      slice_end = wide_context.absolute_path_offset(@relative_end)
       unless absolute >= slice_start && absolute <= slice_end
         raise CorruptPartError.new("inline coordinate is outside the named callback slice")
       end
@@ -94,15 +93,24 @@ module CrystalClick
 
     def local_position_for_absolute(absolute : Int64, allow_terminal : Bool) : Int64?
       context = @context || raise(CorruptPartError.new("inline callback slice has no authenticated coordinate context"))
-      slice_start = context.absolute_path_offset(@relative_start)
-      slice_end = context.absolute_path_offset(@relative_end)
+      unless context.is_a?(ObjectSharedInlineDataCoordinateContext)
+        raise UnsupportedFormatError.new("absolute inline positions are only defined for Wide Data coordinates")
+      end
+      wide_context = context.as(ObjectSharedInlineDataCoordinateContext)
+      slice_start = wide_context.absolute_path_offset(@relative_start)
+      slice_end = wide_context.absolute_path_offset(@relative_end)
       if absolute < slice_start || (allow_terminal ? absolute > slice_end : absolute >= slice_end)
         return nil
       end
       absolute - slice_start
     end
 
-    def shares_context?(context : ObjectSharedInlineDataCoordinateContext) : Bool
+    def local_position_for_pair(pair : Tuple(UInt64, UInt64), allow_terminal : Bool) : Int64?
+      context = @context || raise(CorruptPartError.new("inline callback slice has no authenticated coordinate context"))
+      context.callback_position(pair, @relative_start, @relative_end, allow_terminal)
+    end
+
+    def shares_context?(context : ObjectSharedInlineCoordinateContext) : Bool
       if current = @context
         current.same_path?(context)
       else
@@ -116,7 +124,7 @@ module CrystalClick
       left.same_path?(right)
     end
 
-    def context_matches_context?(context : ObjectSharedInlineDataCoordinateContext) : Bool
+    def context_matches_context?(context : ObjectSharedInlineCoordinateContext) : Bool
       if current = @context
         current.same_path?(context)
       else

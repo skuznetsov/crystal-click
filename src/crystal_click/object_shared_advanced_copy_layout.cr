@@ -213,7 +213,7 @@ module CrystalClick
       unless views.size == COPY_LANES.size && COPY_LANES.all? { |name| views.has_key?(name) }
         raise CorruptPartError.new("inline Object shared Copy role roster is incomplete or has extra roles")
       end
-      first_context = nil.as(ObjectSharedInlineDataCoordinateContext?)
+      first_context = nil.as(ObjectSharedInlineCoordinateContext?)
       COPY_LANES.each do |name|
         view = views[name]
         unless view.role_name == name && view.authenticated_context? && view.segment_count > 0

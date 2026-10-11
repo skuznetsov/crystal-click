@@ -98,7 +98,7 @@ module CrystalClick
         }
       end
 
-      first_context = nil.as(ObjectSharedInlineDataCoordinateContext?)
+      first_context = nil.as(ObjectSharedInlineCoordinateContext?)
       bindings.each_with_index do |binding, index|
         canonical_name, owner_kind, owner_path, role = binding
         pair = pairs[index]

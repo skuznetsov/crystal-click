@@ -3,7 +3,7 @@ module CrystalClick
   # decompressed physical Data lane. The lane owner keeps its frame index and
   # has already authenticated the paired bytes/marks; this object only narrows
   # that resolver to the validated path interval.
-  class ObjectSharedInlineDataCoordinateContext
+  class ObjectSharedInlineDataCoordinateContext < ObjectSharedInlineCoordinateContext
     @data_lane : ObjectSharedPhysicalLaneReader
     getter path_data_start : Int64
     getter path_data_end : Int64
@@ -79,6 +79,21 @@ module CrystalClick
       absolute
     end
 
+    def callback_position(
+      pair : Tuple(UInt64, UInt64),
+      relative_start : UInt64,
+      relative_end : UInt64,
+      allow_terminal : Bool,
+    ) : Int64?
+      absolute = resolve_path_position(pair)
+      slice_start = absolute_path_offset(relative_start)
+      slice_end = absolute_path_offset(relative_end)
+      if absolute < slice_start || (allow_terminal ? absolute > slice_end : absolute >= slice_end)
+        return nil
+      end
+      absolute - slice_start
+    end
+
     def same_lane?(lane : ObjectSharedPhysicalLaneReader) : Bool
       @data_lane.same?(lane)
     end
@@ -87,6 +102,11 @@ module CrystalClick
       @data_lane.same?(other.@data_lane) &&
         @path_data_start == other.@path_data_start &&
         @path_data_end == other.@path_data_end
+    end
+
+    def same_path?(other : ObjectSharedInlineCoordinateContext) : Bool
+      other.is_a?(ObjectSharedInlineDataCoordinateContext) &&
+        same_path?(other.as(ObjectSharedInlineDataCoordinateContext))
     end
   end
 end
