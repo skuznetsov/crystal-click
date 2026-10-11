@@ -79,7 +79,7 @@ module CrystalClick
       @prefix.capture_body_callback_from!(canonical_name, callback_name, @budget) do
         _value, exact_bytes = @source.with_grammar_extent(callback_name) do |remaining|
           context = BinaryCodecContext.new(@limits, remaining, false, @budget, false, false)
-          parse_binding!(binding, context)
+          parse_binding!(binding, context, remaining)
           {nil, context.input_offset}
         end
         finish = @source.position
@@ -95,13 +95,17 @@ module CrystalClick
       nil
     end
 
-    private def parse_binding!(binding : BodyBinding, context : BinaryCodecContext) : Nil
+    private def parse_binding!(
+      binding : BodyBinding,
+      context : BinaryCodecContext,
+      borrowed_tape : Bytes,
+    ) : Nil
       _canonical_name, owner_kind, owner_path, role = binding
       case owner_kind
       when :typed
         parse_typed!(owner_path, role, context)
       when :root_dynamic
-        parse_root_dynamic!(owner_path, role, context)
+        parse_root_dynamic!(owner_path, role, context, borrowed_tape)
       when :shared
         parse_shared!(role, context)
       else
@@ -118,7 +122,12 @@ module CrystalClick
       raise CorruptPartError.new("Compact MRK3 typed body role has no parsed descriptor: #{ex.message}")
     end
 
-    private def parse_root_dynamic!(owner_path : String, role : String, context : BinaryCodecContext) : Nil
+    private def parse_root_dynamic!(
+      owner_path : String,
+      role : String,
+      context : BinaryCodecContext,
+      borrowed_tape : Bytes,
+    ) : Nil
       plan = @prefix.root_dynamic_plan_for(owner_path)
       arm_count = plan.arm_count("root")
       shared_index = plan.shared_index("root")
@@ -128,27 +137,46 @@ module CrystalClick
 
       if role == "root.discriminators"
         mode = dynamic_prefix_mode(owner_path)
-        if mode == DynamicDiscriminatorBodyValidator::COMPACT_MODE
-          raise UnsupportedFormatError.new("Compact MRK3 root MAP checkpoint requires BASIC Dynamic tags")
-        elsif mode != DynamicDiscriminatorBodyValidator::BASIC_MODE
+        unless mode == DynamicDiscriminatorBodyValidator::BASIC_MODE ||
+               mode == DynamicDiscriminatorBodyValidator::COMPACT_MODE
           raise CorruptPartError.new("Compact MRK3 Dynamic discriminator mode is unknown")
         end
-        bytes = context.read_slice(@row_count)
-        DynamicDiscriminatorBodyValidator.inspect_body(mode, bytes, @row_count)
-        charge_occurrences!(@row_count)
-        counts = Array(UInt64).new(arm_count, 0_u64)
-        bytes.each do |tag|
-          next if tag == DynamicDiscriminatorCodec::NULL_TAG
 
-          index = tag.to_i
-          unless index < arm_count
-            raise CorruptPartError.new("Compact MRK3 Dynamic tag is outside the parsed canonical arm roster")
+        if @row_count == 0_u64
+          empty = context.read_slice(0_u64)
+          DynamicDiscriminatorBodyValidator.inspect_body(mode, empty, @row_count)
+          charge_occurrences!(@row_count)
+          @dynamic_arm_counts[owner_path] = Array(UInt64).new(arm_count, 0_u64)
+          return nil
+        end
+
+        if mode == DynamicDiscriminatorBodyValidator::BASIC_MODE
+          bytes = context.read_slice(@row_count)
+          DynamicDiscriminatorBodyValidator.inspect_body(mode, bytes, @row_count)
+          charge_occurrences!(@row_count)
+          counts = Array(UInt64).new(arm_count, 0_u64)
+          bytes.each do |tag|
+            count_dynamic_tag!(counts, tag)
           end
-          previous = counts[index]
-          if previous == UInt64::MAX
-            raise CorruptPartError.new("Compact MRK3 Dynamic arm occurrence count overflows")
+        else
+          frame_start = context.input_offset
+          frame_rows, format, tag_offset, frame_end =
+            DynamicDiscriminatorBodyValidator.inspect_frame(borrowed_tape, frame_start)
+          unless frame_rows == @row_count
+            raise CorruptPartError.new("Compact MRK3 Dynamic COMPACT frame rows do not equal its mark rows")
           end
-          counts[index] = previous + 1_u64
+          consumed = frame_end - frame_start
+          if consumed < 0
+            raise CorruptPartError.new("Compact MRK3 Dynamic COMPACT frame ends before its borrowed start")
+          end
+          frame = context.read_slice(consumed.to_u64)
+          charge_occurrences!(@row_count)
+          counts = Array(UInt64).new(arm_count, 0_u64)
+          layout = {format, tag_offset - frame_start}
+          @row_count.times do |row_index|
+            tag = DynamicDiscriminatorBodyValidator.tag_at(frame, layout, row_index.to_i)
+            count_dynamic_tag!(counts, tag)
+          end
         end
         @dynamic_arm_counts[owner_path] = counts
         return nil
@@ -162,6 +190,21 @@ module CrystalClick
       parse_scalar_role!(arm_type, "dynamic:#{owner_path}:#{arm_index}", arm_suffix, count, context)
     rescue ex : KeyError
       raise CorruptPartError.new("Compact MRK3 Dynamic body role has no parsed descriptor: #{ex.message}")
+    end
+
+    private def count_dynamic_tag!(counts : Array(UInt64), tag : UInt8) : Nil
+      return if tag == DynamicDiscriminatorCodec::NULL_TAG
+
+      index = tag.to_i
+      unless index < counts.size
+        raise CorruptPartError.new("Compact MRK3 Dynamic tag is outside the parsed canonical arm roster")
+      end
+      previous = counts[index]
+      if previous == UInt64::MAX
+        raise CorruptPartError.new("Compact MRK3 Dynamic arm occurrence count overflows")
+      end
+      counts[index] = previous + 1_u64
+      nil
     end
 
     private def parse_shared!(role : String, context : BinaryCodecContext) : Nil

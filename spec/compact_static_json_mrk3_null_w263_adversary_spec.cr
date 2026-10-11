@@ -102,7 +102,7 @@ if ENV["CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT"]?
       w263_mrk3_null_expect_corrupt_mutation(1, 54, 255_u8, 254_u8, 110_i64, 72)
     end
 
-    it "classifies the genuine stock COMPACT Variant sibling as unsupported" do
+    it "prepares and reads the genuine stock COMPACT Variant sibling" do
       source = CompactStaticJsonMrk3NullW263Fixture.source_part(:compact)
       CompactJsonW263Fixture.assert_native_inventory!(source[:path], source[:inventory])
       evidence = CompactStaticJsonMrk3NullW263Fixture.raw_mark_evidence(source[:path], 0)
@@ -115,12 +115,29 @@ if ENV["CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT"]?
         "root",
         CompactStaticJsonMrk3NullW263Fixture.json_type,
       )
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        reader.read_marks(reader.mark_count, 0)
+      reader.row_count.should eq(4_u64)
+      reader.mark_count.should eq(2)
+      reader.mark_row_counts.should eq([2_u64, 2_u64])
+      reader.read_marks(reader.mark_count, 0).should be_empty
+      reader.prepared_context.mark_count.should eq(2)
+
+      type_name = CompactStaticJsonMrk3NullW263Fixture.json_type.name
+      expected = [
+        "#{type_name}{id=UInt8:1,label=String:\"r1\",maybe=String:\"alpha\"}",
+        "#{type_name}{id=UInt8:2,label=String:\"r2\"}",
+        "#{type_name}{id=UInt8:3,label=String:\"r3\"}",
+        "#{type_name}{id=UInt8:4,label=String:\"r4\"}",
+      ]
+      actual = [] of String
+      reader.read_marks(0, reader.mark_count).each do |mark|
+        mark.each do |document|
+          entries = document.paths.sort.map do |path|
+            "#{path}=#{CompactJsonW263Fixture.value_signature(document.value_for(path))}"
+          end
+          actual << "#{type_name}{#{entries.join(",")}}"
+        end
       end
-      expect_raises(ArgumentError, /has not completed EOF-first preparation/) do
-        reader.prepared_context
-      end
+      actual.should eq(expected)
     end
   end
 end

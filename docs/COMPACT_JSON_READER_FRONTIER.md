@@ -3,7 +3,8 @@
 Document status: W263 six-layout/multi-chunk native baseline RED qualified; coordinate prerequisite
 VERIFIED within its focused scope; advanced inline preparation prerequisite
 VERIFIED; bounded internal V1 MRK3/MAP, V2 MRK4/MAP and V3 MRK4/ADVANCED_CHUNKED
-roots VERIFIED; recursive/public/offline native GREEN pending
+roots and bounded MRK3 COMPACT Dynamic frames VERIFIED;
+recursive/public/offline native GREEN pending
 (2026-10-11).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
 Current transition: bind persisted JSON/Object sites to the existing recursive
@@ -11,7 +12,126 @@ Compact lifecycle, Object codecs and public selected-column consumers. The full
 types, MV/projection and subsequent memory/performance objective remains ACTIVE.
 This transition does not redefine completion or establish <=10% speed parity.
 
-## Bounded BASIC Dynamic NULL in MRK3 MAP — qualified within the named stock witness
+The latest qualification below governs current admission. Older checkpoint
+sections are revision-scoped history; their former refusals and next steps do
+not override a later qualification.
+
+## Bounded COMPACT Dynamic frames in MRK3 MAP — qualified within the named stock witness
+
+Anchor: BASIC/NULL checkpoint `af32c8dfc7fb083c0c5de6144c0675376056deaa`.
+At that anchor, the MRK3 MAP framer rejected the valid COMPACT mode word. This
+slice moves only the named Object-v1/Dynamic-v1/MAP, plain-MRK3/String-v0 root
+from guard-only to admitted after native RED/GREEN; other JSON layouts,
+String-v1, compressed marks, recursive/public/offline JSON and Compact writing
+remain rejected or pending. Memory/performance and MV/projection work are not
+part of this change. The full objective remains ACTIVE.
+
+Terminology boundary: Compact is the physical part layout; COMPACT here is the
+Variant discriminator encoding inside that part. Qualifying the latter neither
+creates a Compact writer nor admits every Compact type/layout combination.
+
+Pinned upstream `MergeTreeDataPartWriterCompact.cpp:174-205` calls the body
+serializer once per column granule. `SerializationVariant.cpp:326-500` emits
+one positive COMPACT frame: row-count VarUInt, then ROW_TAGS (format 0) with one
+tag per row, or UNIFORM (format 1) with one tag for every represented row.
+Zero rows emit no discriminator body but still visit every arm callback. This
+is a source grammar anchor, not source/runtime revision identity.
+
+Risk is CAUTION; rollback is the clean checkpoint above. The likeliest failure
+is counting physical tags instead of represented rows, dropping zero-count
+arms, or consuming the following MAP callback as part of a malformed frame.
+Keep the existing shared budget and discriminator validator. Inspect exactly
+one frame in the borrowed remaining tape, require the exact mark row count,
+consume only that frame extent, and count arm occurrences without a new tag
+vector. NULL 255 never indexes an arm, but every represented row is charged.
+EOF-first requests must complete structural validation before publishing
+prepared state. Arbitrary deletions that yield another valid MRK3 tape are
+not promised detectable; tests pin specific malformed grammar and boundaries.
+
+Execution order and ownership:
+
+1. Luna capture owner changes only
+   `scripts/probe_compact_json_mrk3_null_w263.rb`: add opt-in `--frame-witness`
+   with a distinct manifest version and preserve the default four-row capture.
+   Root captures fresh six-row BASIC/COMPACT parts in
+   `/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU`: three two-row
+   marks containing String/NULL, NULL/NULL and String/String. Authenticate
+   native values, part inventories and independently observed raw mark bytes.
+2. Luna test owner adds
+   `spec/support/compact_static_json_mrk3_compact_w263_fixture.cr`,
+   `spec/compact_static_json_mrk3_compact_native_w263_spec.cr` and
+   `spec/compact_static_json_mrk3_compact_w263_adversary_spec.cr`. Generalize
+   only the old NULL fixture's explicit expected-grid parameter, preserving
+   its two-mark default. Root first runs the new COMPACT positive case against
+   unchanged production and requires a genuine UnsupportedFormatError RED.
+3. Only after that RED, Luna engine owner may change
+   `src/crystal_click/compact_json_object_map_tape_framer.cr`. The test owner
+   may then change only the old NULL adversary's genuine COMPACT refusal
+   expectation to the new positive capability. No other production owner or
+   protected user spec changes. Root independently reviews and runs commands.
+4. DoD: guarded serial `crystal spec` runs of the new native/adversary pair,
+   old five NULL cases, 155 affected cases, 19 prior native cases and the
+   three unchanged original native roots, in both DEBUG and RELEASE. Use
+   explicit original/NULL/new COMPACT evidence-root environment variables,
+   `CRYSTAL_WORKERS=1`, `--single-module --threads 1`, and the existing
+   `run_safe.sh /opt/homebrew/bin/crystal 180 12288` resource guard. Expected
+   signal: zero failures/errors/pending, full/single/cross-mark and EOF values
+   matching native literals; exact prefix and callback extents, including
+   empty arms and the following 16/0/0-byte MAP callbacks.
+5. Falsifiers: unknown mode/format, zero or mismatched frame rows, mixed and
+   uniform out-of-roster tags, and a late EOF-first malformed mark must refuse
+   as CorruptPartError before prepared publication. Expected body-only logical
+   node/element deltas, including three prefix lookups, are 20/19/21 for the
+   three marks. A copy-only undercharge mutant must fail an exact budget gate.
+   Format/diff checks and hostile root review precede an exact-path local
+   atomic commit; no push. Refresh on source, profile, fixture or consumer drift.
+
+Observed pre-change gate: root authenticated both fresh native parts and ran
+the new COMPACT positive case against the unchanged `e4b8c6cb...` framer.
+Its BASIC sibling passed EOF/prepared control first. The COMPACT case then
+raised the intended UnsupportedFormatError at `parse_root_dynamic!` (tool
+`185eb9`, exit 1; one example, zero failures, one error). This is a capability
+RED, not a compiler, fixture or native-value mismatch. Production work is now
+authorized inside the one-class boundary above; admission required GREEN.
+
+Observed qualification: the six-row stock COMPACT sibling now passes EOF-first,
+single-mark, cross-mark and full-value reads. Independent prefix-only raw probes
+pin the mixed frame `02 00 01 ff`, uniform NULL frame `02 01 ff` and uniform
+String frame `02 01 01`, with prefix lengths 46 and canonical String index 1.
+All eight body bindings retain their source order, including both zero-count
+Dynamic arm callbacks and the following MAP sizes/paths/values. Exact body
+extents are `[2,6,4,0,6,16,0,0]`, `[2,6,3,0,0,16,0,0]` and
+`[2,6,3,0,11,16,0,0]`. Body-only logical node/element deltas are 20/19/21;
+these include three prefix lookups and are not RSS or performance measurements.
+
+Root's seven-example focused DEBUG run and exact 39-path regression cohort
+pass: 189 examples in each serial DEBUG/RELEASE mode, zero failures/errors/
+pending. The cohort includes the old five NULL cases, 155 affected cases,
+19 prior native cases and all three unchanged original root oracles. The
+older four-row stock COMPACT sibling also passes its refreshed positive case.
+Unknown mode/format, zero/short/long frame rows, mixed/uniform tag 254 and
+later all-NULL corruption refuse before prepared-state publication. A separate
+compressed-frame corruption confined to the final root mark leaves mark 0
+physically readable but refuses EOF-first preparation.
+
+In a copy with identical tests, changing only uniform-frame charging from all
+represented rows to one physical tag makes the exact all-NULL budget gate fail
+(19 expected, 18 observed), while the other six controls pass. Production never
+contained that mutant. Initial compiler/iterator/error-message test corrections
+were instrumentation faults, not capability evidence. Root adversary ROBUST
+within this scope. All 504 original capture files, both sibling capture pairs,
+the three protected specs and source/runtime pins remain unchanged. The
+implementation reuses the existing discriminator validator and recursive value
+codecs; only the private MAP tape framer changes.
+
+See [COMPACT frame evidence](../.landmark/evidence/compact-static-json-mrk3-compact-w263.json).
+Remaining JSON profiles/layouts, String-v1, compressed marks and recursive/
+public/offline admission are open. This does not create a Compact writer or
+qualify MV/projection composition or later performance. Goal ACTIVE; local
+atomic commit only, no push. Refresh after source, tests, profile, native capture,
+compiler or consumer drift, or scope widening.
+
+## Prior checkpoint: BASIC Dynamic NULL in MRK3 MAP
 
 Anchor: local CHUNKED checkpoint `87fd164189d31adee3253daaa1e28124d8a9c62c`.
 Before this transition, the MRK3 MAP grammar walker indexed every discriminator

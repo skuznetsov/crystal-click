@@ -12,6 +12,7 @@ require_relative 'stock_part_probe_support_w191'
 
 module ProbeCompactJSONMRK3NullW263
   FORMAT = 'compact_json_mrk3_null_w263_native_manifest_v1'.freeze
+  FRAME_WITNESS_FORMAT = 'compact_json_mrk3_null_frame_witness_w263_native_manifest_v1'.freeze
   BINARY = '/private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped'.freeze
   BINARY_SHA256 = 'bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2'.freeze
   VERSION = '26.10.1.1201'.freeze
@@ -26,11 +27,20 @@ module ProbeCompactJSONMRK3NullW263
   TABLES = {basic: 'w263n_mrk3_basic', compact: 'w263n_mrk3_compact'}.freeze
   SCHEMA = [['pk', 'UInt64'], ['root', JSON_TYPE]].map(&:freeze).freeze
   MARK_ROWS = [2, 2].freeze
+  FRAME_WITNESS_MARK_ROWS = [2, 2, 2].freeze
   ROWS = [
     {pk: 1, id: 1, label: 'r1', maybe: 'alpha'},
     {pk: 2, id: 2, label: 'r2', maybe: nil},
     {pk: 3, id: 3, label: 'r3', maybe: nil},
     {pk: 4, id: 4, label: 'r4', maybe: nil},
+  ].map(&:freeze).freeze
+  FRAME_WITNESS_ROWS = [
+    {pk: 1, id: 1, label: 'r1', maybe: 'alpha'},
+    {pk: 2, id: 2, label: 'r2', maybe: nil},
+    {pk: 3, id: 3, label: 'r3', maybe: nil},
+    {pk: 4, id: 4, label: 'r4', maybe: nil},
+    {pk: 5, id: 5, label: 'r5', maybe: 'beta'},
+    {pk: 6, id: 6, label: 'r6', maybe: 'gamma'},
   ].map(&:freeze).freeze
   TAG = {
     pin: '__W263N_PIN__', check_begin: '__W263N_CHECK_BEGIN__',
@@ -45,9 +55,25 @@ module ProbeCompactJSONMRK3NullW263
   class Failure < StandardError; end
 
   class Probe
-    def initialize(binary:, evidence_root:)
+    def initialize(binary:, evidence_root:, frame_witness: false)
       @binary = validate_executable(binary)
       @root = validate_root(evidence_root)
+      @frame_witness = frame_witness
+      @tables = TABLES
+      @rows = @frame_witness ? FRAME_WITNESS_ROWS : ROWS
+      @mark_rows = @frame_witness ? FRAME_WITNESS_MARK_ROWS : MARK_ROWS
+      @manifest_format = @frame_witness ? FRAME_WITNESS_FORMAT : FORMAT
+      @scope = if @frame_witness
+                 'six-row stock Compact MRK3 Object-v1/Dynamic-v1/MAP discriminator frame witness; native capture is not a Crystal reader admission'
+               else
+                 'two stock Compact MRK3 Object-v1/Dynamic-v1/MAP tables; BASIC is the target and COMPACT is refusal-only'
+               end
+      @failure_format = if @frame_witness
+                          'compact_json_mrk3_null_frame_witness_w263_native_failure_v1'
+                        else
+                          'compact_json_mrk3_null_w263_native_failure_v1'
+                        end
+      @capture_label = @frame_witness ? 'stock_mrk3_frame_witness' : 'stock_mrk3_null'
       @capture = StockPartProbeSupportW191.new(@binary, @root)
       @store = File.join(@root, 'stores', 'native')
       @source_files = [
@@ -66,14 +92,18 @@ module ProbeCompactJSONMRK3NullW263
       verify_runtime_before!
       verify_source_before!
 
-      @stage = 'stock BASIC and COMPACT sibling MRK3 tables'
+      @stage = if @frame_witness
+                 'stock BASIC and COMPACT MRK3 NULL frame-witness tables'
+               else
+                 'stock BASIC and COMPACT sibling MRK3 tables'
+               end
       native = run_native(initial_sql)
       assert_native_success!(native)
       observations = parse_native(native[:stdout])
       assert_pin!(observations.fetch(:pin))
       assert_observations!(observations)
 
-      parts = TABLES.to_h do |mode, table|
+      parts = @tables.to_h do |mode, table|
         native_part = observations.fetch(:parts).fetch(mode)
         path = validate_part_path!(native_part.fetch(:path))
         [mode, inspect_part(mode, path, native_part)]
@@ -92,11 +122,11 @@ module ProbeCompactJSONMRK3NullW263
       verify_source_after!
 
       manifest = {
-        format: FORMAT,
+        format: @manifest_format,
         status: 'stock_native_capture_observed',
-        scope: 'two stock Compact MRK3 Object-v1/Dynamic-v1/MAP tables; BASIC is the target and COMPACT is refusal-only',
-        row_count: ROWS.size,
-        mark_rows: MARK_ROWS,
+        scope: @scope,
+        row_count: @rows.size,
+        mark_rows: @mark_rows,
         pins: {
           runtime: {
             path: @binary, expected_sha256: BINARY_SHA256,
@@ -126,8 +156,19 @@ module ProbeCompactJSONMRK3NullW263
           note: 'Each part was inventoried after the single native process exited and re-inventoried before manifest publication.',
         },
       }
+      if @frame_witness
+        manifest[:frame_witness] = {
+          version: 1,
+          option: '--frame-witness',
+          mark_patterns: [
+            {mark: 0, rows: [{dynamic_type: 'String', value: 'alpha'}, {dynamic_type: NATIVE_NULL_DYNAMIC_TYPE, value: nil}]},
+            {mark: 1, rows: [{dynamic_type: NATIVE_NULL_DYNAMIC_TYPE, value: nil}, {dynamic_type: NATIVE_NULL_DYNAMIC_TYPE, value: nil}]},
+            {mark: 2, rows: [{dynamic_type: 'String', value: 'beta'}, {dynamic_type: 'String', value: 'gamma'}]},
+          ],
+        }
+      end
       write_new(File.join(@root, 'native_manifest.json'), JSON.pretty_generate(manifest) + "\n")
-      puts "W263 MRK3 NULL stock capture observed; tables=#{TABLES.keys.join(',')}; rows=#{ROWS.size}; evidence=#{@root}"
+      puts "W263 MRK3 NULL stock capture observed; tables=#{@tables.keys.join(',')}; rows=#{@rows.size}; evidence=#{@root}"
       true
     rescue StandardError => error
       @fatal_error ||= "#{error.class}: #{error.message}"
@@ -135,7 +176,7 @@ module ProbeCompactJSONMRK3NullW263
       @source_revision_after = source_revision rescue nil
       warn "W263 MRK3 NULL #{@stage} failed: #{@fatal_error}"
       write_new(File.join(@root, 'failure.json'), JSON.pretty_generate({
-        format: 'compact_json_mrk3_null_w263_native_failure_v1',
+        format: @failure_format,
         stage: @stage, error: @fatal_error,
         binary_sha_before: @binary_sha_before, binary_sha_after: @binary_sha_after,
         source_revision_before: @source_revision_before, source_revision_after: @source_revision_after,
@@ -227,10 +268,10 @@ module ProbeCompactJSONMRK3NullW263
     end
 
     def run_native(sql)
-      write_new(File.join(@root, 'invocations', 'stock_mrk3_null.stdin.sql'), sql.b)
+      write_new(File.join(@root, 'invocations', "#{@capture_label}.stdin.sql"), sql.b)
       argv = [@binary, 'local', '--path', @store, '--session_timezone=UTC', '--max_threads=1',
               "--max_memory_usage=#{W185::MEMORY}", '--output_format_json_quote_64bit_integers=0', '--multiquery']
-      invocation = @capture.send(:execute_record, 'stock_mrk3_null', argv, sql.b,
+      invocation = @capture.send(:execute_record, @capture_label, argv, sql.b,
                                  'clickhouse local', BINARY_SHA256, @binary)
       @invocations << invocation.fetch(:record)
       fail!('ClickHouse stdout exceeds capture bound') if invocation.fetch(:stdout).bytesize > MAX_CAPTURE_BYTES
@@ -260,13 +301,13 @@ module ProbeCompactJSONMRK3NullW263
       lines.each do |line|
         if line.start_with?("#{TAG[:check_begin]}\t")
           fields = line.split("\t", -1)
-          mode = TABLES.key(fields.fetch(1)) if fields.size == 2
+          mode = @tables.key(fields.fetch(1)) if fields.size == 2
           fail!('malformed, duplicate or nested CHECK begin') unless mode && !checks.key?(mode) && active.nil?
           active = mode
           checks[active] = []
         elsif line.start_with?("#{TAG[:check_end]}\t")
           fields = line.split("\t", -1)
-          mode = TABLES.key(fields.fetch(1)) if fields.size == 2
+          mode = @tables.key(fields.fetch(1)) if fields.size == 2
           fail!('malformed or mismatched CHECK end') unless mode && active == mode
           active = nil
         elsif active
@@ -277,7 +318,7 @@ module ProbeCompactJSONMRK3NullW263
 
       parts = records.call(TAG[:part]).to_h do |fields|
         fail!('malformed system.parts row') unless fields.size == 7
-        mode = TABLES.key(fields.fetch(1))
+        mode = @tables.key(fields.fetch(1))
         fail!("unexpected system.parts table #{fields.fetch(1).inspect}") unless mode
         [mode, {table: fields[1], name: fields[2], path: fields[3], type: fields[4], rows: fields[5], marks: fields[6]}]
       end
@@ -303,23 +344,23 @@ module ProbeCompactJSONMRK3NullW263
     end
 
     def assert_observations!(native)
-      fail!('native part roster differs') unless native.fetch(:parts).keys.sort == TABLES.keys.sort
-      fail!('CHECK roster differs') unless native.fetch(:checks).keys.sort == TABLES.keys.sort
-      TABLES.each_key do |mode|
+      fail!('native part roster differs') unless native.fetch(:parts).keys.sort == @tables.keys.sort
+      fail!('CHECK roster differs') unless native.fetch(:checks).keys.sort == @tables.keys.sort
+      @tables.each_key do |mode|
         fail!("#{mode} CHECK did not report one valid stock part") unless
           native.fetch(:checks).fetch(mode) == ["all_1_1_0\t1\t"]
       end
-      expected_schema = TABLES.values.sort.flat_map do |table|
+      expected_schema = @tables.values.sort.flat_map do |table|
         SCHEMA.map { |name, type| [table, name, type] }
       end
       fail!('native schema differs from the independent declaration') unless native.fetch(:schema) == expected_schema
-      fail!('native row count differs from two tables x four literals') unless native.fetch(:rows).size == TABLES.size * ROWS.size
+      fail!("native row count differs from two tables x #{@rows.size} literals") unless native.fetch(:rows).size == @tables.size * @rows.size
 
-      expected_rows = TABLES.values.product(ROWS).to_h do |table, row|
+      expected_rows = @tables.values.product(@rows).to_h do |table, row|
         ["#{table}|#{row.fetch(:pk)}", [row.fetch(:id).to_s, row.fetch(:label), row.fetch(:maybe)]]
       end
       actual_rows = native.fetch(:rows).to_h do |row|
-        table = TABLES.values.find { |name| name == row.fetch(:table) }
+        table = @tables.values.find { |name| name == row.fetch(:table) }
         fail!("unexpected row table #{row.fetch(:table).inspect}") unless table
         pk = Integer(row.fetch(:pk), 10)
         key = "#{table}|#{pk}"
@@ -343,7 +384,7 @@ module ProbeCompactJSONMRK3NullW263
           maybe_json: maybe_json, dynamic_paths: paths, shared_paths: shared, root_json: decoded_root,
         }]
       end
-      fail!('native row identities differ from independent four-row literals') unless actual_rows.keys.sort == expected_rows.keys.sort
+      fail!("native row identities differ from independent #{@rows.size}-row literals") unless actual_rows.keys.sort == expected_rows.keys.sort
       expected_rows.each do |key, (id, label, maybe)|
         actual = actual_rows.fetch(key)
         expected_type = maybe.nil? ? NATIVE_NULL_DYNAMIC_TYPE : 'String'
@@ -356,18 +397,18 @@ module ProbeCompactJSONMRK3NullW263
         expected_root['maybe'] = maybe unless maybe.nil?
         fail!("#{key} root JSON fields differ") unless actual.fetch(:root_json) == expected_root
       end
-      TABLES.values.each do |table|
-        %w[1 2 3 4].each do |pk|
+      @tables.each_value do |table|
+        @rows.each do |expected|
+          pk = expected.fetch(:pk).to_s
           key = "#{table}|#{pk}"
-          row = actual_rows.fetch(key)
           raw = native.fetch(:rows).find { |entry| entry.fetch(:table) == table && entry.fetch(:pk) == pk }
-          row[:native_root_json_hex] = raw.fetch(:root_json_hex)
+          actual_rows.fetch(key)[:native_root_json_hex] = raw.fetch(:root_json_hex)
         end
       end
       native[:rows] = actual_rows.sort.to_h.values
       native.fetch(:parts).each do |mode, part|
         fail!("#{mode} part identity/grid differs") unless
-          part.values_at(:name, :type, :rows, :marks) == ['all_1_1_0', 'Compact', '4', '3']
+          part.values_at(:name, :type, :rows, :marks) == ['all_1_1_0', 'Compact', @rows.size.to_s, (@rows.size / 2 + 1).to_s]
       end
     end
 
@@ -380,7 +421,7 @@ module ProbeCompactJSONMRK3NullW263
       fail!("#{mode} part unexpectedly has a substream mark roster") if names.include?('columns_substreams.txt')
       fail!("#{mode} part has marks other than PlainMRK3") unless names.grep(/\.c?mrk\d*\z/) == ['data.mrk3']
       fail!("#{mode} part has unexpected binary lanes") unless names.grep(/\.bin\z/) == ['data.bin']
-      fail!("#{mode} count.txt differs") unless File.binread(File.join(path, 'count.txt')) == '4'
+      fail!("#{mode} count.txt differs") unless File.binread(File.join(path, 'count.txt')) == @rows.size.to_s
       fail!("#{mode} default compression differs") unless
         File.binread(File.join(path, 'default_compression_codec.txt')).strip == 'CODEC(LZ4)'
       serialization = JSON.parse(File.binread(File.join(path, 'serialization.json')))
@@ -458,9 +499,9 @@ module ProbeCompactJSONMRK3NullW263
         'SET print_pretty_type_names=0;',
         "SELECT '#{TAG[:pin]}', version(), (SELECT value FROM system.build_options WHERE name='VERSION_GITHASH') FORMAT TSVRaw;",
       ]
-      TABLES.each do |mode, table|
+      @tables.each do |mode, table|
         statements << "CREATE TABLE default.#{table} (pk UInt64, root #{JSON_TYPE}) ENGINE=MergeTree ORDER BY pk SETTINGS #{settings_for(mode)};"
-        values = ROWS.map do |row|
+        values = @rows.map do |row|
           document = JSON.generate(row.reject { |key, _| key == :pk })
           "(toUInt64(#{row.fetch(:pk)}), CAST(#{sql_string(document)}, #{sql_string(JSON_TYPE)}))"
         end
@@ -469,10 +510,10 @@ module ProbeCompactJSONMRK3NullW263
         statements << "CHECK TABLE default.#{table} FORMAT TSV;"
         statements << "SELECT '#{TAG[:check_end]}', '#{table}' FORMAT TSVRaw;"
       end
-      table_list = TABLES.values.map { |table| sql_string(table) }.join(', ')
+      table_list = @tables.values.map { |table| sql_string(table) }.join(', ')
       statements << "SELECT '#{TAG[:schema]}', table, name, type FROM system.columns WHERE database='default' AND table IN (#{table_list}) ORDER BY table, position FORMAT TSVRaw;"
       statements << "SELECT '#{TAG[:part]}', table, name, path, part_type, toString(rows), toString(marks) FROM system.parts WHERE database='default' AND table IN (#{table_list}) AND active ORDER BY table, name FORMAT TSVRaw;"
-      TABLES.each do |mode, table|
+      @tables.each do |mode, table|
         statements << "SELECT '#{TAG[:row]}', '#{table}', toString(pk), toString(root.id), hex(root.label), " \
           "dynamicType(root.maybe), " \
           "if(isNull(root.maybe), '-', hex(toString(root.maybe))), " \
@@ -513,14 +554,15 @@ end
 
 if $PROGRAM_NAME == __FILE__
   begin
-    options = {binary: ProbeCompactJSONMRK3NullW263::BINARY, root: nil}
+    options = {binary: ProbeCompactJSONMRK3NullW263::BINARY, root: nil, frame_witness: false}
     OptionParser.new do |parser|
-      parser.banner = 'Usage: ruby scripts/probe_compact_json_mrk3_null_w263.rb --evidence-root EMPTY_/private/tmp_CHILD [--clickhouse PINNED]'
+      parser.banner = 'Usage: ruby scripts/probe_compact_json_mrk3_null_w263.rb --evidence-root EMPTY_/private/tmp_CHILD [--clickhouse PINNED] [--frame-witness]'
       parser.on('--clickhouse PATH', 'Pinned ClickHouse 26.10.1.1201 executable') { |value| options[:binary] = value }
       parser.on('--evidence-root PATH', 'Existing empty direct child of /private/tmp') { |value| options[:root] = value }
+      parser.on('--frame-witness', 'Capture the opt-in six-row, three-mark Dynamic NULL frame witness') { options[:frame_witness] = true }
     end.parse!
     abort 'W263 MRK3 NULL: --evidence-root is required' unless options[:root]
-    ok = ProbeCompactJSONMRK3NullW263::Probe.new(binary: options[:binary], evidence_root: options[:root]).run
+    ok = ProbeCompactJSONMRK3NullW263::Probe.new(binary: options[:binary], evidence_root: options[:root], frame_witness: options[:frame_witness]).run
     exit(ok ? 0 : 1)
   rescue StandardError => error
     warn "W263 MRK3 NULL runner error: #{error.class}: #{error.message}"

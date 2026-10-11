@@ -169,7 +169,11 @@ module CompactStaticJsonMrk3NullW263Fixture
   # Captures only the authenticated mark and its complete Object/Dynamic
   # prefix. It deliberately does not invoke the body/MAP tape walker, so the
   # returned bytes can independently pin raw NULL tags and prefix offsets.
-  def raw_mark_evidence(part_path : String, mark_index : Int32) : NamedTuple(
+  def raw_mark_evidence(
+    part_path : String,
+    mark_index : Int32,
+    expected_mark_count : Int32 = 2,
+  ) : NamedTuple(
     raw: Bytes,
     logical_start: Int64,
     prefix_end: Int32,
@@ -182,8 +186,9 @@ module CompactStaticJsonMrk3NullW263Fixture
     dynamic_statistics_offsets: Hash(String, Int32),
   )
     physical = CrystalClick::CompactPartPhysicalContext.open(part_path)
-    unless physical.mode.mrk3? && physical.mark_row_counts == [2_u64, 2_u64]
-      raise "W263 null source part is not the expected two-mark MRK3 grid"
+    expected_mark_rows = expected_two_row_mark_grid(expected_mark_count)
+    unless physical.mode.mrk3? && physical.mark_row_counts == expected_mark_rows
+      raise "W263 null source part is not the expected #{expected_mark_count}-mark MRK3 grid"
     end
     granule = physical.read_window("root", mark_index, 1).granules.first? ||
               raise CrystalClick::CorruptPartError.new("W263 null root mark is missing")
@@ -251,7 +256,11 @@ module CompactStaticJsonMrk3NullW263Fixture
   # framer and reports only the body phase's logical budget delta and callback
   # byte extents. This lets a narrow all-NULL assertion distinguish charging
   # the two row tags from inventing Dynamic-arm occurrences for NULL rows.
-  def body_capture_evidence(part_path : String, mark_index : Int32) : NamedTuple(
+  def body_capture_evidence(
+    part_path : String,
+    mark_index : Int32,
+    expected_mark_count : Int32 = 2,
+  ) : NamedTuple(
     body_nodes: Int64,
     body_elements: Int64,
     body_wire_bytes: Int64,
@@ -259,8 +268,9 @@ module CompactStaticJsonMrk3NullW263Fixture
     callbacks: Array(Tuple(String, String, Int32)),
   )
     physical = CrystalClick::CompactPartPhysicalContext.open(part_path)
-    unless physical.mode.mrk3? && physical.mark_row_counts == [2_u64, 2_u64]
-      raise "W263 null body source is not the expected two-mark MRK3 grid"
+    expected_mark_rows = expected_two_row_mark_grid(expected_mark_count)
+    unless physical.mode.mrk3? && physical.mark_row_counts == expected_mark_rows
+      raise "W263 null body source is not the expected #{expected_mark_count}-mark MRK3 grid"
     end
     granule = physical.read_window("root", mark_index, 1).granules.first? ||
               raise CrystalClick::CorruptPartError.new("W263 null body mark is missing")
@@ -337,10 +347,12 @@ module CompactStaticJsonMrk3NullW263Fixture
     tape_offset : Int32,
     expected : UInt8,
     replacement : UInt8,
+    expected_mark_count : Int32 = 2,
   ) : NamedTuple(logical_start: Int64, tape_size: Int32)
     physical = CrystalClick::CompactPartPhysicalContext.open(part_path)
-    unless physical.mode.mrk3? && physical.mark_row_counts == [2_u64, 2_u64]
-      raise "W263 null mutation source is not the expected two-mark MRK3 grid"
+    expected_mark_rows = expected_two_row_mark_grid(expected_mark_count)
+    unless physical.mode.mrk3? && physical.mark_row_counts == expected_mark_rows
+      raise "W263 null mutation source is not the expected #{expected_mark_count}-mark MRK3 grid"
     end
     granule = physical.read_window("root", mark_index, 1).granules.first? ||
               raise CrystalClick::CorruptPartError.new("W263 null mutation mark is missing")
@@ -360,7 +372,7 @@ module CompactStaticJsonMrk3NullW263Fixture
     reframe_mrk3_tape!(part_path, physical, raw)
 
     reopened = CrystalClick::CompactPartPhysicalContext.open(part_path)
-    unless reopened.mode.mrk3? && reopened.mark_row_counts == [2_u64, 2_u64]
+    unless reopened.mode.mrk3? && reopened.mark_row_counts == expected_mark_rows
       raise "reframed W263 null mutation changed its physical mode or mark grid"
     end
     observed = reopened.read_window("root", mark_index, 1).granules.first?.try(&.shards.first?) ||
@@ -380,8 +392,12 @@ module CompactStaticJsonMrk3NullW263Fixture
     {parent, copied_part}
   end
 
-  def render_raw_mark_evidence(part_path : String, mark_index : Int32) : String
-    evidence = raw_mark_evidence(part_path, mark_index)
+  def render_raw_mark_evidence(
+    part_path : String,
+    mark_index : Int32,
+    expected_mark_count : Int32 = 2,
+  ) : String
+    evidence = raw_mark_evidence(part_path, mark_index, expected_mark_count)
     String.build do |io|
       io << "mark=" << mark_index << " logical_start=" << evidence[:logical_start]
       io << " tape_size=" << evidence[:raw].size << " prefix_end=" << evidence[:prefix_end]
@@ -457,5 +473,10 @@ module CompactStaticJsonMrk3NullW263Fixture
     8.times do |index|
       bytes[offset + index] = ((value >> (index * 8)) & 0xff_u64).to_u8
     end
+  end
+
+  private def expected_two_row_mark_grid(expected_mark_count : Int32) : Array(UInt64)
+    raise ArgumentError.new("W263 two-row mark count must be positive") unless expected_mark_count > 0
+    Array(UInt64).new(expected_mark_count, 2_u64)
   end
 end

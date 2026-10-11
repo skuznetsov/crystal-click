@@ -4,12 +4,44 @@ Current bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
 root adversary ROBUST for three stock root JSON cells: V1/Dynamic-v1/MAP MRK3,
 V2/Dynamic-v2/MAP MRK4 and V3/Dynamic-v3/ADVANCED_CHUNKED MRK4, all
 String-v0/Variant-BASIC with eight rows and four two-row marks, plus a separate
-four-row MRK3 BASIC Dynamic-NULL witness with mixed and all-NULL marks. MRK3 derives
+four-row MRK3 BASIC Dynamic-NULL witness and a six-row MRK3 COMPACT Dynamic
+frame witness with mixed, uniform-NULL and uniform-String marks. MRK3 derives
 callback extents from descriptor/count grammar without inventing physical
 substream names; MRK4 retains exact named extents and original saved-pair
 coordinates. Own-file owners reuse recursive codecs, retain complete prefix
 statistics, prepare the full selected column at EOF first and decode only
 selected marks. There is no public facade, recursive or offline admission yet.
+
+The COMPACT-frame extension refreshes the exact 39-path cohort: seven new cases,
+five old NULL cases, 155 affected cases, 19 prior native cases and three unchanged
+stock-root oracles. All 189 examples pass in each serial DEBUG/RELEASE mode,
+zero failures/errors/pending. Complete raw tapes, three prefix callbacks and
+eight ordered body bindings pin row-tag/uniform-tag framing, NULL omission,
+zero-byte arm callbacks, following MAP boundaries and full/single/cross/EOF reads.
+Malformed frame rows, mode/format, mixed/uniform tag 254 and later corruption
+refuse without prepared publication. A copy-only one-tag-charge mutant fails
+the all-NULL logical budget gate (19 expected, 18 observed); its other six
+controls pass. Root adversary ROBUST within this finite root scope. All 504
+original capture files, both sibling capture pairs and three protected specs
+remain unchanged. See the
+[COMPACT frame evidence](../.landmark/evidence/compact-static-json-mrk3-compact-w263.json)
+and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md).
+
+Current remaining frontier: other JSON profiles/layouts, String-v1, compressed
+marks and the full 48-cell recursive/public/offline gate. MAP preparation checks
+outer String framing, not nested value semantics; well-framed semantic errors
+may fail only on selected decoding. Static/Dynamic Compact public readers remain
+their separately qualified finite profiles, not general JSON admission. Compact
+writing still requires a separate physical coordinator and publication backend;
+recursive value codecs are reusable, current Wide `.bin`/`.mrk2` envelopes are not.
+Remaining types/layouts, MV/projection composition and later performance remain
+required. Full goal ACTIVE; no speed/full-suite claim, local atomic commit only,
+no push.
+
+## Earlier revision-scoped checkpoints
+
+The following records describe the state at their own qualification revision.
+Their former refusals and next steps do not override the current frontier above.
 
 The preceding CHUNKED checkpoint's five-path cohort passes 11 examples, the affected 23-path
 cohort passes 155 examples and the six-path native MAP cohort passes eight
@@ -47,8 +79,8 @@ protected specs and source/runtime pins remain unchanged. See the
 All three mandatory stock internal roots are qualified, not all combinations.
 The MRK3 body walker now skips valid NULL in arm occurrence counts while charging
 every row and preserving empty callbacks; unknown discriminator modes are corrupt.
-COMPACT discriminator bodies and other profiles/layouts remain open. Shared
-MAP preparation checks outer String framing, not nested value semantics;
+At that checkpoint, COMPACT discriminator bodies and other profiles/layouts
+remained open. Shared MAP preparation checks outer String framing, not nested value semantics;
 well-framed semantic errors may fail only on selected decoding. Remaining
 profiles/layouts and the full 48-cell recursive/public/offline gate stay open.
 Remaining types/layouts, MV/projection composition and later performance remain

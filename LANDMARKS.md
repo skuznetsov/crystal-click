@@ -1,5 +1,36 @@
 # Crystal Click landmarks
 
+## Bounded internal MRK3 COMPACT Dynamic frames — W263
+
+- VERIFIED / root adversary ROBUST over BASIC/NULL checkpoint
+  `af32c8dfc7fb083c0c5de6144c0675376056deaa`: six stock Object-v1/Dynamic-v1/
+  MAP/S0/COMPACT rows form mixed, uniform-NULL and uniform-String two-row marks.
+  Unchanged production first refused the valid COMPACT mode at EOF; the BASIC
+  sibling passed preparation as a control.
+- One private MAP framer uses the existing discriminator frame validator and
+  recursive value codecs. Consume exactly one frame with its exact mark rows;
+  NULL 255 contributes no arm occurrence. Every represented row still consumes
+  logical budget; all empty arms and the following MAP callbacks remain events.
+  No tag vector, new public API, recursive/offline admission or Compact writer.
+- Root executes seven focused DEBUG cases and the exact 39-path / 189-example
+  cohort in serial DEBUG and RELEASE: zero failures/errors/pending. Independent
+  raw tapes, prefix statistics, eight ordered callbacks and body deltas 20/19/21
+  qualify full/single/cross-mark/EOF behavior. Unknown mode/format, zero/mismatched
+  frame rows and mixed/uniform tag 254 refuse before prepared publication.
+- Later all-NULL corruption refuses at EOF. A final-mark-only compressed-frame
+  corruption leaves the earlier physical window readable but also refuses EOF.
+  A one-line copy-only uniform-tag undercharge fails the exact 19-versus-18
+  all-NULL budget gate; the other six controls pass. Test compiler/iterator/message
+  corrections were instrument repairs, not capability evidence. Original 504-file
+  capture, both sibling capture pairs and protected specs remain unchanged.
+- Return pointers: [COMPACT evidence](.landmark/evidence/compact-static-json-mrk3-compact-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Older checkpoint
+  refusals below are revision-scoped history. Next: remaining JSON profiles and
+  recursive/public/offline qualification. Compact physical writing is a separate
+  backend; MV/projections and performance remain required. Goal ACTIVE; local
+  atomic commit only, no push. Refresh after source/test/profile/capture/compiler/
+  consumer drift or widening. Same-lineage Luna review is correlated.
+
 ## Bounded internal MRK3 BASIC Dynamic NULL — W263
 
 - VERIFIED / root adversary ROBUST over `87fd164189d31adee3253daaa1e28124d8a9c62c`:
