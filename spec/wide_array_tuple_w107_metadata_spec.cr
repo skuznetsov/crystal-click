@@ -67,27 +67,32 @@ describe CrystalClick::WidePart do
     end
   end
 
-  it "rejects payload-named and recursive serializer records before a mark callback" do
+  it "admits payload-named Default statistics under the common WITH_TYPES profile" do
+    parent = File.tempname("crystal-click-array-tuple-w107-metadata-payload")
+    Dir.mkdir(parent)
+    begin
+      part, _type_name = w107m_write_part(parent, "payload-serializer")
+      payload_record = %([{"kind":"Default","name":"payload","num_defaults":0,"num_rows":2}])
+      w107m_replace_serialization(part, w107m_valid_header(payload_record))
+      reader = CrystalClick::WidePart.open_typed(part, "payload")
+      data = reader.read_array_tuple_mark_range("payload", 0, reader.mark_count)
+      data.row_count.should eq(2)
+      data.element_count.should eq(2)
+      data.row(0)[0]["note"].should eq("one")
+      data.row(1)[0]["note"].should eq("two")
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "rejects unsupported recursive serializer records before a mark callback" do
     parent = File.tempname("crystal-click-array-tuple-w107-metadata-invalid")
     Dir.mkdir(parent)
     begin
-      part, _type_name = w107m_write_part(parent, "recursive-serializer")
-      payload_record = %([{"kind":"Default","name":"payload","num_defaults":0,"num_rows":2}])
-      w107m_replace_serialization(part, w107m_valid_header(payload_record))
-      callbacks = [] of Int32
-      expect_raises(CrystalClick::UnsupportedFormatError, "array serializer must identify a UInt64 key column") do
-        reader = CrystalClick::WidePart.open_typed(part, "payload")
-        reader.each_array_tuple_mark_range("payload", 0, 1) do |_data, mark_index|
-          callbacks << mark_index
-          nil
-        end
-      end
-      callbacks.should be_empty
-
       part, _type_name = w107m_write_part(parent)
       recursive_record = %([{"kind":"Default","name":"pk","num_defaults":0,"num_rows":2,"subcolumns":[]}])
       w107m_replace_serialization(part, w107m_valid_header(recursive_record))
-      callbacks.clear
+      callbacks = [] of Int32
       expect_raises(CrystalClick::UnsupportedFormatError, "array column serializer fields are unsupported") do
         reader = CrystalClick::WidePart.open_typed(part, "payload")
         reader.each_array_tuple_mark_range("payload", 0, 1) do |_data, mark_index|

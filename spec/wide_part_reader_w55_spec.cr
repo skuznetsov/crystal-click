@@ -179,7 +179,7 @@ describe "W55 Array of named UInt64 Tuple reader and writer" do
     end
   end
 
-  it "rejects reordered or missing physical child declarations" do
+  it "binds reordered physical children by exact identity and rejects missing declarations" do
     reordered_path = w55_copy_fixture
     begin
       metadata_path = File.join(reordered_path, "columns_substreams.txt")
@@ -190,9 +190,12 @@ describe "W55 Array of named UInt64 Tuple reader and writer" do
       )
       reordered.should_not eq(original)
       File.write(metadata_path, reordered)
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::WidePart.open_typed(reordered_path, "payload")
-      end
+      reader = CrystalClick::WidePart.open_typed(reordered_path, "payload")
+      reader.column_type.should eq(W55_TYPE)
+      reader.read_array_tuple_uint64_uint64_mark_range("payload", 0, reader.mark_count)
+        .should eq(W55_VALUES)
+      reader.read_array_tuple_uint64_uint64_mark_range("payload", 2, 2)
+        .should eq(W55_VALUES[4, 3])
     ensure
       w55_remove_fixture(reordered_path)
     end

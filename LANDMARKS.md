@@ -1,5 +1,44 @@
 # Crystal Click landmarks
 
+## Ragged Wide selected-column metadata admission — W261
+
+- VERIFIED / root adversary ROBUST within the finite canonical-stock/common
+  profile over `7996476d260bf7507d326fed54b90642b3ec2e6b`. Four minimal hooks
+  reuse existing metadata/typed readers for generic Array(Tuple) and recognized
+  Map types without an unrelated two-column or unique external UInt64 law.
+  Exact selected stream sets bind canonically; actual UInt64 siblings use
+  canonical escaping. No leaf codec, carrier, writer or new type grammar.
+- Exact 100 legacy spec paths: 430 examples per DEBUG/RELEASE mode; two new
+  W261 paths add 13 examples. Thus 102 paths / 443 distinct examples per mode,
+  zero failures/errors/pending, with nine focused repeats (452 final executed
+  examples). Legacy modes use 20 DEBUG / 12 RELEASE guarded commands; not the
+  full repository suite. Both final formatted helpers build and fresh stock
+  ten-column native cells pass public values/windows/EOF/facades/budgets.
+- All 85 stock files / 12,722 bytes per mode agree. Root actual-capture audit:
+  two positives / 20 negatives, 96 original input paths unchanged per capture;
+  auditor self-test: 64 mocked negatives. Reused oracle, not a second codec or
+  exhaustive corruption proof. Late child coordinate controls reject full and
+  suffix reads before callbacks. All 545 production source hashes stay sealed.
+- Refuted root hypothesis: every `.mrk2` stream stores outer rows
+  `[2,2,2,2,0]`, not flattened counts; pinned CH writer confirms the law.
+  W55's reordered-roster expectation fails at exact baseline HEAD; its narrow
+  test-only repair asserts values and retains missing-stream refusal.
+  Harness/format diagnostics remain separate from behavioral compatibility.
+- Crystal's parsed-object proof is last-wins for duplicate raw JSON members;
+  raw duplicate rejection is unqualified, as are Poco duplicate semantics.
+  Full unselected non-UInt64 physical roster validation, every metadata/layout
+  version and all future payload authentication are not claimed. Quiescent
+  parts/trusted ancestry remain assumptions; logical budgets are not RSS.
+- Return pointers: [W261 frontier](docs/WIDE_RAGGED_SELECTED_METADATA_FRONTIER.md),
+  [root evidence](.landmark/evidence/wide-ragged-selected-metadata-w261.json).
+  Separate source/runtime pins: `ed30948f095ecb70679986d7d60e27ad770ae27a` /
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Source/test/harness/oracle/tool/profile
+  drift or capture loss reopens dependent checks; refresh exact modes and raw
+  native/audit evidence. Next: context-owned remaining layouts, parent `.proj`
+  authentication and projection composition, general keys/partitions and facade
+  decomposition. Full goal ACTIVE; native MV SQL/trigger/freshness and speed
+  claims remain open. Performance deferred; local atomic commit only, no push.
+
 ## Recursive Compact typed facade and offline consumers — W260
 
 - VERIFIED / root adversary ROBUST within the finite static Compact/plain-mark

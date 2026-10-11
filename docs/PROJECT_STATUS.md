@@ -1,6 +1,41 @@
 # CrystalClick project status
 
-Current qualification (W260, 2026-10-11): VERIFIED / root adversary ROBUST within
+Current qualification (W261, 2026-10-11): VERIFIED / root adversary ROBUST within
+the finite canonical-stock/common-profile Wide selected-column target. Already
+admitted generic Array(Tuple) and Map readers reuse the common metadata proof;
+ordinary multi-column tables no longer require two physical columns or a unique
+external UInt64 sibling inside that profile. Exact selected stream identity and
+escaped UInt64 sibling checks remain; no codec, typed carrier or writer changes.
+
+The exact 100-path legacy roster passes 430 examples per DEBUG/RELEASE mode.
+Both new W261 paths execute against fresh stock bytes: 443 distinct examples
+across 102 spec paths per mode, zero failures/errors/pending. Final focused
+commands include nine repeated legacy examples (452 executed final examples
+per mode); not a full-suite claim. Both final formatted helpers build, and fresh
+ten-column stock native cells pass full/window/EOF, typed tables, offline values
+and logical budgets. All 85 files / 12,722 bytes per cell agree between modes.
+Root runs two positives and 20 negative controls over actual captures; the
+auditor separately passes 64 mocked controls. Originals remain unchanged.
+
+W55's inherited reordered-roster test failure was reproduced at exact HEAD and
+corrected without losing its missing-stream refusal. Root refuted its own
+flattened `.mrk2` row-count hypothesis: all substreams carry outer rows, while
+ragged child offsets use the other coordinates. Repeated raw JSON members are
+last-wins in Crystal; rejection of those ambiguous members is not claimed.
+Neither complete unselected non-UInt64 roster validation nor exhaustive
+corruption, a second native codec, or source/runtime equivalence is claimed.
+
+Context-owned Compact JSON/Dynamic and remaining aggregate/SAF/QBit/Geo layouts,
+compressed Compact marks/writing, parent `.proj` authentication, broader
+transform/projection composition, general keys/partitions and facade
+decomposition remain open. Existing bounded MV/projection seams are not native
+MV SQL execution, triggers or freshness. Full goal ACTIVE; memory/performance
+and <=10% parity remain deferred and unqualified. See the
+[W261 frontier](WIDE_RAGGED_SELECTED_METADATA_FRONTIER.md) and
+[root evidence](../.landmark/evidence/wide-ragged-selected-metadata-w261.json).
+Local atomic commit only, no push or speed claim.
+
+Previous qualification (W260, 2026-10-11): VERIFIED / root adversary ROBUST within
 the finite static Compact plain-mark typed-reader target. `TypedPartTable`
 routes existing typed carriers across Wide and Compact candidates; the Compact
 backend normalizes recursive prefix/body/suffix events into the existing

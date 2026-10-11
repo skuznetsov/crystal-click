@@ -1,0 +1,1397 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W261",
+  "title": "Ragged Wide selected-column metadata admission through existing typed readers",
+  "recorded_date": "2026-10-11",
+  "baseline_commit": "7996476d260bf7507d326fed54b90642b3ec2e6b",
+  "claim": {
+    "level": "VERIFIED",
+    "root_adversary": "ROBUST within the finite canonical-stock/common-profile selected-column target; raw duplicate JSON rejection and universal layout/type compatibility are not claimed",
+    "global_goal": "ACTIVE; all types/MV/projections and subsequent <=10% performance parity remain unclosed",
+    "meaning": "Curated index to actually executed root commands, current source state and raw captures; field presence, hashes and correlated model agreement alone are not behavioral proof."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "boundary": "Persistent metadata/physical identity and typed consumer admission",
+    "rollback": "One exact-path local atomic feature commit; no push, dependency/guard change or history rewrite."
+  },
+  "admitted": {
+    "families": [
+      "Generic Array(Tuple) already admitted by WideArrayTupleTypePlan",
+      "Map families already recognized by validate_map_serialization, including Map(Tuple)"
+    ],
+    "laws": [
+      "The selected physical declaration and existing admitted type predicates still own type identity.",
+      "Reuse the exact parsed-object common WITH_TYPES profile: version 1, propagated versions true, exactly String v1; valid sparse Default records and bounded known Tuple descendants.",
+      "A false proof follows the sole unchanged legacy family validator. Detected malformed JSON/types/counts fail as CorruptPartError, not another profile or codec.",
+      "Selected substreams must match an exact unique name set, then bind canonically; physical column block order stays unchanged.",
+      "Only actual UInt64 siblings are checked as plain UInt64, with canonical filename escaping.",
+      "Existing typed carriers, codecs, ragged schedules, frames/checksums, complete mark grids and logical materializer budgets remain."
+    ],
+    "fixture": {
+      "schema": [
+        [
+          "pk",
+          "UInt64"
+        ],
+        [
+          "u",
+          "UInt64"
+        ],
+        [
+          "side",
+          "String"
+        ],
+        [
+          "seq",
+          "Array(Tuple(id UInt64, details Tuple(note Nullable(String), score UInt32)))"
+        ],
+        [
+          "mapped",
+          "Map(String, Tuple(meta Tuple(note Nullable(String), id UInt64), score Nullable(Float64)))"
+        ],
+        [
+          "simple",
+          "Map(UInt64, Nullable(UInt64))"
+        ],
+        [
+          "lookup",
+          "Map(String, Array(Nullable(UInt64)))"
+        ],
+        [
+          "tup",
+          "Tuple(n UInt64, s String)"
+        ],
+        [
+          "lc",
+          "LowCardinality(String)"
+        ],
+        [
+          "v",
+          "Variant(String, UInt64)"
+        ]
+      ],
+      "rows": 8,
+      "outer_mark_rows_with_terminal": [
+        2,
+        2,
+        2,
+        2,
+        0
+      ],
+      "array_counts": [
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        1,
+        2
+      ],
+      "map_tuple_counts": [
+        0,
+        0,
+        3,
+        0,
+        0,
+        0,
+        1,
+        2
+      ],
+      "features": [
+        "Zero and unequal flattened intervals",
+        "Ordered duplicate Map keys and distinct values",
+        "Null, NUL and Unicode literals",
+        "Mixed selected reads without pk",
+        "Full/middle/EOF and public batch/offline consumers",
+        "Exact logical String/Tuple budgets"
+      ],
+      "profile": "Wide LZ4/plain adaptive mrk2, common WITH_TYPES/String-v1 propagated versions, BASIC Map topology"
+    }
+  },
+  "non_guarantees": [
+    "Raw duplicate JSON object-member rejection: Crystal JSON parser is last-wins; proof checks parsed objects.",
+    "Poco duplicate-member semantics: pinned CH parser identity was source-confirmed, vendored implementation unavailable; no equivalence claim.",
+    "Complete declared-type physical roster validation of every unselected non-UInt64 sibling.",
+    "All metadata versions, type products, Sparse/custom layouts and Map WITH_BUCKETS.",
+    "Context-owned Compact JSON/Dynamic, remaining aggregate/SAF/QBit/Geo layouts, compressed Compact marks and Compact writing.",
+    "Parent .proj authentication, broader projection/MV composition, native MV SQL/triggers/freshness and general keys/partitions.",
+    "Full repository suite, second native codec, exhaustive corruption handling, cross-version/endianness equivalence or authentication of all future payloads.",
+    "Exclusive native stdout grammar: oracle validates expected fixture tags/literals plus raw byte closure.",
+    "Total heap/RSS or caller snapshot limits; performance/global <=10% parity; concurrency/crash durability."
+  ],
+  "assumptions": [
+    "Quiescent parts and trusted directory ancestry.",
+    "Separately pinned comparison source and executed runtime; no latest-source or source/runtime equivalence claim."
+  ],
+  "boundaries": {
+    "allowed_paths": [
+      ".landmark/evidence/wide-ragged-selected-metadata-w261.json",
+      "LANDMARKS.md",
+      "docs/PROJECT_STATUS.md",
+      "docs/WIDE_RAGGED_SELECTED_METADATA_FRONTIER.md",
+      "scripts/audit_wide_ragged_selected_metadata_w261.rb",
+      "scripts/check_wide_ragged_selected_metadata_w261.cr",
+      "scripts/probe_wide_ragged_selected_metadata_w261.rb",
+      "scripts/support/wide_ragged_selected_metadata_w261_fixture.cr",
+      "spec/wide_array_tuple_w107_metadata_spec.cr",
+      "spec/wide_map_tuple_w108_reader_spec.cr",
+      "spec/wide_part_reader_w55_spec.cr",
+      "spec/wide_ragged_selected_metadata_w261_native_spec.cr",
+      "spec/wide_ragged_selected_metadata_w261_spec.cr",
+      "src/crystal_click/wide_part.cr"
+    ],
+    "source_index_excludes_packet_self_hash": true
+  },
+  "production": {
+    "changed_files": [
+      {
+        "path": "src/crystal_click/wide_part.cr",
+        "bytes": 907992,
+        "sha256": "cd7ce3728fb8c87a253bd3c58ceaaa8354bc0b2becfe940d661b67cfdd99aa0f"
+      }
+    ],
+    "retained_owner_index": [
+      {
+        "path": "src/crystal_click/wide_part/selected_column_serialization_metadata.cr",
+        "bytes": 6354,
+        "sha256": "d188e62544f964f18257339f5d8d33d7842ccc3d24b79b1e7d9064abea1b6b4d"
+      },
+      {
+        "path": "src/crystal_click/wide_part/tuple_serialization_metadata_validator.cr",
+        "bytes": 4774,
+        "sha256": "334e3d1b192e75c4cee66ba68b4f077399a50155344c27302623a576e88b53d3"
+      }
+    ],
+    "root_review": {
+      "scopes": [
+        "All 33 production diff lines and selected physical-roster binding",
+        "Full common SelectedColumnSerializationMetadata owner",
+        "Existing admitted Map predicates/type gates and canonical escaping",
+        "Pinned CH BASIC Map metadata/stream law, outer rows_in_mark and actual Poco parser use"
+      ],
+      "verdict": "ROBUST within the finite target after claim narrowing",
+      "basis": "Root source inspection, complete exact affected mode tests, stock literal consumer checks, physical coordinate falsifiers and actual-capture controls; not independent model agreement",
+      "correlated_luna_review": "No admission/type/escaping bypass found; VULNERABLE only if raw duplicate JSON keys are called hard corruption. Root independently observed parser last-wins and explicitly excluded that claim."
+    }
+  },
+  "input_seals": {
+    "production": {
+      "count": 545,
+      "sorted_path_sha256_index_sha256": "dec90725c11e4b0769d5aceb1d7540c3ea75f7126bdc365ef25916b2bd00b031",
+      "unchanged_from_frozen_qualification_sources": true,
+      "algorithm": "SHA256(JSON.generate(sorted array of {path,sha256})) using Ruby; rg --files src -g '*.cr' defines the roster"
+    },
+    "test_harness": {
+      "count": 106,
+      "sorted_path_size_sha256_index_sha256": "0aae237f556508843ee3587d7633628696183b65ec90c61fc190e3aceda17897",
+      "algorithm": "SHA256(JSON.generate(sorted array of {path,bytes,sha256}))",
+      "paths": [
+        "scripts/audit_wide_ragged_selected_metadata_w261.rb",
+        "scripts/check_wide_ragged_selected_metadata_w261.cr",
+        "scripts/probe_wide_ragged_selected_metadata_w261.rb",
+        "scripts/support/wide_ragged_selected_metadata_w261_fixture.cr",
+        "spec/multi_column_part_writer_w245_spec.cr",
+        "spec/offline_catalog_w53_spec.cr",
+        "spec/offline_catalog_w54_spec.cr",
+        "spec/offline_catalog_w63_spec.cr",
+        "spec/offline_catalog_w68_spec.cr",
+        "spec/offline_catalog_w69_spec.cr",
+        "spec/offline_catalog_w70_spec.cr",
+        "spec/offline_catalog_w71_spec.cr",
+        "spec/offline_catalog_w73_spec.cr",
+        "spec/offline_catalog_w95_tuple_values_spec.cr",
+        "spec/static_binary_bulk_table_w247_spec.cr",
+        "spec/static_recursive_selected_metadata_w258_adversary_spec.cr",
+        "spec/static_recursive_selected_metadata_w258_spec.cr",
+        "spec/storage_read_budget_w245_spec.cr",
+        "spec/wide_array_tuple_w107_admission_spec.cr",
+        "spec/wide_array_tuple_w107_consumer_spec.cr",
+        "spec/wide_array_tuple_w107_leaf_matrix_spec.cr",
+        "spec/wide_array_tuple_w107_metadata_spec.cr",
+        "spec/wide_array_tuple_w107_model_spec.cr",
+        "spec/wide_array_tuple_w107_reader_spec.cr",
+        "spec/wide_map_tuple_w108_admission_spec.cr",
+        "spec/wide_map_tuple_w108_consumer_spec.cr",
+        "spec/wide_map_tuple_w108_model_spec.cr",
+        "spec/wide_map_tuple_w108_reader_spec.cr",
+        "spec/wide_part_array_map_owner_w134_spec.cr",
+        "spec/wide_part_numeric_map_owner_spec.cr",
+        "spec/wide_part_reader_compositional_tuple_spec.cr",
+        "spec/wide_part_reader_nested_tuple_w106_spec.cr",
+        "spec/wide_part_reader_tuple_empty_eof_spec.cr",
+        "spec/wide_part_reader_tuple_metadata_spec.cr",
+        "spec/wide_part_reader_w21_spec.cr",
+        "spec/wide_part_reader_w22_spec.cr",
+        "spec/wide_part_reader_w23_spec.cr",
+        "spec/wide_part_reader_w27_spec.cr",
+        "spec/wide_part_reader_w28_spec.cr",
+        "spec/wide_part_reader_w30_spec.cr",
+        "spec/wide_part_reader_w31_spec.cr",
+        "spec/wide_part_reader_w32_spec.cr",
+        "spec/wide_part_reader_w33_spec.cr",
+        "spec/wide_part_reader_w34_spec.cr",
+        "spec/wide_part_reader_w51_spec.cr",
+        "spec/wide_part_reader_w52_spec.cr",
+        "spec/wide_part_reader_w53_spec.cr",
+        "spec/wide_part_reader_w54_spec.cr",
+        "spec/wide_part_reader_w55_spec.cr",
+        "spec/wide_part_reader_w56_spec.cr",
+        "spec/wide_part_reader_w61_spec.cr",
+        "spec/wide_part_reader_w62_spec.cr",
+        "spec/wide_part_reader_w63_spec.cr",
+        "spec/wide_part_reader_w64_spec.cr",
+        "spec/wide_part_reader_w65_spec.cr",
+        "spec/wide_part_reader_w66_spec.cr",
+        "spec/wide_part_reader_w68_spec.cr",
+        "spec/wide_part_reader_w69_spec.cr",
+        "spec/wide_part_reader_w70_spec.cr",
+        "spec/wide_part_reader_w71_spec.cr",
+        "spec/wide_part_reader_w73_spec.cr",
+        "spec/wide_part_table_low_cardinality_cache_spec.cr",
+        "spec/wide_part_table_w53_spec.cr",
+        "spec/wide_part_table_w54_spec.cr",
+        "spec/wide_part_table_w61_spec.cr",
+        "spec/wide_part_table_w62_spec.cr",
+        "spec/wide_part_table_w63_spec.cr",
+        "spec/wide_part_table_w64_spec.cr",
+        "spec/wide_part_table_w68_spec.cr",
+        "spec/wide_part_table_w69_spec.cr",
+        "spec/wide_part_table_w70_spec.cr",
+        "spec/wide_part_table_w71_spec.cr",
+        "spec/wide_part_table_w73_spec.cr",
+        "spec/wide_part_table_w95_tuple_spec.cr",
+        "spec/wide_part_writer_array_tuple_w107_spec.cr",
+        "spec/wide_part_writer_map_tuple_w108_spec.cr",
+        "spec/wide_part_writer_nested_tuple_w106_spec.cr",
+        "spec/wide_part_writer_nullable_tuple_w105_spec.cr",
+        "spec/wide_part_writer_w52_spec.cr",
+        "spec/wide_part_writer_w53_spec.cr",
+        "spec/wide_part_writer_w54_spec.cr",
+        "spec/wide_part_writer_w61_spec.cr",
+        "spec/wide_part_writer_w62_spec.cr",
+        "spec/wide_part_writer_w63_spec.cr",
+        "spec/wide_part_writer_w65_spec.cr",
+        "spec/wide_part_writer_w66_spec.cr",
+        "spec/wide_part_writer_w68_spec.cr",
+        "spec/wide_part_writer_w69_spec.cr",
+        "spec/wide_part_writer_w70_spec.cr",
+        "spec/wide_part_writer_w71_spec.cr",
+        "spec/wide_part_writer_w73_spec.cr",
+        "spec/wide_ragged_selected_metadata_w261_native_spec.cr",
+        "spec/wide_ragged_selected_metadata_w261_spec.cr",
+        "spec/wide_tuple_nested_w106_admission_spec.cr",
+        "spec/wide_tuple_nested_w106_model_spec.cr",
+        "spec/wide_tuple_nullable_w105_admission_spec.cr",
+        "spec/wide_tuple_nullable_w105_consumers_spec.cr",
+        "spec/wide_tuple_nullable_w105_lazy_spec.cr",
+        "spec/wide_tuple_nullable_w105_model_spec.cr",
+        "spec/wide_tuple_parameterized_consumers_w101_spec.cr",
+        "spec/wide_tuple_parameterized_reader_budget_spec.cr",
+        "spec/wide_type_plan_w67_spec.cr",
+        "spec/wide_type_plan_w69_spec.cr",
+        "spec/wide_type_plan_w70_spec.cr",
+        "spec/wide_type_plan_w71_spec.cr",
+        "spec/wide_type_plan_w73_spec.cr"
+      ]
+    },
+    "scope": "545 production files plus 102 explicit specs and four harness/support files = 651 repository qualification inputs. Hash closure alone is not substantive compatibility proof."
+  },
+  "tests_and_harness": {
+    "critical_file_index": [
+      {
+        "path": "spec/wide_array_tuple_w107_metadata_spec.cr",
+        "bytes": 4454,
+        "sha256": "c9c9c947bab211cfc4e0d4ce81286feb6c73672949c98c678f2dc316a9662676"
+      },
+      {
+        "path": "spec/wide_map_tuple_w108_reader_spec.cr",
+        "bytes": 17490,
+        "sha256": "1f9a5c21fa53ec1bf01468d40118dcf9c370c50421f13ed5de3a8e210ef05801"
+      },
+      {
+        "path": "spec/wide_part_reader_w55_spec.cr",
+        "bytes": 10218,
+        "sha256": "55ad171db0d166f24c6834a9205528ab2a7302a0f7763793fef69b5900974aa4"
+      },
+      {
+        "path": "spec/wide_ragged_selected_metadata_w261_spec.cr",
+        "bytes": 31456,
+        "sha256": "491ff25d876eeafa474f63915d75cb528b648c6f95d52aeabdaf5c683684fa78"
+      },
+      {
+        "path": "spec/wide_ragged_selected_metadata_w261_native_spec.cr",
+        "bytes": 6835,
+        "sha256": "7d0f36101df81b7f9c6b637779f675c541936b31c2bec147869ea1d87d7224ab"
+      },
+      {
+        "path": "scripts/check_wide_ragged_selected_metadata_w261.cr",
+        "bytes": 25307,
+        "sha256": "90c6db4a172d784d3fbd4de708eaf9699dea2d6417ae7ec7cff1ce92cccc69f8"
+      },
+      {
+        "path": "scripts/support/wide_ragged_selected_metadata_w261_fixture.cr",
+        "bytes": 8908,
+        "sha256": "f84cbf27dfc342d46477305d5e62076c4de9dd7b3da8bf9a8f6e423a836034a2"
+      },
+      {
+        "path": "scripts/probe_wide_ragged_selected_metadata_w261.rb",
+        "bytes": 36507,
+        "sha256": "778478a7beca175ef169353c0c2bf9b4080b31401a8adccfc533b4e577501c4f"
+      },
+      {
+        "path": "scripts/audit_wide_ragged_selected_metadata_w261.rb",
+        "bytes": 57772,
+        "sha256": "be32f01ba5cebd3c0aef0a8c601dfbf39e3b198c52d110d654b32bb5400ab1fc"
+      }
+    ],
+    "affected_legacy_roster": [
+      "spec/multi_column_part_writer_w245_spec.cr",
+      "spec/offline_catalog_w53_spec.cr",
+      "spec/offline_catalog_w54_spec.cr",
+      "spec/offline_catalog_w63_spec.cr",
+      "spec/offline_catalog_w68_spec.cr",
+      "spec/offline_catalog_w69_spec.cr",
+      "spec/offline_catalog_w70_spec.cr",
+      "spec/offline_catalog_w71_spec.cr",
+      "spec/offline_catalog_w73_spec.cr",
+      "spec/offline_catalog_w95_tuple_values_spec.cr",
+      "spec/static_binary_bulk_table_w247_spec.cr",
+      "spec/static_recursive_selected_metadata_w258_adversary_spec.cr",
+      "spec/static_recursive_selected_metadata_w258_spec.cr",
+      "spec/storage_read_budget_w245_spec.cr",
+      "spec/wide_array_tuple_w107_admission_spec.cr",
+      "spec/wide_array_tuple_w107_consumer_spec.cr",
+      "spec/wide_array_tuple_w107_leaf_matrix_spec.cr",
+      "spec/wide_array_tuple_w107_metadata_spec.cr",
+      "spec/wide_array_tuple_w107_model_spec.cr",
+      "spec/wide_array_tuple_w107_reader_spec.cr",
+      "spec/wide_map_tuple_w108_admission_spec.cr",
+      "spec/wide_map_tuple_w108_consumer_spec.cr",
+      "spec/wide_map_tuple_w108_model_spec.cr",
+      "spec/wide_map_tuple_w108_reader_spec.cr",
+      "spec/wide_part_array_map_owner_w134_spec.cr",
+      "spec/wide_part_numeric_map_owner_spec.cr",
+      "spec/wide_part_reader_compositional_tuple_spec.cr",
+      "spec/wide_part_reader_nested_tuple_w106_spec.cr",
+      "spec/wide_part_reader_tuple_empty_eof_spec.cr",
+      "spec/wide_part_reader_tuple_metadata_spec.cr",
+      "spec/wide_part_reader_w21_spec.cr",
+      "spec/wide_part_reader_w22_spec.cr",
+      "spec/wide_part_reader_w23_spec.cr",
+      "spec/wide_part_reader_w27_spec.cr",
+      "spec/wide_part_reader_w28_spec.cr",
+      "spec/wide_part_reader_w30_spec.cr",
+      "spec/wide_part_reader_w31_spec.cr",
+      "spec/wide_part_reader_w32_spec.cr",
+      "spec/wide_part_reader_w33_spec.cr",
+      "spec/wide_part_reader_w34_spec.cr",
+      "spec/wide_part_reader_w51_spec.cr",
+      "spec/wide_part_reader_w52_spec.cr",
+      "spec/wide_part_reader_w53_spec.cr",
+      "spec/wide_part_reader_w54_spec.cr",
+      "spec/wide_part_reader_w55_spec.cr",
+      "spec/wide_part_reader_w56_spec.cr",
+      "spec/wide_part_reader_w61_spec.cr",
+      "spec/wide_part_reader_w62_spec.cr",
+      "spec/wide_part_reader_w63_spec.cr",
+      "spec/wide_part_reader_w64_spec.cr",
+      "spec/wide_part_reader_w65_spec.cr",
+      "spec/wide_part_reader_w66_spec.cr",
+      "spec/wide_part_reader_w68_spec.cr",
+      "spec/wide_part_reader_w69_spec.cr",
+      "spec/wide_part_reader_w70_spec.cr",
+      "spec/wide_part_reader_w71_spec.cr",
+      "spec/wide_part_reader_w73_spec.cr",
+      "spec/wide_part_table_low_cardinality_cache_spec.cr",
+      "spec/wide_part_table_w53_spec.cr",
+      "spec/wide_part_table_w54_spec.cr",
+      "spec/wide_part_table_w61_spec.cr",
+      "spec/wide_part_table_w62_spec.cr",
+      "spec/wide_part_table_w63_spec.cr",
+      "spec/wide_part_table_w64_spec.cr",
+      "spec/wide_part_table_w68_spec.cr",
+      "spec/wide_part_table_w69_spec.cr",
+      "spec/wide_part_table_w70_spec.cr",
+      "spec/wide_part_table_w71_spec.cr",
+      "spec/wide_part_table_w73_spec.cr",
+      "spec/wide_part_table_w95_tuple_spec.cr",
+      "spec/wide_part_writer_array_tuple_w107_spec.cr",
+      "spec/wide_part_writer_map_tuple_w108_spec.cr",
+      "spec/wide_part_writer_nested_tuple_w106_spec.cr",
+      "spec/wide_part_writer_nullable_tuple_w105_spec.cr",
+      "spec/wide_part_writer_w52_spec.cr",
+      "spec/wide_part_writer_w53_spec.cr",
+      "spec/wide_part_writer_w54_spec.cr",
+      "spec/wide_part_writer_w61_spec.cr",
+      "spec/wide_part_writer_w62_spec.cr",
+      "spec/wide_part_writer_w63_spec.cr",
+      "spec/wide_part_writer_w65_spec.cr",
+      "spec/wide_part_writer_w66_spec.cr",
+      "spec/wide_part_writer_w68_spec.cr",
+      "spec/wide_part_writer_w69_spec.cr",
+      "spec/wide_part_writer_w70_spec.cr",
+      "spec/wide_part_writer_w71_spec.cr",
+      "spec/wide_part_writer_w73_spec.cr",
+      "spec/wide_tuple_nested_w106_admission_spec.cr",
+      "spec/wide_tuple_nested_w106_model_spec.cr",
+      "spec/wide_tuple_nullable_w105_admission_spec.cr",
+      "spec/wide_tuple_nullable_w105_consumers_spec.cr",
+      "spec/wide_tuple_nullable_w105_lazy_spec.cr",
+      "spec/wide_tuple_nullable_w105_model_spec.cr",
+      "spec/wide_tuple_parameterized_consumers_w101_spec.cr",
+      "spec/wide_tuple_parameterized_reader_budget_spec.cr",
+      "spec/wide_type_plan_w67_spec.cr",
+      "spec/wide_type_plan_w69_spec.cr",
+      "spec/wide_type_plan_w70_spec.cr",
+      "spec/wide_type_plan_w71_spec.cr",
+      "spec/wide_type_plan_w73_spec.cr"
+    ],
+    "new_spec_roster": [
+      "spec/wide_ragged_selected_metadata_w261_spec.cr",
+      "spec/wide_ragged_selected_metadata_w261_native_spec.cr"
+    ],
+    "qualification_counts": {
+      "source_count": 545,
+      "production_index_sha256": "dec90725c11e4b0769d5aceb1d7540c3ea75f7126bdc365ef25916b2bd00b031",
+      "test_harness_count": 106,
+      "test_harness_index_sha256": "0aae237f556508843ee3587d7633628696183b65ec90c61fc190e3aceda17897",
+      "debug_legacy_examples": 430,
+      "release_legacy_examples": 430,
+      "focused_examples": 22,
+      "unique_examples_per_mode": 443,
+      "executed_final_examples_per_mode": 452,
+      "explicit_unique_spec_paths": 102,
+      "root_verdict": "ROBUST within the finite canonical-stock/common-profile selected-column target; raw duplicate JSON rejection and universal layout/type compatibility are not claimed"
+    },
+    "legacy_debug": [
+      {
+        "mode": "DEBUG",
+        "cohort": 1,
+        "paths": [
+          "spec/multi_column_part_writer_w245_spec.cr",
+          "spec/offline_catalog_w53_spec.cr",
+          "spec/offline_catalog_w54_spec.cr",
+          "spec/offline_catalog_w63_spec.cr",
+          "spec/offline_catalog_w68_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/multi_column_part_writer_w245_spec.cr spec/offline_catalog_w53_spec.cr spec/offline_catalog_w54_spec.cr spec/offline_catalog_w63_spec.cr spec/offline_catalog_w68_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "9 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 2,
+        "paths": [
+          "spec/offline_catalog_w69_spec.cr",
+          "spec/offline_catalog_w70_spec.cr",
+          "spec/offline_catalog_w71_spec.cr",
+          "spec/offline_catalog_w73_spec.cr",
+          "spec/offline_catalog_w95_tuple_values_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w69_spec.cr spec/offline_catalog_w70_spec.cr spec/offline_catalog_w71_spec.cr spec/offline_catalog_w73_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "10 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 3,
+        "paths": [
+          "spec/static_binary_bulk_table_w247_spec.cr",
+          "spec/static_recursive_selected_metadata_w258_adversary_spec.cr",
+          "spec/static_recursive_selected_metadata_w258_spec.cr",
+          "spec/storage_read_budget_w245_spec.cr",
+          "spec/wide_array_tuple_w107_admission_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/static_binary_bulk_table_w247_spec.cr spec/static_recursive_selected_metadata_w258_adversary_spec.cr spec/static_recursive_selected_metadata_w258_spec.cr spec/storage_read_budget_w245_spec.cr spec/wide_array_tuple_w107_admission_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "40 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 4,
+        "paths": [
+          "spec/wide_array_tuple_w107_consumer_spec.cr",
+          "spec/wide_array_tuple_w107_leaf_matrix_spec.cr",
+          "spec/wide_array_tuple_w107_metadata_spec.cr",
+          "spec/wide_array_tuple_w107_model_spec.cr",
+          "spec/wide_array_tuple_w107_reader_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_array_tuple_w107_consumer_spec.cr spec/wide_array_tuple_w107_leaf_matrix_spec.cr spec/wide_array_tuple_w107_metadata_spec.cr spec/wide_array_tuple_w107_model_spec.cr spec/wide_array_tuple_w107_reader_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "13 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 5,
+        "paths": [
+          "spec/wide_map_tuple_w108_admission_spec.cr",
+          "spec/wide_map_tuple_w108_consumer_spec.cr",
+          "spec/wide_map_tuple_w108_model_spec.cr",
+          "spec/wide_map_tuple_w108_reader_spec.cr",
+          "spec/wide_part_array_map_owner_w134_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_map_tuple_w108_admission_spec.cr spec/wide_map_tuple_w108_consumer_spec.cr spec/wide_map_tuple_w108_model_spec.cr spec/wide_map_tuple_w108_reader_spec.cr spec/wide_part_array_map_owner_w134_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "22 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 6,
+        "paths": [
+          "spec/wide_part_numeric_map_owner_spec.cr",
+          "spec/wide_part_reader_compositional_tuple_spec.cr",
+          "spec/wide_part_reader_nested_tuple_w106_spec.cr",
+          "spec/wide_part_reader_tuple_empty_eof_spec.cr",
+          "spec/wide_part_reader_tuple_metadata_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_numeric_map_owner_spec.cr spec/wide_part_reader_compositional_tuple_spec.cr spec/wide_part_reader_nested_tuple_w106_spec.cr spec/wide_part_reader_tuple_empty_eof_spec.cr spec/wide_part_reader_tuple_metadata_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "32 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 7,
+        "paths": [
+          "spec/wide_part_reader_w21_spec.cr",
+          "spec/wide_part_reader_w22_spec.cr",
+          "spec/wide_part_reader_w23_spec.cr",
+          "spec/wide_part_reader_w27_spec.cr",
+          "spec/wide_part_reader_w28_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w21_spec.cr spec/wide_part_reader_w22_spec.cr spec/wide_part_reader_w23_spec.cr spec/wide_part_reader_w27_spec.cr spec/wide_part_reader_w28_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "31 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 8,
+        "paths": [
+          "spec/wide_part_reader_w30_spec.cr",
+          "spec/wide_part_reader_w31_spec.cr",
+          "spec/wide_part_reader_w32_spec.cr",
+          "spec/wide_part_reader_w33_spec.cr",
+          "spec/wide_part_reader_w34_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w30_spec.cr spec/wide_part_reader_w31_spec.cr spec/wide_part_reader_w32_spec.cr spec/wide_part_reader_w33_spec.cr spec/wide_part_reader_w34_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "44 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 9,
+        "paths": [
+          "spec/wide_part_reader_w51_spec.cr",
+          "spec/wide_part_reader_w52_spec.cr",
+          "spec/wide_part_reader_w53_spec.cr",
+          "spec/wide_part_reader_w54_spec.cr",
+          "spec/wide_part_reader_w55_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w51_spec.cr spec/wide_part_reader_w52_spec.cr spec/wide_part_reader_w53_spec.cr spec/wide_part_reader_w54_spec.cr spec/wide_part_reader_w55_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "26 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 10,
+        "paths": [
+          "spec/wide_part_reader_w56_spec.cr",
+          "spec/wide_part_reader_w61_spec.cr",
+          "spec/wide_part_reader_w62_spec.cr",
+          "spec/wide_part_reader_w63_spec.cr",
+          "spec/wide_part_reader_w64_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w56_spec.cr spec/wide_part_reader_w61_spec.cr spec/wide_part_reader_w62_spec.cr spec/wide_part_reader_w63_spec.cr spec/wide_part_reader_w64_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "29 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 11,
+        "paths": [
+          "spec/wide_part_reader_w65_spec.cr",
+          "spec/wide_part_reader_w66_spec.cr",
+          "spec/wide_part_reader_w68_spec.cr",
+          "spec/wide_part_reader_w69_spec.cr",
+          "spec/wide_part_reader_w70_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w65_spec.cr spec/wide_part_reader_w66_spec.cr spec/wide_part_reader_w68_spec.cr spec/wide_part_reader_w69_spec.cr spec/wide_part_reader_w70_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "28 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 12,
+        "paths": [
+          "spec/wide_part_reader_w71_spec.cr",
+          "spec/wide_part_reader_w73_spec.cr",
+          "spec/wide_part_table_low_cardinality_cache_spec.cr",
+          "spec/wide_part_table_w53_spec.cr",
+          "spec/wide_part_table_w54_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w71_spec.cr spec/wide_part_reader_w73_spec.cr spec/wide_part_table_low_cardinality_cache_spec.cr spec/wide_part_table_w53_spec.cr spec/wide_part_table_w54_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "15 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 13,
+        "paths": [
+          "spec/wide_part_table_w61_spec.cr",
+          "spec/wide_part_table_w62_spec.cr",
+          "spec/wide_part_table_w63_spec.cr",
+          "spec/wide_part_table_w64_spec.cr",
+          "spec/wide_part_table_w68_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w61_spec.cr spec/wide_part_table_w62_spec.cr spec/wide_part_table_w63_spec.cr spec/wide_part_table_w64_spec.cr spec/wide_part_table_w68_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "12 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 14,
+        "paths": [
+          "spec/wide_part_table_w69_spec.cr",
+          "spec/wide_part_table_w70_spec.cr",
+          "spec/wide_part_table_w71_spec.cr",
+          "spec/wide_part_table_w73_spec.cr",
+          "spec/wide_part_table_w95_tuple_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w69_spec.cr spec/wide_part_table_w70_spec.cr spec/wide_part_table_w71_spec.cr spec/wide_part_table_w73_spec.cr spec/wide_part_table_w95_tuple_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "16 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 15,
+        "paths": [
+          "spec/wide_part_writer_array_tuple_w107_spec.cr",
+          "spec/wide_part_writer_map_tuple_w108_spec.cr",
+          "spec/wide_part_writer_nested_tuple_w106_spec.cr",
+          "spec/wide_part_writer_nullable_tuple_w105_spec.cr",
+          "spec/wide_part_writer_w52_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_array_tuple_w107_spec.cr spec/wide_part_writer_map_tuple_w108_spec.cr spec/wide_part_writer_nested_tuple_w106_spec.cr spec/wide_part_writer_nullable_tuple_w105_spec.cr spec/wide_part_writer_w52_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "28 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 16,
+        "paths": [
+          "spec/wide_part_writer_w53_spec.cr",
+          "spec/wide_part_writer_w54_spec.cr",
+          "spec/wide_part_writer_w61_spec.cr",
+          "spec/wide_part_writer_w62_spec.cr",
+          "spec/wide_part_writer_w63_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_w53_spec.cr spec/wide_part_writer_w54_spec.cr spec/wide_part_writer_w61_spec.cr spec/wide_part_writer_w62_spec.cr spec/wide_part_writer_w63_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "15 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 17,
+        "paths": [
+          "spec/wide_part_writer_w65_spec.cr",
+          "spec/wide_part_writer_w66_spec.cr",
+          "spec/wide_part_writer_w68_spec.cr",
+          "spec/wide_part_writer_w69_spec.cr",
+          "spec/wide_part_writer_w70_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_w65_spec.cr spec/wide_part_writer_w66_spec.cr spec/wide_part_writer_w68_spec.cr spec/wide_part_writer_w69_spec.cr spec/wide_part_writer_w70_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "15 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 18,
+        "paths": [
+          "spec/wide_part_writer_w71_spec.cr",
+          "spec/wide_part_writer_w73_spec.cr",
+          "spec/wide_tuple_nested_w106_admission_spec.cr",
+          "spec/wide_tuple_nested_w106_model_spec.cr",
+          "spec/wide_tuple_nullable_w105_admission_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_w71_spec.cr spec/wide_part_writer_w73_spec.cr spec/wide_tuple_nested_w106_admission_spec.cr spec/wide_tuple_nested_w106_model_spec.cr spec/wide_tuple_nullable_w105_admission_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "18 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 19,
+        "paths": [
+          "spec/wide_tuple_nullable_w105_consumers_spec.cr",
+          "spec/wide_tuple_nullable_w105_lazy_spec.cr",
+          "spec/wide_tuple_nullable_w105_model_spec.cr",
+          "spec/wide_tuple_parameterized_consumers_w101_spec.cr",
+          "spec/wide_tuple_parameterized_reader_budget_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_tuple_nullable_w105_consumers_spec.cr spec/wide_tuple_nullable_w105_lazy_spec.cr spec/wide_tuple_nullable_w105_model_spec.cr spec/wide_tuple_parameterized_consumers_w101_spec.cr spec/wide_tuple_parameterized_reader_budget_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "17 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "DEBUG",
+        "cohort": 20,
+        "paths": [
+          "spec/wide_type_plan_w67_spec.cr",
+          "spec/wide_type_plan_w69_spec.cr",
+          "spec/wide_type_plan_w70_spec.cr",
+          "spec/wide_type_plan_w71_spec.cr",
+          "spec/wide_type_plan_w73_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_type_plan_w67_spec.cr spec/wide_type_plan_w69_spec.cr spec/wide_type_plan_w70_spec.cr spec/wide_type_plan_w71_spec.cr spec/wide_type_plan_w73_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "10 examples, 0 failures, 0 errors, 0 pending"
+      }
+    ],
+    "legacy_release": [
+      {
+        "mode": "RELEASE",
+        "cohort": 1,
+        "paths": [
+          "spec/multi_column_part_writer_w245_spec.cr",
+          "spec/offline_catalog_w53_spec.cr",
+          "spec/offline_catalog_w54_spec.cr",
+          "spec/offline_catalog_w63_spec.cr",
+          "spec/offline_catalog_w68_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/multi_column_part_writer_w245_spec.cr spec/offline_catalog_w53_spec.cr spec/offline_catalog_w54_spec.cr spec/offline_catalog_w63_spec.cr spec/offline_catalog_w68_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "9 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 2,
+        "paths": [
+          "spec/offline_catalog_w69_spec.cr",
+          "spec/offline_catalog_w70_spec.cr",
+          "spec/offline_catalog_w71_spec.cr",
+          "spec/offline_catalog_w73_spec.cr",
+          "spec/offline_catalog_w95_tuple_values_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/offline_catalog_w69_spec.cr spec/offline_catalog_w70_spec.cr spec/offline_catalog_w71_spec.cr spec/offline_catalog_w73_spec.cr spec/offline_catalog_w95_tuple_values_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "10 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": 3,
+        "paths": [
+          "spec/static_binary_bulk_table_w247_spec.cr",
+          "spec/static_recursive_selected_metadata_w258_adversary_spec.cr",
+          "spec/static_recursive_selected_metadata_w258_spec.cr",
+          "spec/storage_read_budget_w245_spec.cr",
+          "spec/wide_array_tuple_w107_admission_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/static_binary_bulk_table_w247_spec.cr spec/static_recursive_selected_metadata_w258_adversary_spec.cr spec/static_recursive_selected_metadata_w258_spec.cr spec/storage_read_budget_w245_spec.cr spec/wide_array_tuple_w107_admission_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "40 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "4+5",
+        "covered_cohorts": [
+          4,
+          5
+        ],
+        "paths": [
+          "spec/wide_array_tuple_w107_consumer_spec.cr",
+          "spec/wide_array_tuple_w107_leaf_matrix_spec.cr",
+          "spec/wide_array_tuple_w107_metadata_spec.cr",
+          "spec/wide_array_tuple_w107_model_spec.cr",
+          "spec/wide_array_tuple_w107_reader_spec.cr",
+          "spec/wide_map_tuple_w108_admission_spec.cr",
+          "spec/wide_map_tuple_w108_consumer_spec.cr",
+          "spec/wide_map_tuple_w108_model_spec.cr",
+          "spec/wide_map_tuple_w108_reader_spec.cr",
+          "spec/wide_part_array_map_owner_w134_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_array_tuple_w107_consumer_spec.cr spec/wide_array_tuple_w107_leaf_matrix_spec.cr spec/wide_array_tuple_w107_metadata_spec.cr spec/wide_array_tuple_w107_model_spec.cr spec/wide_array_tuple_w107_reader_spec.cr spec/wide_map_tuple_w108_admission_spec.cr spec/wide_map_tuple_w108_consumer_spec.cr spec/wide_map_tuple_w108_model_spec.cr spec/wide_map_tuple_w108_reader_spec.cr spec/wide_part_array_map_owner_w134_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "35 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "6+7",
+        "covered_cohorts": [
+          6,
+          7
+        ],
+        "paths": [
+          "spec/wide_part_numeric_map_owner_spec.cr",
+          "spec/wide_part_reader_compositional_tuple_spec.cr",
+          "spec/wide_part_reader_nested_tuple_w106_spec.cr",
+          "spec/wide_part_reader_tuple_empty_eof_spec.cr",
+          "spec/wide_part_reader_tuple_metadata_spec.cr",
+          "spec/wide_part_reader_w21_spec.cr",
+          "spec/wide_part_reader_w22_spec.cr",
+          "spec/wide_part_reader_w23_spec.cr",
+          "spec/wide_part_reader_w27_spec.cr",
+          "spec/wide_part_reader_w28_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_numeric_map_owner_spec.cr spec/wide_part_reader_compositional_tuple_spec.cr spec/wide_part_reader_nested_tuple_w106_spec.cr spec/wide_part_reader_tuple_empty_eof_spec.cr spec/wide_part_reader_tuple_metadata_spec.cr spec/wide_part_reader_w21_spec.cr spec/wide_part_reader_w22_spec.cr spec/wide_part_reader_w23_spec.cr spec/wide_part_reader_w27_spec.cr spec/wide_part_reader_w28_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "63 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "8+9",
+        "covered_cohorts": [
+          8,
+          9
+        ],
+        "paths": [
+          "spec/wide_part_reader_w30_spec.cr",
+          "spec/wide_part_reader_w31_spec.cr",
+          "spec/wide_part_reader_w32_spec.cr",
+          "spec/wide_part_reader_w33_spec.cr",
+          "spec/wide_part_reader_w34_spec.cr",
+          "spec/wide_part_reader_w51_spec.cr",
+          "spec/wide_part_reader_w52_spec.cr",
+          "spec/wide_part_reader_w53_spec.cr",
+          "spec/wide_part_reader_w54_spec.cr",
+          "spec/wide_part_reader_w55_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w30_spec.cr spec/wide_part_reader_w31_spec.cr spec/wide_part_reader_w32_spec.cr spec/wide_part_reader_w33_spec.cr spec/wide_part_reader_w34_spec.cr spec/wide_part_reader_w51_spec.cr spec/wide_part_reader_w52_spec.cr spec/wide_part_reader_w53_spec.cr spec/wide_part_reader_w54_spec.cr spec/wide_part_reader_w55_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "70 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "10+11",
+        "covered_cohorts": [
+          10,
+          11
+        ],
+        "paths": [
+          "spec/wide_part_reader_w56_spec.cr",
+          "spec/wide_part_reader_w61_spec.cr",
+          "spec/wide_part_reader_w62_spec.cr",
+          "spec/wide_part_reader_w63_spec.cr",
+          "spec/wide_part_reader_w64_spec.cr",
+          "spec/wide_part_reader_w65_spec.cr",
+          "spec/wide_part_reader_w66_spec.cr",
+          "spec/wide_part_reader_w68_spec.cr",
+          "spec/wide_part_reader_w69_spec.cr",
+          "spec/wide_part_reader_w70_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w56_spec.cr spec/wide_part_reader_w61_spec.cr spec/wide_part_reader_w62_spec.cr spec/wide_part_reader_w63_spec.cr spec/wide_part_reader_w64_spec.cr spec/wide_part_reader_w65_spec.cr spec/wide_part_reader_w66_spec.cr spec/wide_part_reader_w68_spec.cr spec/wide_part_reader_w69_spec.cr spec/wide_part_reader_w70_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "57 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "12+13",
+        "covered_cohorts": [
+          12,
+          13
+        ],
+        "paths": [
+          "spec/wide_part_reader_w71_spec.cr",
+          "spec/wide_part_reader_w73_spec.cr",
+          "spec/wide_part_table_low_cardinality_cache_spec.cr",
+          "spec/wide_part_table_w53_spec.cr",
+          "spec/wide_part_table_w54_spec.cr",
+          "spec/wide_part_table_w61_spec.cr",
+          "spec/wide_part_table_w62_spec.cr",
+          "spec/wide_part_table_w63_spec.cr",
+          "spec/wide_part_table_w64_spec.cr",
+          "spec/wide_part_table_w68_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w71_spec.cr spec/wide_part_reader_w73_spec.cr spec/wide_part_table_low_cardinality_cache_spec.cr spec/wide_part_table_w53_spec.cr spec/wide_part_table_w54_spec.cr spec/wide_part_table_w61_spec.cr spec/wide_part_table_w62_spec.cr spec/wide_part_table_w63_spec.cr spec/wide_part_table_w64_spec.cr spec/wide_part_table_w68_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "27 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "14+15",
+        "covered_cohorts": [
+          14,
+          15
+        ],
+        "paths": [
+          "spec/wide_part_table_w69_spec.cr",
+          "spec/wide_part_table_w70_spec.cr",
+          "spec/wide_part_table_w71_spec.cr",
+          "spec/wide_part_table_w73_spec.cr",
+          "spec/wide_part_table_w95_tuple_spec.cr",
+          "spec/wide_part_writer_array_tuple_w107_spec.cr",
+          "spec/wide_part_writer_map_tuple_w108_spec.cr",
+          "spec/wide_part_writer_nested_tuple_w106_spec.cr",
+          "spec/wide_part_writer_nullable_tuple_w105_spec.cr",
+          "spec/wide_part_writer_w52_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_table_w69_spec.cr spec/wide_part_table_w70_spec.cr spec/wide_part_table_w71_spec.cr spec/wide_part_table_w73_spec.cr spec/wide_part_table_w95_tuple_spec.cr spec/wide_part_writer_array_tuple_w107_spec.cr spec/wide_part_writer_map_tuple_w108_spec.cr spec/wide_part_writer_nested_tuple_w106_spec.cr spec/wide_part_writer_nullable_tuple_w105_spec.cr spec/wide_part_writer_w52_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "44 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "16+17",
+        "covered_cohorts": [
+          16,
+          17
+        ],
+        "paths": [
+          "spec/wide_part_writer_w53_spec.cr",
+          "spec/wide_part_writer_w54_spec.cr",
+          "spec/wide_part_writer_w61_spec.cr",
+          "spec/wide_part_writer_w62_spec.cr",
+          "spec/wide_part_writer_w63_spec.cr",
+          "spec/wide_part_writer_w65_spec.cr",
+          "spec/wide_part_writer_w66_spec.cr",
+          "spec/wide_part_writer_w68_spec.cr",
+          "spec/wide_part_writer_w69_spec.cr",
+          "spec/wide_part_writer_w70_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_w53_spec.cr spec/wide_part_writer_w54_spec.cr spec/wide_part_writer_w61_spec.cr spec/wide_part_writer_w62_spec.cr spec/wide_part_writer_w63_spec.cr spec/wide_part_writer_w65_spec.cr spec/wide_part_writer_w66_spec.cr spec/wide_part_writer_w68_spec.cr spec/wide_part_writer_w69_spec.cr spec/wide_part_writer_w70_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "30 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "18+19",
+        "covered_cohorts": [
+          18,
+          19
+        ],
+        "paths": [
+          "spec/wide_part_writer_w71_spec.cr",
+          "spec/wide_part_writer_w73_spec.cr",
+          "spec/wide_tuple_nested_w106_admission_spec.cr",
+          "spec/wide_tuple_nested_w106_model_spec.cr",
+          "spec/wide_tuple_nullable_w105_admission_spec.cr",
+          "spec/wide_tuple_nullable_w105_consumers_spec.cr",
+          "spec/wide_tuple_nullable_w105_lazy_spec.cr",
+          "spec/wide_tuple_nullable_w105_model_spec.cr",
+          "spec/wide_tuple_parameterized_consumers_w101_spec.cr",
+          "spec/wide_tuple_parameterized_reader_budget_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_writer_w71_spec.cr spec/wide_part_writer_w73_spec.cr spec/wide_tuple_nested_w106_admission_spec.cr spec/wide_tuple_nested_w106_model_spec.cr spec/wide_tuple_nullable_w105_admission_spec.cr spec/wide_tuple_nullable_w105_consumers_spec.cr spec/wide_tuple_nullable_w105_lazy_spec.cr spec/wide_tuple_nullable_w105_model_spec.cr spec/wide_tuple_parameterized_consumers_w101_spec.cr spec/wide_tuple_parameterized_reader_budget_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "35 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "cohort": "20",
+        "covered_cohorts": [
+          20
+        ],
+        "paths": [
+          "spec/wide_type_plan_w67_spec.cr",
+          "spec/wide_type_plan_w69_spec.cr",
+          "spec/wide_type_plan_w70_spec.cr",
+          "spec/wide_type_plan_w71_spec.cr",
+          "spec/wide_type_plan_w73_spec.cr"
+        ],
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_type_plan_w67_spec.cr spec/wide_type_plan_w69_spec.cr spec/wide_type_plan_w70_spec.cr spec/wide_type_plan_w71_spec.cr spec/wide_type_plan_w73_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "10 examples, 0 failures, 0 errors, 0 pending"
+      }
+    ],
+    "focused_final": [
+      {
+        "mode": "DEBUG",
+        "paths": [
+          "spec/wide_ragged_selected_metadata_w261_spec.cr",
+          "spec/wide_ragged_selected_metadata_w261_native_spec.cr",
+          "spec/wide_array_tuple_w107_metadata_spec.cr",
+          "spec/wide_map_tuple_w108_reader_spec.cr"
+        ],
+        "command": "env CRYSTAL_CLICK_W261_STOCK_PART=/private/tmp/crystal-click-w261-final-debug.jmUfkP/stores/native/store/103/1036f2b1-0b2c-438d-9ec1-af738428b26b/all_1_1_0 env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_ragged_selected_metadata_w261_spec.cr spec/wide_ragged_selected_metadata_w261_native_spec.cr spec/wide_array_tuple_w107_metadata_spec.cr spec/wide_map_tuple_w108_reader_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "22 examples, 0 failures, 0 errors, 0 pending"
+      },
+      {
+        "mode": "RELEASE",
+        "paths": [
+          "spec/wide_ragged_selected_metadata_w261_spec.cr",
+          "spec/wide_ragged_selected_metadata_w261_native_spec.cr",
+          "spec/wide_array_tuple_w107_metadata_spec.cr",
+          "spec/wide_map_tuple_w108_reader_spec.cr"
+        ],
+        "command": "env CRYSTAL_CLICK_W261_STOCK_PART=/private/tmp/crystal-click-w261-final-release.CIXu3R/stores/native/store/6ff/6ff946f4-b36a-4c09-922c-d430adfd7032/all_1_1_0 env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_ragged_selected_metadata_w261_spec.cr spec/wide_ragged_selected_metadata_w261_native_spec.cr spec/wide_array_tuple_w107_metadata_spec.cr spec/wide_map_tuple_w108_reader_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+        "exit_code": 0,
+        "summary": "22 examples, 0 failures, 0 errors, 0 pending"
+      }
+    ],
+    "expected_signal": "All commanded paths execute the observed nonzero examples with zero failures/errors/pending; 430 legacy + 13 new = 443 distinct examples per mode, plus nine repeats = 452 final executed examples. Diagnostic/intermediate runs excluded.",
+    "physical_falsifiers": [
+      "Only final Array(Tuple) UInt32 child decompressed mark coordinate += 4, full and suffix CorruptPartError before zero callbacks.",
+      "Only final Map(Tuple) UInt64 child decompressed mark coordinate += 8, full and suffix CorruptPartError before zero callbacks."
+    ],
+    "guard": {
+      "min_free_pct": 50,
+      "crystal_workers": 1,
+      "process_tree_mib": 12288,
+      "crystal_timeout_seconds": 600,
+      "ruby_timeout_seconds": 180,
+      "crystal_command_prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288",
+      "ruby_command_prefix": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288",
+      "unchanged": true
+    }
+  },
+  "native": {
+    "comparison_source": {
+      "root": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+      "revision": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+      "worktree_status": "Root observed empty git status --short",
+      "pointers": [
+        "src/DataTypes/Serializations/SerializationInfo.cpp:592-593; 638-687",
+        "src/DataTypes/Serializations/SerializationMap.cpp:667-680",
+        "src/Storages/MergeTree/MergeTreeDataPartWriterWide.cpp:472-481"
+      ]
+    },
+    "runtime": {
+      "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+    },
+    "build_and_capture_commands": [
+      {
+        "kind": "helper_debug_build_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_wide_ragged_selected_metadata_w261.cr -o /private/tmp/crystal-click-w261.nCbkfv/check-final-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "exit_code": 0
+      },
+      {
+        "kind": "helper_release_build_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_wide_ragged_selected_metadata_w261.cr -o /private/tmp/crystal-click-w261.nCbkfv/check-final-release --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace",
+        "exit_code": 0
+      },
+      {
+        "kind": "native_debug_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/probe_wide_ragged_selected_metadata_w261.rb --helper /private/tmp/crystal-click-w261.nCbkfv/check-final-debug --evidence-root /private/tmp/crystal-click-w261-final-debug.jmUfkP --mode green",
+        "exit_code": 0
+      },
+      {
+        "kind": "native_release_final",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/probe_wide_ragged_selected_metadata_w261.rb --helper /private/tmp/crystal-click-w261.nCbkfv/check-final-release --evidence-root /private/tmp/crystal-click-w261-final-release.CIXu3R --mode green",
+        "exit_code": 0
+      }
+    ],
+    "captures": [
+      {
+        "mode": "DEBUG",
+        "root": "/private/tmp/crystal-click-w261-final-debug.jmUfkP",
+        "summary_path": "/private/tmp/crystal-click-w261-final-debug.jmUfkP/summary.json",
+        "summary_sha256": "903e4020f08603f8704b041e7b0249b30aac7bcb8545b5287dc99d13b4f341d6",
+        "helper_path": "/private/tmp/crystal-click-w261.nCbkfv/check-final-debug",
+        "helper_sha256": "1b2916e8755b07d50f97771aaa099c9cab57cfe80185e785db5bf751b92759fa",
+        "helper_before_after_identical": true,
+        "helper_source_before_after_identical": true,
+        "stock_part": "/private/tmp/crystal-click-w261-final-debug.jmUfkP/stores/native/store/103/1036f2b1-0b2c-438d-9ec1-af738428b26b/all_1_1_0",
+        "stock_files": 85,
+        "stock_bytes": 12722,
+        "mrk2_streams": 38,
+        "outer_row_grids": [
+          2,
+          2,
+          2,
+          2,
+          0
+        ],
+        "actual_assertions": [
+          "Raw CHECK=1 and exact typed stock schema",
+          "Independent literal native full/middle values; ordered mapKeys/mapValues preserves duplicates",
+          "Direct full/window/EOF typed reads and exact public carriers",
+          "Both selected table facades, offline .values and logical budget thresholds"
+        ],
+        "availability": "Private temporary raw captures, binaries and I/O files retained; loss reopens reproducibility, do not infer absent fields."
+      },
+      {
+        "mode": "RELEASE",
+        "root": "/private/tmp/crystal-click-w261-final-release.CIXu3R",
+        "summary_path": "/private/tmp/crystal-click-w261-final-release.CIXu3R/summary.json",
+        "summary_sha256": "8a202344668f83f1dff58187f428eab0324edd211b565ea6cd8db66a65f71ea7",
+        "helper_path": "/private/tmp/crystal-click-w261.nCbkfv/check-final-release",
+        "helper_sha256": "f196f4d54ecaf6a4e70ad7200fe84f8f162e4cd7b900219990d4e2bdde105ec2",
+        "helper_before_after_identical": true,
+        "helper_source_before_after_identical": true,
+        "stock_part": "/private/tmp/crystal-click-w261-final-release.CIXu3R/stores/native/store/6ff/6ff946f4-b36a-4c09-922c-d430adfd7032/all_1_1_0",
+        "stock_files": 85,
+        "stock_bytes": 12722,
+        "mrk2_streams": 38,
+        "outer_row_grids": [
+          2,
+          2,
+          2,
+          2,
+          0
+        ],
+        "actual_assertions": [
+          "Raw CHECK=1 and exact typed stock schema",
+          "Independent literal native full/middle values; ordered mapKeys/mapValues preserves duplicates",
+          "Direct full/window/EOF typed reads and exact public carriers",
+          "Both selected table facades, offline .values and logical budget thresholds"
+        ],
+        "availability": "Private temporary raw captures, binaries and I/O files retained; loss reopens reproducibility, do not infer absent fields."
+      }
+    ],
+    "peer_part_bytes_equal": true
+  },
+  "adversary": {
+    "commands": [
+      {
+        "kind": "audit_self_test_final_formatted",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/audit_wide_ragged_selected_metadata_w261.rb --self-test",
+        "exit_code": 0
+      },
+      {
+        "kind": "audit_green_peers_final_formatted",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/audit_wide_ragged_selected_metadata_w261.rb /private/tmp/crystal-click-w261-final-debug.jmUfkP --peer-root /private/tmp/crystal-click-w261-final-release.CIXu3R",
+        "exit_code": 0
+      },
+      {
+        "kind": "root_actual_capture_adversary_final_formatted",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 /private/tmp/crystal-click-w261.nCbkfv/root-capture-adversary.rb /private/tmp/crystal-click-w261-final-debug.jmUfkP /private/tmp/crystal-click-w261-final-release.CIXu3R",
+        "exit_code": 0
+      }
+    ],
+    "mocked_controls": {
+      "status": "self_test_passed",
+      "negative_controls_rejected": 64,
+      "controls": [
+        "nonzero exit",
+        "signal",
+        "timeout",
+        "classification",
+        "spawn error",
+        "stdin write error",
+        "stdout read error",
+        "stderr read error",
+        "stdout size",
+        "stdout digest",
+        "stderr size",
+        "stderr digest",
+        "stdin size",
+        "stdin digest",
+        "argv digest algorithm",
+        "argv order/value",
+        "wrong runtime pin",
+        "before runtime hash",
+        "after runtime hash",
+        "memory cap",
+        "thread cap",
+        "missing selected type column",
+        "selected-column order",
+        "full row count",
+        "data mark grid",
+        "direct report order",
+        "direct report cardinality",
+        "direct full/window literal claim",
+        "selected-table roster",
+        "selected-table status",
+        "selected-table full rows",
+        "selected-table window rows",
+        "EOF callback count",
+        "offline typed value missing",
+        "offline typed cardinality",
+        "budget string bytes",
+        "budget tuple cells",
+        "budget one-less guard",
+        "assertion roster",
+        "helper report missing field",
+        "missing typed schema",
+        "wrong stock type",
+        "schema column order",
+        "selected typed value missing",
+        "independent row literal",
+        "terminal mark schedule",
+        "missing helper provenance",
+        "helper mode",
+        "helper binary before/after",
+        "missing source file",
+        "source order",
+        "source hash changed",
+        "actual source bytes differ",
+        "manifest omits stock file",
+        "manifest file digest",
+        "part count metadata",
+        "serialization metadata bytes",
+        "logical roster differs from admitted schema",
+        "escaped stream identity is not canonical",
+        "escaped stream identity uses a false prefix",
+        "mrk2 terminal grid",
+        "nested stream mrk2 row grid",
+        "mark file count",
+        "part geometry"
+      ]
+    },
+    "actual_capture_controls": {
+      "positive_captures": 2,
+      "negative_controls_rejected": 20,
+      "per_capture": [
+        {
+          "root": "/private/tmp/crystal-click-w261-final-debug.jmUfkP",
+          "controls": [
+            "actual native nonzero exit",
+            "actual stdout digest mismatch",
+            "raw CHECK zero with coherent stream digest",
+            "actual duplicate Map value order",
+            "actual typed stock schema",
+            "actual helper EOF callback",
+            "actual helper tuple-cell budget",
+            "actual stock manifest omission",
+            "actual late mark row corruption with coherent inventory",
+            "actual escaped stream substitution with coherent inventory"
+          ],
+          "negative_controls": 10,
+          "original_inputs_unchanged": true,
+          "sealed_input_paths": 96
+        },
+        {
+          "root": "/private/tmp/crystal-click-w261-final-release.CIXu3R",
+          "controls": [
+            "actual native nonzero exit",
+            "actual stdout digest mismatch",
+            "raw CHECK zero with coherent stream digest",
+            "actual duplicate Map value order",
+            "actual typed stock schema",
+            "actual helper EOF callback",
+            "actual helper tuple-cell budget",
+            "actual stock manifest omission",
+            "actual late mark row corruption with coherent inventory",
+            "actual escaped stream substitution with coherent inventory"
+          ],
+          "negative_controls": 10,
+          "original_inputs_unchanged": true,
+          "sealed_input_paths": 96
+        }
+      ],
+      "scope": "In-memory mutations of actual capture records and bytes; no native rerun, codec reimplementation or exhaustive corruption proof."
+    },
+    "root_temporary_probe_index": [
+      {
+        "path": "/private/tmp/crystal-click-w261.nCbkfv/root-capture-adversary.rb",
+        "bytes": 6866,
+        "sha256": "2a2571506b2119f2758a763ab41d0aa9b694f0b87885c5b9195e52f6f2895931"
+      },
+      {
+        "path": "/private/tmp/crystal-click-w261.nCbkfv/root-duplicate-json-members.cr",
+        "bytes": 456,
+        "sha256": "bf82869ede4a2a537971e0fc404acfbe05a85daff86171ae023cfd4617f82bc1"
+      }
+    ],
+    "duplicate_member_parser_probe": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 run /private/tmp/crystal-click-w261.nCbkfv/root-duplicate-json-members.cr --error-trace --link-flags=-fuse-ld=ld",
+      "exit_code": 0,
+      "observed": "Duplicate top-level version and nested String-version keys are last-wins. This is a parser-stage discriminator, not an executed mutated-part test."
+    }
+  },
+  "baseline_and_diagnostics": {
+    "stock_red": {
+      "root": "/private/tmp/crystal-click-w261-native-baseline.lWZO3s",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/probe_wide_ragged_selected_metadata_w261.rb --helper /private/tmp/crystal-click-w261.nCbkfv/check-baseline-debug --evidence-root /private/tmp/crystal-click-w261-native-baseline.lWZO3s --mode baseline",
+      "observed": "Native CHECK/schema/literals and ordinary u/side/tup/lc/v controls pass; seq rejects two-column Array(Tuple) profile, mapped/simple/lookup reject unique UInt64 sibling, both table facades reject seq; runner exit 0 means baseline_red_captured, not GREEN.",
+      "provenance_limit": "Helper source before/after provenance was overwritten in the baseline runner summary; retain actual binary/I/O bytes, do not manufacture those fields."
+    },
+    "w55_preexisting_red": {
+      "isolated_archive_root": "/private/tmp/crystal-click-w261-w55-baseline.x0ZbVJ",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/wide_part_reader_w55_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose",
+      "observed": "Exact baseline HEAD: five examples, one failure, no errors/pending; reordered-roster expectation already wrong. Test-only correction asserts full/late values and keeps missing-stream refusal."
+    },
+    "refuted_hypothesis": "Root's flattened mrk2 third-coordinate suspicion was rejected by all 38 actual stock row grids and pinned CH writer source; every substream receives outer rows_in_mark.",
+    "setup_diagnostics": [
+      "Nullable Float64 literal getter and lost helper provenance corrected before GREEN",
+      "Ruby 2.6 filter_map, escaped-roster assumption, lambda arity and UTF-8/binary Ruby equality corrected before final audit",
+      "Standalone eval linker/argument setup failures are not parser RED; file-based guarded probe passes",
+      "Mechanical formatting of two support files required final helper rebuilds, fresh captures and focused/audit refresh; legacy dependent roster unaffected"
+    ],
+    "intermediate_native_roots": [
+      "/private/tmp/crystal-click-w261-native-debug.oO7LqD",
+      "/private/tmp/crystal-click-w261-native-release.qdhWdn"
+    ],
+    "not_added_to_final_coverage": true
+  },
+  "hygiene": {
+    "runs": [
+      {
+        "kind": "format",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 tool format --check src/crystal_click/wide_part.cr spec/wide_array_tuple_w107_metadata_spec.cr spec/wide_map_tuple_w108_reader_spec.cr spec/wide_part_reader_w55_spec.cr spec/wide_ragged_selected_metadata_w261_spec.cr spec/wide_ragged_selected_metadata_w261_native_spec.cr scripts/check_wide_ragged_selected_metadata_w261.cr scripts/support/wide_ragged_selected_metadata_w261_fixture.cr",
+        "exit_code": 1,
+        "observed": "[PREFLIGHT] System memory free 76% > 50%\n=== STDERR ===\nformatting './scripts/check_wide_ragged_selected_metadata_w261.cr' produced changes\nformatting './scripts/support/wide_ragged_selected_metadata_w261_fixture.cr' produced changes\n[EXIT: 1] after ~0s\n"
+      },
+      {
+        "kind": "ruby_syntax_audit",
+        "command": "/usr/bin/ruby -c scripts/audit_wide_ragged_selected_metadata_w261.rb",
+        "exit_code": 0,
+        "observed": "Syntax OK\n"
+      },
+      {
+        "kind": "ruby_syntax_probe",
+        "command": "/usr/bin/ruby -c scripts/probe_wide_ragged_selected_metadata_w261.rb",
+        "exit_code": 0,
+        "observed": "Syntax OK\n"
+      },
+      {
+        "kind": "format",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 tool format --check src/crystal_click/wide_part.cr spec/wide_array_tuple_w107_metadata_spec.cr spec/wide_map_tuple_w108_reader_spec.cr spec/wide_part_reader_w55_spec.cr spec/wide_ragged_selected_metadata_w261_spec.cr spec/wide_ragged_selected_metadata_w261_native_spec.cr scripts/check_wide_ragged_selected_metadata_w261.cr scripts/support/wide_ragged_selected_metadata_w261_fixture.cr",
+        "exit_code": 0,
+        "observed": "[PREFLIGHT] System memory free 76% > 50%\n[EXIT: 0] after ~0s\n"
+      },
+      {
+        "kind": "git_diff_check",
+        "command": "git diff --check",
+        "exit_code": 0,
+        "observed": ""
+      },
+      {
+        "kind": "upstream_source_pin",
+        "command": "git -C /private/tmp/clickhouse-w254-upstream.AqeqyC rev-parse HEAD",
+        "exit_code": 0,
+        "observed": "ed30948f095ecb70679986d7d60e27ad770ae27a\n"
+      },
+      {
+        "kind": "upstream_clean",
+        "command": "git -C /private/tmp/clickhouse-w254-upstream.AqeqyC status --short",
+        "exit_code": 0,
+        "observed": ""
+      },
+      {
+        "kind": "support_dependents",
+        "command": "rg -l 'wide_ragged_selected_metadata_w261_fixture' spec",
+        "exit_code": 0,
+        "observed": "spec/wide_ragged_selected_metadata_w261_native_spec.cr\nspec/wide_ragged_selected_metadata_w261_spec.cr\n"
+      }
+    ],
+    "formatting_diagnostic": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w261.nCbkfv/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 tool format scripts/check_wide_ragged_selected_metadata_w261.cr scripts/support/wide_ragged_selected_metadata_w261_fixture.cr",
+      "exit_code": 0,
+      "observed": "Only alignments and joining unless conditions; no production or legacy spec change."
+    },
+    "documentation_index": [
+      {
+        "path": "docs/WIDE_RAGGED_SELECTED_METADATA_FRONTIER.md",
+        "bytes": 19365,
+        "sha256": "4e15e0e3e669f95eb1eba413aa6f43639235b0434360762010999d041230ab84"
+      },
+      {
+        "path": "docs/PROJECT_STATUS.md",
+        "bytes": 258682,
+        "sha256": "f8e5bc44999cdeaf22f4bce8dcba2689f4c5a23f78f2a73f031c488454160e7c"
+      },
+      {
+        "path": "LANDMARKS.md",
+        "bytes": 103017,
+        "sha256": "35e467219e1815d110d6b47226b6ea31f0d5a6be3c16cd1f554021ef90547472"
+      }
+    ],
+    "packet_validation": "Manual JSON/path/hash/command roster checks; a structural packet check does not prove execution and no missing project-wide validator is claimed."
+  },
+  "continuity": {
+    "active_goal": "All native-storable types and MV/projection coverage before memory/performance; <=10% parity unqualified.",
+    "confirmed_frontier": "Finite W261 common-profile Wide ragged selected-column target closes; raw JSON ambiguity and arbitrary version/layout products do not.",
+    "next_falsifier": "Fresh stock context-owned Compact JSON/Dynamic layouts and parent projection provenance against exact typed consumers, preserving existing recursive codecs.",
+    "reopen_on": [
+      "Owned metadata/physical/codec/materializer/consumer source drift",
+      "Test/harness/oracle/tool/profile/input change",
+      "Raw capture loss, contradictory native behavior or a widened claim"
+    ],
+    "refresh": "Rerun exact affected mode rosters plus rebuilt helper/native/falsifier/audit checks in the changed corridor; preserve weaker baseline provenance as such.",
+    "authority": "In-scope safe local work/guarded verification and one exact atomic local commit; no push, remote/history rewrite, dependency or production-data mutation."
+  }
+}

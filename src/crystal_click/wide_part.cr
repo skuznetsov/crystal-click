@@ -12167,13 +12167,14 @@ module CrystalClick
               expected_streams = expected_physical_streams(column, selected_type, escape_simple_uint64_column: true)
               generic_array_tuple = !WideArrayTupleTypePlan.for_type(selected_type).nil? &&
                                     WideTypePlan.admitted(selected_type).nil?
-              unordered_roster = selected_type == "String" ||
+              supported_map = selected_type.starts_with?("Map(") && WidePart.supports_typed_type?(selected_type)
+              unordered_roster = generic_array_tuple || supported_map ||
+                                 selected_type == "String" ||
                                  !WidePart.numeric_array_element_type(selected_type).nil? ||
-                                 (!generic_array_tuple &&
-                                  (WidePart.supports_array_type?(selected_type) ||
-                                   selected_type == "LowCardinality(String)" ||
-                                   WidePart.supports_named_scalar_tuple_type?(selected_type) ||
-                                   WidePart.supports_variant_type?(selected_type)))
+                                 WidePart.supports_array_type?(selected_type) ||
+                                 selected_type == "LowCardinality(String)" ||
+                                 WidePart.supports_named_scalar_tuple_type?(selected_type) ||
+                                 WidePart.supports_variant_type?(selected_type)
               if unordered_roster
                 # These readers bind by stream name. Compare exact roster
                 # identity independent of metadata listing order, then return
@@ -12199,8 +12200,9 @@ module CrystalClick
           expected_streams = expected_physical_streams(column, sibling_type)
           raise UnsupportedFormatError.new("W51 sibling physical substreams do not match exact serialization shape") unless streams == expected_streams
         elsif WideMapTupleTypePlan.for_type(selected_type)
-          if columns.any? { |name, type| name == column && type == "UInt64" }
-            raise UnsupportedFormatError.new("Map(Tuple) key column must have one plain UInt64 stream") unless streams == [column]
+          if columns[index][1] == "UInt64"
+            expected_streams = expected_physical_streams(column, columns[index][1], escape_simple_uint64_column: true)
+            raise UnsupportedFormatError.new("Map(Tuple) UInt64 sibling must have one plain stream") unless streams == expected_streams
           end
         elsif WideNestedTypePlan.for_type(selected_type)
           if columns.any? { |name, type| name == column && type == "UInt64" }
@@ -12219,8 +12221,9 @@ module CrystalClick
             raise UnsupportedFormatError.new("Geometry primary key column must have one plain UInt64 stream") unless streams == [column]
           end
         elsif WideArrayTupleTypePlan.for_type(selected_type) && WideTypePlan.admitted(selected_type).nil?
-          if columns.any? { |name, type| name == column && type == "UInt64" }
-            raise UnsupportedFormatError.new("Array(Tuple) key column must have one plain UInt64 stream") unless streams == [column]
+          if columns[index][1] == "UInt64"
+            expected_streams = expected_physical_streams(column, columns[index][1], escape_simple_uint64_column: true)
+            raise UnsupportedFormatError.new("Array(Tuple) UInt64 sibling must have one plain stream") unless streams == expected_streams
           end
         elsif WidePart.supports_named_scalar_tuple_type?(selected_type)
           if columns[index][1] == "UInt64"
@@ -12245,8 +12248,9 @@ module CrystalClick
               WidePart.supports_map_string_string_type?(selected_type) ||
               WidePart.supports_map_uint64_nullable_uint64_type?(selected_type) || WidePart.supports_map_string_nullable_uint64_type?(selected_type) ||
               WidePart.supports_map_uint64_nullable_string_type?(selected_type) || WidePart.supports_map_string_nullable_string_type?(selected_type)
-          if columns.any? { |name, type| name == column && type == "UInt64" }
-            raise UnsupportedFormatError.new("Map key column must have one plain UInt64 stream") unless streams == [column]
+          if columns[index][1] == "UInt64"
+            expected_streams = expected_physical_streams(column, columns[index][1], escape_simple_uint64_column: true)
+            raise UnsupportedFormatError.new("Map UInt64 sibling must have one plain stream") unless streams == expected_streams
           end
         end
       end
@@ -12643,7 +12647,7 @@ module CrystalClick
       row_count : UInt64,
     ) : Nil
       generic_array_tuple = !WideArrayTupleTypePlan.for_type(type).nil? && WideTypePlan.admitted(type).nil?
-      if !generic_array_tuple && WidePart.supports_array_type?(type) &&
+      if (generic_array_tuple || WidePart.supports_array_type?(type)) &&
          SelectedColumnSerializationMetadata.proven?(@path, columns, selected_column, type, row_count)
         return
       end
@@ -13033,6 +13037,9 @@ module CrystalClick
                        WidePart.supports_map_string_nullable_string_type?(map_type)
       map_tuple = !WideMapTupleTypePlan.for_type(map_type).nil?
       supported_map = uint64_key_map || string_key_map || map_tuple
+      if supported_map && SelectedColumnSerializationMetadata.proven?(@path, columns, selected_column, map_type, row_count)
+        return
+      end
       valid_columns = columns.any? { |name, type| name == selected_column && type == map_type }
       valid_columns &&= columns.size == 2 if map_tuple
       unless supported_map && keys.size == 1 && valid_columns

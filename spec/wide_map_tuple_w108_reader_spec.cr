@@ -271,7 +271,7 @@ describe CrystalClick::WidePart do
     end
   end
 
-  it "admits only the qualified PK-only Map(Tuple) serialization envelope" do
+  it "admits qualified Map(Tuple) statistics and rejects unproven or corrupt metadata" do
     parent = File.tempname("crystal-click-map-tuple-w108-reader-serialization")
     Dir.mkdir(parent)
 
@@ -317,9 +317,16 @@ describe CrystalClick::WidePart do
         %("columns":[{"kind":"Default","name":"pk","num_defaults":0,"num_rows":5}]),
         %("columns":[{"kind":"Default","name":"pk","num_defaults":0,"num_rows":5},{"kind":"Default","name":"payload","num_defaults":0,"num_rows":5}])
       )
-      expect_raises(CrystalClick::UnsupportedFormatError, "Map(Tuple) serialization requires one external key serializer") do
-        CrystalClick::WidePart.open_typed(payload_serializer, "payload")
-      end
+      reader = CrystalClick::WidePart.open_typed(payload_serializer, "payload")
+      data = reader.read_map_tuple_mark_range("payload", 0, reader.mark_count)
+      data.row_count.should eq(5)
+      data.row_sizes.should eq([0_u64, 2_u64, 0_u64, 1_u64, 0_u64])
+      data.row(1).key_at(0).should eq("dup")
+      data.row(1).key_at(1).should eq("dup")
+      data.row(1).value_at(0).tuple("meta")["note"].should eq("alpha")
+      data.row(1).value_at(1).tuple("meta")["note"].should be_nil
+      data.row(3).key_at(0).should eq("\0key")
+      data.row(3).value_at(0).tuple("meta")["note"].should eq("omega")
 
       wrong_rows = w108r_write_part(parent, "wrong-pk-row-count")
       w108r_replace_metadata(
@@ -328,7 +335,7 @@ describe CrystalClick::WidePart do
         %("num_rows":5}),
         %("num_rows":4})
       )
-      expect_raises(CrystalClick::CorruptPartError, "Map key serializer row count does not match part") do
+      expect_raises(CrystalClick::CorruptPartError, "serializer default or row count does not match the part") do
         CrystalClick::WidePart.open_typed(wrong_rows, "payload")
       end
 
@@ -339,7 +346,7 @@ describe CrystalClick::WidePart do
         %("num_defaults":0),
         %("num_defaults":6)
       )
-      expect_raises(CrystalClick::UnsupportedFormatError, "only Default key serialization is supported for Map") do
+      expect_raises(CrystalClick::CorruptPartError, "serializer default or row count does not match the part") do
         CrystalClick::WidePart.open_typed(wrong_defaults, "payload")
       end
 
@@ -350,7 +357,7 @@ describe CrystalClick::WidePart do
         %("num_defaults":0),
         %("num_defaults":-1)
       )
-      expect_raises(CrystalClick::UnsupportedFormatError, "only Default key serialization is supported for Map") do
+      expect_raises(CrystalClick::CorruptPartError, "serializer default or row count does not match the part") do
         CrystalClick::WidePart.open_typed(negative_defaults, "payload")
       end
     ensure
