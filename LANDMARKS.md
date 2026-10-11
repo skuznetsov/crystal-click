@@ -1,5 +1,46 @@
 # Crystal Click landmarks
 
+## Actual Compact physical windows and lifecycle roster — W259
+
+- VERIFIED / root adversary ROBUST within the qualified plain `.mrk3`/`.mrk4`
+  physical-window target over baseline `ef4980eaf70b207df8a2190d4da774ebf515967e`.
+  `CompactPartPhysicalContext` retains validated adaptive grids and returns
+  detached ordered shards by column/mark window. Ten own-file physical and
+  metadata owners reuse existing parser, resolver, mmap/authentication/codec
+  seams. No new per-product value serde or typed Compact admission.
+- Stock baseline RED: `.mrk3` lacked the Wide substreams sidecar; `.mrk4`
+  searched for nonexistent Wide streams. Source shows `.mrk4` roster uses a
+  prefix/empty-body/suffix dry run with first-seen unique getter names, not
+  generic enumeration. Live Compact marks follow getter events. The interval
+  law stays scoped to the observed monotone grid/matching roster; arbitrary
+  serializer replay equality is not an interface theorem. Equal coordinates
+  and empty Array child callbacks are retained, not deduplicated.
+- The sealed 15-file roster passes 149 examples per DEBUG/RELEASE mode, zero
+  failures/errors/pending. Both helpers build; fresh stock Wide/mrk3/mrk4 cells
+  pass actual CHECK=1, schema and exact rows. An independent raw Ruby oracle
+  matches all 70 physical windows per mode. Typed Wide stays positive; typed
+  Compact keeps its baseline guards. The full repository suite was not run.
+- Root audits all process/I/O/deadline/pin/CHECK records and complete native
+  file closure: 62 files / 14,643 bytes per mode agree byte-for-byte. Thirteen
+  actual-capture negatives per mode and 16 parser/LZ4 negatives reject, with
+  positive controls and original captures unchanged. Root uses the runner
+  oracle, not a second Ruby codec; CityHash is not independently recomputed.
+  Same-lineage model review remains correlated; finite audits are not exhaustive.
+- Root observed the zero-window descriptor-charge RED, then checked the repair
+  before both final test runs. Logical budgets are not RSS/snapshot limits;
+  touched payloads only are authenticated. Trusted directory ancestry and
+  quiescent parts are assumptions, not no-follow/access-control guarantees.
+- Return pointers: [W259 frontier](docs/COMPACT_PHYSICAL_CONTEXT_FRONTIER.md),
+  [root evidence](.landmark/evidence/compact-physical-context-w259.json).
+  Source `ed30948f095ecb70679986d7d60e27ad770ae27a` and executable build
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028` are separately pinned. Refresh after
+  physical/parser/budget/transport/consumer/helper/oracle/tool drift, capture
+  loss or a widened profile. Next: typed Compact lifecycle integration and
+  stock read/write qualification. Compressed marks, remaining state/products,
+  parent `.proj` authentication, transform/projection composition, general keys
+  and facade decomposition remain open. Full goal ACTIVE, perf deferred;
+  local atomic commit only, no push or <=10% speed claim.
+
 ## Static typed selected-column metadata and physical identity — W258
 
 - VERIFIED / root adversary ROBUST within the finite declared Wide target over

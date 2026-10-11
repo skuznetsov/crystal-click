@@ -15,22 +15,49 @@ module CrystalClick
     @entries : Hash(String, PartChecksums::Entry)
 
     def initialize(part_path : String)
-      raise CorruptPartError.new("part directory must not be a symbolic link") if File.symlink?(part_path)
-      raise CorruptPartError.new("part path is not a directory") unless Dir.exists?(part_path)
-
-      checksums = PartChecksums.open(part_path)
+      # Preserve the original no-read-before-path-validation behavior. In
+      # particular, do not parse checksums through a symlinked/non-directory
+      # part path before rejecting it.
+      validate_part_directory(part_path)
       @part_path = String.new(part_path.to_slice)
-      @entries = Hash(String, PartChecksums::Entry).new(initial_capacity: checksums.entries.size)
+      @entries = snapshot_entries(PartChecksums.open(part_path))
+    end
+
+    # Accepts a checksum table that was already read through a bounded
+    # metadata path. The existing constructor remains the default for current
+    # callers and keeps its prior validation behavior.
+    def initialize(part_path : String, checksums : PartChecksums)
+      validate_part_directory(part_path)
+      @part_path = String.new(part_path.to_slice)
+      @entries = snapshot_entries(checksums)
+    end
+
+    private def snapshot_entries(checksums : PartChecksums) : Hash(String, PartChecksums::Entry)
+      entries = Hash(String, PartChecksums::Entry).new(initial_capacity: checksums.entries.size)
       checksums.entries.each do |name, entry|
         # Checksum names and entries are detached from the parser-owned table;
         # no caller ever receives this retained snapshot.
-        @entries[String.new(name.to_slice)] = PartChecksums::Entry.new(
+        entries[String.new(name.to_slice)] = PartChecksums::Entry.new(
           entry.physical_size,
           entry.compressed,
           entry.uncompressed_size,
           entry.file_hash
         )
       end
+      entries
+    end
+
+    private def validate_part_directory(part_path : String) : Nil
+      raise CorruptPartError.new("part directory must not be a symbolic link") if File.symlink?(part_path)
+      raise CorruptPartError.new("part path is not a directory") unless Dir.exists?(part_path)
+      nil
+    end
+
+    # Return only an optional declared physical size, never the retained
+    # checksum table. Metadata files are allowed to be absent from it.
+    def checksum_size_declaration(name : String) : UInt64?
+      validate_basename(name)
+      @entries[name]?.try(&.physical_size)
     end
 
     def inspect_grid(
@@ -84,6 +111,13 @@ module CrystalClick
     def physical_lane_input(data_name : String, marks_name : String) : ObjectSharedPhysicalLaneInput
       data, marks = resolve_pair(data_name, marks_name)
       ObjectSharedPhysicalLaneInput.new(data.path, marks.path, data.size, marks.size)
+    end
+
+    # Resolve an exact checksum-declared pair into a detached general-purpose
+    # physical input. This does not imply any mark-format interpretation.
+    def physical_input(data_name : String, marks_name : String) : PartPhysicalInput
+      data, marks = resolve_pair(data_name, marks_name)
+      PartPhysicalInput.new(data_name, marks_name, data.path, marks.path, data.size, marks.size)
     end
 
     private def resolve_pair(data_name : String, marks_name : String) : {ResolvedFile, ResolvedFile}

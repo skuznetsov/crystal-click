@@ -4,6 +4,15 @@ module CrystalClick
   module CompressedMarkReader
     MARK_RECORD_SIZE = 24
 
+    private struct RangeSpan
+      getter start : Int64
+      getter finish : Int64
+      getter output_index : Int32
+
+      def initialize(@start : Int64, @finish : Int64, @output_index : Int32)
+      end
+    end
+
     def self.read(
       data_path : String,
       marks_path : String,
@@ -187,6 +196,146 @@ module CrystalClick
       output.not_nil!
     end
 
+    # Reads ordered logical half-open intervals from an unprefixed compressed
+    # stream. Frame indexing is fresh for each call; one decoded frame is
+    # authenticated and decoded once even when several or duplicate ranges
+    # overlap it. Result order and duplicate ranges match the input exactly.
+    def self.read_ranges(
+      data_path : String,
+      expected_data_size : Int64,
+      ranges : Array({Int64, Int64}),
+      budget : CompressedStreamBudget,
+    ) : Array(Bytes)
+      budget.ensure_direction(false)
+      validate_expected_size(expected_data_size, "data")
+      if expected_data_size == 0
+        raise CorruptPartError.new("empty compressed stream is unsupported without a mark grid")
+      end
+      if expected_data_size > budget.limits.max_file_bytes || expected_data_size > Int32::MAX
+        raise CorruptPartError.new("data file exceeds supported in-memory limit")
+      end
+      if ranges.size > Int32::MAX
+        raise CorruptPartError.new("logical range count exceeds supported in-memory domain")
+      end
+
+      # Charge even zero-byte ranges before allocating their detached result
+      # descriptors. Empty intervals still carry caller-visible order.
+      budget.reserve_records(ranges.size.to_i64)
+      spans = Array(RangeSpan).new(ranges.size)
+      total_result_size = 0_i64
+      ranges.each_with_index do |range, index|
+        start, finish = range
+        if start < 0 || finish < start
+          raise ArgumentError.new("logical range must be nonnegative and ordered")
+        end
+        size = finish - start
+        if size > Int32::MAX || size > Int64::MAX - total_result_size
+          raise CorruptPartError.new("logical range result exceeds supported in-memory domain")
+        end
+        total_result_size += size
+        spans << RangeSpan.new(start, finish, index.to_i32) if finish > start
+      end
+      spans.sort_by! { |span| {span.start, span.finish, span.output_index} }
+
+      preflight_regular_file(data_path, expected_data_size, "data file")
+      budget.reserve_file_bytes(expected_data_size)
+      results = nil.as(Array(Bytes)?)
+      MMapDataSource.with_file(data_path, expected_data_size, budget.limits.max_file_bytes) do |data|
+        limits = budget.limits
+        index = CompressedFrameIndex.new(data, limits, budget)
+        ranges.each do |range|
+          if range[1] > index.logical_size
+            raise ArgumentError.new("logical range is outside the decompressed stream")
+          end
+        end
+
+        decoded_work = 0_i64
+        each_touched_frame(index.frames, spans) do |frame, _active|
+          decoded_work = checked_add(decoded_work, frame.decompressed_size, "decoded work")
+          if frame.method == CompressedBlock::METHOD_MULTIPLE
+            decoded_work = checked_add(decoded_work, multiple_nested_size(data, frame, limits), "nested decoded work")
+          end
+        end
+        # Reserve the complete touched decode and all output bytes before any
+        # result buffers or decoder workspace are grown.
+        budget.reserve_decoded_bytes(decoded_work)
+        budget.reserve_result_bytes(total_result_size)
+        output = Array(Bytes).new(ranges.size)
+        ranges.each do |range|
+          output << Bytes.new((range[1] - range[0]).to_i)
+        end
+
+        workspace = CompressedBlock::DecodeWorkspace.new
+        each_touched_frame(index.frames, spans) do |frame, active|
+          decoded = decode_touched_frame(data, frame, workspace, limits)
+          active.each do |span|
+            copy_range_intersection(decoded, frame, span, output[span.output_index])
+          end
+        end
+        results = output
+      end
+      results.not_nil!
+    end
+
+    # Shared adaptive-mark envelope check for physical formats whose record
+    # width is not the legacy two-lane MARK_RECORD_SIZE. The caller charges
+    # its known record count before allocating parsed mark descriptors.
+    def self.validate_plain_marks!(
+      bytes : Bytes,
+      record_size : Int,
+      budget : CompressedStreamBudget,
+      prepaid_records : Int64 = 0_i64,
+    ) : Nil
+      raise ArgumentError.new("mark record size must be positive") if record_size <= 0
+      if compressed_mark_stream?(bytes, budget, prepaid_records, record_size)
+        raise UnsupportedFormatError.new("compressed mark streams are unsupported")
+      end
+      unless bytes.size % record_size == 0
+        raise CorruptPartError.new("adaptive mark file size is not a whole record count")
+      end
+      nil
+    end
+
+    private def self.each_touched_frame(
+      frames : Array(CompressedFrameDescriptor),
+      spans : Array(RangeSpan),
+      & : CompressedFrameDescriptor, Array(RangeSpan) ->
+    ) : Nil
+      span_cursor = 0
+      active = Array(RangeSpan).new
+      frames.each do |frame|
+        write_index = 0
+        active.each do |span|
+          if span.finish > frame.logical_start
+            active[write_index] = span
+            write_index += 1
+          end
+        end
+        active.pop(active.size - write_index) if write_index < active.size
+        while span_cursor < spans.size && spans[span_cursor].start < frame.logical_end
+          span = spans[span_cursor]
+          active << span if span.finish > frame.logical_start
+          span_cursor += 1
+        end
+        yield frame, active unless active.empty?
+      end
+    end
+
+    private def self.copy_range_intersection(
+      decoded : Bytes,
+      frame : CompressedFrameDescriptor,
+      span : RangeSpan,
+      destination : Bytes,
+    ) : Nil
+      start = {frame.logical_start, span.start}.max
+      finish = {frame.logical_end, span.finish}.min
+      return if finish <= start
+      source_offset = (start - frame.logical_start).to_i
+      destination_offset = (start - span.start).to_i
+      size = (finish - start).to_i
+      decoded[source_offset, size].copy_to(destination[destination_offset, size])
+    end
+
     private def self.read_marks(
       path : String,
       expected_size : Int64,
@@ -199,12 +348,7 @@ module CrystalClick
 
       records = nil.as(Array(Mark)?)
       MMapDataSource.with_file(path, expected_size, limits.max_mark_bytes) do |bytes|
-        if compressed_mark_stream?(bytes, budget, record_count)
-          raise UnsupportedFormatError.new("compressed mark streams are unsupported")
-        end
-        unless bytes.size % MARK_RECORD_SIZE == 0
-          raise CorruptPartError.new("adaptive mark file size is not a whole record count")
-        end
+        validate_plain_marks!(bytes, MARK_RECORD_SIZE, budget, record_count)
         actual_count = bytes.size // MARK_RECORD_SIZE
         unless actual_count.to_i64 == record_count
           raise CorruptPartError.new("mark record count changed")
@@ -460,11 +604,12 @@ module CrystalClick
       bytes : Bytes,
       budget : CompressedStreamBudget,
       prepaid_records : Int64,
+      record_size : Int = MARK_RECORD_SIZE,
     ) : Bool
       # A whole-record-sized payload is authoritative adaptive-mark input.
       # Header-shaped values inside its coordinates/row counts must not
       # relabel a valid plain grid as a compressed stream.
-      return false if bytes.empty? || bytes.size % MARK_RECORD_SIZE == 0
+      return false if bytes.empty? || bytes.size % record_size == 0
       offset = 0
       frame_count = 0
       while offset < bytes.size
@@ -519,6 +664,16 @@ module CrystalClick
 
     private def self.validate_expected_size(size : Int64, label : String) : Nil
       raise ArgumentError.new("expected #{label} size must be nonnegative") if size < 0
+    end
+
+    private def self.preflight_regular_file(path : String, expected_size : Int64, label : String) : Nil
+      info = File.info?(path, follow_symlinks: false) || raise(CorruptPartError.new("#{label} is missing or inaccessible"))
+      raise CorruptPartError.new("#{label} must not be a symbolic link") if File.symlink?(path)
+      raise CorruptPartError.new("#{label} is not a regular file") unless info.type.file?
+      raise CorruptPartError.new("#{label} size does not match its physical input") unless info.size == expected_size
+      nil
+    rescue ex : IO::Error
+      raise CorruptPartError.new(ex.message || "cannot inspect #{label}")
     end
 
     private def self.checked_add(left : Int64, right : Int64, label : String) : Int64

@@ -23,6 +23,71 @@ module CrystalClick
         columns
       end
 
+      def self.parse_columns_substreams(
+        text : String,
+        columns : Array({String, String}),
+      ) : Array({String, Array(String)})
+        bytes = text.to_slice
+        cursor = 0
+        require_metadata_line(bytes, cursor, "columns substreams version: 1", "columns_substreams.txt")
+        cursor += line_length(bytes, cursor)
+        count_line = metadata_line(bytes, cursor, "columns_substreams.txt")
+        cursor += line_length(bytes, cursor)
+        count = parse_count_line(count_line, " columns:", WidePart::MAX_METADATA_COLUMNS, "columns_substreams.txt")
+        raise UnsupportedFormatError.new("columns_substreams.txt column count does not match columns.txt") unless count == columns.size
+
+        blocks = Array({String, Array(String)}).new(count)
+        seen_columns = Set(String).new
+        total_streams = 0
+        count.times do |column_index|
+          line = metadata_line(bytes, cursor, "columns_substreams.txt")
+          cursor += line_length(bytes, cursor)
+          stream_count, column = parse_substream_header(line)
+          expected = columns[column_index]? || raise(UnsupportedFormatError.new("columns_substreams.txt column count does not match columns.txt"))
+          unless column == expected[0]
+            raise UnsupportedFormatError.new("columns_substreams.txt column order does not match columns.txt")
+          end
+          raise UnsupportedFormatError.new("duplicate column block in columns_substreams.txt") if seen_columns.includes?(column)
+          seen_columns << column
+          if stream_count > WidePart::MAX_METADATA_SUBSTREAMS - total_streams
+            raise UnsupportedFormatError.new("columns_substreams.txt exceeds substream limit")
+          end
+          total_streams += stream_count
+
+          streams = Array(String).new(stream_count)
+          seen_in_column = Set(String).new
+          stream_count.times do
+            stream_line = metadata_line(bytes, cursor, "columns_substreams.txt")
+            cursor += line_length(bytes, cursor)
+            raise UnsupportedFormatError.new("invalid physical stream name") unless stream_line.starts_with?("\t")
+            stream_bytes = stream_line.to_slice
+            stream = String.new(stream_bytes[1, stream_bytes.size - 1])
+            validate_opaque_name(stream)
+            if seen_in_column.includes?(stream)
+              raise UnsupportedFormatError.new("duplicate physical stream name within column")
+            end
+            seen_in_column << stream
+            streams << stream
+          end
+          blocks << {column, streams}
+        end
+        raise UnsupportedFormatError.new("columns_substreams.txt has trailing data") unless cursor == bytes.size
+        blocks
+      end
+
+      def self.parse_count(text : String, max_rows : UInt64) : UInt64
+        if text.empty? || text.bytesize > 32
+          raise CorruptPartError.new("row count file size is invalid")
+        end
+        bytes = text.to_slice
+        digits = if bytes[bytes.size - 1] == 10
+                   String.new(bytes[0, bytes.size - 1])
+                 else
+                   text
+                 end
+        parse_decimal(digits, max_rows, "count.txt")
+      end
+
       def self.parse_count_line(line : String, suffix : String, limit : Int, file : String) : Int
         raise UnsupportedFormatError.new("invalid count in #{file}") unless line.ends_with?(suffix)
         line_bytes = line.to_slice
@@ -37,7 +102,7 @@ module CrystalClick
         text.each_byte do |byte|
           raise UnsupportedFormatError.new("invalid count in #{file}") unless byte >= '0'.ord && byte <= '9'.ord
           digit = (byte - '0'.ord).to_u64
-          raise UnsupportedFormatError.new("count exceeds limit in #{file}") if value > (limit - digit) // 10
+          raise UnsupportedFormatError.new("count exceeds limit in #{file}") if digit > limit || value > (limit - digit) // 10
           value = value * 10 + digit
         end
         value
@@ -165,6 +230,23 @@ module CrystalClick
           raise UnsupportedFormatError.new("selected physical stream name is not a filename component")
         end
       end
+    end
+
+    # Narrow public forwarding boundary for schema-neutral Compact metadata
+    # parsing. The parser remains private and its grammar is shared with Wide.
+    def self.parse_columns_metadata(text : String) : Array({String, String})
+      PartMetadataTextParser.parse_columns(text)
+    end
+
+    def self.parse_columns_substreams_metadata(
+      text : String,
+      columns : Array({String, String}),
+    ) : Array({String, Array(String)})
+      PartMetadataTextParser.parse_columns_substreams(text, columns)
+    end
+
+    def self.parse_count_metadata(text : String, max_rows : UInt64) : UInt64
+      PartMetadataTextParser.parse_count(text, max_rows)
     end
   end
 end

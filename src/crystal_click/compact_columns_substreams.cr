@@ -1,0 +1,125 @@
+module CrystalClick
+  # Detached physical roster for one Compact part. Mrk3 has one indivisible
+  # callback slot per columns.txt entry; Mrk4 uses the exact flattened
+  # columns_substreams.txt order.
+  class CompactColumnsSubstreams
+    getter mode : CompactMarkFormat
+
+    @columns : Array({String, String})
+    @slots : Array(CompactPhysicalSlot)
+    @slots_by_column : Hash(String, Array(CompactPhysicalSlot))
+
+    def initialize(
+      @mode : CompactMarkFormat,
+      columns : Array({String, String}),
+      substreams : Array({String, Array(String)})? = nil,
+    )
+      validate_structure(columns, substreams)
+      @columns = columns.map { |name, type| {String.new(name.to_slice), String.new(type.to_slice)} }
+      @slots = [] of CompactPhysicalSlot
+      @slots_by_column = Hash(String, Array(CompactPhysicalSlot)).new
+      @columns.each do |name, _type|
+        @slots_by_column[name] = [] of CompactPhysicalSlot
+      end
+
+      case @mode
+      when CompactMarkFormat::Mrk3
+        raise ArgumentError.new("mrk3 physical roster cannot contain substreams") if substreams
+        @columns.each do |name, _type|
+          append_slot(name, nil)
+        end
+      when CompactMarkFormat::Mrk4
+        blocks = substreams || raise(CorruptPartError.new("columns_substreams.txt is required for mrk4"))
+        unless blocks.size == @columns.size
+          raise CorruptPartError.new("columns_substreams.txt column count differs from columns.txt")
+        end
+        blocks.each_with_index do |block, index|
+          expected = @columns[index][0]
+          unless block[0] == expected
+            raise CorruptPartError.new("columns_substreams.txt order differs from columns.txt")
+          end
+          block[1].each { |stream_name| append_slot(block[0], stream_name) }
+        end
+      end
+      raise CorruptPartError.new("Compact physical roster is empty") if @slots.empty?
+    end
+
+    def columns : Array({String, String})
+      @columns.map { |name, type| {String.new(name.to_slice), String.new(type.to_slice)} }
+    end
+
+    def roster : Array(CompactPhysicalSlot)
+      @slots.map(&.detached_copy)
+    end
+
+    def slots_for(column_name : String) : Array(CompactPhysicalSlot)
+      slots = @slots_by_column[column_name]? || raise(ArgumentError.new("unknown Compact column"))
+      slots.map(&.detached_copy)
+    end
+
+    def slot_count : Int32
+      @slots.size.to_i32
+    end
+
+    def slot_count_for(column_name : String) : Int32
+      slots = @slots_by_column[column_name]? || raise(ArgumentError.new("unknown Compact column"))
+      slots.size.to_i32
+    end
+
+    private def validate_structure(
+      columns : Array({String, String}),
+      substreams : Array({String, Array(String)})?,
+    ) : Nil
+      if columns.empty? || columns.size > WidePart::MAX_METADATA_COLUMNS
+        raise CorruptPartError.new("Compact column roster is empty or exceeds its limit")
+      end
+      seen_columns = Set(String).new
+      columns.each do |name, _type|
+        if name.empty? || name.bytesize > WidePart::MAX_METADATA_LINE_BYTES || seen_columns.includes?(name)
+          raise CorruptPartError.new("Compact column roster contains an invalid or duplicate column")
+        end
+        seen_columns << name
+      end
+
+      case @mode
+      when CompactMarkFormat::Mrk3
+        raise ArgumentError.new("mrk3 physical roster cannot contain substreams") if substreams
+      when CompactMarkFormat::Mrk4
+        blocks = substreams || raise(CorruptPartError.new("columns_substreams.txt is required for mrk4"))
+        unless blocks.size == columns.size
+          raise CorruptPartError.new("columns_substreams.txt column count differs from columns.txt")
+        end
+        total_streams = 0
+        blocks.each_with_index do |(column, streams), index|
+          unless column == columns[index][0] && !streams.empty?
+            raise CorruptPartError.new("columns_substreams.txt has an invalid or empty column block")
+          end
+          if streams.size > WidePart::MAX_METADATA_SUBSTREAMS - total_streams
+            raise CorruptPartError.new("columns_substreams.txt exceeds substream limit")
+          end
+          total_streams += streams.size
+          seen_streams = Set(String).new
+          streams.each do |stream|
+            if stream.empty? || stream.bytesize > WidePart::MAX_METADATA_LINE_BYTES || seen_streams.includes?(stream)
+              raise CorruptPartError.new("columns_substreams.txt has an invalid or duplicate stream")
+            end
+            seen_streams << stream
+          end
+        end
+        if total_streams == 0
+          raise CorruptPartError.new("Compact physical roster is empty")
+        end
+      end
+      nil
+    end
+
+    private def append_slot(column_name : String, stream_name : String?) : Nil
+      if @slots.size >= Int32::MAX
+        raise CorruptPartError.new("Compact physical roster exceeds supported in-memory domain")
+      end
+      slot = CompactPhysicalSlot.new(@slots.size.to_i32, column_name, stream_name)
+      @slots << slot
+      @slots_by_column[column_name] << slot
+    end
+  end
+end

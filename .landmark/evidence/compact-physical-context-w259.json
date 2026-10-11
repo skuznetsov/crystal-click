@@ -1,0 +1,631 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W259",
+  "title": "Actual top-level Compact plain-mark physical context and owned column/granule windows",
+  "recorded_date": "2026-10-10",
+  "baseline_commit": "ef4980eaf70b207df8a2190d4da774ebf515967e",
+  "claim": {
+    "level": "VERIFIED",
+    "root_adversary": "ROBUST within the qualified plain-mark physical-window target and finite stock fixture",
+    "global_goal": "ACTIVE; remaining all-types/MV/projection qualification and subsequent <=10% speed goal are not closed",
+    "meaning": "Curated index to observed commands, root primary-source inspection and actual raw captures. Hashes, field presence and correlated model agreement are not behavioral proof."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "boundary": "Persistent Compact physical framing, public detached API and shared parser/transport/budget seams",
+    "rollback": "One exact-path local atomic feature commit; no push, dependency change, history rewrite or unrelated staging."
+  },
+  "admitted": {
+    "api": "CompactPartPhysicalContext.open(part_path, budget); read_window(column_name, first_mark, mark_count) returns owned raw shards, not typed .values",
+    "physical_profiles": [
+      "Plain adaptive data.mrk3, one indivisible column slot in exact columns.txt order",
+      "Plain adaptive data.mrk4, exact ordered columns_substreams.txt flattened slot roster"
+    ],
+    "laws": [
+      "Complete 16*N+8 mark records, bounded positive real rows summing to count.txt and explicit physical-EOF/zero-row terminal.",
+      "Monotone granule-major/slot-major logical coordinates; equal coordinates and empty child shards remain distinct.",
+      "Half-open ends use the next global slot, or next granule slot zero; interpretation is qualified against the observed matching callback roster, not arbitrary serializers.",
+      "One consumptive budget across metadata, grid, range index and windows; descriptors charged before proportional allocation, including selected slot clones for zero-mark windows.",
+      "Fresh callback-scoped mmap frame index; aggregate touched-frame/output preflight; each touched frame authenticated/decoded once per operation.",
+      "Detached columns, roster, granules, shards and bytes; no borrowed mmap slice or retained mutable grid escapes.",
+      "Reuse existing private Wide metadata grammar through structural bridges; do not widen existing selected typed admission."
+    ],
+    "fixture": {
+      "schema": [
+        [
+          "pk",
+          "UInt64"
+        ],
+        [
+          "u",
+          "UInt64"
+        ],
+        [
+          "side",
+          "String"
+        ],
+        [
+          "arr",
+          "Array(Nullable(UInt64))"
+        ],
+        [
+          "tup",
+          "Tuple(n UInt64, s String)"
+        ],
+        [
+          "lc",
+          "LowCardinality(String)"
+        ],
+        [
+          "v",
+          "Variant(String, UInt64)"
+        ]
+      ],
+      "rows": 8,
+      "mark_row_counts_with_terminal": [
+        2,
+        2,
+        2,
+        2,
+        0
+      ],
+      "windows": {
+        "full": [
+          0,
+          4
+        ],
+        "first": [
+          0,
+          1
+        ],
+        "middle": [
+          1,
+          2
+        ],
+        "last": [
+          3,
+          1
+        ],
+        "eof": [
+          4,
+          0
+        ]
+      },
+      "physical_windows_per_mode": 70,
+      "features": [
+        "Empty Array child domains at marks zero and two; unequal child/outer domains at other marks",
+        "Nullable values, duplicate/empty LC strings, both Variant arms and None"
+      ],
+      "native_settings": "Force Compact; uncompressed adaptive marks; LZ4 max_compress_block_size=4096 and min=0; two-row granularity; WITH_TYPES/propagated String version 1, Variant BASIC; mrk3 substream marks off / mrk4 on."
+    }
+  },
+  "source_contract": {
+    "snapshot_path": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+    "snapshot_commit": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+    "relation": "Separately pinned comparison source, not asserted executable build provenance or latest upstream.",
+    "anchors": [
+      "MergeTreeDataPartWriterOnDisk.cpp:634-685,727-744",
+      "MergeTreeDataPartWriterCompact.cpp:174-205,306-398,422-441",
+      "SerializationTuple.cpp:766-861",
+      "SerializationArray.cpp:352-395",
+      "ISerialization.h:396-403",
+      "ColumnsSubstreams.cpp:40-52"
+    ],
+    "finding": "mrk4 roster is a prefix/empty-range bulk/suffix dry-run getter recording unique names in first-seen order; live Compact writes marks per getter event. Generic enumerateStreams order is not lifecycle order. No universal interface callback/roster bijection theorem is asserted.",
+    "primary_read_by_root": true
+  },
+  "falsifiers": {
+    "baseline": {
+      "root": "/private/tmp/crystal-click-w259-baseline-confirmed.EN2VYw",
+      "summary": {
+        "path": "/private/tmp/crystal-click-w259-baseline-confirmed.EN2VYw/summary.json",
+        "bytes": 65529,
+        "sha256": "205d46f23fe711cbc1fbf2bd0a94df3bd6954e4c98f13a9dc6cc36307fe66776"
+      },
+      "observed": "Stock Wide/Compact CHECK, schema and literal rows pass. Typed Wide positive; mrk3 rejects missing columns_substreams and mrk4 searches for missing Wide streams. This slice does not relax typed Compact guards."
+    },
+    "zero_window_descriptor_charge": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w259.QcMsh7/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_physical_context_w259_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose > /private/tmp/crystal-click-w259.QcMsh7/zero-window-slot-charge-red.log 2>&1",
+      "log": "/private/tmp/crystal-click-w259.QcMsh7/zero-window-slot-charge-red.log",
+      "exit": 1,
+      "examples": 17,
+      "failures": 1,
+      "errors": 0,
+      "pending": 0,
+      "observed": "Expected pre-window record_count 999999 unchanged, got 1000000 at spec/compact_physical_context_w259_adversary_spec.cr:495 before roster-clone charge repair",
+      "artifact": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/zero-window-slot-charge-red.log",
+        "bytes": 3421,
+        "sha256": "49863bdce02681c265cac139d35bca2720cdeec2a2f67b427bc00c83d2d77b3e"
+      },
+      "repair": "Include selected slot-roster clone in preflight/reserve before any window file work; new test passes in both final 149-example rosters."
+    }
+  },
+  "boundaries": {
+    "allowed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/compressed_mark_reader.cr",
+      "src/crystal_click/part_stream_source.cr",
+      "src/crystal_click/wide_part/part_metadata_text_parser.cr",
+      "scripts/check_compact_physical_context_w259.cr",
+      "scripts/support/compact_physical_context_w259_fixture.cr",
+      "spec/compact_physical_context_w259_adversary_spec.cr",
+      "spec/compact_physical_context_w259_spec.cr",
+      "src/crystal_click/compact_columns_substreams.cr",
+      "src/crystal_click/compact_mark_format.cr",
+      "src/crystal_click/compact_mark_index.cr",
+      "src/crystal_click/compact_part_physical_context.cr",
+      "src/crystal_click/compact_part_physical_granule.cr",
+      "src/crystal_click/compact_part_physical_shard.cr",
+      "src/crystal_click/compact_part_physical_window.cr",
+      "src/crystal_click/compact_physical_slot.cr",
+      "src/crystal_click/part_metadata_file_reader.cr",
+      "src/crystal_click/part_physical_input.cr",
+      "scripts/probe_compact_physical_context_w259.rb",
+      "docs/COMPACT_PHYSICAL_CONTEXT_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-physical-context-w259.json"
+    ],
+    "source_test_harness_identities": [
+      {
+        "path": "src/crystal_click.cr",
+        "bytes": 29886,
+        "sha256": "0d6b5fde2d8aaa2efdc69356ae5c32fedf51540e579c0c38f08aa4cf4148d4a7"
+      },
+      {
+        "path": "src/crystal_click/compressed_mark_reader.cr",
+        "bytes": 30746,
+        "sha256": "39f96cdbed79b447c7b8cdd2e67f7acfcd789f6eeb1d68a6701e7097fbcca77f"
+      },
+      {
+        "path": "src/crystal_click/part_stream_source.cr",
+        "bytes": 6254,
+        "sha256": "3d0f26d040ee03bd49840036c2c0e391df51f986182fb2a0b389e6fe037fcf8c"
+      },
+      {
+        "path": "src/crystal_click/wide_part/part_metadata_text_parser.cr",
+        "bytes": 11961,
+        "sha256": "44686f3156ff710740967d028d430ff1787d7396a63ac57c27ced500cf3e4a64"
+      },
+      {
+        "path": "scripts/check_compact_physical_context_w259.cr",
+        "bytes": 11164,
+        "sha256": "6cca0916b94550e4532e6a1f2d7c6833b14d8f190ae12562e31e4add0f1c4078"
+      },
+      {
+        "path": "scripts/support/compact_physical_context_w259_fixture.cr",
+        "bytes": 10695,
+        "sha256": "572c391e6e42b1f99a940bc858e0182c69fe037087d1f964a3cbc3ee0057e3fb"
+      },
+      {
+        "path": "spec/compact_physical_context_w259_adversary_spec.cr",
+        "bytes": 22821,
+        "sha256": "20f4adc0b88e19a3349e2dbbe768901a9a55f331b066ed98cbc272f75f80e31f"
+      },
+      {
+        "path": "spec/compact_physical_context_w259_spec.cr",
+        "bytes": 7872,
+        "sha256": "1c83b7149841b91b115cbd2590b630ccd779988d1422c34c08b7657493766f72"
+      },
+      {
+        "path": "src/crystal_click/compact_columns_substreams.cr",
+        "bytes": 5070,
+        "sha256": "c092c4d80500bab31df2e9de249ae831e1dfda6c0614068c8173c7f79cabd9b6"
+      },
+      {
+        "path": "src/crystal_click/compact_mark_format.cr",
+        "bytes": 146,
+        "sha256": "402f62ec7af75349d3c7e8fd5516d99ad1cd0d9b70d4ab8cf7a75ee26a621a7c"
+      },
+      {
+        "path": "src/crystal_click/compact_mark_index.cr",
+        "bytes": 7830,
+        "sha256": "e4e32e760155239a58c539f492b39c4c280b557601ce100bfee8a17a0cc0ee31"
+      },
+      {
+        "path": "src/crystal_click/compact_part_physical_context.cr",
+        "bytes": 7830,
+        "sha256": "ceabe44677c49d2205fb21b97aa642ab6fb789b3e5529a1d1bf5b0d1d2652099"
+      },
+      {
+        "path": "src/crystal_click/compact_part_physical_granule.cr",
+        "bytes": 779,
+        "sha256": "d38c19bfa69cf7df87ba6112afc0226fdc0188e76314eb69fc3ad9e6d1db5b9d"
+      },
+      {
+        "path": "src/crystal_click/compact_part_physical_shard.cr",
+        "bytes": 1330,
+        "sha256": "f36c206672126bad99d8d69e12409a5a23296d857bb7d87ab64a6e79d8ff4406"
+      },
+      {
+        "path": "src/crystal_click/compact_part_physical_window.cr",
+        "bytes": 830,
+        "sha256": "d10a67d1362faf5016f22a4e165a7a60755887944a03943e92345b01f2c2b08b"
+      },
+      {
+        "path": "src/crystal_click/compact_physical_slot.cr",
+        "bytes": 750,
+        "sha256": "683227e03a10f4daaf0982ad32c174eb1e403b303591b0a9dec8c4ce947d5e82"
+      },
+      {
+        "path": "src/crystal_click/part_metadata_file_reader.cr",
+        "bytes": 3351,
+        "sha256": "091778a60a0c6df5e21cf0ea9504580c36315172e3125b0eb9c83d764aeded8e"
+      },
+      {
+        "path": "src/crystal_click/part_physical_input.cr",
+        "bytes": 814,
+        "sha256": "2733de1e8d8a7e9035b9aaf3e62f61487c9c97cc0865344b22c827e37f019c6c"
+      },
+      {
+        "path": "scripts/probe_compact_physical_context_w259.rb",
+        "bytes": 50965,
+        "sha256": "a20fa77da53c3a99909d71374545a355dc3d964343146346de2a071108cc818b"
+      }
+    ],
+    "preserved": "Old Object physical method, plain 24-byte marks and existing Wide/recursive consumers remain covered by the sealed affected roster; no dependency or serializer version change."
+  },
+  "verification": {
+    "sealed_spec_files": [
+      "compact_physical_context_w259_spec.cr",
+      "compact_physical_context_w259_adversary_spec.cr",
+      "compressed_mark_transport_w124_spec.cr",
+      "compressed_mark_transport_w124_root_spec.cr",
+      "compressed_mark_positions_w194_spec.cr",
+      "physical_stream_plan_w125_spec.cr",
+      "wide_part_metadata_parser_refactor_spec.cr",
+      "object_file_reader_w126_root_spec.cr",
+      "binary_bulk_w122_spec.cr",
+      "binary_bulk_physical_prefix_w151_spec.cr",
+      "binary_dynamic_bulk_values_w155_spec.cr",
+      "binary_dynamic_bulk_values_w155_adversary_spec.cr",
+      "binary_dynamic_bulk_shared_context_w155_spec.cr",
+      "object_shared_advanced_profile_w195_spec.cr",
+      "static_binary_bulk_table_w247_spec.cr"
+    ],
+    "full_repository_suite": false,
+    "spec_debug": {
+      "log": "/private/tmp/crystal-click-w259.QcMsh7/spec-sealed-debug-green.log",
+      "examples": 149,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "exit": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w259.QcMsh7/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compressed_mark_transport_w124_spec.cr spec/compressed_mark_transport_w124_root_spec.cr spec/compressed_mark_positions_w194_spec.cr spec/physical_stream_plan_w125_spec.cr spec/wide_part_metadata_parser_refactor_spec.cr spec/object_file_reader_w126_root_spec.cr spec/binary_bulk_w122_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/binary_dynamic_bulk_shared_context_w155_spec.cr spec/object_shared_advanced_profile_w195_spec.cr spec/static_binary_bulk_table_w247_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose > /private/tmp/crystal-click-w259.QcMsh7/spec-sealed-debug-green.log 2>&1",
+      "artifact": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/spec-sealed-debug-green.log",
+        "bytes": 23789,
+        "sha256": "5a0a3d6f1f101b69dd51363e605606b125e8594d494170734507103133cff0d8"
+      }
+    },
+    "spec_release": {
+      "log": "/private/tmp/crystal-click-w259.QcMsh7/spec-sealed-release-green.log",
+      "examples": 149,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "exit": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w259.QcMsh7/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compressed_mark_transport_w124_spec.cr spec/compressed_mark_transport_w124_root_spec.cr spec/compressed_mark_positions_w194_spec.cr spec/physical_stream_plan_w125_spec.cr spec/wide_part_metadata_parser_refactor_spec.cr spec/object_file_reader_w126_root_spec.cr spec/binary_bulk_w122_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/binary_dynamic_bulk_shared_context_w155_spec.cr spec/object_shared_advanced_profile_w195_spec.cr spec/static_binary_bulk_table_w247_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --verbose --release > /private/tmp/crystal-click-w259.QcMsh7/spec-sealed-release-green.log 2>&1",
+      "artifact": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/spec-sealed-release-green.log",
+        "bytes": 23790,
+        "sha256": "c784132f23ca8857520189eacfbe2f4114e76f1c2cb1d70d0e578f9b35d604f4"
+      }
+    },
+    "helper_debug": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w259.QcMsh7/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_compact_physical_context_w259.cr -o /private/tmp/crystal-click-w259.QcMsh7/helper-debug --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace > /private/tmp/crystal-click-w259.QcMsh7/helper-debug-build-green.log 2>&1",
+      "log": "/private/tmp/crystal-click-w259.QcMsh7/helper-debug-build-green.log",
+      "exit": 0,
+      "artifact": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/helper-debug-build-green.log",
+        "bytes": 61,
+        "sha256": "1d1d3dfaead9a091f49bc1a64cba8588be3efed378e469481d27b0b0d1acc3cc"
+      },
+      "executable": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/helper-debug",
+        "bytes": 22323488,
+        "sha256": "8077035c2b728f68a72902edff4b69bfe4aae7cd5466b28e099f0524c45d66cb"
+      }
+    },
+    "helper_release": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w259.QcMsh7/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 build scripts/check_compact_physical_context_w259.cr -o /private/tmp/crystal-click-w259.QcMsh7/helper-release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --release > /private/tmp/crystal-click-w259.QcMsh7/helper-release-build-green.log 2>&1",
+      "log": "/private/tmp/crystal-click-w259.QcMsh7/helper-release-build-green.log",
+      "exit": 0,
+      "artifact": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/helper-release-build-green.log",
+        "bytes": 62,
+        "sha256": "a05ce6be74eb23223cdc9c04ac6ec955136d0ca79901d440192f874c25f1ea70"
+      },
+      "executable": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/helper-release",
+        "bytes": 6695248,
+        "sha256": "1c960901ab5f4d13edd4715bca33d0dfb855afda7a6c0979cc8aa4e22be53de1"
+      }
+    },
+    "native_debug": {
+      "exit": 0,
+      "log": "/private/tmp/crystal-click-w259.QcMsh7/native-debug-sealed.log",
+      "evidenceRoot": "/private/tmp/crystal-click-w259-native-debug-sealed.inObat",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w259.QcMsh7/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/probe_compact_physical_context_w259.rb --helper '/private/tmp/crystal-click-w259.QcMsh7/helper-debug' --evidence-root '/private/tmp/crystal-click-w259-native-debug-sealed.inObat' > '/private/tmp/crystal-click-w259.QcMsh7/native-debug-sealed.log' 2>&1",
+      "artifact": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/native-debug-sealed.log",
+        "bytes": 281,
+        "sha256": "ca639b2e3b8213d967000e9b593631a8c943d548dd939f39996f76bf93111da2"
+      }
+    },
+    "native_release": {
+      "exit": 0,
+      "log": "/private/tmp/crystal-click-w259.QcMsh7/native-release-sealed.log",
+      "evidenceRoot": "/private/tmp/crystal-click-w259-native-release-sealed.YXeOVc",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w259.QcMsh7/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/probe_compact_physical_context_w259.rb --helper /private/tmp/crystal-click-w259.QcMsh7/helper-release --evidence-root /private/tmp/crystal-click-w259-native-release-sealed.YXeOVc > /private/tmp/crystal-click-w259.QcMsh7/native-release-sealed.log 2>&1",
+      "artifact": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/native-release-sealed.log",
+        "bytes": 283,
+        "sha256": "e82630e059cb613da3198be75fc144569f756aec1a2fb37d46a91254a766a7c6"
+      }
+    },
+    "format": {
+      "exit": 0,
+      "log": "/private/tmp/crystal-click-w259.QcMsh7/format-final.log",
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w259.QcMsh7/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 tool format --check src/crystal_click.cr src/crystal_click/compressed_mark_reader.cr src/crystal_click/part_stream_source.cr src/crystal_click/wide_part/part_metadata_text_parser.cr scripts/check_compact_physical_context_w259.cr scripts/support/compact_physical_context_w259_fixture.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_physical_context_w259_spec.cr src/crystal_click/compact_columns_substreams.cr src/crystal_click/compact_mark_format.cr src/crystal_click/compact_mark_index.cr src/crystal_click/compact_part_physical_context.cr src/crystal_click/compact_part_physical_granule.cr src/crystal_click/compact_part_physical_shard.cr src/crystal_click/compact_part_physical_window.cr src/crystal_click/compact_physical_slot.cr src/crystal_click/part_metadata_file_reader.cr src/crystal_click/part_physical_input.cr > /private/tmp/crystal-click-w259.QcMsh7/format-final.log 2>&1",
+      "artifact": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/format-final.log",
+        "bytes": 61,
+        "sha256": "638206e879baa10e5726f399c1f09027e7507af79fa92db8758e612a77c2f6a5"
+      }
+    },
+    "ruby_syntax": {
+      "commands": [
+        "ruby -c scripts/probe_compact_physical_context_w259.rb",
+        "ruby -c /private/tmp/crystal-click-w259.QcMsh7/root-native-audit.rb"
+      ],
+      "observed": "Syntax OK; exit 0"
+    },
+    "git_diff_check": {
+      "command": "git diff --check",
+      "observed": "Empty output; exit 0 before final ledger/index staging"
+    },
+    "unchanged_limits": {
+      "minimum_free_ram_percent": 50,
+      "crystal_workers": 1,
+      "process_tree_memory_limit_bytes": 12884901888,
+      "heavy_commands_serial": true
+    },
+    "tools": {
+      "crystal": {
+        "path": "/opt/homebrew/bin/crystal",
+        "bytes": 13664928,
+        "sha256": "40cffa1b29b572c064b4a397c6b82c7a84c55a146685d0971dab816f855eb836",
+        "version": "1.21.0",
+        "llvm": "22.1.8",
+        "target": "aarch64-apple-darwin"
+      },
+      "guard": {
+        "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+        "bytes": 11567,
+        "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4"
+      },
+      "clickhouse": {
+        "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+        "bytes": 746226224,
+        "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+        "version": "26.10.1.1201",
+        "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028"
+      }
+    }
+  },
+  "root_audit": {
+    "exit": 0,
+    "log": "/private/tmp/crystal-click-w259.QcMsh7/root-native-audit-sealed.log",
+    "auditor": "/private/tmp/crystal-click-w259.QcMsh7/root-native-audit.rb",
+    "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 CRYSTAL_WORKERS=1 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w259.QcMsh7/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 /private/tmp/crystal-click-w259.QcMsh7/root-native-audit.rb /private/tmp/crystal-click-w259-native-debug-sealed.inObat /private/tmp/crystal-click-w259-native-release-sealed.YXeOVc > /private/tmp/crystal-click-w259.QcMsh7/root-native-audit-sealed.log 2>&1",
+    "artifact": {
+      "path": "/private/tmp/crystal-click-w259.QcMsh7/root-native-audit-sealed.log",
+      "bytes": 7833,
+      "sha256": "1b049cb17aa63889b12c86b5b72e37b291181f7909aa69154ceb6e087fdb5ed9"
+    },
+    "auditor_identity": {
+      "path": "/private/tmp/crystal-click-w259.QcMsh7/root-native-audit.rb",
+      "bytes": 9726,
+      "sha256": "6b364c592c9982c06e2a6322a093d58dcc0d219f890553b4a379a1c240d62b43"
+    },
+    "report": {
+      "status": "passed",
+      "cells": [
+        {
+          "root": "/private/tmp/crystal-click-w259-native-debug-sealed.inObat",
+          "summary": {
+            "path": "/private/tmp/crystal-click-w259-native-debug-sealed.inObat/summary.json",
+            "bytes": 281489,
+            "sha256": "f401a613f88c8625cea0fc3e4e0d6f6d733bc0b5434d70260cc34fe1da7dff35"
+          },
+          "invocations": 2,
+          "captures": [
+            {
+              "path": "/private/tmp/crystal-click-w259-native-debug-sealed.inObat/invocations/native_source.stdin.sql",
+              "bytes": 10915,
+              "sha256": "019181567f346cdd6eaabeae949277d288202f12f6a77a3d89c7f759c9459685"
+            },
+            {
+              "path": "/private/tmp/crystal-click-w259-native-debug-sealed.inObat/invocations/native_source.stdout",
+              "bytes": 5821,
+              "sha256": "e6c994351e046539d596d7f30770392245ed8846e58efd80093487e595247066"
+            },
+            {
+              "path": "/private/tmp/crystal-click-w259-native-debug-sealed.inObat/invocations/native_source.stderr",
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "path": "/private/tmp/crystal-click-w259-native-debug-sealed.inObat/invocations/public_reader_probe.stdout",
+              "bytes": 39514,
+              "sha256": "ca7f3da94e67ad8ff134051bbdf71497fe2fc7aa2ccf47607ed1f7c18c5f3bdc"
+            },
+            {
+              "path": "/private/tmp/crystal-click-w259-native-debug-sealed.inObat/invocations/public_reader_probe.stderr",
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ],
+          "native_files": {
+            "wide_control": {
+              "files": 41,
+              "bytes": 6073
+            },
+            "compact_mrk3": {
+              "files": 10,
+              "bytes": 3625
+            },
+            "compact_mrk4": {
+              "files": 11,
+              "bytes": 4945
+            }
+          },
+          "negative_controls": [
+            "missing mode",
+            "extra mode field",
+            "missing column window",
+            "wrong global slot index",
+            "wrong logical range end",
+            "changed payload byte",
+            "dropped empty Array shard",
+            "swapped granules",
+            "wrong row offset",
+            "extra EOF granule",
+            "wide_control raw CHECK=0",
+            "compact_mrk3 raw CHECK=0",
+            "compact_mrk4 raw CHECK=0"
+          ],
+          "original_captures_unchanged": true
+        },
+        {
+          "root": "/private/tmp/crystal-click-w259-native-release-sealed.YXeOVc",
+          "summary": {
+            "path": "/private/tmp/crystal-click-w259-native-release-sealed.YXeOVc/summary.json",
+            "bytes": 281523,
+            "sha256": "b01e2c12aa1bb98328473f95a70b7c24da797c69bbbb4f3ffb8e0785f19fc3eb"
+          },
+          "invocations": 2,
+          "captures": [
+            {
+              "path": "/private/tmp/crystal-click-w259-native-release-sealed.YXeOVc/invocations/native_source.stdin.sql",
+              "bytes": 10915,
+              "sha256": "019181567f346cdd6eaabeae949277d288202f12f6a77a3d89c7f759c9459685"
+            },
+            {
+              "path": "/private/tmp/crystal-click-w259-native-release-sealed.YXeOVc/invocations/native_source.stdout",
+              "bytes": 5827,
+              "sha256": "2a6b4913ddf3599854a3769e140c206757709bc87544e9c1befee9c21fef7899"
+            },
+            {
+              "path": "/private/tmp/crystal-click-w259-native-release-sealed.YXeOVc/invocations/native_source.stderr",
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "path": "/private/tmp/crystal-click-w259-native-release-sealed.YXeOVc/invocations/public_reader_probe.stdout",
+              "bytes": 39514,
+              "sha256": "ca7f3da94e67ad8ff134051bbdf71497fe2fc7aa2ccf47607ed1f7c18c5f3bdc"
+            },
+            {
+              "path": "/private/tmp/crystal-click-w259-native-release-sealed.YXeOVc/invocations/public_reader_probe.stderr",
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          ],
+          "native_files": {
+            "wide_control": {
+              "files": 41,
+              "bytes": 6073
+            },
+            "compact_mrk3": {
+              "files": 10,
+              "bytes": 3625
+            },
+            "compact_mrk4": {
+              "files": 11,
+              "bytes": 4945
+            }
+          },
+          "negative_controls": [
+            "missing mode",
+            "extra mode field",
+            "missing column window",
+            "wrong global slot index",
+            "wrong logical range end",
+            "changed payload byte",
+            "dropped empty Array shard",
+            "swapped granules",
+            "wrong row offset",
+            "extra EOF granule",
+            "wide_control raw CHECK=0",
+            "compact_mrk3 raw CHECK=0",
+            "compact_mrk4 raw CHECK=0"
+          ],
+          "original_captures_unchanged": true
+        }
+      ],
+      "native_files_equal_between_modes": true,
+      "helper_reports_equal_between_modes": true,
+      "native_files_compared_by_literal_bytes": [
+        {
+          "table": "wide_control",
+          "files": 41,
+          "bytes_per_mode": 6073
+        },
+        {
+          "table": "compact_mrk3",
+          "files": 10,
+          "bytes_per_mode": 3625
+        },
+        {
+          "table": "compact_mrk4",
+          "files": 11,
+          "bytes_per_mode": 4945
+        }
+      ],
+      "scope": "finite actual-capture corruption controls; not exhaustive production corruption or adversarial executable authentication"
+    },
+    "distinct_evidence": "Root inspected production owners and primary source. Runner Ruby raw LZ4/frame/mark oracle is independent of Crystal production; root reuses that oracle, not a second independently implemented Ruby codec.",
+    "parser_lz4_controls": {
+      "negative": 16,
+      "positive": 3,
+      "artifact": {
+        "path": "/private/tmp/crystal-click-w259.QcMsh7/pure-controls.log",
+        "bytes": 396,
+        "sha256": "2765bde6377edb8bf7c712d3dbc1fed2ed7cdb954dc1cf806d5e20068fc7cc4b"
+      },
+      "execution": "Root functions.exec orchestration; no standalone durable script. Bounded CHECK roster/parser and LZ4 corruption controls, with positive controls."
+    },
+    "frame_checksum_boundary": "Ruby does not independently recompute CityHash128. Production touched-frame authentication, stock CHECK and SHA snapshots are separate evidence.",
+    "model_review": "Three Luna Max agents provided production, tests/helper and source/runner work. Same-lineage review is correlated, not independent confirmation."
+  },
+  "diagnostics": [
+    "Initial helper/fixture compile errors and consuming iterator/immutable String slice test mistakes were instrumentation repairs, not format RED.",
+    "A temporary root auditor initially assumed a helper stdin capture file; corrected to assert empty stdin bytes/digest and no file. Five actual captures per cell remain unchanged.",
+    "Summary helper metadata is merged with the actual helper report; executable path/argv/SHA must be read from actual invocation records and observed build artifacts.",
+    "Only descriptive source_contract text changed after frozen Crystal runs; both final native cells were rerun against the corrected runner."
+  ],
+  "non_guarantees": [
+    "Typed top-level Compact .values, Compact writing, compressed marks, nonadaptive or nonterminal grids, empty zero-domain compressed parts.",
+    "Arbitrary Dynamic/JSON/custom serializer callback-roster equality or all recursive/layout/state products.",
+    "Parent projection-manifest authentication, native MV SQL/triggers/provenance/freshness, transform/projection composition, general keys/partitions or complete facade decomposition.",
+    "Concurrent server mutation, crash durability or untrusted directory ancestry; inherited path-string symlink guards are not component-wise no-follow/access-control.",
+    "Whole-file checksum authentication or untouched payload authentication; only touched compressed frames are authenticated.",
+    "Total RSS/caller snapshot allocation bounds; fresh header indexing remains whole-file work for each window and offsets are not performance-optimized.",
+    "Full repository suite, exhaustive production corruption handling or malicious executable/output authentication; finite report controls do not establish these.",
+    "Throughput/memory improvements, cross-version/endianness portability or <=10% speed parity."
+  ],
+  "continuation": {
+    "next": "Connect finite existing typed codecs to the qualified Compact granule/column/lifecycle context; run new stock read/write falsifiers before widening.",
+    "refresh_triggers": [
+      "Physical/parser/transport/budget/consumer/helper/oracle source change",
+      "Runtime/compiler/guard/source pin drift",
+      "Widened mark/serializer profile",
+      "Capture loss or changed bytes"
+    ],
+    "raw_capture_policy": "Private temporary scratch paths are local references, not durable proof by their names. If lost, rerun under the recorded pins/limits before relying on qualification.",
+    "failure_policy": "Keep unsupported profiles guarded and reopen dependent claims; do not promote physical shard access into typed compatibility."
+  }
+}

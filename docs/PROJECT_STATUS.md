@@ -1,6 +1,40 @@
 # CrystalClick project status
 
-Current qualification (W258, 2026-10-10): VERIFIED / root adversary ROBUST within
+Current qualification (W259, 2026-10-10): VERIFIED / root adversary ROBUST within
+the qualified top-level Compact plain-mark physical-window target. The new
+`CompactPartPhysicalContext` exposes owned per-column/granule shards from actual
+`.mrk3` and `.mrk4` parts. Ten own-file physical, metadata and detached carrier
+owners reuse the existing parser, checksum-sized resolver, mmap frame index,
+payload authentication and decoder; no per-product value serializer is added.
+Global slot order and equal coordinates preserve empty Array child streams.
+
+All 15 sealed spec files pass 149 examples per DEBUG/RELEASE mode, zero
+failures/errors/pending, and both helpers build. Two fresh native cells pass
+actual CHECK=1/schema/full/middle rows for the three stock parts. The independent
+raw Ruby byte oracle matches 70 physical windows per mode; the typed Wide
+positive and exact typed Compact refusals remain unchanged. Root audits the
+actual process/capture records, all 62 files / 14,643 bytes per mode and byte
+equality across modes. Thirteen actual-capture controls reject per mode;
+16 separate parser/LZ4 negatives and three positives pass. A zero-window
+descriptor-budget RED was repaired before the final runs. Full suite not run.
+
+CH builds its `.mrk4` roster by replaying prefix/empty-body/suffix callbacks,
+not generic type-tree enumeration. The interval law is qualified against the
+observed monotone grid and matching callback roster, not all serializers.
+Parts must be quiescent, directory ancestry trusted; budgets bound logical
+work, not RSS or caller snapshots, and only touched payloads are authenticated.
+Typed Compact `.values`, compressed marks and Compact writing remain open.
+Next: connect existing typed recursion to this physical/lifecycle context.
+Remaining aggregate/type-layout products, parent `.proj` reader authentication,
+transform/projection composition, general keys/partitions and broader facade
+decomposition also stay open. Overall goal ACTIVE; memory/performance deferred.
+Comparison source `ed30948f095ecb70679986d7d60e27ad770ae27a` is separately pinned
+from executed CH build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. See the
+[W259 frontier](COMPACT_PHYSICAL_CONTEXT_FRONTIER.md) and
+[root evidence](../.landmark/evidence/compact-physical-context-w259.json).
+Local atomic commit only, no push or speed claim.
+
+Previous qualification (W258, 2026-10-10): VERIFIED / root adversary ROBUST within
 the finite static typed Wide selected-column admission target. One own-file
 metadata owner removes unrelated two-column/unique-UInt64 constraints from
 already supported typed Array, named scalar Tuple, LowCardinality(String) and
