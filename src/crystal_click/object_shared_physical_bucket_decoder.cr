@@ -14,6 +14,44 @@ module CrystalClick
       expected_logical_rows : UInt64,
       codec_budget : BinaryCodecBudget,
     ) : ObjectSharedPhysicalParentMark
+      validate_inline_request!(version, physical_rows, expected_logical_rows, codec_budget)
+      lanes = inline_lanes(role_views, codec_budget)
+      records = ObjectSharedChunkStructureCodec.read_split_records(
+        lanes["structure_prefix"].borrowed_bytes_for_decode,
+        lanes["structure_suffix"].borrowed_bytes_for_decode,
+        codec_budget,
+      )
+      decode_inline_records(version, lanes, records, physical_rows, expected_logical_rows, codec_budget)
+    end
+
+    # Decodes the same authenticated inline parent while retaining the exact
+    # parser-observed StructurePrefix spans used for its chunk schedule. The
+    # spans remain callback-local and keep original suffix mark pairs intact.
+    def self.decode_inline_with_spans(
+      version : Int,
+      role_views : Hash(String, ObjectSharedInlineRoleReadView),
+      physical_rows : UInt64,
+      expected_logical_rows : UInt64,
+      codec_budget : BinaryCodecBudget,
+    ) : Tuple(ObjectSharedPhysicalParentMark, Array(ObjectSharedChunkStructureReadSpan))
+      validate_inline_request!(version, physical_rows, expected_logical_rows, codec_budget)
+      lanes = inline_lanes(role_views, codec_budget)
+      spans = ObjectSharedChunkStructureCodec.read_split_record_spans(
+        lanes["structure_prefix"].borrowed_bytes_for_decode,
+        lanes["structure_suffix"].borrowed_bytes_for_decode,
+        codec_budget,
+      )
+      records = spans.map(&.record)
+      parent = decode_inline_records(version, lanes, records, physical_rows, expected_logical_rows, codec_budget)
+      {parent, spans}
+    end
+
+    private def self.validate_inline_request!(
+      version : Int,
+      physical_rows : UInt64,
+      expected_logical_rows : UInt64,
+      codec_budget : BinaryCodecBudget,
+    ) : Nil
       validate_version!(version)
       if codec_budget.writing?
         raise ArgumentError.new("inline Object shared bucket decode requires a read-direction budget")
@@ -25,7 +63,13 @@ module CrystalClick
       if expected_logical_rows > Int32::MAX.to_u64
         raise CorruptPartError.new("inline Object shared logical rows exceed Int32")
       end
+      nil
+    end
 
+    private def self.inline_lanes(
+      role_views : Hash(String, ObjectSharedInlineRoleReadView),
+      codec_budget : BinaryCodecBudget,
+    ) : Hash(String, ObjectSharedPhysicalLaneReader)
       role_names = ObjectSharedPhysicalBucketRawLayout::LANE_NAMES
       unless role_views.size == role_names.size && role_names.all? { |name| role_views.has_key?(name) }
         raise CorruptPartError.new("inline Object shared bucket role roster is incomplete or has extra roles")
@@ -47,13 +91,17 @@ module CrystalClick
       role_names.each do |name|
         lanes[name] = ObjectSharedPhysicalLaneReader.new(name, role_views[name], codec_budget)
       end
-      prefix_lane = lanes["structure_prefix"]
-      suffix_lane = lanes["structure_suffix"]
-      records = ObjectSharedChunkStructureCodec.read_split_records(
-        prefix_lane.borrowed_bytes_for_decode,
-        suffix_lane.borrowed_bytes_for_decode,
-        codec_budget,
-      )
+      lanes
+    end
+
+    private def self.decode_inline_records(
+      version : Int,
+      lanes : Hash(String, ObjectSharedPhysicalLaneReader),
+      records : Array(ObjectSharedChunkStructure),
+      physical_rows : UInt64,
+      expected_logical_rows : UInt64,
+      codec_budget : BinaryCodecBudget,
+    ) : ObjectSharedPhysicalParentMark
       if records.empty?
         raise CorruptPartError.new("inline Object shared bucket has no logical chunk records")
       end
@@ -61,7 +109,8 @@ module CrystalClick
         raise CorruptPartError.new("ADVANCED v2 inline physical parent must contain exactly one chunk")
       end
       if expected_logical_rows == 0_u64
-        unless records.size == 1 && records[0].row_count == 0_u64 && records[0].path_count == 0
+        first_record = records[0]
+        unless records.size == 1 && first_record.row_count == 0_u64 && first_record.path_count == 0
           raise CorruptPartError.new("empty inline Object shared schedules require one pathless zero-row chunk")
         end
       end

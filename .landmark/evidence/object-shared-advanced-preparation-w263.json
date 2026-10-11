@@ -1,0 +1,180 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W263-advanced-Object-inline-structural-value-phase-split",
+  "recorded_date": "2026-10-11",
+  "baseline_commit": "8cdd10209f65b1556bb1593c78f93dee53cbbe51",
+  "claim": {
+    "level": "VERIFIED",
+    "text": "Existing authenticated inline advanced SharedData v2/v3 callbacks can be prepared as value-free raw owners and decoded later with the same operation budget.",
+    "scope": "One already authenticated inline mark, existing layouts and coordinate owners; not raw Compact framing or native root admission.",
+    "root_adversary": "ROBUST within the semantic-delay, foreign-owner, budget-identity, detached-Copy and external raw-state factory/constructor attacks actually executed",
+    "global_goal": "ACTIVE; full Compact JSON/native/public/offline, remaining types/MV/projection support and later performance work remain open"
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "boundary": "Raw preparation versus semantic value decoding and source-bound holder construction",
+    "rollback": "One exact-path local atomic commit over the baseline; no push or history rewrite."
+  },
+  "admitted": [
+    "prepare_inline authenticates callback roles, source pairs, raw bucket/Copy extents and original callback-local chunk-header spans without ObjectDocument/BinaryValue decoding.",
+    "decode_prepared reuses the existing AdvancedChunkCodec and enforces the exact retained physical owner and read-budget identity.",
+    "Only prepare_from_source can mint the holder; seal and the generated new are private.",
+    "Raw Copy/path bytes are owned snapshots; mutating a captured Copy slice after preparation does not alter the decoded values.",
+    "Legacy decode delegates through both phases; its caller contract and supported versions are retained."
+  ],
+  "verification": {
+    "guard": "COGNI_RUN_SAFE_MIN_FREE_PCT=50; CRYSTAL_WORKERS=1; run_safe.sh 180 12288; --threads 1; DEBUG then RELEASE serial",
+    "source_snapshot": "Clean export of only the staged five production/test paths over the baseline. The separately pending MAP reader/common prefix changes were not present or loaded.",
+    "snapshot_path": "/private/tmp/crystal-click-w263-phase-index.twGOYm",
+    "snapshot_availability": "Task-local temporary checkout; baseline plus exact changed-source hashes is the durable reconstruction anchor.",
+    "all_source_sorted_hash_roster_sha256": "234d166abeae490df22e327b86b5098ae73e142a4dfa32848ac22ff955da8375",
+    "source_hashes_unchanged_across_final_modes": true,
+    "source_test_sha256": {
+      "src/crystal_click.cr": "ee0645c1f6695c808c809a837410548b7d0c0a2c3cb62d051e041d4118e11c27",
+      "src/crystal_click/object_shared_advanced_inline_prepared.cr": "12eae134aaa2ac095ebc5b5e8dcc47127a4202e9677156c09f94deb47f1000a9",
+      "src/crystal_click/object_shared_advanced_inline_decoder.cr": "339100c62a7710fff937664815c44791173ad6d75aaf9df3a4f6397b874cc18e",
+      "src/crystal_click/object_shared_physical_bucket_decoder.cr": "fa55db1743dfac4a6e34983625c0898cec5bdc54a1572ec458425f9322189f39",
+      "spec/object_shared_advanced_inline_preparation_w263_spec.cr": "e73e447baa13d3a33d2cc32aa8258a972a2948fab18455ad05080acf8e345e45"
+    },
+    "spec_paths": [
+      "spec/object_shared_path_callback_source_w263_spec.cr",
+      "spec/compact_object_shared_coordinate_w263_spec.cr",
+      "spec/object_shared_inline_coordinate_w240_adversary_spec.cr",
+      "spec/object_shared_inline_relocation_w240_adversary_spec.cr",
+      "spec/object_shared_advanced_inline_w240_adversary_spec.cr",
+      "spec/object_document_inline_framing_w240_spec.cr",
+      "spec/object_shared_path_json_tape_w240_spec.cr",
+      "spec/compact_physical_context_w259_spec.cr",
+      "spec/compact_physical_context_w259_adversary_spec.cr",
+      "spec/compact_typed_w260_spec.cr",
+      "spec/compact_typed_w260_adversary_spec.cr",
+      "spec/compact_dynamic_w262_spec.cr",
+      "spec/compact_dynamic_w262_adversary_spec.cr",
+      "spec/object_structure_inline_prefix_w240_adversary_spec.cr",
+      "spec/object_document_inline_depth_w240_adversary_spec.cr",
+      "spec/object_shared_descendant_json_w243_spec.cr",
+      "spec/object_document_callback_prefix_lifecycle_w263_spec.cr",
+      "spec/object_shared_advanced_decoder_contract_w263_spec.cr",
+      "spec/object_shared_chunk_structure_read_span_w263_spec.cr",
+      "spec/object_shared_chunk_structure_split_budget_w240_spec.cr",
+      "spec/object_shared_advanced_inline_preparation_w263_spec.cr"
+    ],
+    "ordered_spec_hash_roster_sha256": "295c7c49267fed8161e74c815379f10b94806012948360126940c5baa19c9da5",
+    "debug": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/object_shared_path_callback_source_w263_spec.cr spec/compact_object_shared_coordinate_w263_spec.cr spec/object_shared_inline_coordinate_w240_adversary_spec.cr spec/object_shared_inline_relocation_w240_adversary_spec.cr spec/object_shared_advanced_inline_w240_adversary_spec.cr spec/object_document_inline_framing_w240_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr spec/object_structure_inline_prefix_w240_adversary_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_document_callback_prefix_lifecycle_w263_spec.cr spec/object_shared_advanced_decoder_contract_w263_spec.cr spec/object_shared_chunk_structure_read_span_w263_spec.cr spec/object_shared_chunk_structure_split_budget_w240_spec.cr spec/object_shared_advanced_inline_preparation_w263_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "cwd": "/private/tmp/crystal-click-w263-phase-index.twGOYm",
+      "tool_result": "433c3a",
+      "examples": 145,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "exit": 0,
+      "test_elapsed": "157.04 milliseconds"
+    },
+    "release": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-release.f4Xdtp/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/object_shared_path_callback_source_w263_spec.cr spec/compact_object_shared_coordinate_w263_spec.cr spec/object_shared_inline_coordinate_w240_adversary_spec.cr spec/object_shared_inline_relocation_w240_adversary_spec.cr spec/object_shared_advanced_inline_w240_adversary_spec.cr spec/object_document_inline_framing_w240_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr spec/object_structure_inline_prefix_w240_adversary_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_document_callback_prefix_lifecycle_w263_spec.cr spec/object_shared_advanced_decoder_contract_w263_spec.cr spec/object_shared_chunk_structure_read_span_w263_spec.cr spec/object_shared_chunk_structure_split_budget_w240_spec.cr spec/object_shared_advanced_inline_preparation_w263_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "cwd": "/private/tmp/crystal-click-w263-phase-index.twGOYm",
+      "tool_result": "788775",
+      "examples": 145,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "exit": 0,
+      "test_elapsed": "92.0 milliseconds"
+    },
+    "negative_compile_guards": [
+      {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/object_shared_advanced_inline_preparation_w263_spec.cr -D w263_raw_state_mint_attack --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color -- --example 'Object shared advanced inline preparation (W263)'",
+        "tool_result": "aa1344",
+        "exit": 1,
+        "expected_diagnostic": "private method 'seal' called for CrystalClick::ObjectSharedAdvancedInlinePrepared.class"
+      },
+      {
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/object_shared_advanced_inline_preparation_w263_spec.cr -D w263_raw_state_constructor_attack --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color -- --example 'Object shared advanced inline preparation (W263)'",
+        "tool_result": "0f609a",
+        "exit": 1,
+        "expected_diagnostic": "private method 'new' called for CrystalClick::ObjectSharedAdvancedInlinePrepared.class"
+      }
+    ],
+    "format_command": "/opt/homebrew/bin/crystal tool format --check src/crystal_click.cr src/crystal_click/object_shared_advanced_inline_prepared.cr src/crystal_click/object_shared_advanced_inline_decoder.cr src/crystal_click/object_shared_physical_bucket_decoder.cr spec/object_shared_advanced_inline_preparation_w263_spec.cr",
+    "format_exit": 0,
+    "format_tool_result": "825f0d",
+    "diff_check_command": "git diff --cached --check",
+    "diff_check_exit": 0,
+    "full_suite_claimed": false,
+    "native_reader_executed": false,
+    "review": "Luna implementation/source review is correlated. Root inspected the actual sources, authored the complete cross-source artifact attack and private-constructor alternative, and executed all final guarded checks."
+  },
+  "falsifiers": {
+    "missing_api_red": {
+      "tool_result": "d6f3c2",
+      "exit": 1,
+      "meaning": "Undefined prepare_inline before production edits; compile discriminator, not behavior qualification."
+    },
+    "complete_cross_source_behavioral_red": {
+      "tool_result": "0b7e58",
+      "exit": 1,
+      "examples": 1,
+      "failures": 1,
+      "meaning": "A complete internally consistent foreign parent/span/Copy set minted through public seal substituted worst for source A's first without refusal. The partial Copy-only replacement was already rejected and was not the decisive RED."
+    },
+    "semantic_delay": "A well-framed reserved 0xff Copy type tag is admitted by raw preparation and rejected by decode_prepared, for both shared versions.",
+    "controls": [
+      "v2 one-chunk and v3 two-chunk schedules over three logical rows and two buckets",
+      "Foreign physical owner rejected before absent body schedules",
+      "Fresh decode budget refused before values",
+      "Post-preparation captured Copy mutation does not change first/second values",
+      "Private seal and generated constructor access both rejected by exact compile diagnostics"
+    ],
+    "excluded_diagnostics": "Earlier private test-helper compiler error and incomplete raw-artifact attack are not behavioral evidence."
+  },
+  "boundaries": {
+    "allowed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/object_shared_advanced_inline_prepared.cr",
+      "src/crystal_click/object_shared_advanced_inline_decoder.cr",
+      "src/crystal_click/object_shared_physical_bucket_decoder.cr",
+      "spec/object_shared_advanced_inline_preparation_w263_spec.cr",
+      "docs/COMPACT_JSON_READER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/object-shared-advanced-preparation-w263.json"
+    ],
+    "changed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/object_shared_advanced_inline_prepared.cr",
+      "src/crystal_click/object_shared_advanced_inline_decoder.cr",
+      "src/crystal_click/object_shared_physical_bucket_decoder.cr",
+      "spec/object_shared_advanced_inline_preparation_w263_spec.cr",
+      "docs/COMPACT_JSON_READER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/object-shared-advanced-preparation-w263.json"
+    ],
+    "requires_scope": "Only the advanced-prepared require hunk is included; the six MAP-reader requires are excluded.",
+    "excluded_unfinished_paths": [
+      "spec/compact_json_w263_native_spec.cr",
+      "spec/compact_static_json_internal_w263_spec.cr",
+      "spec/compact_static_json_root_w263_adversary_spec.cr"
+    ]
+  },
+  "rejected_or_unqualified": [
+    "No MRK3/MRK4 root framer or complete three-root/48-cell native JSON qualification follows from this inline prerequisite.",
+    "No public/typed/offline JSON admission, cross-operation prepared-state rebinding, thread safety or reflection-proof API isolation.",
+    "No complete retained/transient workspace census, allocator capacity, RSS, speed or <=10% parity claim.",
+    "Failed operation budgets and parser metadata are not rolled back; discard failed enclosing operations."
+  ],
+  "assumptions": [
+    "Existing authenticated callback/coordinate context remains alive and quiescent.",
+    "One read operation owns the prepared holder and exact budget.",
+    "Raw bucket/Copy owners expose no ordinary mutator; defensive byte snapshots retain their current semantics."
+  ],
+  "refresh": "Source, compiler visibility, owner/budget, codec, tests or consumer drift reopens the certificate. Rerun this exact isolated cohort and both compile guards; native root admission needs its separate witnesses.",
+  "links": [
+    "docs/COMPACT_JSON_READER_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "LANDMARKS.md",
+    ".landmark/evidence/object-shared-chunk-spans-w263.json"
+  ],
+  "validation_limit": "No repository validate-landmark-graph.sh or local packet template exists. Existing curated-evidence shape is reused; JSON/path/hash checks index evidence but do not execute it or confer truth."
+}

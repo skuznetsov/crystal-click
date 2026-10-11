@@ -17,6 +17,56 @@ module CrystalClick
       role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding)? = nil,
       callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair)? = nil,
     ) : Array(Array(ObjectSharedMapRow))
+      prepared = prepare_inline(
+        prefix,
+        physical_plan,
+        grid,
+        budget,
+        role_bindings,
+        callback_pairs,
+      )
+      decode_prepared(prepared, budget)
+    end
+
+    # Authenticates and materializes one inline mark's raw shared-data roles,
+    # Copy framing, and parser-observed StructurePrefix spans without decoding
+    # any ObjectDocument or BinaryValue. The same operation budget continues
+    # in decode_prepared; preparation is not independently replayable under a
+    # fresh budget.
+    def self.prepare_inline(
+      prefix : ObjectDocumentCallbackPrefix,
+      physical_plan : ObjectDocumentPhysicalPlan,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding)? = nil,
+      callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair)? = nil,
+    ) : ObjectSharedAdvancedInlinePrepared
+      ObjectSharedAdvancedInlinePrepared.prepare_from_source(
+        prefix,
+        physical_plan,
+        grid,
+        budget,
+        role_bindings,
+        callback_pairs,
+      )
+    end
+
+    # Returns raw parser products only. This helper cannot mint a prepared
+    # holder; that is restricted to ObjectSharedAdvancedInlinePrepared's
+    # source-only factory after this full validation path returns.
+    def self.prepare_raw_inline(
+      prefix : ObjectDocumentCallbackPrefix,
+      physical_plan : ObjectDocumentPhysicalPlan,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding)? = nil,
+      callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair)? = nil,
+    ) : NamedTuple(
+      logical_row_count: UInt64,
+      bucket_parents: Array(Array(ObjectSharedPhysicalParentMark)),
+      structure_spans_by_bucket: Array(Array(ObjectSharedChunkStructureReadSpan)),
+      copies: Array(ObjectSharedCopyStreams),
+    )
       context = prefix.nested_context
       if budget.writing? || context.writing?
         raise ArgumentError.new("inline advanced Object decoding requires read-direction contexts")
@@ -173,6 +223,7 @@ module CrystalClick
       budget.charge_elements(total_roles) if total_roles > 0_u64
 
       bucket_parents = Array(Array(ObjectSharedPhysicalParentMark)).new(bucket_count)
+      structure_spans_by_bucket = Array(Array(ObjectSharedChunkStructureReadSpan)).new(bucket_count)
       bucket_count.times do |bucket_index|
         role_views = Hash(String, ObjectSharedInlineRoleReadView).new(initial_capacity: ObjectSharedPhysicalBucketRawLayout::LANE_NAMES.size)
         ObjectSharedPhysicalBucketRawLayout::LANE_NAMES.each do |role|
@@ -185,7 +236,7 @@ module CrystalClick
             budget,
           )
         end
-        parent = ObjectSharedPhysicalBucketDecoder.decode_inline(
+        parent, structure_spans = ObjectSharedPhysicalBucketDecoder.decode_inline_with_spans(
           version.to_i,
           role_views,
           physical_rows,
@@ -193,6 +244,7 @@ module CrystalClick
           budget,
         )
         bucket_parents << [parent] of ObjectSharedPhysicalParentMark
+        structure_spans_by_bucket << structure_spans
       end
 
       copy_views = Hash(String, ObjectSharedInlineRoleReadView).new(initial_capacity: ObjectSharedAdvancedCopyLayout::COPY_LANES.size)
@@ -236,18 +288,38 @@ module CrystalClick
       end
       budget.preflight_children(logical_rows)
 
+      {
+        logical_row_count:         logical_rows,
+        bucket_parents:            bucket_parents,
+        structure_spans_by_bucket: structure_spans_by_bucket,
+        copies:                    copies,
+      }
+    end
+
+    # Decodes only the requested mark's Copy value envelopes and per-path
+    # values. The prepared owner's exact physical plan and budget identity are
+    # checked before the first value parser is entered.
+    def self.decode_prepared(
+      prepared : ObjectSharedAdvancedInlinePrepared,
+      budget : BinaryCodecBudget,
+    ) : Array(Array(ObjectSharedMapRow))
+      prepared.validate_decode_operation!(budget)
+      bucket_count = prepared.bucket_count
+      chunk_count = prepared.chunk_count
+      logical_rows = prepared.logical_row_count
+      nested_context = prepared.nested_context_for_decode
       output_rows = [] of ObjectSharedMapRow
       chunk_count.times do |chunk_index|
         bucket_chunks = Array(ObjectSharedPhysicalChunk).new(bucket_count)
         bucket_count.times do |bucket_index|
-          bucket_chunks << parent_chunks[bucket_index].chunk_at(chunk_index)
+          bucket_chunks << prepared.parent_for_decode(bucket_index).chunk_at(chunk_index)
         end
         rows = ObjectSharedAdvancedChunkCodec.decode(
           bucket_chunks,
-          copies[chunk_index],
+          prepared.copy_for_decode(chunk_index),
           budget,
-          context.profile,
-          context,
+          nested_context.profile,
+          nested_context,
         )
         expected_chunk_rows = bucket_chunks[0].row_count
         unless rows.size.to_u64 == expected_chunk_rows

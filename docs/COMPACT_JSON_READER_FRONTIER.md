@@ -1,7 +1,8 @@
 # Compact JSON/Object reader frontier
 
 Document status: W263 six-layout/multi-chunk native baseline RED qualified; coordinate prerequisite
-VERIFIED within its focused scope; Object reader and native GREEN pending
+VERIFIED within its focused scope; advanced inline preparation prerequisite
+VERIFIED; complete Object reader and native GREEN pending
 (2026-10-11).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
 Current transition: bind persisted JSON/Object sites to the existing recursive
@@ -468,6 +469,75 @@ cohort and are indexed, not included in the narrow metadata commit. See
 [the scoped span evidence](../.landmark/evidence/object-shared-chunk-spans-w263.json).
 No root-reader case, public admission, physical authentication of a manually
 constructed span, full suite, allocation/RSS or speed result follows from this.
+
+The next advanced-reader prerequisite is a structural/value phase split, not
+new root admission. Risk: CAUTION; rollback anchor: `8cdd102` with the pending
+MAP-reader edits preserved separately. After root observes the new API RED in
+`spec/object_shared_advanced_inline_preparation_w263_spec.cr`, the source
+worker may factor `ObjectSharedAdvancedInlineDecoder.prepare_inline` and
+`decode_prepared`, adding one `ObjectSharedAdvancedInlinePrepared` owner and
+only the indispensable inline physical-bucket preparation seam. The core MAP
+worker retains the document materializer and static reader ownership; no
+overlapping edits or simultaneous builds are admitted. Root has now observed
+the corrected, self-contained spec's missing-`prepare_inline` compile RED
+(`d6f3c2`, exit 1); the earlier private-helper diagnostic (`15d1cf`) is excluded
+from the behavior discriminator. The three production files above are the
+source worker's exclusive ownership; the test, requires and execution remain
+root-owned.
+
+Preparation must route the exact captured role/pair/slice schedule, preserve
+the original authenticated coordinate context and suffix pairs, retain each
+parser-local StructurePrefix span, and validate all raw bucket/Copy extents.
+One prepared holder covers one outer mark; whole-file EOF qualification
+requires every mark's holder before any selected value decode. Neither
+`ObjectDocument`, `BinaryValue` nor `advanced_shared_rows` is an admitted
+preparation output. `decode_prepared` reuses the existing chunk value serde;
+the old `decode` path delegates through both phases without widening layouts.
+The holder binds the exact read-operation budget identity; decoding with a
+fresh budget must reject before values rather than reset cumulative ceilings.
+Cross-operation cached-holder reuse is not admitted by this seam and requires
+its own budget-rebinding design. Raw Copy/path data retained for value decoding
+must be detached from mutable captured input; post-preparation Copy input
+mutation must not change the prepared decode result.
+
+Root's cross-source adversary observed a valid value substitution through a
+public raw-artifact `seal` factory (`0b7e58`: expected refusal, no exception;
+source A contained `first` and the substituted source B decoded `worst`).
+Replacing only Copy was correctly rejected by the existing per-path equality
+check; that partial attack does not establish the provenance failure. The
+repair admits only a source-input factory, invoking the validated raw parser
+before a private artifact-to-holder boundary. The same attack must now fail
+compilation on private `seal` access, separately from positive runtime tests.
+The negative compile witnesses are selected with `-D w263_raw_state_mint_attack`
+and `-D w263_raw_state_constructor_attack`; both must fail with their exact
+private-access diagnostic, not an unrelated compiler error. Neither is counted
+as a passing runtime example. The partial advanced holder
+workspace census is removed rather than promoted to a full accounting claim.
+
+The parallel MRK4/MAP staging reader must share one request budget across
+preparation and every selected mark, including its implicit-budget path.
+Prepared raw streams must not be publicly returned: retained owners expose
+mutable borrowed slices. A budgeted context decode delegator may return only
+newly decoded documents; prefix metadata getters remain detached snapshots.
+Standalone workspace observations are estimates, not enforcement of a
+combined transient-memory ceiling or RSS. These guards do not admit MRK3,
+advanced shared data, the other two mandatory native roots or public/offline
+JSON integration.
+
+The distinguishing test is a well-framed semantic payload error: preparation
+accepts its raw extents, then value decoding rejects it. Framing, callback,
+roster and saved-pair corruption must instead reject during preparation. A
+manufactured relocated-tape test certifies this phase boundary, not native
+Compact physical provenance. This prerequisite is now VERIFIED / root adversary
+ROBUST within the declared inline scope. Its clean staged-source export excludes
+the separately pending MAP reader and prefix seams: five focused examples plus
+the existing 140-example affected cohort pass in root-owned serial DEBUG/RELEASE
+runs (145 examples per mode, zero failures/errors/pending). Source hashes remain
+unchanged; both private-access negative compile guards also discriminate at this
+snapshot. Missing-API RED is not behavior evidence. See the
+[phase-split evidence](../.landmark/evidence/object-shared-advanced-preparation-w263.json).
+The mandatory three stock-native roots and full 48-layout target remain open
+until their own gates pass.
 
 Static JSON site identities remain separate from actual Dynamic keys. Offline
 materialization must use one logical

@@ -1,5 +1,29 @@
 # Crystal Click landmarks
 
+## Advanced Object inline preparation/value phase split — W263
+
+- VERIFIED / root adversary ROBUST within one authenticated inline v2/v3 mark
+  over `8cdd10209f65b1556bb1593c78f93dee53cbbe51`. Raw bucket/Copy preparation
+  retains original coordinate owners and exact chunk-header spans; value decode
+  reuses the existing codec and exact read-operation budget.
+- Root observed complete cross-source artifact substitution through public seal;
+  Copy-only replacement was already rejected and did not establish the failure.
+  Source-only holder construction plus private seal/initializer fixes that
+  boundary. Both external seal and generated new have executed private-access
+  compile witnesses, separately from runtime positives.
+- A clean staged-source export, excluding pending MAP/prefix edits, passes the
+  exact 21-file / 145-example cohort in serial DEBUG and RELEASE, zero failures/
+  errors/pending. Semantic-delay, foreign-owner, fresh-budget and detached-Copy
+  controls pass; source hashes stay unchanged. Luna review is correlated.
+- No raw Compact/root/native/public JSON qualification, cross-operation rebinding,
+  full workspace/RSS, thread-safety or speed claim. Failed operations are discarded.
+  Return pointers: [phase evidence](.landmark/evidence/object-shared-advanced-preparation-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Next: qualify the
+  bounded MRK4/MAP staging reader, then complete all three native roots and the
+  unchanged 48-cell recursive/public/offline target. Full goal ACTIVE; performance
+  deferred, local commit only, no push. Refresh on source/compiler/owner/budget/
+  consumer/test drift or scope widening.
+
 ## Split Object chunk-header spans — W263
 
 - VERIFIED / root adversary ROBUST within the callback-local metadata seam

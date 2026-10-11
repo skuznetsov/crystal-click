@@ -1,5 +1,24 @@
 # CrystalClick project status
 
+Current inline prerequisite (W263, 2026-10-11): VERIFIED / root adversary ROBUST
+within the existing authenticated advanced SharedData v2/v3 callback scope.
+Preparation retains raw bucket/Copy owners and exact chunk-header spans without
+decoding values; later decoding reuses the existing codec and exact operation
+budget. Root observed a complete cross-source raw-artifact substitution RED;
+only a source-validation factory can now create the holder, and both external
+seal and generated-constructor access fail the explicit compile guards.
+
+The isolated staged-source snapshot excludes the pending MAP reader/common
+prefix changes. Its exact 21-file cohort passes 145 examples in each serial
+DEBUG/RELEASE mode, zero failures/errors/pending; source hashes are unchanged.
+Well-framed semantic corruption is deferred to decode, foreign owners and fresh
+budgets refuse, and post-preparation Copy input mutation leaves values intact.
+Not a full-suite, raw Compact framing, three-root/native/public JSON, complete
+workspace/RSS or performance claim. See the
+[phase evidence](../.landmark/evidence/object-shared-advanced-preparation-w263.json)
+and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md). Full goal ACTIVE;
+performance deferred; local atomic commit only, no push.
+
 Current metadata prerequisite (W263, 2026-10-11): VERIFIED / root adversary
 ROBUST for exact callback-local split chunk-header spans only. One generic
 parser loop preserves the legacy `read_split_records` result, post-preflight
