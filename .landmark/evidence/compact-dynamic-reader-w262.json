@@ -1,0 +1,489 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W262",
+  "title": "Compact Dynamic prepared state through recursive bulk readers",
+  "recorded_date": "2026-10-11",
+  "baseline_commit": "30818166dc9651b65ad867aecfe98c13b670e74a",
+  "claim": {
+    "level": "VERIFIED",
+    "root_adversary": "ROBUST within the finite Default-profile/plain-mark single-part selected-reader target",
+    "global_goal": "ACTIVE; remaining types/layouts, MV/projections and subsequent <=10% performance parity remain unclosed",
+    "meaning": "Curated index to executed commands and retained captures, not proof by hashes, field presence or correlated model agreement."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "boundary": "Persisted serialization lifecycle, typed/offline dispatch and logical workspace accounting",
+    "rollback": "One exact-path local atomic feature commit; no push, dependency change, guard weakening or history rewrite."
+  },
+  "admitted": {
+    "profile": "Quiescent Compact LZ4, plain adaptive mrk3/mrk4, Default serializer metadata and currently admitted effective profiles",
+    "families": [
+      "Root Dynamic",
+      "Dynamic inside existing recursive static containers; the native fixture qualifies Array(Tuple(Variant, Dynamic)) and Map(String, Dynamic)"
+    ],
+    "laws": [
+      "Prepare one immutable partwide actual Dynamic roster/site binding; later statistics may vary, ordinary rosters may not.",
+      "Use existing DynamicStructureCodec, BinaryDynamicBulkPlan, common Compact normalizer and BinaryBulk value semantics, not serializers for container products.",
+      "Preserve exact physical prefix/body/suffix callback order, empty child callbacks and the complete selected-column mark grid including EOF.",
+      "Prepare the full selected-column grid before the first public callback; this is not lazy-read or speed qualification.",
+      "Keep a borrowed budget through preparation, normalization and decode; add the live reader base to every normalizer workspace observation.",
+      "Bridge only insignificant offline Dynamic DDL whitespace outside quoted tokens through the bounded neutral parser, then the unchanged strict declaration owner.",
+      "Reject unsupported metadata, actual type/layout and dynamic version/roster transitions; do not widen static or Wide guards."
+    ],
+    "fixture": {
+      "schema": [
+        [
+          "pk",
+          "UInt64"
+        ],
+        [
+          "root",
+          "Dynamic(max_types=1)"
+        ],
+        [
+          "nested",
+          "Array(Tuple(choice Variant(String, UInt64), payload Dynamic(max_types=1)))"
+        ],
+        [
+          "by_name",
+          "Map(String, Dynamic(max_types=1))"
+        ],
+        [
+          "choice",
+          "Variant(String, UInt64)"
+        ]
+      ],
+      "rows": 8,
+      "outer_mark_rows_with_terminal": [
+        2,
+        2,
+        2,
+        2,
+        0
+      ],
+      "matrix": "mrk3/mrk4 x String v0/v1 x Variant BASIC/COMPACT",
+      "features": [
+        "Ordinary and SharedVariant UInt8/UInt64/String/Float64/NULL",
+        "Empty and unequal Array/Map children",
+        "Native CHECK/schema/literal witnesses",
+        "Direct full/first/middle/last/EOF-first windows",
+        "Public CompactPartTable, TypedPartTable and offline .values"
+      ]
+    }
+  },
+  "non_guarantees": [
+    "All Dynamic versions/layout/type products or authentication of every future unselected value payload.",
+    "Mixed per-node effective serialization profiles: current global BinaryBulkProfile refuses valid heterogeneous settings trees.",
+    "Compact JSON/Object, remaining actual aggregate/SAF/QBit/Geo layouts, bucketed Map, compressed Compact marks and Compact writing.",
+    "Native MV SQL execution/triggers/freshness, parent projection-manifest authentication or full MV/projection composition.",
+    "Total heap/RSS, allocator capacity, preallocation pressure, caller-owned snapshots or across-part retained-cache aggregate limits.",
+    "Full repository suite, second native codec/CityHash implementation, all corruption cases, cross-version/endianness equivalence.",
+    "Multiple writer input-block roster freezing: the one-INSERT fixture is narrower than the source-backed writer contract.",
+    "Lazy-read, performance optimization or <=10% speed parity."
+  ],
+  "assumptions": [
+    "Quiescent offline parts and trusted directory ancestry.",
+    "Comparison source and executed runtime are separately pinned; neither latest-source nor source/runtime identity is claimed."
+  ],
+  "boundaries": {
+    "allowed_paths": [
+      ".landmark/evidence/compact-dynamic-reader-w262.json",
+      "LANDMARKS.md",
+      "docs/COMPACT_DYNAMIC_READER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "scripts/check_compact_dynamic_w262.cr",
+      "scripts/check_compact_dynamic_w262_float64_oracle.rb",
+      "scripts/probe_compact_dynamic_w262.rb",
+      "scripts/support/compact_dynamic_w262_fixture.cr",
+      "spec/compact_dynamic_w262_adversary_spec.cr",
+      "spec/compact_dynamic_w262_spec.cr",
+      "spec/compact_typed_w260_spec.cr",
+      "spec/dynamic_owned_values_w220_spec.cr",
+      "spec/offline_dynamic_ddl_w262_spec.cr",
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_dynamic_bulk_plan.cr",
+      "src/crystal_click/compact_binary_bulk_granule_cursor.cr",
+      "src/crystal_click/compact_binary_bulk_normalizer.cr",
+      "src/crystal_click/compact_dynamic_bulk_column_reader.cr",
+      "src/crystal_click/compact_dynamic_bulk_prefix_traversal.cr",
+      "src/crystal_click/compact_dynamic_bulk_prepared_context.cr",
+      "src/crystal_click/compact_part_table.cr",
+      "src/crystal_click/compact_serialization_profile.cr",
+      "src/crystal_click/offline_dynamic_bulk_column_declaration.cr",
+      "src/crystal_click/offline_table.cr",
+      "src/crystal_click/offline_table/dynamic_bulk_values_materializer.cr",
+      "src/crystal_click/offline_typed_selection_admission.cr",
+      "src/crystal_click/wide_part_table/wide_part_table_batch.cr"
+    ],
+    "source_index_excludes_packet_self_hash": true,
+    "private_artifacts_not_committed": true
+  },
+  "production": {
+    "changed_files": [
+      {"path": "src/crystal_click.cr", "bytes": 30689, "sha256": "1b3128dad1864722bae3142784ef5e1dfacffa84fd03111f77cbd36e7a3e34f5"},
+      {"path": "src/crystal_click/binary_dynamic_bulk_plan.cr", "bytes": 105615, "sha256": "8377027a68e51bf47b4be9ffb9fd7c227751e2d970346dfb1e16b4e13dd8f2fd"},
+      {"path": "src/crystal_click/compact_binary_bulk_granule_cursor.cr", "bytes": 9370, "sha256": "ba6a862f21325b7b5cfc73f8d968092b18906a2fa39b0daa1a3c4be745dcf5c9"},
+      {"path": "src/crystal_click/compact_binary_bulk_normalizer.cr", "bytes": 61317, "sha256": "d2413c571d96848383e3a17bdfe9aa2c999ef37aec3a77a9499e7837ab9f1016"},
+      {"path": "src/crystal_click/compact_dynamic_bulk_column_reader.cr", "bytes": 18109, "sha256": "85eba3215dafd7398280edf10821cfebe470a2a11d599a6af04ba6a488887863"},
+      {"path": "src/crystal_click/compact_dynamic_bulk_prefix_traversal.cr", "bytes": 17123, "sha256": "8cec2e84a3476e1456b584a5fe0edbecfdd08447fdfb4dcc9b6ad28805a3323b"},
+      {"path": "src/crystal_click/compact_dynamic_bulk_prepared_context.cr", "bytes": 3974, "sha256": "f00589ae5b84c830662f0b336f52ee4bf875c746723bc42ed33ca0a4a9e43d98"},
+      {"path": "src/crystal_click/compact_part_table.cr", "bytes": 18445, "sha256": "e0344c9ef2213a0a050d7d6e080d73fea1d785f712e903355ef9f6ae9f7735b9"},
+      {"path": "src/crystal_click/compact_serialization_profile.cr", "bytes": 15642, "sha256": "694421ae770664cf2669364476b4c640b6a7ecc1b29213b198035758cf04b689"},
+      {"path": "src/crystal_click/offline_dynamic_bulk_column_declaration.cr", "bytes": 3988, "sha256": "22195f87e228e93bb805b05f6fcafafaf26f3f7ed3cb1aec1be63d486ffae560"},
+      {"path": "src/crystal_click/offline_table.cr", "bytes": 229837, "sha256": "952935196ebdd97ffd070deef81b80563944f1c2e6108697c19964abc7a41198"},
+      {"path": "src/crystal_click/offline_table/dynamic_bulk_values_materializer.cr", "bytes": 14207, "sha256": "58adf1ec5f686759a8023e6b51840ee0c23ac0a4cec060d897857d84266c738c"},
+      {"path": "src/crystal_click/offline_typed_selection_admission.cr", "bytes": 2234, "sha256": "7274fd8133771b628862b484d0225ee6f22f289d6aba792fc05451f7512ad5fd"},
+      {"path": "src/crystal_click/wide_part_table/wide_part_table_batch.cr", "bytes": 154240, "sha256": "8f535ac01ec7a4acf14e67fd03ba61b7b58cb522fc4e4f0d75f75451dccd3328"}
+    ],
+    "root_review": {
+      "verdict": "ROBUST within the finite declared target after the live-base regression correction",
+      "basis": "Root source inspection, focused RED/GREEN, exact two-mode affected roster, fresh native matrices, public corruption/budget refusals and actual-capture closure.",
+      "correlated_luna_review": "Same-lineage review is correlated. Final source review found the live-base omission; root independently executed its behavioral falsifier before the minimal fix and refreshed verification.",
+      "residual": "Cross-part backend caches are outside this single-part accounting qualification; injected estimates are not allocated bytes."
+    }
+  },
+  "input_seals": {
+    "production": {
+      "count": 549,
+      "index_sha256": "57df4d599f3840b590dcc50e7da8facdb88f0b35a65ab1ed81760addf18e74c7",
+      "recipe": "SHA256(JSON.generate(sorted src/**/*.cr records {path,sha256})))"
+    },
+    "harness": {
+      "count": 16,
+      "index_sha256": "d69fb60de4653452230f776d7939b02855e54b6fcba41a40028fb64e0afe17b2",
+      "recipe": "SHA256(JSON.generate(sorted records {path,bytes,sha256})))",
+      "files": [
+        {"path": "scripts/check_array_json_parts_w185.rb", "bytes": 36101, "sha256": "a71366bf4e87ed7649373c0c251b865e75ac6cbe67263605a6ceb576ec4b1451"},
+        {"path": "scripts/check_compact_dynamic_w262.cr", "bytes": 15212, "sha256": "b78e4403e63ad5a4ec125f2d72b906c80da26cd3dbda9b0ed36ca4248fa0557e"},
+        {"path": "scripts/check_compact_dynamic_w262_float64_oracle.rb", "bytes": 903, "sha256": "e9a686206297f0eb75cab53d5bcba0c387735890675617b16240d06de7cd1bd5"},
+        {"path": "scripts/probe_compact_dynamic_w262.rb", "bytes": 29536, "sha256": "b5a3eefdc2eef99029228407fec699f8e85f51415420957e35964fcf949cc916"},
+        {"path": "scripts/stock_part_probe_support_w191.rb", "bytes": 446, "sha256": "f8302039adc306c4d94d0d4ea28919616eb1dc50ca2c7540c0d861e0282009e1"},
+        {"path": "scripts/support/compact_dynamic_w262_fixture.cr", "bytes": 11011, "sha256": "488a2161ce5cd8fe41ae0b7f1118006f878b33e864a30999ac058e22de0dc77a"},
+        {"path": "scripts/support/compact_typed_w260_fixture.cr", "bytes": 3830, "sha256": "14c539522ce344685ee9d9c3efbe0811be46ac7ac7a3a00143cd91f999456cdb"},
+        {"path": "spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr", "bytes": 16990, "sha256": "67594c311f50803e5ff85d2a3f5a4d78f2ba80e63a72db01a7878d31da8e7a83"},
+        {"path": "spec/binary_dynamic_bulk_plan_w154_spec.cr", "bytes": 21693, "sha256": "d1e820c41fdc1feb970fee698a5faed4156d36a03b316944c80b67800538df03"},
+        {"path": "spec/compact_dynamic_w262_adversary_spec.cr", "bytes": 11324, "sha256": "62b4465ead1bae91e8b53e385ce35f95550fd4df48d4afcf42dfae164dbb7f17"},
+        {"path": "spec/compact_dynamic_w262_spec.cr", "bytes": 23424, "sha256": "7e072b7b052dd721ca07339f17936618acf7a3fddc595361f87a3e17216a20a9"},
+        {"path": "spec/compact_typed_w260_adversary_spec.cr", "bytes": 7604, "sha256": "4a9f69dfc02fdf4a0bbd42e98bd9a2d6696e2d098edd9181af3235e7e367fb68"},
+        {"path": "spec/compact_typed_w260_spec.cr", "bytes": 39571, "sha256": "1a2b691df13a0f22cc663ba7d0755d53b04085b8ef541834b6c1dec07c324abd"},
+        {"path": "spec/dynamic_bulk_part_w203_spec.cr", "bytes": 37106, "sha256": "19ae9b733a3cdda01daede9c42ef140d14ff9793a2b8f35dde0b8a9d5a6b3585"},
+        {"path": "spec/dynamic_owned_values_w220_spec.cr", "bytes": 35730, "sha256": "07d7596bc5d877eb2c2ddfed8cbb9a42876e31285a6d8b10a4756b62b423fa6b"},
+        {"path": "spec/offline_dynamic_ddl_w262_spec.cr", "bytes": 4624, "sha256": "9f05e121de2ae8137687718528d3c2760406fe09f1e0a02bd8507f3b97c2c6d9"}
+      ]
+    },
+    "private_inputs": [
+      {"path": "/private/tmp/crystal-click-w262.yYWloc/check_compact_dynamic_w262_accounted_debug", "bytes": 43943320, "sha256": "0de05818ed596fe9923f7a46ad025f0d71d0e08eb33606e2e6a5884688691ffc"},
+      {"path": "/private/tmp/crystal-click-w262.yYWloc/check_compact_dynamic_w262_accounted_release", "bytes": 10861888, "sha256": "f5e0fa8b026dfdae99dfb1c0884bf1069b75913ce96b809148c017124f36d6c5"},
+      {"path": "/private/tmp/crystal-click-w262.yYWloc/check_public_dynamic_adversary_w262_accounted_debug", "bytes": 6847008, "sha256": "895b5e150ec0643e823c10bd39a21acbfe58f36a005c0976d0fc2f08f79de122"},
+      {"path": "/private/tmp/crystal-click-w262.yYWloc/audit_final_native_w262.rb", "bytes": 27978, "sha256": "2c4b497dcc930403781249df2165c22a8e69fe2a97611c8a766199929b70c3bb"},
+      {"path": "/private/tmp/crystal-click-w262.yYWloc/check_final_native_audit_aliases_w262.rb", "bytes": 3175, "sha256": "7cf99904ad4f57e651901f02c807400ed6f47a4f9f0767f48575e7606d3e11f9"},
+      {"path": "/private/tmp/crystal-click-w262.yYWloc/check_public_dynamic_adversary_w262.cr", "bytes": 20041, "sha256": "367c816a75f171bc91ff4d451b7b706916c0b3cafd30ccff8c3cae474642afa4"},
+      {"path": "/private/tmp/crystal-click-w262.yYWloc/audit_native_prefixes_w262.rb", "bytes": 6411, "sha256": "5618ba9f61b159f66ba712b3f8ce493056001e2134f9bd75b2822031f7d2e21b"}
+    ]
+  },
+  "provenance": {
+    "comparison_source": {
+      "root": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+      "commit": "ed30948f095ecb70679986d7d60e27ad770ae27a"
+    },
+    "executed_clickhouse": {
+      "path": "/private/tmp/crystal-click-w216-runtime-recovery.DmL9Kw/clickhouse-stripped",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+    },
+    "crystal": {
+      "path": "/opt/homebrew/bin/crystal",
+      "version": "1.21.0",
+      "llvm": "22.1.8",
+      "target": "aarch64"
+    },
+    "ruby": {
+      "path": "/usr/bin/ruby",
+      "version": "2.6.10"
+    },
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "min_free_pct": 50,
+      "process_tree_limit_mib": 12288,
+      "serial": true,
+      "unchanged": true
+    },
+    "environment": {
+      "COGNI_RUN_SAFE_MIN_FREE_PCT": "50",
+      "CRYSTAL_WORKERS": "1",
+      "RUN_SAFE_PASSTHROUGH_STDIO": "1",
+      "TMPDIR": "/private/tmp",
+      "CRYSTAL_CACHE_DIR": "/private/tmp/crystal-click-w262.yYWloc/crystal-cache",
+      "SDKROOT": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+    }
+  },
+  "observed_commands": {
+    "specs": {
+      "paths": [
+        "spec/compact_dynamic_w262_spec.cr",
+        "spec/compact_dynamic_w262_adversary_spec.cr",
+        "spec/compact_typed_w260_spec.cr",
+        "spec/compact_typed_w260_adversary_spec.cr",
+        "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+        "spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr",
+        "spec/dynamic_owned_values_w220_spec.cr",
+        "spec/dynamic_bulk_part_w203_spec.cr",
+        "spec/offline_dynamic_ddl_w262_spec.cr"
+      ],
+      "guard_timeout_seconds": 600,
+      "common_argv": [
+        "spec",
+        "spec/compact_dynamic_w262_spec.cr",
+        "spec/compact_dynamic_w262_adversary_spec.cr",
+        "spec/compact_typed_w260_spec.cr",
+        "spec/compact_typed_w260_adversary_spec.cr",
+        "spec/binary_dynamic_bulk_plan_w154_spec.cr",
+        "spec/binary_dynamic_bulk_plan_w154_adversary_spec.cr",
+        "spec/dynamic_owned_values_w220_spec.cr",
+        "spec/dynamic_bulk_part_w203_spec.cr",
+        "spec/offline_dynamic_ddl_w262_spec.cr",
+        "--single-module",
+        "--threads",
+        "1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace",
+        "--verbose"
+      ],
+      "release_additional_argv": [
+        "--release"
+      ],
+      "native_fixture_environment": "CRYSTAL_CLICK_W262_NATIVE_MANIFEST",
+      "debug": {
+        "chunk": "40c5ca",
+        "session": 16959,
+        "exit": 0,
+        "examples": 80,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "nativeManifest": "/private/tmp/crystal-click-w262-green-debug-final3.wrd95x/parts/native_manifest.json"
+      },
+      "release": {
+        "chunk": "5dff68",
+        "session": 73093,
+        "exit": 0,
+        "examples": 80,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0,
+        "nativeManifest": "/private/tmp/crystal-click-w262-green-release-final.QCUvJg/parts/native_manifest.json"
+      },
+      "portable_default_examples_without_native_environment": 79,
+      "scope": "Exact affected nine-path roster, not full suite; both commands explicitly enabled the native accounting example."
+    },
+    "helper_builds": {
+      "guard_timeout_seconds": 180,
+      "common_argv": [
+        "build",
+        "scripts/check_compact_dynamic_w262.cr",
+        "--single-module",
+        "--threads",
+        "1",
+        "--link-flags=-fuse-ld=ld",
+        "--error-trace"
+      ],
+      "output_paths": [
+        "/private/tmp/crystal-click-w262.yYWloc/check_compact_dynamic_w262_accounted_debug",
+        "/private/tmp/crystal-click-w262.yYWloc/check_compact_dynamic_w262_accounted_release"
+      ],
+      "release_additional_argv": [
+        "--release"
+      ],
+      "debug_trace": "fa91d8",
+      "release_trace": "b1dc31",
+      "exit": 0
+    },
+    "native_matrices": {
+      "guard_timeout_seconds": 180,
+      "common_argv": [
+        "scripts/probe_compact_dynamic_w262.rb",
+        "--mode",
+        "green",
+        "--crystal-helper",
+        "EXECUTABLE",
+        "--evidence-root",
+        "NEW_EMPTY_PRIVATE_TMP_DIRECTORY",
+        "--clickhouse",
+        "PINNED_CH"
+      ],
+      "captures": [
+        {
+          "mode": "DEBUG",
+          "root": "/private/tmp/crystal-click-w262-green-debug-accounted.WJCrdR",
+          "helper": "/private/tmp/crystal-click-w262.yYWloc/check_compact_dynamic_w262_accounted_debug",
+          "helper_sha256": "0de05818ed596fe9923f7a46ad025f0d71d0e08eb33606e2e6a5884688691ffc",
+          "summary_sha256": "f92314d2207ed7c78e7bc066ada03aa36493c0f1cce099b1b2b6490754a99cae",
+          "command_trace": "29c82b",
+          "exit": 0,
+          "cells": 8
+        },
+        {
+          "mode": "RELEASE",
+          "root": "/private/tmp/crystal-click-w262-green-release-accounted.no1lxC",
+          "helper": "/private/tmp/crystal-click-w262.yYWloc/check_compact_dynamic_w262_accounted_release",
+          "helper_sha256": "f5e0fa8b026dfdae99dfb1c0884bf1069b75913ce96b809148c017124f36d6c5",
+          "summary_sha256": "e5d9af6f6b7e01928b2cc6542db9f522312563200b99e266604cfa631cd894b8",
+          "command_trace": "361656",
+          "exit": 0,
+          "cells": 8
+        }
+      ],
+      "observed": "Each native and helper invocation exited 0 with empty stderr, no signal/timeout and intact pins. Both eight-cell matrices passed native literals and all selected public consumers."
+    },
+    "formatter": {
+      "owned_crystal_paths": 21,
+      "command": "crystal tool format --check OWNED_PATHS",
+      "trace": "8fc443",
+      "exit": 0
+    },
+    "ruby_runner_syntax": {
+      "command": "ruby -c scripts/probe_compact_dynamic_w262.rb",
+      "trace": "52473a",
+      "exit": 0
+    },
+    "float64_oracle_controls": {
+      "command": "ruby scripts/check_compact_dynamic_w262_float64_oracle.rb",
+      "trace": "2c064c",
+      "exit": 0,
+      "positives": 4,
+      "old_wire_hex_mismatch_controls": 3
+    },
+    "public_adversary": {
+      "source": "/private/tmp/crystal-click-w262.yYWloc/check_public_dynamic_adversary_w262.cr",
+      "binary": "/private/tmp/crystal-click-w262.yYWloc/check_public_dynamic_adversary_w262_accounted_debug",
+      "guard_timeout_seconds": 30,
+      "argv": [
+        "EXECUTABLE",
+        "CAPTURE/parts/native_manifest.json"
+      ],
+      "debug_capture": {
+        "trace": "d95614",
+        "exit": 0,
+        "logical_retained_bytes": 86233
+      },
+      "release_capture": {
+        "trace": "3b7e7e",
+        "exit": 0,
+        "logical_retained_bytes": 86251
+      },
+      "controls_per_capture": {
+        "later_wire_version_4_to_9_mrk3_mrk4_eof_empty_refusals": 4,
+        "aggregate_logical_workspace_eof_empty_refusals": 2,
+        "callbacks_before_refusal": 0
+      },
+      "interpretation": "DEBUG-compiled instrument used against both captures. Retained estimates are injected after real preparation, not actual byte allocations. Clean positives and original bytes are checked."
+    },
+    "actual_capture_audit": {
+      "source": "/private/tmp/crystal-click-w262.yYWloc/audit_final_native_w262.rb",
+      "guard_timeout_seconds": 30,
+      "argv": [
+        "SOURCE",
+        "/private/tmp/crystal-click-w262-green-debug-accounted.WJCrdR",
+        "/private/tmp/crystal-click-w262-green-release-accounted.no1lxC"
+      ],
+      "trace": "f5833f",
+      "exit": 0,
+      "observed": {
+        "roots": 2,
+        "labels": 8,
+        "helper_semantic_equal": 1,
+        "helper_semantic_sha256": "57baf98287ba7b3b0bf2ed68d8b6811d71a851b7fb83a2021c04600ddbc1af88",
+        "part_file_pairs_equal": 84,
+        "part_bytes_equal": 36628,
+        "part_snapshot_sha256": "88fad792d43302a43ff5b14e788f0cff6532b60eedfcbe77b61e051983535d38",
+        "source_pin_entries": 12,
+        "invocation_artifacts_validated": 18,
+        "evidence_closure_entries": 342,
+        "evidence_closure_files": 234,
+        "evidence_closure_links": 18,
+        "debug_summary_sha256": "f92314d2207ed7c78e7bc066ada03aa36493c0f1cce099b1b2b6490754a99cae",
+        "release_summary_sha256": "e5d9af6f6b7e01928b2cc6542db9f522312563200b99e266604cfa631cd894b8"
+      },
+      "interpretation": "Validates actual invocation pins/artifacts and byte/semantic closure. Reuses the runner oracle; not a second codec. Exact manifest-owned CH aliases allowed without traversing them; actual-part links rejected."
+    },
+    "alias_pressure_controls": {
+      "source": "/private/tmp/crystal-click-w262.yYWloc/check_final_native_audit_aliases_w262.rb",
+      "guard_timeout_seconds": 30,
+      "argv": [
+        "SOURCE",
+        "/private/tmp/crystal-click-w262-green-debug-accounted.WJCrdR",
+        "/private/tmp/crystal-click-w262-green-release-accounted.no1lxC"
+      ],
+      "trace": "ceb287",
+      "exit": 0,
+      "positive_snapshots": 3,
+      "negative_alias_controls": 5,
+      "raw_link_target_change_detected": true,
+      "interpretation": "Bounded synthetic tree-snapshot controls; original captures only read. Missing/unexpected/out-of-root/wrong-target aliases and nested file links refused."
+    }
+  },
+  "refutations": [
+    {
+      "route": "Baseline static Compact admission",
+      "capture": "/private/tmp/crystal-click-w262-red2.5aFk7K",
+      "observation": "Unchanged baseline native/helper exited 0: 8 stock cells, 16 public UInt64 positives and 48 exact UnsupportedFormatError Dynamic-bearing refusals. Expected refusals are the behavioral RED, not a failing process.",
+      "pivot": "Prepared-context Dynamic reader through shared normalizer."
+    },
+    {
+      "route": "Independent native prefix instrument",
+      "source": "/private/tmp/crystal-click-w262.yYWloc/audit_native_prefixes_w262.rb",
+      "input": "/private/tmp/crystal-click-w262-red2.5aFk7K/parts/native_manifest.json",
+      "trace": "273c91",
+      "exit": 0,
+      "observation": "96 callbacks, wire version 4, 39/31/30-byte first prefixes and 11-byte later prefixes; 3 positive/14 malformed framing controls. Fixture-specific instrument, not production decoder."
+    },
+    {
+      "route": "Separate base+window and window+normalization peak checks",
+      "red": {
+        "chunk": "7064b9",
+        "exit": 1,
+        "examples": 1,
+        "failures": 1,
+        "readerPeakMinusBase": 42681,
+        "normalizerPeak": 45315,
+        "retainedBase": 2634
+      },
+      "green": {
+        "chunk": "5dc87d",
+        "exit": 0,
+        "examples": 1,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      "pivot": "Capture retained base before window allocation and checked-add it to every normalizer observer callback; caches still publish only after successful normalization."
+    },
+    {
+      "route": "Raw native Dynamic DDL as canonical physical spelling",
+      "observation": "All 24 selected native DDL sites had insignificant spacing refused by the strict owner; bounded neutral rendering was accepted. Merely selecting catalog_type did not canonicalize Dynamic.",
+      "pivot": "Narrow offline-DDL whitespace bridge; strict admission and raw catalog declaration retained."
+    },
+    {
+      "route": "Float64 wire little-endian hex equals numeric bit hex",
+      "observation": "Ruby instrument mismatch, not a serde failure.",
+      "pivot": "Compare numeric bits through pack('E').unpack1('Q<'); 4 positive/3 old-encoding mismatch controls, followed by fresh matrices."
+    },
+    {
+      "route": "No links anywhere in a native evidence root",
+      "observation": "CH creates expected table/metadata aliases; original whole-root rule invalid.",
+      "pivot": "Exact manifest-owned alias bindings with no alias traversal, actual-part links still rejected; 3 positive/5 negative and raw target-change controls."
+    }
+  ],
+  "decay": {
+    "triggers": [
+      "Production/test/helper/oracle/tool/consumer drift",
+      "Widened actual type, metadata/profile, layout or budget scope",
+      "Runtime/source pin change",
+      "Private raw capture or instrument loss",
+      "Contradicting corruption/value evidence"
+    ],
+    "refresh": "Rerun the exact nine-path DEBUG/RELEASE roster with the native example enabled, rebuild both helpers, generate fresh eight-cell native matrices and execute affected public accounting/corruption/capture/alias controls.",
+    "failure_policy": "Reopen affected claims and do not widen admission or claim performance from this packet."
+  }
+}

@@ -824,7 +824,9 @@ end
 class CrystalClick::CompactPartTable
   def w260_test_inject_logical_read_bytes!(bytes : UInt64) : Nil
     @readers.each do |entry|
-      entry[3].w260_test_inject_logical_read_bytes!(bytes)
+      reader = entry[3].as?(CrystalClick::CompactBinaryBulkColumnReader) ||
+               raise("W260 logical read-byte injection expects a static BinaryBulk reader")
+      reader.w260_test_inject_logical_read_bytes!(bytes)
     end
   end
 
@@ -833,8 +835,10 @@ class CrystalClick::CompactPartTable
     estimate = 0_u64
     @readers.each do |entry|
       next unless entry[0] == column
-      entry[3].w260_test_inject_retained_workspace_extra!(bytes)
-      estimate = entry[3].retained_workspace_bytes
+      reader = entry[3].as?(CrystalClick::CompactBinaryBulkColumnReader) ||
+               raise("W260 retained-workspace injection expects a static BinaryBulk reader")
+      reader.w260_test_inject_retained_workspace_extra!(bytes)
+      estimate = reader.retained_workspace_bytes
       found = true
     end
     raise "W260 selected test column was not found" unless found

@@ -9,11 +9,12 @@ module CrystalClick
     @active_name : String?
     @active_bytes : Bytes?
     @position : Int32
+    @complete_wire_input_charged : Bool
 
     def initialize(
       @mode : CompactMarkFormat,
       shards : Array(CompactPartPhysicalShard),
-      expected_events : Array(String),
+      expected_events : Array(String)?,
     )
       @whole = nil
       @events = [] of Tuple(String, Bytes)
@@ -21,6 +22,7 @@ module CrystalClick
       @active_name = nil
       @active_bytes = nil
       @position = 0
+      @complete_wire_input_charged = false
 
       if @mode.mrk4?
         observed_events = [] of String
@@ -35,8 +37,10 @@ module CrystalClick
           observed_events << detached_name
           @events << {detached_name, shard.bytes}
         end
-        unless observed_events == expected_events
-          raise CorruptPartError.new("Compact mrk4 callbacks differ from the selected serializer roster")
+        if expected = expected_events
+          unless observed_events == expected
+            raise CorruptPartError.new("Compact mrk4 callbacks differ from the selected serializer roster")
+          end
         end
       else
         unless shards.size == 1 && shards[0].stream_name.nil?
@@ -60,6 +64,40 @@ module CrystalClick
       @active_name = name
       @active_bytes = event[1]
       @position = 0
+      nil
+    end
+
+    # First-pass Dynamic discovery cannot know callbacks nested beneath actual
+    # Dynamic arms until it has parsed the parent structure. Open the next
+    # physical callback without assigning it a serializer role yet; the
+    # prepared Dynamic plan later binds the complete observed roster exactly.
+    # mrk3 has no callback names, but shares the same grammar-delimited tape.
+    def begin_next_discovery_event : String?
+      if @active_name || @active_bytes
+        raise CorruptPartError.new("Compact callback event was opened before its predecessor finished")
+      end
+      return nil unless @mode.mrk4?
+
+      event = @events[@event_index]? ||
+              raise(CorruptPartError.new("Compact mrk4 callback is missing during Dynamic discovery"))
+      @active_name = event[0]
+      @active_bytes = event[1]
+      @position = 0
+      event[0]
+    end
+
+    # Close the learning phase by comparing every callback actually consumed
+    # during prefix and body traversal with the now-known serializer roster.
+    def validate_expected_events!(expected_events : Array(String)) : Nil
+      return nil unless @mode.mrk4?
+      unless @events.size == expected_events.size
+        raise CorruptPartError.new("Compact mrk4 callbacks differ from the prepared serializer roster")
+      end
+      @events.each_with_index do |event, index|
+        unless event[0] == expected_events[index]
+          raise CorruptPartError.new("Compact mrk4 callbacks differ from the prepared serializer roster")
+        end
+      end
       nil
     end
 
@@ -128,6 +166,62 @@ module CrystalClick
 
     def remaining : Int32
       current_source.size - @position
+    end
+
+    # Explicitly precharge the complete physical granule before a codec context
+    # borrows any prefix slices with account_input_bytes=false. Charging the
+    # whole source once avoids the mrk3 trap where every nested structure parser
+    # would otherwise charge the same remaining tape tail again.
+    def charge_complete_wire_input!(budget : BinaryCodecBudget) : Nil
+      if budget.writing?
+        raise ArgumentError.new("Compact granule wire precharge requires a read-direction budget")
+      end
+      if @complete_wire_input_charged
+        raise ArgumentError.new("Compact granule wire input was already charged")
+      end
+
+      total = 0_u64
+      if whole = @whole
+        total = whole.size.to_u64
+      else
+        @events.each do |event|
+          size = event[1].size.to_u64
+          if size > UInt64::MAX - total
+            raise CorruptPartError.new("Compact granule input byte count overflows UInt64")
+          end
+          total += size
+        end
+      end
+      budget.ensure_wire_bytes(total)
+      budget.charge_wire_bytes(total)
+      @complete_wire_input_charged = true
+      nil
+    end
+
+    # Borrow the unconsumed callback slice for an existing codec parser. The
+    # returned Bytes is a view over cursor-owned bytes and remains valid while
+    # this cursor is alive; callers must commit only the parser's observed
+    # consumption with #advance_borrowed_prefix.
+    def remaining_slice : Bytes
+      unless @complete_wire_input_charged
+        raise ArgumentError.new("Compact borrowed input requires a prior complete-granule charge")
+      end
+      source = current_source
+      source[@position, source.size - @position]
+    end
+
+    # Advance after a codec parsed a borrowed prefix. The enclosing caller must
+    # have charged the complete physical granule first via
+    # #charge_complete_wire_input! before constructing a prepaid context.
+    def advance_borrowed_prefix(consumed_bytes : Int32) : Nil
+      unless @complete_wire_input_charged
+        raise ArgumentError.new("Compact borrowed input requires a prior complete-granule charge")
+      end
+      if consumed_bytes < 0 || consumed_bytes > remaining
+        raise CorruptPartError.new("Compact borrowed parser consumed outside its callback slice")
+      end
+      @position += consumed_bytes
+      nil
     end
 
     def mrk4? : Bool

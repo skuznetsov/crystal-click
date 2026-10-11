@@ -19,13 +19,24 @@ module CrystalClick
 
         if type.contains_dynamic?
           # The unparameterized spelling keeps its existing specialized
-          # Dynamic route. Parameterized/recursive declarations must pass the
-          # stricter DynamicBulk owner rather than falling through to a broad
-          # nominal type predicate.
+          # Dynamic route. Other declarations pass the offline lexical bridge
+          # and then the unchanged strict DynamicBulk owner.
           return existing_leaf_admitted?(selected_type) if source_type == "Dynamic"
-          dynamic_type = DynamicBulkColumnDeclaration.parse(source_type) || return false
+          candidate, dynamic_type = OfflineDynamicBulkColumnDeclaration.resolve(source_type)
+          return false unless candidate
+          dynamic_type = dynamic_type || return false
           return dynamic_type.name == selected_type
         end
+      end
+
+      # Offline CREATE TABLE parsing retains the source spelling, while
+      # selected_type is the canonical physical declaration. Admit only a
+      # Dynamic-bearing source whose neutral parse proves whitespace-only
+      # lexical normalization; aliases and other semantic rewrites stay out.
+      candidate, dynamic_type = OfflineDynamicBulkColumnDeclaration.resolve(source_type)
+      if candidate
+        dynamic_type = dynamic_type || return false
+        return dynamic_type.name == selected_type
       end
 
       existing_leaf_admitted?(selected_type)

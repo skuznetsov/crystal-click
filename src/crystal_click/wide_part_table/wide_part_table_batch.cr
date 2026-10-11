@@ -664,7 +664,7 @@ module CrystalClick
     def binary_bulk_values_for(column : String) : Slice(BinaryValue)
       index = column_index(column)
       column_type = @column_types[index]
-      expected_type = DynamicBulkColumnDeclaration.parse(column_type)
+      expected_type = dynamic_bulk_type_for_batch(column_type)
       expected_type ||= if WidePart.supports_simple_aggregate_bulk_type?(column_type)
                           SimpleAggregateBulkColumnDeclaration.parse(column_type)
                         else
@@ -700,7 +700,7 @@ module CrystalClick
     # though the shared BinaryValue owner is available through the generic API.
     def dynamic_bulk_values_for(column : String) : Slice(BinaryValue)
       index = column_index(column)
-      unless DynamicBulkColumnDeclaration.parse(@column_types[index])
+      unless dynamic_bulk_type_for_batch(@column_types[index])
         raise UnsupportedFormatError.new("Dynamic bulk accessor requires an admitted Dynamic-bearing declaration")
       end
       binary_bulk_values_for(column)
@@ -710,7 +710,7 @@ module CrystalClick
     def install_binary_bulk_values(column : String, values : Slice(BinaryValue), expected_rows : Int) : Nil
       index = column_index(column)
       column_type = @column_types[index]
-      expected_type = DynamicBulkColumnDeclaration.parse(column_type)
+      expected_type = dynamic_bulk_type_for_batch(column_type)
       expected_type ||= if WidePart.supports_simple_aggregate_bulk_type?(column_type)
                           SimpleAggregateBulkColumnDeclaration.parse(column_type)
                         else
@@ -752,7 +752,7 @@ module CrystalClick
     # Internal table-scan hook for one borrowed parent-row slice.
     def install_dynamic_bulk_values(column : String, values : Slice(BinaryValue), expected_rows : Int) : Nil
       index = column_index(column)
-      unless DynamicBulkColumnDeclaration.parse(@column_types[index])
+      unless dynamic_bulk_type_for_batch(@column_types[index])
         raise CorruptPartError.new("Dynamic bulk materializer received a non-admitted declaration")
       end
       install_binary_bulk_values(column, values, expected_rows)
@@ -2329,6 +2329,15 @@ module CrystalClick
         raise UnsupportedFormatError.new("Nullable(FixedString) accessor requires an exact Nullable(FixedString(N)) column")
       end
       @nullable_fixed_string_values[column]? || raise(UnsupportedFormatError.new("Nullable(FixedString) column was not materialized in this batch"))
+    end
+
+    private def dynamic_bulk_type_for_batch(column_type : String) : BinaryDataType?
+      parsed = DynamicBulkColumnDeclaration.parse(column_type)
+      return parsed if parsed
+      return nil unless column_type == "Dynamic"
+
+      bytes = column_type.to_slice
+      ObjectDeclaredDynamicDeclaration.resolve_slice(bytes, 0, bytes.size).try(&.materialize)
     end
 
     private def column_index(column : String) : Int

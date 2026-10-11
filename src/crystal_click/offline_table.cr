@@ -159,9 +159,15 @@ module CrystalClick
       end
       reject_materialized_view_data_access!
 
-      source_name, source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name, allow_unsupported_exact: true)
+      source_name, _source_type, selected_type, json_path = resolve_typed_ddl_selection(column_name, allow_unsupported_exact: true)
       dynamic_type = if !json_path && source_name == column_name
-                       DynamicBulkColumnDeclaration.parse(source_type)
+                       DynamicBulkColumnDeclaration.parse(selected_type) ||
+                         (if selected_type == "Dynamic"
+                           bytes = selected_type.to_slice
+                           ObjectDeclaredDynamicDeclaration.resolve_slice(bytes, 0, bytes.size).try(&.materialize)
+                         else
+                           nil
+                         end)
                      else
                        nil
                      end
@@ -3961,7 +3967,8 @@ module CrystalClick
                             ObjectDocumentSchema.parse_declaration(selected.type).declaration
                           end
         else
-          selected_type = WidePart.catalog_type(selected.type) || selected.type
+          _dynamic_candidate, dynamic_type = OfflineDynamicBulkColumnDeclaration.resolve(selected.type)
+          selected_type = dynamic_type.try(&.name) || WidePart.catalog_type(selected.type) || selected.type
         end
         unless allow_unsupported_exact || OfflineTypedSelectionAdmission.admitted?(selected.type, selected_type, false)
           raise UnsupportedFormatError.new("selected table column type is unsupported")

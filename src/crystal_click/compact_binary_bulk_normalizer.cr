@@ -3,6 +3,8 @@ module CrystalClick
   # BinaryBulk lanes consumed by the existing recursive decoder. This owner
   # interprets physical callback framing; it does not decode typed values.
   class CompactBinaryBulkNormalizer
+    private alias PhysicalPlan = BinaryBulkPhysicalPlan | BinaryDynamicBulkPhysicalPlan
+
     # Scalar-only descriptor census used before the operation constructs
     # retained role/name plans. It deliberately stores no child arrays or
     # detached names.
@@ -205,11 +207,219 @@ module CrystalClick
       {BinaryBulkStreams.new(mark_count, streams), rows_per_mark}
     end
 
+    # Dynamic requires one complete first-granule prefix to learn the actual
+    # arm roster before any lane roles or later prefix callbacks can be bound.
+    # It intentionally normalizes the complete supplied window, including
+    # marks outside the caller's eventual value selection.
+    def normalize_dynamic(
+      window : CompactPartPhysicalWindow,
+      budget : BinaryCodecBudget,
+    ) : Tuple(BinaryBulkStreams, Array(UInt64), CompactDynamicBulkPreparedContext)
+      no_workspace_observer = ->(_workspace_bytes : UInt64) { nil }
+      normalize_dynamic(window, budget, no_workspace_observer, 0_u64)
+    end
+
+    def normalize_dynamic(
+      window : CompactPartPhysicalWindow,
+      budget : BinaryCodecBudget,
+      workspace_observer : Proc(UInt64, Nil),
+      physical_workspace_bytes : UInt64,
+      prepared_context : CompactDynamicBulkPreparedContext? = nil,
+      prepared_observer : Proc(CompactDynamicBulkPreparedContext, Nil)? = nil,
+    ) : Tuple(BinaryBulkStreams, Array(UInt64), CompactDynamicBulkPreparedContext)
+      unless !budget.writing?
+        raise ArgumentError.new("Compact Dynamic normalization requires a read-direction budget")
+      end
+      unless window.column == @column
+        raise ArgumentError.new("Compact physical window does not match the selected column")
+      end
+      unless @type.contains_dynamic?
+        raise ArgumentError.new("Compact Dynamic normalization requires a Dynamic-bearing descriptor")
+      end
+      unless same_limits?(@limits, budget.limits)
+        raise ArgumentError.new("Compact normalizer limits differ from its shared codec budget")
+      end
+
+      mark_count = window.mark_count
+      granules = window.granules
+      if granules.empty? && prepared_context.nil?
+        raise CorruptPartError.new("Compact Dynamic requires a first granule to learn its part-wide roster")
+      end
+
+      setup_workspace_bytes = estimated_setup_workspace_bytes(@type) || 0_u64
+      dynamic_workspace_bytes = 0_u64
+      workspace_observer.call(checked_add(physical_workspace_bytes, setup_workspace_bytes))
+      operation_observer = ->(workspace_bytes : UInt64) {
+        retained = checked_add(setup_workspace_bytes, dynamic_workspace_bytes)
+        workspace_observer.call(checked_add(workspace_bytes, retained))
+      }
+
+      type_context = BinaryCodecContext.new(@limits, nil, false, budget, false, false)
+      type_context.validate_type_tree(@type)
+      traversal = CompactDynamicBulkPrefixTraversal.new(@type, @profile, @limits)
+      prepared = prepared_context
+      first_cursor = nil.as(CompactBinaryBulkGranuleCursor?)
+      first_modes = nil.as(Hash(String, UInt64)?)
+
+      if prepared.nil?
+        first_granule = granules[0]
+        discovery_cursor = CompactBinaryBulkGranuleCursor.new(window.mode, first_granule.shards, nil)
+        discovery_cursor.charge_complete_wire_input!(budget)
+        workspace_preflight = ->(known_structures : Hash(String, DynamicStructure), role : String, structure : DynamicStructure) {
+          dynamic_workspace_bytes = estimated_dynamic_prepared_workspace_bytes(
+            known_structures, role, structure
+          )
+          workspace_observer.call(
+            checked_add(
+              checked_add(physical_workspace_bytes, setup_workspace_bytes),
+              dynamic_workspace_bytes,
+            )
+          )
+        }
+        structures, modes = traversal.discover(discovery_cursor, budget, workspace_preflight)
+
+        dynamic_workspace_bytes = estimated_dynamic_prepared_workspace_bytes(structures)
+        workspace_observer.call(
+          checked_add(
+            checked_add(physical_workspace_bytes, setup_workspace_bytes),
+            dynamic_workspace_bytes,
+          )
+        )
+        prepared = CompactDynamicBulkPreparedContext.new(
+          @type,
+          @column,
+          @profile,
+          structures,
+          budget,
+        )
+        first_cursor = discovery_cursor
+        first_modes = modes
+      end
+
+      context = prepared.not_nil!
+      unless context.plan.type == @type && context.plan.profile == @profile && context.column_name == @column
+        raise ArgumentError.new("Compact Dynamic prepared context does not match the selected column, descriptor, and profile")
+      end
+      prepared_workspace_bytes = estimated_dynamic_prepared_workspace_bytes(context)
+      if prepared_workspace_bytes > dynamic_workspace_bytes
+        dynamic_workspace_bytes = prepared_workspace_bytes
+      end
+      workspace_observer.call(
+        checked_add(
+          checked_add(physical_workspace_bytes, setup_workspace_bytes),
+          dynamic_workspace_bytes,
+        )
+      )
+      plan = context.plan
+      # Let Compact-specific serializers reject learned layouts before role
+      # allocation or lane/body replay. The frozen plan is now available, while
+      # the same consumptive discovery budget is still in force.
+      prepared_observer.try(&.call(context))
+      physical = context.physical
+      roles = BinaryBulkTypePlan.new(@type, @profile, plan, @limits, false).roles
+      physical_roles = physical.data_stream_names.keys.sort!
+      unless physical_roles == roles
+        raise CorruptPartError.new("Compact Dynamic physical roles differ from the prepared recursive descriptor")
+      end
+      expected_events = traversal.expected_callback_roster(context)
+
+      if cursor = first_cursor
+        cursor.validate_expected_events!(expected_events)
+      end
+
+      observe_workspace(operation_observer, physical_workspace_bytes, roles.size, mark_count, 0_u64, 0_u64)
+      offsets_per_role = mark_count.to_u64 + 1_u64
+      grid_records = multiply_checked(roles.size.to_u64, offsets_per_role)
+      budget.preflight_children(grid_records)
+      grid_records.times { budget.charge_node }
+
+      lanes = Hash(String, CompactBinaryBulkLaneBuilder).new(initial_capacity: roles.size)
+      roles.each do |role|
+        dictionary_header = role.ends_with?(".dictionary")
+        lane = CompactBinaryBulkLaneBuilder.new(String.new(role.to_slice), dictionary_header ? 8_u64 : 0_u64)
+        if dictionary_header
+          observe_workspace(
+            operation_observer,
+            physical_workspace_bytes,
+            roles.size,
+            mark_count,
+            checked_add(sum_lane_data_bytes(lanes), 8_u64),
+            8_u64,
+          )
+          lane.append_u64(BinaryLowCardinalityStorageStreams::VERSION, budget)
+        end
+        lanes[role] = lane
+      end
+
+      rows_per_mark = Array(UInt64).new(mark_count)
+      granules.each_with_index do |granule, mark_index|
+        if granule.row_count > Int32::MAX.to_u64
+          raise CorruptPartError.new("Compact parent rows exceed the BinaryBulk in-memory domain")
+        end
+        rows_per_mark << granule.row_count
+        cursor = if mark_index == 0 && first_cursor
+                   first_cursor.not_nil!
+                 else
+                   next_cursor = CompactBinaryBulkGranuleCursor.new(window.mode, granule.shards, expected_events)
+                   next_cursor.charge_complete_wire_input!(budget)
+                   next_cursor
+                 end
+        variant_modes = if mark_index == 0 && first_modes
+                          first_modes.not_nil!
+                        else
+                          traversal.replay(cursor, budget, context)
+                        end
+        walk_body(
+          @type,
+          "root",
+          granule.row_count,
+          cursor,
+          physical,
+          lanes,
+          variant_modes,
+          budget,
+          operation_observer,
+          physical_workspace_bytes,
+          mark_count,
+          plan,
+        )
+        cursor.finish_granule
+        lanes.each_value(&.finish_mark)
+      end
+
+      observe_workspace(
+        operation_observer,
+        physical_workspace_bytes,
+        roles.size,
+        mark_count,
+        sum_lane_data_bytes(lanes),
+        0_u64,
+        true,
+      )
+      streams = Hash(String, BinaryBulkStream).new(initial_capacity: lanes.size)
+      lanes.each do |role, lane|
+        unless lane.mark_count == mark_count
+          raise CorruptPartError.new("Compact Dynamic normalized lane has an incomplete mark grid")
+        end
+        streams[String.new(role.to_slice)] = lane.build
+      end
+      {BinaryBulkStreams.new(mark_count, streams), rows_per_mark, context}
+    end
+
     # Exact ordered prefix-then-body callback names for metadata-only mrk4
     # binding. mrk3 is intentionally not name-bound: its one physical slot is
     # a grammar-delimited tape and callers must not fabricate substream names.
     def expected_physical_callback_roster : Array(String)
       callback_roster(validated_physical_plan)
+    end
+
+    # Shared census for a prepared Dynamic plan retained by a reader. Keep the
+    # estimator alongside the construction logic so callers do not invent a
+    # smaller, role-insensitive workspace approximation.
+    def dynamic_prepared_context_workspace_bytes(
+      context : CompactDynamicBulkPreparedContext,
+    ) : UInt64
+      estimated_dynamic_prepared_workspace_bytes(context)
     end
 
     private def validated_physical_plan : BinaryBulkPhysicalPlan
@@ -368,13 +578,14 @@ module CrystalClick
       role : String,
       count : UInt64,
       cursor : CompactBinaryBulkGranuleCursor,
-      physical : BinaryBulkPhysicalPlan,
+      physical : PhysicalPlan,
       lanes : Hash(String, CompactBinaryBulkLaneBuilder),
       variant_modes : Hash(String, UInt64),
       budget : BinaryCodecBudget,
       workspace_observer : Proc(UInt64, Nil),
       physical_workspace_bytes : UInt64,
       mark_count : Int32,
+      dynamic_plan : BinaryDynamicBulkPlan? = nil,
     ) : Nil
       if count > Int32::MAX.to_u64 || count > @limits.max_elements.to_u64
         raise CorruptPartError.new("Compact recursive occurrence count exceeds its bounded domain")
@@ -384,7 +595,7 @@ module CrystalClick
       when BinaryDataType::TAG_CUSTOM, BinaryDataType::TAG_SIMPLE_AGGREGATE
         walk_body(
           type.child_at(0), role, count, cursor, physical, lanes, variant_modes, budget,
-          workspace_observer, physical_workspace_bytes, mark_count
+          workspace_observer, physical_workspace_bytes, mark_count, dynamic_plan
         )
       when BinaryDataType::TAG_STRING
         data_role = "#{role}.data"
@@ -424,7 +635,7 @@ module CrystalClick
         append_lane(lanes, size_role, size_bytes, budget, workspace_observer, physical_workspace_bytes, mark_count)
         walk_body(
           type.child_at(0), "#{role}.elements", child_count, cursor, physical, lanes, variant_modes, budget,
-          workspace_observer, physical_workspace_bytes, mark_count
+          workspace_observer, physical_workspace_bytes, mark_count, dynamic_plan
         )
       when BinaryDataType::TAG_NULLABLE
         null_role = "#{role}.nulls"
@@ -437,7 +648,7 @@ module CrystalClick
         append_lane(lanes, null_role, nulls, budget, workspace_observer, physical_workspace_bytes, mark_count)
         walk_body(
           type.child_at(0), "#{role}.nested", count, cursor, physical, lanes, variant_modes, budget,
-          workspace_observer, physical_workspace_bytes, mark_count
+          workspace_observer, physical_workspace_bytes, mark_count, dynamic_plan
         )
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
@@ -453,7 +664,7 @@ module CrystalClick
           type.child_count.times do |index|
             walk_body(
               type.child_at(index), "#{role}.field.#{index}", count, cursor, physical, lanes, variant_modes, budget,
-              workspace_observer, physical_workspace_bytes, mark_count
+              workspace_observer, physical_workspace_bytes, mark_count, dynamic_plan
             )
           end
         end
@@ -465,12 +676,12 @@ module CrystalClick
         walk_body(
           type.child_at(0), "#{role}.elements.field.0", pair_count,
           cursor, physical, lanes, variant_modes, budget,
-          workspace_observer, physical_workspace_bytes, mark_count
+          workspace_observer, physical_workspace_bytes, mark_count, dynamic_plan
         )
         walk_body(
           type.child_at(1), "#{role}.elements.field.1", pair_count,
           cursor, physical, lanes, variant_modes, budget,
-          workspace_observer, physical_workspace_bytes, mark_count
+          workspace_observer, physical_workspace_bytes, mark_count, dynamic_plan
         )
       when BinaryDataType::TAG_LOW_CARDINALITY
         dictionary_role = "#{role}.dictionary"
@@ -483,7 +694,7 @@ module CrystalClick
         index_bytes = cursor.consumed_slice(start)
         cursor.finish_event
         append_lane(lanes, index_role, index_bytes, budget, workspace_observer, physical_workspace_bytes, mark_count)
-      when BinaryDataType::TAG_VARIANT
+      when BinaryDataType::TAG_VARIANT, BinaryDataType::TAG_DYNAMIC
         discriminator_role = "#{role}.discriminators"
         mode = variant_modes[discriminator_role]? ||
                raise(CorruptPartError.new("Compact Variant body has no matching state prefix"))
@@ -510,28 +721,39 @@ module CrystalClick
           mark_count,
         )
         append_lane(lanes, discriminator_role, tags, budget, workspace_observer, physical_workspace_bytes, mark_count)
+        arm_count = if type.tag == BinaryDataType::TAG_DYNAMIC
+                      dynamic_plan.try(&.arm_count(role)) ||
+                        raise(CorruptPartError.new("Compact Dynamic body has no matching prepared structure"))
+                    else
+                      type.child_count
+                    end
         observe_workspace(
           workspace_observer,
           physical_workspace_bytes,
           lanes.size,
           mark_count,
           sum_lane_data_bytes(lanes),
-          checked_multiply(type.child_count.to_u64, sizeof(UInt64).to_u64),
+          checked_multiply(arm_count.to_u64, sizeof(UInt64).to_u64),
         )
-        counts = Array(UInt64).new(type.child_count, 0_u64)
+        counts = Array(UInt64).new(arm_count, 0_u64)
         tags.each do |tag|
           next if tag == 0xff_u8
           index = tag.to_i
-          if index >= type.child_count
-            raise CorruptPartError.new("Compact Variant discriminator is outside its arm roster")
+          if index >= arm_count
+            raise CorruptPartError.new("Compact discriminator is outside its arm roster")
           end
           counts[index] += 1_u64
         end
-        type.child_count.times do |index|
+        arm_count.times do |index|
+          arm_type = if type.tag == BinaryDataType::TAG_DYNAMIC
+                       dynamic_plan.not_nil!.arm_type(role, index)
+                     else
+                       type.child_at(index)
+                     end
           walk_body(
-            type.child_at(index), "#{role}.arm.#{index}", counts[index],
+            arm_type, "#{role}.arm.#{index}", counts[index],
             cursor, physical, lanes, variant_modes, budget,
-            workspace_observer, physical_workspace_bytes, mark_count
+            workspace_observer, physical_workspace_bytes, mark_count, dynamic_plan
           )
         end
       else
@@ -559,7 +781,7 @@ module CrystalClick
       count : UInt64,
       width : UInt64,
       cursor : CompactBinaryBulkGranuleCursor,
-      physical : BinaryBulkPhysicalPlan,
+      physical : PhysicalPlan,
     ) : Bytes
       size = multiply_checked(count, width)
       if size > Int32::MAX.to_u64
@@ -815,6 +1037,128 @@ module CrystalClick
       return nil if census.nodes > @limits.max_nodes.to_u64
       return nil if census.edges > @limits.max_elements.to_u64
 
+      estimated_census_workspace_bytes(census)
+    end
+
+    private def estimated_dynamic_prepared_workspace_bytes(
+      structures : Hash(String, DynamicStructure),
+    ) : UInt64
+      bytes = instance_sizeof(CompactDynamicBulkPreparedContext).to_u64
+      bytes = checked_add(bytes, instance_sizeof(Hash(String, DynamicStructure)).to_u64)
+      structures.each do |role, structure|
+        bytes = checked_add(bytes, estimated_dynamic_structure_workspace_bytes(role, structure))
+      end
+      bytes
+    end
+
+    private def estimated_dynamic_prepared_workspace_bytes(
+      structures : Hash(String, DynamicStructure),
+      current_role : String,
+      current_structure : DynamicStructure,
+    ) : UInt64
+      bytes = estimated_dynamic_prepared_workspace_bytes(structures)
+      checked_add(bytes, estimated_dynamic_structure_workspace_bytes(current_role, current_structure))
+    end
+
+    private def estimated_dynamic_prepared_workspace_bytes(
+      context : CompactDynamicBulkPreparedContext,
+    ) : UInt64
+      bytes = instance_sizeof(CompactDynamicBulkPreparedContext).to_u64
+      bytes = checked_add(bytes, instance_sizeof(Hash(String, DynamicStructure)).to_u64)
+      context.plan.each_site_path do |role|
+        bytes = checked_add(
+          bytes,
+          estimated_dynamic_structure_workspace_bytes(role, context.plan.structure_for(role)),
+        )
+      end
+      bytes
+    end
+
+    private def estimated_dynamic_structure_workspace_bytes(
+      role : String,
+      structure : DynamicStructure,
+    ) : UInt64
+      # Compact's learned roster owns the decoded structure, its site key,
+      # canonical-arm pointer array, the Dynamic plan's copy of that arm
+      # array, and escaped path/name snapshots. Count the implicit shared
+      # String even though it is not in DynamicStructure#types.
+      arm_count = structure.canonical_variant_count.to_u64
+      bytes = checked_add(instance_sizeof(DynamicStructure).to_u64, 512_u64)
+      bytes = checked_add(
+        bytes,
+        checked_multiply(role.bytesize.to_u64, 16_u64),
+      )
+      bytes = checked_add(
+        bytes,
+        checked_multiply(arm_count, checked_add(sizeof(Pointer(Void)).to_u64, 64_u64)),
+      )
+      bytes = checked_add(bytes, estimated_dynamic_statistics_workspace_bytes(structure))
+      structure.type_count.times do |index|
+        census = setup_census(structure.type_at(index), 1) ||
+                 raise(UnsupportedFormatError.new("Dynamic actual descriptor exceeds Compact workspace limits"))
+        census_bytes = estimated_census_workspace_bytes(census) ||
+                       raise(UnsupportedFormatError.new("Dynamic actual descriptor exceeds Compact workspace limits"))
+        bytes = checked_add(bytes, census_bytes)
+      end
+      # SharedVariant is a synthesized String arm and participates in naming,
+      # prefixes, and physical role maps on every site.
+      checked_add(bytes, 1_024_u64)
+    end
+
+    private def estimated_dynamic_statistics_workspace_bytes(structure : DynamicStructure) : UInt64
+      statistics = structure.statistics || return 0_u64
+      count_count = statistics.count_count.to_u64
+      shared_count = statistics.shared_count.to_u64
+
+      # The structure parser has already bounded these counts and bytes by
+      # the caller's read budget. This post-parse logical census accounts for
+      # retained owners; it is not a pre-parse allocator/RSS guarantee.
+      bytes = instance_sizeof(StructureStatistics).to_u64
+      bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(count_count, sizeof(UInt64).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Array(StructureStatistic)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(shared_count, sizeof(Pointer(StructureStatistic)).to_u64))
+
+      # The shared-path index retains a Hash plus bucket arrays of Int32
+      # indexes. Charge one hash slot and bucket header per entry as a
+      # conservative logical owner estimate, including hash collisions.
+      bytes = checked_add(bytes, instance_sizeof(Hash(UInt64, Array(Int32))).to_u64)
+      bytes = checked_add(
+        bytes,
+        checked_multiply(
+          shared_count,
+          checked_add(
+            checked_add(sizeof(UInt64).to_u64, sizeof(Pointer(Array(Int32))).to_u64),
+            32_u64,
+          ),
+        ),
+      )
+      bytes = checked_add(
+        bytes,
+        checked_multiply(
+          shared_count,
+          checked_add(instance_sizeof(Array(Int32)).to_u64, sizeof(Int32).to_u64),
+        ),
+      )
+
+      statistics.shared_count.times do |index|
+        entry = statistics.shared_at(index)
+        bytes = checked_add(bytes, instance_sizeof(StructureStatistic).to_u64)
+        bytes = checked_add(
+          bytes,
+          checked_add(
+            instance_sizeof(String).to_u64,
+            checked_add(entry.name_byte_size.to_u64, 1_u64),
+          ),
+        )
+      end
+      bytes
+    end
+
+    private def estimated_census_workspace_bytes(census : SetupCensus) : UInt64?
+      return nil if census.nodes > @limits.max_nodes.to_u64
+      return nil if census.edges > @limits.max_elements.to_u64
+
       roles = checked_add(checked_multiply(census.nodes, 4_u64), census.qbit_plane_count)
       roles = checked_add(roles, 4_u64)
       return nil if roles > Int32::MAX.to_u64
@@ -1021,13 +1365,13 @@ module CrystalClick
       lanes[role]? || raise(CorruptPartError.new("Compact callback addresses an unplanned BinaryBulk role"))
     end
 
-    private def body_name(role : String, physical : BinaryBulkPhysicalPlan) : String
+    private def body_name(role : String, physical : PhysicalPlan) : String
       physical.stream_name_for(role)
     rescue ex : KeyError
       raise CorruptPartError.new("Compact callback role is outside the selected physical plan")
     end
 
-    private def prefix_name(role : String, physical : BinaryBulkPhysicalPlan) : String
+    private def prefix_name(role : String, physical : PhysicalPlan) : String
       unless physical.prefix_size_for(role) == BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES
         raise CorruptPartError.new("Compact state-prefix role has no admitted eight-byte prefix")
       end
@@ -1065,6 +1409,13 @@ module CrystalClick
         raise CorruptPartError.new("Compact workspace estimate overflows UInt64")
       end
       left + right
+    end
+
+    private def same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
+      left.max_depth == right.max_depth &&
+        left.max_nodes == right.max_nodes &&
+        left.max_elements == right.max_elements &&
+        left.max_bytes == right.max_bytes
     end
 
     private def checked_multiply(left : UInt64, right : UInt64) : UInt64

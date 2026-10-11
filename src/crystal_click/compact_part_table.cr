@@ -1,13 +1,14 @@
 module CrystalClick
   # Single-part typed table backend for Compact physical storage. It preserves
-  # WidePartTableBatch carriers while delegating Compact lifecycle decoding to
-  # CompactBinaryBulkColumnReader and typed conversion to the shared adapter.
+  # WidePartTableBatch carriers while delegating static and Dynamic lifecycle
+  # decoding to Compact readers and conversion to established batch adapters.
   class CompactPartTable
     getter part_count : Int32
     getter total_row_count : UInt64
     getter checksum_verification : ChecksumVerification
 
-    private alias SelectedReader = {String, String, BinaryDataType, CompactBinaryBulkColumnReader}
+    private alias CompactColumnReader = CompactBinaryBulkColumnReader | CompactDynamicBulkColumnReader
+    private alias SelectedReader = {String, String, BinaryDataType, CompactColumnReader}
 
     @columns : Array(String)
     @column_types : Array({String, String})
@@ -63,18 +64,28 @@ module CrystalClick
         unless source_type
           raise CorruptPartError.new("selected column is absent from Compact columns.txt")
         end
-        type = StaticBinaryBulkColumnDeclaration.parse(source_type) ||
-               raise(UnsupportedFormatError.new("selected Compact declaration is outside static BinaryBulk admission"))
-        unless BinaryValueTypedBatchAdapter.admitted?(type)
+        dynamic_type = compact_dynamic_type(source_type)
+        type = dynamic_type || StaticBinaryBulkColumnDeclaration.parse(source_type) ||
+               raise(UnsupportedFormatError.new("selected Compact declaration is outside static or Dynamic BinaryBulk admission"))
+        if dynamic_type.nil? && !BinaryValueTypedBatchAdapter.admitted?(type)
           raise UnsupportedFormatError.new("selected Compact declaration has no established typed batch carrier")
         end
 
-        reader = CompactBinaryBulkColumnReader.open(
-          @part_path,
-          column,
-          type,
-          transport_budget: budget,
-        )
+        reader : CompactColumnReader = if dynamic_type
+          CompactDynamicBulkColumnReader.open(
+            @part_path,
+            column,
+            type,
+            transport_budget: budget,
+          )
+        else
+          CompactBinaryBulkColumnReader.open(
+            @part_path,
+            column,
+            type,
+            transport_budget: budget,
+          )
+        end
         unless reader.schema_declaration == source_type && reader.source_declaration == source_type
           raise CorruptPartError.new("selected Compact declaration differs from its physical schema")
         end
@@ -155,7 +166,10 @@ module CrystalClick
       if start_row > @total_row_count
         raise BoundsError.new("window start is beyond the source row count")
       end
-      return nil if start_row == @total_row_count
+      if start_row == @total_row_count
+        validate_dynamic_schedules!
+        return nil
+      end
 
       available = @total_row_count - start_row
       rows = max_rows.to_u64 < available ? max_rows.to_u64 : available
@@ -193,6 +207,8 @@ module CrystalClick
       window_rows : {UInt64, UInt64}?,
       & : WidePartTableBatch -> Nil
     ) : Nil
+      validate_dynamic_schedules!
+
       selected_cursor = 0
       part_row_offset = 0_u64
       @mark_row_counts.each_with_index do |mark_rows, mark_index|
@@ -234,6 +250,37 @@ module CrystalClick
       end
       unless part_row_offset == @total_row_count
         raise CorruptPartError.new("Compact part row grid differs from its total row count")
+      end
+      nil
+    end
+
+    # A learned Dynamic plan is part-wide state. Validate every granule
+    # before mark/window selection can publish rows, including an empty
+    # candidate set or an EOF-first window. Previously normalized Dynamic
+    # owners remain live while later readers prepare, so their retained
+    # workspace is included in each subsequent reader's preflight.
+    private def validate_dynamic_schedules! : Nil
+      limit = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
+      @readers.each_with_index do |entry, reader_index|
+        reader = entry[3].as?(CompactDynamicBulkColumnReader)
+        next unless reader
+
+        other_retained_workspace = 0_u64
+        @readers.each_with_index do |other_entry, other_index|
+          next if other_index == reader_index
+          other_retained_workspace = checked_add(other_retained_workspace, other_entry[3].retained_workspace_bytes)
+        end
+        if other_retained_workspace > limit
+          raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+        end
+        reader_workspace_limit = limit - other_retained_workspace
+        workspace_observer = ->(workspace_bytes : UInt64) do
+          if workspace_bytes > reader_workspace_limit
+            raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+          end
+          nil
+        end
+        reader.validate_complete_schedule(workspace_observer)
       end
       nil
     end
@@ -305,6 +352,9 @@ module CrystalClick
       while cursor < rows
         slice_rows = (rows - cursor) < WidePartTable::MAX_BATCH_ROWS.to_u64 ? (rows - cursor) : WidePartTable::MAX_BATCH_ROWS.to_u64
         @readers.each_with_index do |entry, column_index|
+          # Dynamic already has its exact BinaryValue carrier; installing the
+          # borrowed slice does not allocate a second typed owner.
+          next if entry[2].contains_dynamic?
           values = values_by_column[column_index]
           slice = Slice.new(values.to_unsafe + cursor.to_i, slice_rows.to_i)
           estimated = BinaryValueTypedBatchAdapter.estimated_materialization_bytes(entry[2], slice)
@@ -347,13 +397,17 @@ module CrystalClick
       @readers.each_with_index do |entry, column_index|
         values = values_by_column[column_index]
         slice = Slice.new(values.to_unsafe + row_offset.to_i, rows.to_i)
-        BinaryValueTypedBatchAdapter.install(
-          batch,
-          entry[0],
-          entry[2],
-          slice,
-          rows.to_i32,
-        )
+        if entry[2].contains_dynamic?
+          batch.install_dynamic_bulk_values(entry[0], slice, rows.to_i32)
+        else
+          BinaryValueTypedBatchAdapter.install(
+            batch,
+            entry[0],
+            entry[2],
+            slice,
+            rows.to_i32,
+          )
+        end
       end
       yield batch
       nil
@@ -364,6 +418,14 @@ module CrystalClick
         raise BoundsError.new("#{label} is out of range")
       end
       nil
+    end
+
+    private def compact_dynamic_type(source_type : String) : BinaryDataType?
+      if source_type == "Dynamic"
+        bytes = source_type.to_slice
+        return ObjectDeclaredDynamicDeclaration.resolve_slice(bytes, 0, bytes.size).try(&.materialize)
+      end
+      DynamicBulkColumnDeclaration.parse(source_type)
     end
 
     private def validate_selected_part(requested_path : String) : {String, String}

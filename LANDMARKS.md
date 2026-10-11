@@ -1,5 +1,61 @@
 # Crystal Click landmarks
 
+## Context-owned recursive Compact Dynamic reader — W262
+
+- VERIFIED / root adversary ROBUST within the finite Default/plain-mark target
+  over `30818166dc9651b65ad867aecfe98c13b670e74a`, after the live-baseline
+  accounting falsifier and final two-mode refresh. Own-file learned
+  prefix traversal, immutable prepared context and reader reuse the shared
+  Compact lifecycle normalizer and BinaryBulk decoder, including empty child
+  callbacks and partwide frozen ordinary rosters. No per-product value serde.
+- Root baseline RED: eight stock cells, 16 public UInt64 positives and 48
+  intentional Dynamic refusals. Independent raw prefix instrument observes
+  96 wire-v4 callbacks and passes 3 positives/14 framing negatives; one INSERT
+  does not measure freezing across separate writer input blocks.
+- Final exact nine-spec roster: 80 examples in each DEBUG/RELEASE mode with
+  the native accounting fixture explicitly enabled (79 portable examples),
+  zero failures/errors/pending; both helpers built and fresh eight-cell native
+  matrices passed literal/window/EOF-first/public/offline assertions. All
+  84 part-file pairs / 36,628 bytes agree across modes. Root capture closure:
+  234 regular files / 18 manifest-bound native aliases unchanged; helper
+  semantics agree. Auditor is not a second codec or independent CityHash.
+- Root's DEBUG-compiled public instrument ran against both final captures:
+  later wire-version corruption refused four EOF/empty requests per capture;
+  injected retained logical estimates refused two aggregate-limit requests
+  per capture. Clean positives and original-byte preservation pass. This
+  qualifies public accounting, not RSS, allocator capacity or preallocation.
+- Corrected obligation: separate base + physical and physical + peak checks
+  missed the simultaneous sum. Root's native RED measured the missing
+  2,634-byte live-reader base; a checked observer wrapper passed the same
+  regression, then both modes/native matrices were refreshed. Across-part
+  cached aggregate limits remain outside this single-part logical guard
+  qualification; neither RSS nor allocator capacity is covered.
+- Refutations: raw ATTACH DDL whitespace differs from canonical columns.txt;
+  the bounded offline bridge keeps strict owner/raw metadata unchanged. The
+  newly admitted whitespace route replaces one inherited W220 expectation,
+  retaining malformed/reordered/default-cap refusals. Ruby Float64 wire-hex
+  versus numeric-bit-hex was an oracle error, not a serde error; four positive
+  and three mismatch controls pass before fresh native requalification.
+  Native table/metadata aliases refuted the private auditor's no-links-anywhere
+  assumption; exact allow-list repair passes three positives/five negatives
+  and detects raw link-target replacement without traversing aliases.
+- Global profiles remain narrower than CH's recursive effective settings:
+  Tuple passes settings, Dynamic may reset them. Valid mixed String-v1/v0
+  trees are refused; fix through per-node context, not product-specific serde.
+  Full-grid prefix preparation is not lazy access or complete future-payload
+  authentication. Quiescent parts/trusted ancestry remain assumptions.
+- Return pointers: [W262 frontier](docs/COMPACT_DYNAMIC_READER_FRONTIER.md),
+  [root evidence](.landmark/evidence/compact-dynamic-reader-w262.json).
+  Separate comparison/runtime pins: `ed30948f095ecb70679986d7d60e27ad770ae27a`
+  / `d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Source/test/helper/oracle/tool/
+  profile/consumer drift, widening or capture loss reopens affected evidence;
+  refresh exact modes, fresh native matrices and affected negative controls.
+- Next: Compact JSON/Object prepared binding; remaining aggregate/SAF/QBit/Geo
+  layouts/effective profiles, parent `.proj` authentication and composition,
+  general keys/partitions/facade decomposition. Full all-types/MV/projection
+  goal ACTIVE, no native MV SQL/trigger/freshness claim. Memory/performance and
+  <=10% parity deferred; local atomic commit only, no push.
+
 ## Ragged Wide selected-column metadata admission — W261
 
 - VERIFIED / root adversary ROBUST within the finite canonical-stock/common

@@ -1295,6 +1295,26 @@ module CrystalClick
       end
     end
 
+    # Compact's first-granule prefix traversal must visit nested Dynamic sites
+    # online, in the actual canonical arm order, before it has enough parsed
+    # structures to construct a complete BinaryDynamicBulkPlan. Reuse the same
+    # bounded arm admission/mapping here instead of duplicating that grammar.
+    def self.canonical_arm_types_for_compact_prefix(
+      structure : DynamicStructure,
+      budget : BinaryCodecBudget,
+      descriptor_depth : Int32,
+    ) : Array(BinaryDataType)
+      unless !budget.writing?
+        raise ArgumentError.new("Compact Dynamic arm discovery requires a read-direction budget")
+      end
+      context = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
+      context.ensure_depth(descriptor_depth)
+      # Match discover_read_sites exactly: the implicit SharedVariant String
+      # is a physical arm and is validated/charged before ordinary arm names.
+      charge_shared_variant_arm(context, descriptor_depth)
+      canonical_arm_types(structure, context, descriptor_depth, false)
+    end
+
     private def self.build_json_object_bindings(
       sites : Hash(String, Site),
       supplied : Array(Tuple(String, Int32, ObjectDocumentPlan))?,

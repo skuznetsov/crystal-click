@@ -6,6 +6,8 @@ module CrystalClick
     # does not expose the full transient descendant graph decoded by JSON or
     # LowCardinality replay, so this is not a 64 MiB peak-allocation or RSS cap.
     private class DynamicBulkValuesMaterializer
+      private alias Reader = DynamicBulkColumnReader | CompactDynamicBulkColumnReader
+
       def self.materialize(
         table : OfflineTable,
         candidates : Array(OfflinePartCandidate),
@@ -35,12 +37,13 @@ module CrystalClick
         # Preflight every candidate, including complete schedules and any
         # required full-part replay, before allocating the retained result.
         candidates.each do |candidate|
-          reader = DynamicBulkColumnReader.open(candidate.path, column, type)
+          reader = open_reader(candidate, column, type)
           mark_rows = reader.mark_row_counts
           validate_reader!(reader, candidate, mark_rows, expected_rows)
           workspace = full_part_workspace_bytes(reader, mark_rows, candidate, column)
           budget.ensure_workspace(workspace)
-          reader.validate_complete_schedule
+          validate_complete_schedule!(reader, budget, workspace)
+          budget.ensure_workspace(full_part_workspace_bytes(reader, reader.mark_row_counts, candidate, column))
         end
 
         values = Array(OfflineColumnValue).new(expected_rows.to_i)
@@ -50,7 +53,7 @@ module CrystalClick
         # by immutable part; each reopen is checked against that part's own
         # declaration and grid rather than another part's runtime roster.
         candidates.each do |candidate|
-          reader = DynamicBulkColumnReader.open(candidate.path, column, type)
+          reader = open_reader(candidate, column, type)
           mark_rows = reader.mark_row_counts
           validate_reader!(reader, candidate, mark_rows, expected_rows)
           workspace = full_part_workspace_bytes(reader, mark_rows, candidate, column)
@@ -60,7 +63,7 @@ module CrystalClick
             # Reserve the conservative full-part workspace before entering
             # that path, including when the selected mark itself is empty.
             budget.ensure_workspace(workspace)
-            selected = reader.read_marks(mark_index, 1)
+            selected = read_marks_with_workspace(reader, mark_index, workspace, budget)
             unless selected.size == 1 && selected[0].size.to_u64 == expected_mark_rows
               raise CorruptPartError.new("Dynamic catalog mark row count changed during materialization")
             end
@@ -95,7 +98,7 @@ module CrystalClick
       end
 
       private def self.validate_reader!(
-        reader : DynamicBulkColumnReader,
+        reader : Reader,
         candidate : OfflinePartCandidate,
         mark_rows : Array(UInt64),
         expected_rows : UInt64,
@@ -131,17 +134,21 @@ module CrystalClick
       end
 
       private def self.full_part_workspace_bytes(
-        reader : DynamicBulkColumnReader,
+        reader : Reader,
         mark_rows : Array(UInt64),
         candidate : OfflinePartCandidate,
         column : String,
       ) : UInt64
         bytes = reader.logical_read_bytes
-        bytes = checked_add(bytes, instance_sizeof(DynamicBulkColumnReader).to_u64)
-        bytes = checked_add(bytes, instance_sizeof(DynamicBulkSiteReader).to_u64)
-        bytes = checked_add(bytes, instance_sizeof(BinaryDynamicBulkPlan).to_u64)
-        bytes = checked_add(bytes, instance_sizeof(BinaryDynamicBulkPhysicalPlan).to_u64)
-        bytes = checked_add(bytes, instance_sizeof(PartStreamSource).to_u64)
+        if compact_reader = reader.as?(CompactDynamicBulkColumnReader)
+          bytes = checked_add(bytes, compact_reader.retained_workspace_bytes)
+        else
+          bytes = checked_add(bytes, instance_sizeof(DynamicBulkColumnReader).to_u64)
+          bytes = checked_add(bytes, instance_sizeof(DynamicBulkSiteReader).to_u64)
+          bytes = checked_add(bytes, instance_sizeof(BinaryDynamicBulkPlan).to_u64)
+          bytes = checked_add(bytes, instance_sizeof(BinaryDynamicBulkPhysicalPlan).to_u64)
+          bytes = checked_add(bytes, instance_sizeof(PartStreamSource).to_u64)
+        end
         # Count the actual retained @grids and @structure_grids census,
         # including each grid's mark-specific positions and row arrays.
         bytes = checked_add(bytes, reader.retained_grid_workspace_bytes)
@@ -175,7 +182,8 @@ module CrystalClick
         bytes = checked_add(bytes, checked_multiply(string_array_bytes(physical_names), 2_u64))
         bytes = checked_add(bytes, checked_multiply(string_array_bytes(checksum_names), 2_u64))
         # Include bounded role-map/read-window containers and one possible
-        # discriminator prefix-read tuple per physical role.
+        # discriminator prefix-read tuple per physical role. Compact's retained
+        # reader census also owns its normalized role grid and prepared plan.
         role_count = physical_names.size.to_u64
         role_workspace = instance_sizeof(Hash(String, BinaryBulkStream)).to_u64
         role_workspace = checked_add(role_workspace, checked_multiply(role_count, sizeof(Pointer(String)).to_u64 * 2_u64))
@@ -191,6 +199,57 @@ module CrystalClick
         bytes = checked_add(bytes, string_owner_bytes(candidate.path))
         bytes = checked_add(bytes, checked_multiply(string_owner_bytes(column), 2_u64))
         checked_add(bytes, string_owner_bytes(File.expand_path(candidate.path)))
+      end
+
+      private def self.open_reader(
+        candidate : OfflinePartCandidate,
+        column : String,
+        type : BinaryDataType,
+      ) : Reader
+        path = File.expand_path(candidate.path)
+        metadata = PartMetadataFileReader.new(path, CompressedStreamBudget.read_default)
+        checksums = PartChecksums.parse(
+          metadata.read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice
+        )
+        if checksums.entry("data.mrk3") || checksums.entry("data.mrk4")
+          CompactDynamicBulkColumnReader.open(path, column, type)
+        else
+          DynamicBulkColumnReader.open(path, column, type)
+        end
+      end
+
+      private def self.validate_complete_schedule!(
+        reader : Reader,
+        budget : ObjectValuesMaterializationBudget,
+        base_workspace : UInt64,
+      ) : Nil
+        if compact_reader = reader.as?(CompactDynamicBulkColumnReader)
+          observer = ->(extra_workspace : UInt64) do
+            budget.ensure_workspace(checked_add(base_workspace, extra_workspace))
+            nil
+          end
+          compact_reader.validate_complete_schedule(observer)
+        else
+          reader.validate_complete_schedule
+        end
+        nil
+      end
+
+      private def self.read_marks_with_workspace(
+        reader : Reader,
+        mark_index : Int32,
+        base_workspace : UInt64,
+        budget : ObjectValuesMaterializationBudget,
+      ) : Array(Array(BinaryValue))
+        if compact_reader = reader.as?(CompactDynamicBulkColumnReader)
+          observer = ->(extra_workspace : UInt64) do
+            budget.ensure_workspace(checked_add(base_workspace, extra_workspace))
+            nil
+          end
+          compact_reader.read_marks(mark_index, 1, observer)
+        else
+          reader.read_marks(mark_index, 1)
+        end
       end
 
       private def self.string_array_bytes(values : Array(String)) : UInt64

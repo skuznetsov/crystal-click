@@ -89,8 +89,11 @@ module CrystalClick
 
       has_string = contains_tag?(selected_type, BinaryDataType::TAG_STRING)
       has_map = contains_tag?(selected_type, BinaryDataType::TAG_MAP)
-      if has_string && string_version != 0 && string_version != 1
+      if string_version != 0 && string_version != 1
         raise UnsupportedFormatError.new("Compact String serialization version must be 0 or 1")
+      end
+      if map_version != 0 && map_version != 1
+        raise UnsupportedFormatError.new("Compact Map serialization version must be BASIC or WITH_BUCKETS")
       end
       map_basic = map_version == 0
       if has_map && !map_basic
@@ -107,16 +110,23 @@ module CrystalClick
       validate_record_shapes(records, physical_types, row_count, selected_column, selected_type)
 
       # A selected String root uses its declared version regardless of the
-      # propagation flag. Child String serializers use v1 only when that flag
-      # explicitly propagates the version; BinaryBulkProfile is global, so
-      # mixed root/nested layouts are rejected rather than mis-normalized.
+      # propagation flag. ClickHouse containers do not all propagate settings
+      # identically: Tuple forwards them, while Dynamic may use defaults.
+      # BinaryBulkProfile is global, so the current admission conservatively
+      # rejects nested String v1 without propagation rather than assuming a
+      # homogeneous effective profile for every node.
       nested_string = has_string && selected_type.tag != BinaryDataType::TAG_STRING
       if has_string && string_version == 1 && nested_string && !propagated
         raise UnsupportedFormatError.new("nested Compact String v1 requires propagated serialization versions")
       end
       string_v1 = has_string && string_version == 1
+      # Dynamic's nominal descriptor does not expose the implicit
+      # SharedVariant String arm. With propagation enabled that arm follows
+      # the part's String version; without propagation Dynamic resets to v0.
+      dynamic_shared_string_v1 = selected_type.contains_dynamic? && propagated && string_version == 1
       if string_v1 && selected_type.tag == BinaryDataType::TAG_STRING ||
-         string_v1 && propagated
+         string_v1 && propagated ||
+         dynamic_shared_string_v1
         profile = BinaryBulkProfile.with_size_stream
       else
         profile = BinaryBulkProfile.single_stream
@@ -317,7 +327,14 @@ module CrystalClick
       selected_type : BinaryDataType,
     ) : BinaryDataType?
       return selected_type if name == selected_column
-      StaticBinaryBulkColumnDeclaration.parse(type_name)
+      StaticBinaryBulkColumnDeclaration.parse(type_name) ||
+        DynamicBulkColumnDeclaration.parse(type_name) || declared_dynamic_type(type_name)
+    end
+
+    private def self.declared_dynamic_type(type_name : String) : BinaryDataType?
+      return nil unless type_name == "Dynamic"
+      bytes = type_name.to_slice
+      ObjectDeclaredDynamicDeclaration.resolve_slice(bytes, 0, bytes.size).try(&.materialize)
     end
 
     private def self.tuple_type?(type : BinaryDataType?) : Bool

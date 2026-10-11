@@ -453,9 +453,28 @@ describe "W220 owned offline values for Dynamic-bearing columns" do
     end
 
     w220_write_catalog_shell("Array( Dynamic )") do |root, _table_path|
-      selection = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["payload"]
-      error = expect_raises(CrystalClick::UnsupportedFormatError) { selection.values }
-      error.message.should eq("selected table column type is unsupported")
+      table = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]
+      table.columns.find { |column| column.name == "payload" }.not_nil!.type.should eq("Array( Dynamic )")
+      table.metadata_ddl.not_nil!.should contain("`payload` Array( Dynamic )")
+
+      source_candidate, selected_type = CrystalClick::OfflineDynamicBulkColumnDeclaration.resolve("Array( Dynamic )")
+      source_candidate.should be_true
+      selected_type.not_nil!.name.should eq("Array(Dynamic)")
+      CrystalClick::DynamicBulkColumnDeclaration.parse(selected_type.not_nil!.name).should_not be_nil
+
+      table["payload"].values.should be_empty
+    end
+
+    [
+      "Array(Dynamic(max_types=1), UInt64)",
+      "Tuple(v Variant(UInt64, String), d Dynamic(max_types = 1))",
+      "Array(Dynamic(max_types = 32))",
+    ].each do |declaration|
+      w220_write_catalog_shell(declaration) do |root, _table_path|
+        selection = CrystalClick::OfflineCatalog.open(root)["lab"]["events"]["payload"]
+        error = expect_raises(CrystalClick::UnsupportedFormatError) { selection.values }
+        error.message.should eq("selected table column type is unsupported")
+      end
     end
 
     # Nothing is valid in the binary value/type grammar but is not an admitted

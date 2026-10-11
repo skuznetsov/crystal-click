@@ -1,6 +1,55 @@
 # CrystalClick project status
 
-Current qualification (W261, 2026-10-11): VERIFIED / root adversary ROBUST within
+Current qualification (W262, 2026-10-11): VERIFIED / root adversary ROBUST within
+the finite Default-profile/plain-mark Compact Dynamic target, after the
+live-baseline accounting falsifier and final two-mode refresh. New own-file
+prefix traversal, immutable prepared-context and reader owners bind learned
+partwide Dynamic rosters to the existing Compact lifecycle normalizer and
+recursive BinaryBulk decoder. Existing typed carriers and public Compact/typed
+table/offline `.values` consumers are reused. A bounded DDL whitespace bridge
+preserves raw metadata and the unchanged strict declaration owner; no
+serializer per container combination, Compact writer or performance rewrite.
+
+The exact nine-path focused/regression roster passes 80 examples per
+DEBUG/RELEASE mode with the native accounting fixture explicitly enabled,
+zero failures/errors/pending; the portable roster has 79 examples. This is
+not a full-suite claim.
+Both final helpers build. Fresh eight-cell stock native matrices cover plain
+mrk3/mrk4, String v0/v1 and Variant BASIC/COMPACT with root, Array(Tuple) and Map
+Dynamic sites, SharedVariant values and empty/unequal child marks. Native
+CHECK/schema/literal values and full/window/EOF-first/public/offline assertions
+pass. All 84 native file pairs / 36,628 bytes and helper semantics agree across
+modes; 234 regular capture files and 18 exact native aliases stay unchanged.
+Root public-API late-version corruption and aggregate accounting controls pass
+against both captures; injected estimates are not RSS/preallocation evidence.
+Private alias-auditor controls and the Float64 literal-oracle controls pass.
+
+Final source review found an omitted 2,634-byte live-reader baseline during
+normalization. Root observed assertion RED, then the checked baseline observer
+passed that regression and the final mode/native refresh. Cross-part
+retained-cache aggregate limits are separately unqualified; the selected-reader
+guard is scoped to one Compact part and logical estimates, not allocator/RSS.
+
+First use validates the full selected-column prefix/grid including EOF/empty
+selections. It is not lazy access or semantic authentication of every future
+unselected payload. Logical budgets exclude total heap/RSS and caller snapshots.
+Quiescent parts/trusted ancestry remain assumptions. The global serializer
+profile still refuses valid mixed per-node layouts; recursion itself matches
+ClickHouse's architecture, while effective context/state needs further work.
+Comparison source `ed30948f095ecb70679986d7d60e27ad770ae27a` remains distinct
+from executed CH build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`.
+
+Next: context-owned Compact JSON/Object binding, then remaining aggregate/SAF/
+QBit/Geo layouts and effective profiles. Compressed Compact marks/writing,
+parent `.proj` authentication, broader transform/projection composition,
+general keys/partitions and facade decomposition remain open. Existing bounded
+MV/projection seams are not native MV SQL execution, triggers or freshness.
+Full goal ACTIVE; memory/performance and <=10% parity remain deferred and
+unqualified. See the [W262 frontier](COMPACT_DYNAMIC_READER_FRONTIER.md) and
+[root evidence](../.landmark/evidence/compact-dynamic-reader-w262.json).
+Local atomic commit only, no push or speed claim.
+
+Previous qualification (W261, 2026-10-11): VERIFIED / root adversary ROBUST within
 the finite canonical-stock/common-profile Wide selected-column target. Already
 admitted generic Array(Tuple) and Map readers reuse the common metadata proof;
 ordinary multi-column tables no longer require two physical columns or a unique
