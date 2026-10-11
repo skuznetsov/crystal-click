@@ -1,5 +1,31 @@
 # Crystal Click landmarks
 
+## Bounded internal MRK3 BASIC Dynamic NULL — W263
+
+- VERIFIED / root adversary ROBUST over `87fd164189d31adee3253daaa1e28124d8a9c62c`:
+  a separate four-row stock Object-v1/Dynamic-v1/MAP/S0/BASIC part has mixed and
+  all-NULL two-row marks. Unchanged production first refused valid tag 255.
+- The existing MAP grammar walker skips NULL only for canonical arm counts,
+  still charges every row and retains both empty arm callbacks plus the following
+  16/0/0-byte MAP callbacks. The reserved sentinel bounds the roster at 255;
+  unknown modes are corrupt, while the genuine stock COMPACT sibling stays
+  unsupported. No new serializer, public API or recursive/offline admission.
+- Root executes five new, 155 affected, 19 native MAP/CHUNKED and three unchanged
+  original stock-oracle examples in each serial DEBUG/RELEASE mode: all pass with
+  zero failures/errors/pending. Complete raw-prefix/body literals are independent
+  of the grammar walker. Native NULL display `None` is a runtime observation,
+  not a source/runtime revision-identity claim.
+- A body-budget prediction first missed the three charged prefix lookups;
+  source review corrects the deltas to 20 mixed / 19 all-NULL. A one-line copy-only
+  non-NULL-charge mutant fails the exact mixed assertion, with four other controls
+  still passing. Late discriminator faults do not publish prepared state. All 504
+  baseline files and all three protected specs remain unchanged.
+- Return pointers: [NULL evidence](.landmark/evidence/compact-static-json-mrk3-null-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Refresh after
+  source/test/profile/consumer drift. Next: valid COMPACT framing before widening
+  remaining profiles and recursive/public/offline consumers. Goal ACTIVE;
+  MV/projection and later performance remain required; local commit only, no push.
+
 ## Bounded internal MRK4 ADVANCED_CHUNKED root JSON — W263
 
 - VERIFIED / root adversary ROBUST for the stock V3/Dynamic-v3/CHUNKED

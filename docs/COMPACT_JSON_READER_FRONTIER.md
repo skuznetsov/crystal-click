@@ -11,6 +11,78 @@ Compact lifecycle, Object codecs and public selected-column consumers. The full
 types, MV/projection and subsequent memory/performance objective remains ACTIVE.
 This transition does not redefine completion or establish <=10% speed parity.
 
+## Bounded BASIC Dynamic NULL in MRK3 MAP — qualified within the named stock witness
+
+Anchor: local CHUNKED checkpoint `87fd164189d31adee3253daaa1e28124d8a9c62c`.
+Before this transition, the MRK3 MAP grammar walker indexed every discriminator
+byte and therefore classified valid NULL tag 255 as corruption. Pinned upstream Variant
+writing/reading skips that sentinel in arm counts while still visiting every
+zero-count arm callback. Our downstream discriminator/value codecs already
+have that behavior. The same walker admits a 256-arm roster and classifies
+unknown mode words as unsupported; reserve the sentinel, distinguish valid
+COMPACT mode from malformed mode words, and leave COMPACT capability closed.
+
+Risk is CAUTION: a plausible NULL result could hide incorrect arm counts,
+lost empty callbacks, undercharged rows or a shifted following MAP boundary.
+Rollback is the clean checkpoint above. Preserve all three user-owned gate
+specs and the existing 48-cell capture. Do not expand public/recursive/offline,
+shared-data or marks-profile admission.
+
+First discriminator: a separate four-row stock Object-v1/Dynamic-v1/MAP,
+plain-MRK3/String-v0/Variant-BASIC part with one non-null String occurrence,
+a mixed NULL mark and an all-NULL mark. Authenticate its native inventory,
+actual discriminator bytes and ordinary/shared zero-value extents separately
+from absent JSON keys. NULL inferred fields are omitted by ObjectDocument;
+typed id/label fields remain present. Retain exact full/empty prefix statistics.
+Root observed the native reader witness fail on unchanged production before the fix.
+
+Luna owns the separate native Ruby capture runner and new native/adversary
+specs plus fixture helper. After that RED, Luna may change only
+`compact_json_object_map_tape_framer.cr`: skip NULL before arm indexing while
+charging every row, retain all zero-count callbacks, cap the roster at 255,
+and distinguish unknown modes (corrupt) from valid COMPACT (unsupported).
+Root runs native/build/test commands serially under the existing resource
+guard, compares the pinned source, performs hostile review and commits exact
+paths locally without push. DoD: the new native/adversary specs and existing
+MRK3/MRK4/CHUNKED regression cohorts pass in DEBUG and RELEASE; out-of-roster
+non-NULL tags and unknown mode words refuse as CorruptPartError, while valid
+COMPACT mode refuses as UnsupportedFormatError. Format and diff checks pass.
+The strongest guard is an authenticated all-NULL mark with zero arm extents
+and a following MAP sizes lane; no skipped callback or budget reset is allowed.
+
+Root then qualified the separate stock four-row BASIC part with two two-row
+marks. Independent complete raw-mark literals pin String's canonical index 1,
+NULL bytes `[1, 255]` / `[255, 255]`, full/empty Object and Dynamic statistics,
+and exact callback extents. Both zero-count arm callbacks remain present; the
+following MAP sizes/paths/values callbacks remain 16/0/0 bytes. Inferred NULL
+paths are omitted from returned documents, matching the native row literals.
+The native `dynamicType` display is `None`; that runtime observation is not an
+assertion about the separately pinned source revision or an ordinary NULL arm.
+
+Five new native/adversary examples, 155 affected examples, 19 existing native
+MAP/CHUNKED examples and all three unchanged original stock-root oracles pass
+in each serial DEBUG/RELEASE mode, zero failures/errors/pending. Checksum-valid
+tag 254, unknown mode 2 and late all-NULL corruption refuse before prepared
+state publication. The genuine stock COMPACT sibling still refuses as
+UnsupportedFormatError, not corruption. The roster cap is defensive: the
+existing prefix parser admits at most 254 ordinary types plus SharedVariant.
+
+The body-only budget witness includes eight callback captures, three charged
+prefix lookups and every represented row, including NULL: node/element deltas
+are 20 for the mixed mark and 19 for the all-NULL mark. An isolated one-line
+mutant that charges only non-NULL discriminator rows fails the exact mixed
+budget assertion (20 expected, 19 observed); its other four adversaries pass.
+The initial test prediction omitted those three prefix-lookup charges and was
+corrected from source, not by changing production. Root adversary ROBUST within
+this scope. All 504 files in the preserved 48-part baseline remain authenticated;
+the protected specs, source/runtime pins and native manifests are unchanged.
+
+See [NULL evidence](../.landmark/evidence/compact-static-json-mrk3-null-w263.json).
+Refresh after source/test/profile/consumer drift. Remaining COMPACT bodies,
+String-v1 and other layouts, recursive/public/offline admission, MV/projection
+composition and later performance remain open. Full goal ACTIVE; no speed or
+full-suite claim. Local atomic commit only, no push.
+
 ## Bounded MRK4 ADVANCED_CHUNKED extension — qualified within the named stock cell
 
 Anchor: local MRK3/MAP checkpoint `5605a70259f2a03fe79c050593aee00c669bb62b`.

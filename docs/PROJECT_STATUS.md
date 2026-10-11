@@ -3,14 +3,15 @@
 Current bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
 root adversary ROBUST for three stock root JSON cells: V1/Dynamic-v1/MAP MRK3,
 V2/Dynamic-v2/MAP MRK4 and V3/Dynamic-v3/ADVANCED_CHUNKED MRK4, all
-String-v0/Variant-BASIC with eight rows and four two-row marks. MRK3 derives
+String-v0/Variant-BASIC with eight rows and four two-row marks, plus a separate
+four-row MRK3 BASIC Dynamic-NULL witness with mixed and all-NULL marks. MRK3 derives
 callback extents from descriptor/count grammar without inventing physical
 substream names; MRK4 retains exact named extents and original saved-pair
 coordinates. Own-file owners reuse recursive codecs, retain complete prefix
 statistics, prepare the full selected column at EOF first and decode only
 selected marks. There is no public facade, recursive or offline admission yet.
 
-The final five-path CHUNKED cohort passes 11 examples, the affected 23-path
+The preceding CHUNKED checkpoint's five-path cohort passes 11 examples, the affected 23-path
 cohort passes 155 examples and the six-path native MAP cohort passes eight
 examples in each serial DEBUG/RELEASE mode, zero failures/errors/pending.
 The unchanged original V3 filtered oracle also passes one example in each mode.
@@ -31,9 +32,22 @@ peaks and RSS. See the [CHUNKED evidence](../.landmark/evidence/compact-static-j
 [earlier MRK4 MAP evidence](../.landmark/evidence/compact-static-json-mrk4-map-w263.json)
 and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md).
 
+The NULL extension refreshes five new native/adversary, 155 affected, 19 combined
+native MAP/CHUNKED and three unchanged stock-oracle examples in each serial
+DEBUG/RELEASE mode, zero failures/errors/pending. Native complete raw-mark and
+row literals pin NULL tag 255, persisted Dynamic rosters, full/empty statistics,
+both zero-arm callbacks and following MAP extents. NULL rows still consume the
+body budget; a non-NULL-only charge mutant fails the exact 20-versus-19 witness.
+Checksum-valid tag 254, unknown mode 2 and later-mark corruption refuse before
+prepared-state publication. Valid COMPACT mode remains unsupported. Root
+adversary ROBUST within the named NULL witness; all 504 original capture files,
+protected specs and source/runtime pins remain unchanged. See the
+[NULL evidence](../.landmark/evidence/compact-static-json-mrk3-null-w263.json).
+
 All three mandatory stock internal roots are qualified, not all combinations.
-The MRK3 body walker currently rejects valid Dynamic NULL discriminator 255 as
-corruption; support and corrected exception taxonomy remain required. Shared
+The MRK3 body walker now skips valid NULL in arm occurrence counts while charging
+every row and preserving empty callbacks; unknown discriminator modes are corrupt.
+COMPACT discriminator bodies and other profiles/layouts remain open. Shared
 MAP preparation checks outer String framing, not nested value semantics;
 well-framed semantic errors may fail only on selected decoding. Remaining
 profiles/layouts and the full 48-cell recursive/public/offline gate stay open.

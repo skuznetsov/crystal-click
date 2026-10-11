@@ -122,20 +122,24 @@ module CrystalClick
       plan = @prefix.root_dynamic_plan_for(owner_path)
       arm_count = plan.arm_count("root")
       shared_index = plan.shared_index("root")
-      unless arm_count > 0 && shared_index >= 0 && shared_index < arm_count && arm_count <= 256
+      unless arm_count > 0 && shared_index >= 0 && shared_index < arm_count && arm_count <= 255
         raise CorruptPartError.new("Compact MRK3 Dynamic plan has an invalid canonical arm roster")
       end
 
       if role == "root.discriminators"
         mode = dynamic_prefix_mode(owner_path)
-        unless mode == DynamicDiscriminatorBodyValidator::BASIC_MODE
+        if mode == DynamicDiscriminatorBodyValidator::COMPACT_MODE
           raise UnsupportedFormatError.new("Compact MRK3 root MAP checkpoint requires BASIC Dynamic tags")
+        elsif mode != DynamicDiscriminatorBodyValidator::BASIC_MODE
+          raise CorruptPartError.new("Compact MRK3 Dynamic discriminator mode is unknown")
         end
         bytes = context.read_slice(@row_count)
         DynamicDiscriminatorBodyValidator.inspect_body(mode, bytes, @row_count)
         charge_occurrences!(@row_count)
         counts = Array(UInt64).new(arm_count, 0_u64)
         bytes.each do |tag|
+          next if tag == DynamicDiscriminatorCodec::NULL_TAG
+
           index = tag.to_i
           unless index < arm_count
             raise CorruptPartError.new("Compact MRK3 Dynamic tag is outside the parsed canonical arm roster")
