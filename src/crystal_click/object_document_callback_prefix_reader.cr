@@ -13,6 +13,7 @@ module CrystalClick
       nested_context : ObjectSharedNestedSerializationContext,
       budget : BinaryCodecBudget,
       bare_inferred_root_json : Bool = true,
+      statistics_offset_observer : Proc(String, Int32, Nil)? = nil,
     ) : ObjectDocumentCallbackPrefix forall T
       ObjectDocumentInlinePlanReader.read_json_site_prefix(
         tape,
@@ -26,6 +27,7 @@ module CrystalClick
         budget,
         ObjectDocumentCallbackPrefix::StatisticsContext::Complete,
         bare_inferred_root_json,
+        statistics_offset_observer,
       ).as(ObjectDocumentCallbackPrefix)
     end
   end

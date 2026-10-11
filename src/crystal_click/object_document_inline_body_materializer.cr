@@ -13,6 +13,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       role_bindings : Array(BodyBinding)? = nil,
       callback_pairs_override : Array(ObjectDocumentInlineCallbackOrder::CallbackPair)? = nil,
+      statistics_offsets : Hash(String, Int32)? = nil,
     ) : ObjectDocumentStreams
       context = prefix.nested_context
       if budget.writing? || context.writing?
@@ -95,7 +96,7 @@ module CrystalClick
 
       typed_schema = prefix.typed_schema_for(budget)
       object_structure = plan.structures.object
-      validate_structure_callbacks!(prefix, physical_plan, prefix_callbacks, typed_schema, budget)
+      validate_structure_callbacks!(prefix, physical_plan, prefix_callbacks, typed_schema, budget, statistics_offsets)
 
       rows = grid.logical_occurrences_at(0)
       root_paths = snapshot_object_dynamic_paths(object_structure, budget)
@@ -131,7 +132,7 @@ module CrystalClick
             name = physical_dynamic.structure_name_for(site_path)
             bytes = prefix_callbacks[name]? || raise(CorruptPartError.new("inline typed Dynamic metadata callback is missing"))
             site_bytes[site_path] = bytes
-            site_offsets[site_path] = bytes.size
+            site_offsets[site_path] = structure_statistics_offset(prefix, name, bytes, statistics_offsets)
           end
           typed_dynamic_site_bytes[path] = site_bytes
           typed_site_offsets[path] = site_offsets
@@ -257,7 +258,7 @@ module CrystalClick
         name = physical_plan.dynamic_structure_stream(path)
         bytes = prefix_callbacks[name]? || raise(CorruptPartError.new("inline Object Dynamic structure callback is missing"))
         root_structure_bytes[path] = bytes
-        dynamic_offsets[path] = bytes.size
+        dynamic_offsets[path] = structure_statistics_offset(prefix, name, bytes, statistics_offsets)
       end
       object_dynamic = ObjectDynamicStructureStreams.new(
         object_bytes,
@@ -272,8 +273,8 @@ module CrystalClick
       end
 
       typed_site_offsets.each_value do |offsets|
-        # Retain one site offset per exact parsed prefix; statistics are absent
-        # by construction, so each offset is the end of the admitted prefix.
+        # PrefixOnly callers retain terminal offsets; direct Complete callers
+        # supply parser-observed statistics boundaries for every Dynamic site.
         offsets.each_value { |offset| raise CorruptPartError.new("inline typed Dynamic statistics offset is invalid") if offset < 0 }
       end
 
@@ -342,10 +343,16 @@ module CrystalClick
       prefix_callbacks : Hash(String, Bytes),
       typed_schema : Hash(String, BinaryDataType),
       budget : BinaryCodecBudget,
+      statistics_offsets : Hash(String, Int32)?,
     ) : Nil
       object_name = PhysicalStreamName.append_literal(prefix.physical_prefix, ".object_structure")
       object_bytes = prefix_callbacks[object_name]? || raise(CorruptPartError.new("inline Object structure callback is missing"))
-      unless object_bytes.size == prefix.object_structure_statistics_offset
+      object_offset = prefix.object_structure_statistics_offset
+      if prefix.statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly
+        unless object_bytes.size == object_offset
+          raise CorruptPartError.new("inline Object structure prefix does not end at its statistics offset")
+        end
+      elsif object_offset < 0 || object_offset > object_bytes.size
         raise CorruptPartError.new("inline Object structure prefix does not end at its statistics offset")
       end
 
@@ -354,9 +361,7 @@ module CrystalClick
         path = object.dynamic_path_at(index)
         name = physical_plan.dynamic_structure_stream(path)
         bytes = prefix_callbacks[name]? || raise(CorruptPartError.new("inline Object Dynamic structure callback is missing"))
-        unless bytes.size <= Int32::MAX
-          raise CorruptPartError.new("inline Object Dynamic structure prefix exceeds the supported domain")
-        end
+        structure_statistics_offset(prefix, name, bytes, statistics_offsets)
       end
 
       typed_schema.each do |path, type|
@@ -365,12 +370,32 @@ module CrystalClick
         physical = physical_plan.typed_dynamic(path)
         sites.each_key do |site_path|
           name = physical.structure_name_for(site_path)
-          unless prefix_callbacks.has_key?(name)
+          bytes = prefix_callbacks[name]?
+          unless bytes
             raise CorruptPartError.new("inline typed Dynamic structure callback is missing")
           end
+          structure_statistics_offset(prefix, name, bytes.not_nil!, statistics_offsets)
         end
       end
       nil
+    end
+
+    private def self.structure_statistics_offset(
+      prefix : ObjectDocumentCallbackPrefix,
+      name : String,
+      bytes : Bytes,
+      statistics_offsets : Hash(String, Int32)?,
+    ) : Int32
+      offset = if prefix.statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+                 offsets = statistics_offsets || raise(CorruptPartError.new("complete Object statistics offsets are missing"))
+                 offsets[name]? || raise(CorruptPartError.new("complete Dynamic statistics offset is missing"))
+               else
+                 bytes.size
+               end
+      unless offset >= 0 && offset <= bytes.size
+        raise CorruptPartError.new("inline Dynamic statistics offset is outside its parsed prefix")
+      end
+      offset
     end
 
     private def self.snapshot_object_dynamic_paths(

@@ -47,6 +47,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       statistics_context : ObjectDocumentCallbackPrefix::StatisticsContext,
       bare_inferred_root_json : Bool = false,
+      statistics_offset_observer : Proc(String, Int32, Nil)? = nil,
     ) : ObjectDocumentCallbackPrefix | ObjectDocumentInlinePrefix forall T
       unless descriptor.tag == BinaryDataType::TAG_JSON
         raise ArgumentError.new("inline Object prefix reader requires a JSON descriptor")
@@ -98,9 +99,17 @@ module CrystalClick
       unless object.dynamic_path_count <= json_type.max_dynamic_paths
         raise CorruptPartError.new("inline Object dynamic path count exceeds its JSON descriptor cap")
       end
-      unless object.shared_data_version == nested_context.shared_data_version
-        raise CorruptPartError.new("inline Object shared-data version differs from its inherited context")
-      end
+      effective_nested_context = if key.nil? && statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+                                   ObjectSharedNestedSerializationContext.for_read(
+                                     object.shared_data_version,
+                                     nested_context.profile,
+                                   )
+                                 else
+                                   unless object.shared_data_version == nested_context.shared_data_version
+                                     raise CorruptPartError.new("inline Object shared-data version differs from its inherited context")
+                                   end
+                                   nested_context
+                                 end
       inferred_actual_root_depth = if bare_inferred_root_json
                                      checked_depth_add(json_descriptor_depth, 1, budget)
                                    else
@@ -148,6 +157,7 @@ module CrystalClick
             capture,
             false,
             statistics_context: statistics_context,
+            statistics_offset_observer: statistics_offset_observer,
           )
           reject_json_actuals!(local_sites)
           typed_dynamic_sites[field] = local_sites
@@ -171,6 +181,7 @@ module CrystalClick
             capture,
             false,
             statistics_context: statistics_context,
+            statistics_offset_observer: statistics_offset_observer,
           )
         end
       end
@@ -203,10 +214,11 @@ module CrystalClick
           capture,
           false,
           nil,
-          nested_context,
+          effective_nested_context,
           nested_json_prefixes,
           virtual_root_dynamic: true,
           statistics_context: statistics_context,
+          statistics_offset_observer: statistics_offset_observer,
         )
         root_dynamic_sites[path] = local_sites
         root_dynamic_json_prefixes[path] = nested_json_prefixes
@@ -223,7 +235,7 @@ module CrystalClick
         root_dynamic_plans[path] = decode_dynamic_plan(
           dynamic_type,
           local_sites,
-          nested_context.profile,
+          effective_nested_context.profile,
           root_dynamic_descriptor_depth,
           budget,
           nested_json_bindings,
@@ -244,7 +256,7 @@ module CrystalClick
             type,
             sites,
             budget,
-            nested_context.profile,
+            effective_nested_context.profile,
             typed_descriptor_root_depth,
           )
         rescue ex : UnsupportedFormatError
@@ -285,7 +297,7 @@ module CrystalClick
           physical_prefix,
           callback_prefix,
           array_level,
-          nested_context,
+          effective_nested_context,
           statistics_offset,
           plan,
           structure_set,
@@ -306,7 +318,7 @@ module CrystalClick
           physical_prefix,
           callback_prefix,
           array_level,
-          nested_context,
+          effective_nested_context,
           statistics_offset,
           statistics_context,
           plan,

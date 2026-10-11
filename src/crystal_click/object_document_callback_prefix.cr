@@ -199,6 +199,26 @@ module CrystalClick
       nil
     end
 
+    # Parser-owned callback providers preflight the lifecycle/name and charge
+    # the single callback node before advancing their source, then pass the
+    # exact captured interval back for mutation-only retention. The protected
+    # append helper remains unavailable to callers that could bypass budget
+    # accounting.
+    def capture_body_callback_from!(
+      canonical_name : String,
+      callback_name : String,
+      budget : BinaryCodecBudget,
+      &capture : -> ObjectSharedInlineCallbackReadSlice
+    ) : Nil
+      preflight_and_charge_body_callback!(canonical_name, budget)
+      slice = capture.call
+      unless slice.canonical_name == canonical_name && slice.callback_name == callback_name
+        raise CorruptPartError.new("Object body callback source returned a different owner interval")
+      end
+      append_precharged_body_callback!(canonical_name, slice)
+      nil
+    end
+
     # Caller-owned callback capture precharges before consuming its source
     # tape, then uses this mutation-only step to avoid charging the node twice.
     protected def preflight_and_charge_body_callback!(

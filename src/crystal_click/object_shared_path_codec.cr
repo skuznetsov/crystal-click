@@ -366,6 +366,7 @@ module CrystalClick
       json_prefixes : ObjectSharedPathJsonTapeCodec::PrefixMap? = nil,
       virtual_root_dynamic : Bool = false,
       statistics_context : ObjectDocumentCallbackPrefix::StatisticsContext = ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly,
+      statistics_offset_observer : Proc(String, Int32, Nil)? = nil,
     ) : Nil forall T
       if !register_prefixes_with_parent && capture_prefix_fragment.nil? && capture_prefix_slice.nil?
         raise ArgumentError.new("scoped inline prefix traversal requires a fragment capture callback")
@@ -393,6 +394,7 @@ module CrystalClick
         false,
         virtual_root_dynamic,
         statistics_context,
+        statistics_offset_observer,
       )
     end
 
@@ -653,6 +655,7 @@ module CrystalClick
       bare_inferred_json_origin : Bool = false,
       virtual_root_dynamic : Bool = false,
       statistics_context : ObjectDocumentCallbackPrefix::StatisticsContext = ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly,
+      statistics_offset_observer : Proc(String, Int32, Nil)? = nil,
     ) : Nil forall T
       budget.ensure_depth(depth)
       case type.tag
@@ -663,57 +666,70 @@ module CrystalClick
         budget.ensure_depth(depth + 1)
         structure_name = append_name(physical_prefix, ".dynamic_structure", budget)
         callback_structure_name = append_name(callback_prefix, ".dynamic_structure", budget)
-        structure_bytes, structure = if capture = capture_prefix_slice
-                                       slice = reader.take_inline_fragment_slice(structure_name, callback_structure_name)
-                                       capture.call(slice)
-                                       context = BinaryCodecContext.new(budget.limits, slice.bytes, false, budget, false, false)
-                                       parsed = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
-                                                  DynamicStructureCodec.read_with_statistics_offset(
-                                                    context,
-                                                    depth,
-                                                    depth + 1,
-                                                    true,
-                                                  )[0]
-                                                else
-                                                  DynamicStructureCodec.read_prefix_without_statistics(
-                                                    context,
-                                                    depth,
-                                                    depth + 1,
-                                                    true,
-                                                  )
-                                                end
-                                       context.ensure_consumed
-                                       {slice.bytes, parsed}
-                                     else
-                                       reader.with_self_delimited(callback_structure_name) do |bytes|
-                                         context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false, false)
-                                         parsed = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
-                                                    DynamicStructureCodec.read_with_statistics_offset(
-                                                      context,
-                                                      depth,
-                                                      depth + 1,
-                                                      true,
-                                                    )[0]
-                                                  else
-                                                    DynamicStructureCodec.read_prefix_without_statistics(
-                                                      context,
-                                                      depth,
-                                                      depth + 1,
-                                                      true,
-                                                    )
-                                                  end
-                                         context.ensure_consumed
-                                         { {bytes, parsed}, context.input_offset }
-                                       end
-                                     end
-        reader.add_structure(path, structure_bytes, structure) if register_prefixes_with_parent
+        structure_bytes, structure, statistics_offset = if capture = capture_prefix_slice
+                                                          slice = reader.take_inline_fragment_slice(structure_name, callback_structure_name)
+                                                          capture.call(slice)
+                                                          context = BinaryCodecContext.new(budget.limits, slice.bytes, false, budget, false, false)
+                                                          parsed, parsed_offset = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+                                                                                    DynamicStructureCodec.read_with_statistics_offset(
+                                                                                      context,
+                                                                                      depth,
+                                                                                      depth + 1,
+                                                                                      true,
+                                                                                    )
+                                                                                  else
+                                                                                    value = DynamicStructureCodec.read_prefix_without_statistics(
+                                                                                      context,
+                                                                                      depth,
+                                                                                      depth + 1,
+                                                                                      true,
+                                                                                    )
+                                                                                    {value, context.input_offset}
+                                                                                  end
+                                                          context.ensure_consumed
+                                                          {slice.bytes, parsed, parsed_offset}
+                                                        else
+                                                          reader.with_self_delimited(callback_structure_name) do |bytes|
+                                                            context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false, false)
+                                                            parsed, parsed_offset = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+                                                                                      DynamicStructureCodec.read_with_statistics_offset(
+                                                                                        context,
+                                                                                        depth,
+                                                                                        depth + 1,
+                                                                                        true,
+                                                                                      )
+                                                                                    else
+                                                                                      value = DynamicStructureCodec.read_prefix_without_statistics(
+                                                                                        context,
+                                                                                        depth,
+                                                                                        depth + 1,
+                                                                                        true,
+                                                                                      )
+                                                                                      {value, context.input_offset}
+                                                                                    end
+                                                            context.ensure_consumed
+                                                            { {bytes, parsed, parsed_offset}, context.input_offset }
+                                                          end
+                                                        end
+        statistics_offset_observer.try(&.call(structure_name, statistics_offset))
+        if register_prefixes_with_parent
+          if reader.responds_to?(:add_structure)
+            reader.add_structure(path, structure_bytes, structure)
+          else
+            raise ArgumentError.new("prefix traversal requested parent Dynamic registration from a reader without add_structure")
+          end
+        end
         capture_prefix_fragment.try(&.call(structure_name, structure_bytes))
         observer.try(&.call(path, structure_bytes, structure))
         role = logical_name(path, ".discriminators", budget)
         prefix_name = append_name(physical_prefix, ".variant_discr_prefix", budget)
         callback_prefix_name = append_name(callback_prefix, ".variant_discr_prefix", budget)
         if register_prefixes_with_parent
-          reader.add_discriminator_prefix(role, callback_prefix_name)
+          if reader.responds_to?(:add_discriminator_prefix)
+            reader.add_discriminator_prefix(role, callback_prefix_name)
+          else
+            raise ArgumentError.new("prefix traversal requested discriminator registration from a reader without add_discriminator_prefix")
+          end
         else
           prefix_bytes = if capture = capture_prefix_slice
                            slice = reader.take_inline_fragment_slice(prefix_name, callback_prefix_name)
@@ -743,14 +759,18 @@ module CrystalClick
                                 end
           arm_key = BinaryDynamicJsonLeafKey.new(path, index, [] of Int32)
           child_bare_json_origin = virtual_root_dynamic
-          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, arm_key, capture_prefix_slice, child_bare_json_origin, false, statistics_context)
+          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, arm_key, capture_prefix_slice, child_bare_json_origin, false, statistics_context, statistics_offset_observer)
         end
       when BinaryDataType::TAG_VARIANT
         role = logical_name(path, ".discriminators", budget)
         prefix_name = append_name(physical_prefix, ".variant_discr_prefix", budget)
         callback_prefix_name = append_name(callback_prefix, ".variant_discr_prefix", budget)
         if register_prefixes_with_parent
-          reader.add_discriminator_prefix(role, callback_prefix_name)
+          if reader.responds_to?(:add_discriminator_prefix)
+            reader.add_discriminator_prefix(role, callback_prefix_name)
+          else
+            raise ArgumentError.new("prefix traversal requested discriminator registration from a reader without add_discriminator_prefix")
+          end
         else
           prefix_bytes = if capture = capture_prefix_slice
                            slice = reader.take_inline_fragment_slice(prefix_name, callback_prefix_name)
@@ -773,30 +793,34 @@ module CrystalClick
                          append_escaped_type_component(physical_prefix, arm, budget)
                        end
           callback_arm_prefix = append_type_component(callback_prefix, arm, budget)
-          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context)
+          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        decode_prefix_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, callback_prefix, array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context)
+        decode_prefix_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, callback_prefix, array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
       when BinaryDataType::TAG_NULLABLE
-        decode_prefix_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context)
+        decode_prefix_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        decode_prefix_type(type.child_at(0), path, physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context)
+        decode_prefix_type(type.child_at(0), path, physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = indexed_path(path, ".field.", index, budget)
           field_prefix = append_tuple_field(physical_prefix, type, index, budget)
           callback_field_prefix = append_tuple_field(callback_prefix, type, index, budget)
-          decode_prefix_type(type.child_at(index), child, field_prefix, callback_field_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context)
+          decode_prefix_type(type.child_at(index), child, field_prefix, callback_field_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
         end
       when BinaryDataType::TAG_MAP
-        decode_prefix_type(type.child_at(0), logical_name(path, ".elements.field.0", budget), append_escaped_field(physical_prefix, "keys", budget), append_escaped_field(callback_prefix, "keys", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context)
-        decode_prefix_type(type.child_at(1), logical_name(path, ".elements.field.1", budget), append_escaped_field(physical_prefix, "values", budget), append_escaped_field(callback_prefix, "values", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(1) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context)
+        decode_prefix_type(type.child_at(0), logical_name(path, ".elements.field.0", budget), append_escaped_field(physical_prefix, "keys", budget), append_escaped_field(callback_prefix, "keys", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
+        decode_prefix_type(type.child_at(1), logical_name(path, ".elements.field.1", budget), append_escaped_field(physical_prefix, "values", budget), append_escaped_field(callback_prefix, "values", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(1) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
       when BinaryDataType::TAG_LOW_CARDINALITY
         role = logical_name(path, ".dictionary", budget)
         prefix_name = append_name(physical_prefix, ".dict_prefix", budget)
         callback_prefix_name = append_name(callback_prefix, ".dict_prefix", budget)
         if register_prefixes_with_parent
-          reader.add_low_cardinality_dictionary_prefix(role, callback_prefix_name)
+          if reader.responds_to?(:add_low_cardinality_dictionary_prefix)
+            reader.add_low_cardinality_dictionary_prefix(role, callback_prefix_name)
+          else
+            raise ArgumentError.new("prefix traversal requested LowCardinality registration from a reader without add_low_cardinality_dictionary_prefix")
+          end
         else
           prefix_bytes = if capture = capture_prefix_slice
                            slice = reader.take_inline_fragment_slice(prefix_name, callback_prefix_name)

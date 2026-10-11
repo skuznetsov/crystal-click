@@ -1,5 +1,30 @@
 # Crystal Click landmarks
 
+## Bounded internal MRK4 MAP root JSON reader — W263
+
+- VERIFIED / root adversary ROBUST for one stock V2/Dynamic-v2/MAP MRK4/S0/BASIC
+  root cell over advanced-phase commit `959252abcac084d4c399ad16113d545460c9f57d`.
+  Eight literal rows, four two-row marks and sixteen named callbacks qualify
+  the internal reader, not general JSON/public/typed/offline admission.
+- Separate manifest/framer/schedule/prepared-context/materializer/reader owners
+  reuse serde, keep static sites keyless, retain full prefix statistics and parse
+  the complete selected column before selected ObjectDocument values. No cached
+  documents, fake Dynamic keys, Wide registry or rebased coordinates.
+- Root executes 149 affected examples and four explicit native examples in each
+  serial DEBUG/RELEASE mode, zero failures/errors/pending. Late checksum and
+  valid-metadata callback reorder refuse; metadata snapshots remain detached.
+  Finite prep+single caps admit individually but aggregate selection refuses.
+  Temporarily resetting budgets makes that test fail; production hash is restored.
+- Extra-newline metadata and aggregate>prep calibration errors were instrument
+  diagnostics, not capability evidence. Workspace is an estimate only; caller
+  handoff, failed-operation discard and quiescent-part assumptions remain.
+- Return pointers: [MAP evidence](.landmark/evidence/compact-static-json-mrk4-map-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Next: MRK3 grammar
+  extents and advanced multi-chunk EOF preparation with explicit per-request
+  budget lifetime, then all three roots and unchanged 48-cell/public/recursive
+  gate. Goal ACTIVE; performance deferred, local commit only, no push. Refresh
+  after code/profile/consumer/tests/capture/pin drift or scope widening.
+
 ## Advanced Object inline preparation/value phase split — W263
 
 - VERIFIED / root adversary ROBUST within one authenticated inline v2/v3 mark

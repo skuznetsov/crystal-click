@@ -2,7 +2,8 @@
 
 Document status: W263 six-layout/multi-chunk native baseline RED qualified; coordinate prerequisite
 VERIFIED within its focused scope; advanced inline preparation prerequisite
-VERIFIED; complete Object reader and native GREEN pending
+VERIFIED; bounded internal V2 MRK4/MAP root VERIFIED; complete three-root and
+recursive/public/offline native GREEN pending
 (2026-10-11).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
 Current transition: bind persisted JSON/Object sites to the existing recursive
@@ -514,7 +515,24 @@ private-access diagnostic, not an unrelated compiler error. Neither is counted
 as a passing runtime example. The partial advanced holder
 workspace census is removed rather than promoted to a full accounting claim.
 
-The parallel MRK4/MAP staging reader must share one request budget across
+The bounded internal MRK4/MAP staging reader is now VERIFIED / root adversary
+ROBUST for `obj_v2_dyn_v2_map_mrk4_s0_variant_basic` only: eight stock rows,
+four two-row marks and the exact sixteen-slot root callback roster. Its own-file
+manifest/framer/schedule/prepared-context/materializer/reader preserve complete
+Object/Dynamic statistics and defer ObjectDocument values until the full
+selected-column EOF-first preparation succeeds. The public facade is unchanged.
+
+The final affected 22-file cohort passes 149 examples per DEBUG/RELEASE mode;
+the explicit three-path native cohort passes four examples per mode, all with
+zero failures/errors/pending. Native literal full/window reads, detached prefix
+metadata, late compressed-frame corruption, valid-metadata callback reorder and
+finite aggregate-budget controls pass. A temporary budget-reset ablation makes
+the finite-budget test fail; the production reader is restored byte-for-byte.
+The earlier adversary errors were repaired instrument issues (extra metadata
+terminator and an invalid calibration premise), not reader evidence. See the
+[bounded MAP evidence](../.landmark/evidence/compact-static-json-mrk4-map-w263.json).
+
+The staging reader shares one request budget across
 preparation and every selected mark, including its implicit-budget path.
 Prepared raw streams must not be publicly returned: retained owners expose
 mutable borrowed slices. A budgeted context decode delegator may return only
@@ -523,6 +541,18 @@ Standalone workspace observations are estimates, not enforcement of a
 combined transient-memory ceiling or RSS. These guards do not admit MRK3,
 advanced shared data, the other two mandatory native roots or public/offline
 JSON integration.
+
+Next discriminators remain separate. MRK3 must use grammar-owned consumed
+extents for complete Object/Dynamic prefixes and a role-aware recursive body
+walker; the raw remainder is never one callback. The V1 stock witness starts
+with a 220-byte tape but a 38-byte Object prefix, statistics offset 22 and an
+aggregate prefix end of 102. ADVANCED_CHUNKED MRK4 must keep one StructurePrefix
+callback containing multiple headers, prepare every mark before value decode,
+and preserve original whole-data suffix pairs. Its same-budget prepared holders
+cannot silently survive an implicit fresh-budget call: request-scoped
+repreparation or explicit rebinding/accounting needs its own design and test.
+Both extensions are PROPOSED, not native GREEN. The other two mandatory roots
+and the unchanged full 48-cell recursive/public/offline gate remain open.
 
 The distinguishing test is a well-framed semantic payload error: preparation
 accepts its raw extents, then value decoding rejects it. Framing, callback,
