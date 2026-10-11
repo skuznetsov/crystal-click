@@ -1,5 +1,32 @@
 # Crystal Click landmarks
 
+## Bounded internal MRK3 MAP root JSON extension — W263
+
+- VERIFIED / root adversary ROBUST for the stock V1/Dynamic-v1/MAP MRK3/S0/BASIC
+  root over `d85572848cfccee65d47ac15e0a849c0fce1cd4a`: eight literal rows and
+  four two-row marks. The prior V2 MRK4 cell remains covered; two of three
+  mandatory internal roots are now qualified, not all JSON or public APIs.
+- A transactional Compact-only grammar seam commits consumed prefixes, not the
+  unlabelled remainder. A paired role walker derives body extents without value
+  decoding or fake physical names; MRK4 retains exact named event boundaries.
+  Complete statistics, EOF-first preparation, stream-only caching, detached
+  metadata and one request budget remain intact.
+- Root executes 155 affected and eight explicit native examples in each serial
+  DEBUG/RELEASE mode, zero failures/errors/pending. The unchanged original V1
+  oracle passes in both modes. Checksum-valid Object-count and MAP-size corruptions
+  refuse before values. Temporarily resetting implicit budgets per mark makes
+  the calibrated aggregate refusal test fail; the reader is restored exactly.
+- Qualification is narrow: valid Dynamic NULL 255 is currently unsupported and
+  misclassified as corruption. MAP preparation validates outer nonempty String
+  envelopes, not their nested semantic values. No allocation/RSS, full-suite,
+  performance or general MRK3/layout claim follows from this stock cell.
+- Return pointers: [MRK3 evidence](.landmark/evidence/compact-static-json-mrk3-map-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Next: stock advanced
+  multi-chunk MRK4 preparation and request-budget lifetime, remaining valid
+  representations, then unchanged 48-cell/public/recursive gate. Goal ACTIVE;
+  performance deferred, local atomic commit only, no push. Refresh after
+  source/profile/consumer/test/capture/pin drift or scope widening.
+
 ## Bounded internal MRK4 MAP root JSON reader — W263
 
 - VERIFIED / root adversary ROBUST for one stock V2/Dynamic-v2/MAP MRK4/S0/BASIC

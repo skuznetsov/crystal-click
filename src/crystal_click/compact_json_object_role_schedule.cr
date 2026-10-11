@@ -1,5 +1,5 @@
 module CrystalClick
-  # Frozen root Object schedule for the bounded mrk4/MAP checkpoint. It owns
+  # Frozen root Object schedule for the bounded Compact MAP checkpoints. It owns
   # the source-order prefix roster and the existing callback-order owner's
   # body-role projection; it does not invent a Wide event registry.
   class CompactJsonObjectRoleSchedule

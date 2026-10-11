@@ -2,7 +2,7 @@
 
 Document status: W263 six-layout/multi-chunk native baseline RED qualified; coordinate prerequisite
 VERIFIED within its focused scope; advanced inline preparation prerequisite
-VERIFIED; bounded internal V2 MRK4/MAP root VERIFIED; complete three-root and
+VERIFIED; bounded internal V1 MRK3/MAP and V2 MRK4/MAP roots VERIFIED; complete three-root and
 recursive/public/offline native GREEN pending
 (2026-10-11).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
@@ -10,6 +10,100 @@ Current transition: bind persisted JSON/Object sites to the existing recursive
 Compact lifecycle, Object codecs and public selected-column consumers. The full
 types, MV/projection and subsequent memory/performance objective remains ACTIVE.
 This transition does not redefine completion or establish <=10% speed parity.
+
+## Bounded MRK3 MAP extension — qualified within the named stock cell
+
+Anchor: local MRK4/MAP checkpoint `d85572848cfccee65d47ac15e0a849c0fce1cd4a`.
+The unchanged stock V1/Dynamic-v1/MAP MRK3 root example was executed with the
+explicit W263 capture and failed at reader open with the intended
+`UnsupportedFormatError` (tool `51aa74`, exit 1; one example, one error).
+This is a missing-capability RED, not a compiler or fixture failure.
+
+Risk is CAUTION: wrong grammar consumption can assign the next callback's
+bytes to the current site while decoded rows appear plausible. Rollback is the
+clean local checkpoint above; no push or history rewrite is authorized.
+
+The bounded target is the stock eight-row/four-mark
+`obj_v1_dyn_v1_map_mrk3_s0_variant_basic` root. It does not admit advanced shared
+layouts, recursive static JSON, the full 48-cell matrix or a public facade.
+The generic `ObjectSharedPathCallbackSource.with_self_delimited` exact-interval
+contract remains unchanged. A Compact-only grammar transaction may borrow the
+unlabelled remainder, but commits only the parser-observed consumed prefix;
+exceptions and invalid extents do not advance the cursor. MRK4 still requires
+the entire exact named event. Fixed Variant/LowCardinality prefixes remain
+eight bytes; zero-occurrence body callbacks may consume zero bytes but must
+still traverse the schedule. No physical MRK3 substream names are fabricated.
+
+Execution plan and owners:
+
+1. `compact_json_object_site_framer.cr`: add the transactional grammar seam and
+   MRK3 fixed extents. `object_document_inline_plan_reader.cr` and
+   `object_shared_path_codec.cr`: retain complete Object/Dynamic prefixes using
+   existing codecs' input offsets, not the unconsumed tail. The bounded consumer
+   inventory is `rg -n 'ObjectDocumentInlinePlanReader|decode_prefix_type_with_observer|CompactJsonObjectSiteFramer' src spec --glob '*.cr'`;
+   legacy inline consumers remain under the exact source contract.
+2. New `compact_json_object_map_tape_framer.cr`: derive root typed, Dynamic-arm
+   and shared-MAP body extents from descriptor/occurrence grammar and the frozen
+   callback schedule, reusing existing framing validators. No ObjectDocument or
+   BinaryValue decoding is used to discover a callback boundary.
+3. `compact_static_json_bulk_column_reader.cr` and the root require list: route
+   only the MRK3 MAP path through that framer, preserve EOF-first preparation,
+   selected-only value decode, one request budget and stream-only caching.
+
+Executed DoD: under the existing serial `run_safe.sh` guard and explicitly set
+`CRYSTAL_CLICK_W263_EVIDENCE_ROOT`, run new MRK3 native/adversary and framer specs
+in DEBUG and RELEASE, including the existing MRK4/MAP regressions. The final
+23-path affected cohort passes 155 examples per mode (tools `4624d6`, `b2441b`);
+the six-path native cohort passes eight per mode (`fabd21`, `bc66a9`). All have
+zero failures/errors/pending and the native capture is explicitly enabled.
+The original filtered V1 internal example must also pass without modifying its
+literal/statistics oracle; it passes one example per mode (`0ae90a`, `eeef93`).
+Format and `git diff --check` must pass before an exact-path atomic local commit.
+This is VERIFIED / root adversary ROBUST within the named stock cell, not a
+general MRK3 or full-suite qualification. See the
+[MRK3 MAP evidence](../.landmark/evidence/compact-static-json-mrk3-map-w263.json).
+
+The MRK3 request-budget adversary must independently calibrate a finite codec
+cap under which EOF preparation and each selected mark pass separately, while
+preparation plus all selected marks refuses. It must use fresh default-budget
+readers for the controls and aggregate request, so a per-mark budget reset
+cannot masquerade as aggregate enforcement. This is a logical codec-budget
+claim, not an allocation or RSS bound. The root-owned temporary implicit
+per-mark reset ablation fails the aggregate refusal assertion (`9cebfc`, one
+example, one failure); the reader is restored byte-for-byte (`84c4b8`) before
+the final passing cohorts above.
+
+The hostile audit identifies two deliberate qualification limits. A valid
+upstream BASIC Dynamic NULL discriminator (`255`) is not supported by this
+MRK3 walker and is currently misclassified as `CorruptPartError`; this is an
+unadmitted valid representation, not proof of corrupt source bytes. NULL
+support and that exception taxonomy remain required. Shared MAP EOF preparation
+validates UInt64 row counts, sorted paths and nonempty VarUInt-delimited outer
+String envelopes, not their nested Dynamic semantics. A length-preserving
+semantic error inside an envelope can be rejected only on selected value
+decoding. Neither limit is hidden behind the passing native cell.
+
+Decisive falsifiers: the first 220-byte MRK3 tape retains only its 38-byte Object
+prefix (statistics offset 22), and the complete prefix sequence ends at 102;
+later marks retain their own 25-byte Object prefixes. A checksum-refreshed
+private copy with an Object-to-Dynamic boundary corruption must refuse before
+values; MRK3 tail/truncation and grammar reservation/re-entry probes must refuse.
+MRK4 partial-extent, ordering and finite aggregate-budget guards must survive.
+If a general role grammar is not yet justified, narrow/reject that descriptor;
+never replace the remaining tape with a callback or weaken EOF-first semantics.
+
+The additional body falsifier changes the first shared-MAP size from one to two
+without changing tape length, then refreshes LZ4 frames, every global MRK3
+coordinate and outer checksums. Its literal anchors are the `[1, 1]` UInt64
+size lane at byte 154 and VarUInt length 11 plus `zz_overflow` at byte 170 of
+the first 220-byte root tape. An independent authenticated raw-tape probe
+established these bytes (tool `3693a1`, one example, exit 0). The earlier manual
+byte-152 estimate was refuted: the Float64 occurrence is carried by a
+SharedVariant String envelope, not an eight-byte ordinary Float64 arm. Keep
+the prefix-boundary and body-size adversaries separate. Both copy helpers
+reach the existing reader's intended MRK3 refusal after physical reopening
+(tool `d57fc3`, three examples, three unsupported-layout errors); this verifies
+the mutation setup, not the new reader capability.
 
 ## Factual anchor and scope
 
@@ -347,7 +441,11 @@ remain separate ordered events. A diagnostic-only matcher failure was corrected
 separately and is not a second behavioral finding. Correlated Luna review is
 supporting evidence; root executed the falsifiers and final mode refresh.
 
-Important remaining obligations:
+Remaining obligations at the earlier preframed checkpoint:
+
+The bounded MRK3/MRK4 extensions above supersede the exact-extent and complete
+statistics gaps below only within their named stock cells; the broader target
+and failed-operation/ownership limits are not superseded.
 
 - The current source requires an exact callback extent. A raw mrk3 remainder
   is not admitted. The next Compact framer must accept bounded grammar-observed
@@ -538,11 +636,11 @@ Prepared raw streams must not be publicly returned: retained owners expose
 mutable borrowed slices. A budgeted context decode delegator may return only
 newly decoded documents; prefix metadata getters remain detached snapshots.
 Standalone workspace observations are estimates, not enforcement of a
-combined transient-memory ceiling or RSS. These guards do not admit MRK3,
+combined transient-memory ceiling or RSS. At that MRK4 checkpoint, these guards did not admit MRK3,
 advanced shared data, the other two mandatory native roots or public/offline
 JSON integration.
 
-Next discriminators remain separate. MRK3 must use grammar-owned consumed
+The extension discriminators remain separate. MRK3 uses grammar-owned consumed
 extents for complete Object/Dynamic prefixes and a role-aware recursive body
 walker; the raw remainder is never one callback. The V1 stock witness starts
 with a 220-byte tape but a 38-byte Object prefix, statistics offset 22 and an
@@ -551,8 +649,10 @@ callback containing multiple headers, prepare every mark before value decode,
 and preserve original whole-data suffix pairs. Its same-budget prepared holders
 cannot silently survive an implicit fresh-budget call: request-scoped
 repreparation or explicit rebinding/accounting needs its own design and test.
-Both extensions are PROPOSED, not native GREEN. The other two mandatory roots
-and the unchanged full 48-cell recursive/public/offline gate remain open.
+The named MRK3 MAP stock cell is now qualified by the checkpoint above.
+The advanced multi-chunk extension remains PROPOSED, not native GREEN. The
+third mandatory root and the unchanged full 48-cell recursive/public/offline
+gate remain open.
 
 The distinguishing test is a well-framed semantic payload error: preparation
 accepts its raw extents, then value decoding rejects it. Framing, callback,
@@ -600,11 +700,13 @@ At closure update this banner, `docs/PROJECT_STATUS.md` and `LANDMARKS.md`, then
 store a curated source-linked evidence index. There is no root TODO.md or
 CHANGELOG.md at the baseline. No memory-folder update is authorized.
 
-Implementation seal: coordinate provenance prerequisite implemented and
-qualified; remaining owners pending. Native RED: qualified within the matrix
-below. Native GREEN and final JSON hostile review: pending. Next required
-discriminator: general Compact Object context binding, including full-statistics
-prefixes and actual multi-chunk callback schedules. Remaining
+Implementation seal: coordinate provenance, complete prefix and advanced
+phase-split prerequisites qualified; two bounded internal MAP root cells
+qualified. Native RED: qualified within the matrix below. Full native GREEN,
+recursive/public/offline integration and final JSON hostile closure remain
+pending. Next required discriminator: the stock ADVANCED_CHUNKED MRK4 root,
+including actual multi-header callback schedules and request-budget lifetime.
+The valid MRK3 Dynamic NULL gap remains explicit. Remaining
 types/layouts, MV/projections and measured performance parity remain required
 after this finite slice.
 

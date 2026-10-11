@@ -1,7 +1,7 @@
 module CrystalClick
   # Direct reader for one static root JSON column in a plain Compact part.
-  # The first bounded checkpoint admits only named mrk4 root Object MAP
-  # schedules; it validates the complete selected mark grid at EOF before
+  # The bounded MAP checkpoints admit named mrk4 events and one unlabelled
+  # mrk3 root tape; both validate the complete selected mark grid at EOF before
   # decoding any ObjectDocument value.
   class CompactStaticJsonBulkColumnReader
     getter row_count : UInt64
@@ -79,8 +79,8 @@ module CrystalClick
       operation_transport_budget = transport_budget || CompressedStreamBudget.new(@transport_limits)
       @transport_budget = operation_transport_budget
       @context = CompactPartPhysicalContext.open(@part_path, operation_transport_budget)
-      unless @context.mode.mrk4?
-        raise UnsupportedFormatError.new("this Compact static JSON reader checkpoint requires named mrk4 callbacks")
+      unless @context.mode.mrk3? || @context.mode.mrk4?
+        raise UnsupportedFormatError.new("Compact static JSON reader requires plain mrk3 or mrk4 marks")
       end
       if @context.row_count == 0_u64 || @context.row_count > WidePartTable::MAX_TOTAL_ROWS
         raise CorruptPartError.new("Compact static JSON row count is outside the typed reader bound")
@@ -107,16 +107,23 @@ module CrystalClick
       if selected_slots.empty?
         raise CorruptPartError.new("Compact static JSON column has no physical callback slots")
       end
-      names = selected_slots.map do |slot|
-        slot.stream_name || raise(CorruptPartError.new("Compact mrk4 static JSON callback has no stream name"))
-      end
-      seen_names = Set(String).new
-      names.each do |name|
-        unless seen_names.add?(name)
-          raise CorruptPartError.new("Compact static JSON physical callback roster is duplicated")
+      if @context.mode.mrk4?
+        names = selected_slots.map do |slot|
+          slot.stream_name || raise(CorruptPartError.new("Compact mrk4 static JSON callback has no stream name"))
         end
+        seen_names = Set(String).new
+        names.each do |name|
+          unless seen_names.add?(name)
+            raise CorruptPartError.new("Compact static JSON physical callback roster is duplicated")
+          end
+        end
+        @physical_stream_names = copy_strings(names)
+      else
+        unless selected_slots.size == 1 && selected_slots[0].stream_name.nil?
+          raise CorruptPartError.new("Compact mrk3 JSON column is not one unlabelled physical tape")
+        end
+        @physical_stream_names = [] of String
       end
-      @physical_stream_names = copy_strings(names)
 
       @mark_row_counts = @context.mark_row_counts
       if @mark_row_counts.empty? || @mark_row_counts.size > WidePartTable::MAX_MARKS_PER_READER
@@ -136,7 +143,7 @@ module CrystalClick
 
       @row_count = @context.row_count
       @mark_count = @mark_row_counts.size.to_i32
-      @selected_checksum_names = ["data.bin", "data.mrk4"]
+      @selected_checksum_names = @context.mode.mrk4? ? ["data.bin", "data.mrk4"] : ["data.bin", "data.mrk3"]
       @logical_read_bytes = @context.logical_bytes_for(@column_name)
       @prepared_context = nil
       @frozen_event_names = nil
@@ -309,9 +316,22 @@ module CrystalClick
         end
 
         prefix.start_body_capture!
-        schedule.body_pairs.each do |canonical_name, callback_name|
-          prefix.capture_body_callback_from!(canonical_name, callback_name, budget) do
-            framer.take_inline_fragment_slice(canonical_name, callback_name)
+        if @context.mode.mrk3?
+          CompactJsonObjectMapTapeFramer.capture_body!(
+            prefix,
+            physical_plan,
+            schedule,
+            framer,
+            granule.row_count,
+            @ordinary_profile,
+            @limits,
+            budget,
+          )
+        else
+          schedule.body_pairs.each do |canonical_name, callback_name|
+            prefix.capture_body_callback_from!(canonical_name, callback_name, budget) do
+              framer.take_inline_fragment_slice(canonical_name, callback_name)
+            end
           end
         end
         prefix.finish_body_capture!(schedule.body_pairs.size)
@@ -496,7 +516,7 @@ module CrystalClick
 
     private def physical_window_workspace_bytes : UInt64
       marks = @mark_count.to_u64
-      slots = @physical_stream_names.size.to_u64
+      slots = (@context.mode.mrk3? ? 1 : @physical_stream_names.size).to_u64
       shard_count = checked_multiply(marks, slots)
       bytes = checked_multiply(@logical_read_bytes, 4_u64)
       shard_owner = checked_add(

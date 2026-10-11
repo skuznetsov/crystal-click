@@ -70,29 +70,51 @@ module CrystalClick
 
       structure_name = PhysicalStreamName.append_literal(physical_prefix, ".object_structure")
       structure_callback_name = PhysicalStreamName.append_literal(callback_prefix, ".object_structure")
-      object, statistics_offset, structure_bytes = tape.with_self_delimited(structure_callback_name) do |bytes|
-        structure_context = BinaryCodecContext.new(
-          budget.limits,
-          bytes,
-          false,
-          budget,
-          false,
-          false,
-        )
-        parsed_object, parsed_offset = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly
-                                         ObjectStructureCodec.read_prefix_without_statistics(
-                                           structure_context,
-                                           typed_descriptor_root_depth,
-                                         )
-                                       else
-                                         ObjectStructureCodec.read_with_statistics_offset(
-                                           structure_context,
-                                           typed_descriptor_root_depth,
-                                         )
-                                       end
-        structure_context.ensure_consumed
-        { {parsed_object, parsed_offset, bytes}, structure_context.input_offset }
-      end
+      object, statistics_offset, structure_bytes = if tape.responds_to?(:with_grammar_extent)
+                                                     unless statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+                                                       raise UnsupportedFormatError.new("Compact grammar-framed Object prefixes require complete statistics")
+                                                     end
+                                                     parsed, consumed_structure_bytes = tape.with_grammar_extent(structure_callback_name) do |bytes|
+                                                       structure_context = BinaryCodecContext.new(
+                                                         budget.limits,
+                                                         bytes,
+                                                         false,
+                                                         budget,
+                                                         false,
+                                                         false,
+                                                       )
+                                                       parsed_object, parsed_offset = ObjectStructureCodec.read_with_statistics_offset(
+                                                         structure_context,
+                                                         typed_descriptor_root_depth,
+                                                       )
+                                                       { {parsed_object, parsed_offset}, structure_context.input_offset }
+                                                     end
+                                                     {parsed[0], parsed[1], consumed_structure_bytes}
+                                                   else
+                                                     tape.with_self_delimited(structure_callback_name) do |bytes|
+                                                       structure_context = BinaryCodecContext.new(
+                                                         budget.limits,
+                                                         bytes,
+                                                         false,
+                                                         budget,
+                                                         false,
+                                                         false,
+                                                       )
+                                                       parsed_object, parsed_offset = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly
+                                                                                        ObjectStructureCodec.read_prefix_without_statistics(
+                                                                                          structure_context,
+                                                                                          typed_descriptor_root_depth,
+                                                                                        )
+                                                                                      else
+                                                                                        ObjectStructureCodec.read_with_statistics_offset(
+                                                                                          structure_context,
+                                                                                          typed_descriptor_root_depth,
+                                                                                        )
+                                                                                      end
+                                                       structure_context.ensure_consumed
+                                                       { {parsed_object, parsed_offset, bytes}, structure_context.input_offset }
+                                                     end
+                                                   end
       unless statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete || statistics_offset == structure_bytes.size
         raise CorruptPartError.new("inline Object structure prefix does not end at its statistics offset")
       end

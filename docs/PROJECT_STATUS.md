@@ -1,25 +1,34 @@
 # CrystalClick project status
 
 Current bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
-root adversary ROBUST for the stock V2/Dynamic-v2/MAP MRK4/String-v0/Variant-BASIC
-root JSON cell: eight rows, four two-row marks and an exact sixteen-callback
-root roster. New own-file owners reuse recursive codecs, retain complete prefix
-statistics, prepare the full selected column at EOF first and decode only
-selected marks. There is no public facade, recursive or offline admission yet.
+root adversary ROBUST for two stock root JSON cells: V1/Dynamic-v1/MAP MRK3 and
+V2/Dynamic-v2/MAP MRK4, both String-v0/Variant-BASIC with eight rows and four
+two-row marks. MRK3 derives callback extents from descriptor/count grammar
+without inventing physical substream names; MRK4 retains exact named extents.
+Own-file owners reuse recursive codecs, retain complete prefix statistics,
+prepare the full selected column at EOF first and decode only selected marks.
+There is no public facade, recursive or offline admission yet.
 
-The affected 22-file cohort passes 149 examples in each serial DEBUG/RELEASE;
-four explicit native examples pass in each mode, zero failures/errors/pending.
+The final affected 23-path cohort passes 155 examples in each serial
+DEBUG/RELEASE; eight explicit native examples pass in each mode, zero
+failures/errors/pending. The unchanged original V1 filtered oracle also passes
+one example in each mode.
 Independent literal rows/Float64 bits, exact statistics offsets, late selected
 checksum corruption, valid-metadata callback reorder and detached prefix checks
 pass. One request budget spans preparation and all selected marks; a temporary
 reset-budget ablation makes the aggregate-cap guard fail, then the source is
 restored exactly. Workspace reports are estimates, not RSS or enforced combined
-transient ceilings. See the [MAP evidence](../.landmark/evidence/compact-static-json-mrk4-map-w263.json)
+transient ceilings. See the [MRK3 MAP evidence](../.landmark/evidence/compact-static-json-mrk3-map-w263.json),
+[earlier MRK4 MAP evidence](../.landmark/evidence/compact-static-json-mrk4-map-w263.json)
 and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md).
 
-Only one of three mandatory native roots is qualified. MRK3 grammar-owned
-callback extents, advanced multi-chunk root preparation and its cross-call budget
-lifetime are next; the full 48-cell recursive/public/offline gate stays open.
+Only two of three mandatory native roots are qualified. The MRK3 body walker
+currently rejects valid Dynamic NULL discriminator 255 as corruption; support
+and corrected exception taxonomy remain required. Shared MAP preparation checks
+outer String framing, not nested value semantics; well-framed semantic errors
+may fail only on selected decoding. General combinations remain unqualified.
+Advanced multi-chunk root preparation and its cross-call budget lifetime are
+next; the full 48-cell recursive/public/offline gate stays open.
 Remaining types/layouts, MV/projection composition and later performance remain
 required. Full goal ACTIVE; no speed/full-suite claim, local atomic commit only,
 no push.

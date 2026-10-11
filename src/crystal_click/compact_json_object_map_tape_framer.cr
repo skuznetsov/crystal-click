@@ -1,0 +1,419 @@
+module CrystalClick
+  # Grammar-only boundary finder for the bounded root JSON MAP tape. It walks
+  # the frozen role schedule and existing descriptors/count lanes, retaining
+  # only callback slices. It never materializes BinaryValue/ObjectDocument
+  # values to discover a callback boundary.
+  class CompactJsonObjectMapTapeFramer
+    alias BodyBinding = ObjectDocumentInlineCallbackOrder::BodyLaneBinding
+    alias CallbackPair = ObjectDocumentInlineCallbackOrder::CallbackPair
+
+    @prefix : ObjectDocumentCallbackPrefix
+    @physical_plan : ObjectDocumentPhysicalPlan
+    @schedule : CompactJsonObjectRoleSchedule
+    @source : CompactJsonObjectSiteFramer
+    @row_count : UInt64
+    @profile : BinaryBulkProfile
+    @limits : BinaryCodecLimits
+    @budget : BinaryCodecBudget
+    @string_totals : Hash(String, UInt64)
+    @dynamic_arm_counts : Hash(String, Array(UInt64))
+    @map_counts : Array(UInt64)?
+    @map_entry_count : UInt64?
+
+    private def initialize(
+      @prefix : ObjectDocumentCallbackPrefix,
+      @physical_plan : ObjectDocumentPhysicalPlan,
+      @schedule : CompactJsonObjectRoleSchedule,
+      @source : CompactJsonObjectSiteFramer,
+      @row_count : UInt64,
+      @profile : BinaryBulkProfile,
+      @limits : BinaryCodecLimits,
+      @budget : BinaryCodecBudget,
+    )
+      @string_totals = Hash(String, UInt64).new
+      @dynamic_arm_counts = Hash(String, Array(UInt64)).new
+      @map_counts = nil
+      @map_entry_count = nil
+    end
+
+    def self.capture_body!(
+      prefix : ObjectDocumentCallbackPrefix,
+      physical_plan : ObjectDocumentPhysicalPlan,
+      schedule : CompactJsonObjectRoleSchedule,
+      source : CompactJsonObjectSiteFramer,
+      row_count : UInt64,
+      profile : BinaryBulkProfile,
+      limits : BinaryCodecLimits,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      new(prefix, physical_plan, schedule, source, row_count, profile, limits, budget).capture_body!
+    end
+
+    def capture_body! : Nil
+      if @row_count > Int32::MAX.to_u64
+        raise UnsupportedFormatError.new("Compact MRK3 root MAP mark rows exceed the parser domain")
+      end
+      bindings = @schedule.body_bindings
+      pairs = @schedule.body_pairs
+      unless bindings.size == pairs.size
+        raise CorruptPartError.new("Compact MRK3 body schedule has mismatched bindings and callback names")
+      end
+
+      bindings.each_with_index do |binding, index|
+        pair = pairs[index]
+        unless pair[0] == binding[0]
+          raise CorruptPartError.new("Compact MRK3 body callback is not bound to its descriptor role")
+        end
+        capture_one!(binding, pair)
+      end
+
+      unless @map_counts && @map_entry_count
+        raise CorruptPartError.new("Compact MRK3 root MAP schedule omitted its shared sizes lane")
+      end
+      nil
+    end
+
+    private def capture_one!(binding : BodyBinding, pair : CallbackPair) : Nil
+      canonical_name, callback_name = pair
+      start = @source.position
+      @prefix.capture_body_callback_from!(canonical_name, callback_name, @budget) do
+        _value, exact_bytes = @source.with_grammar_extent(callback_name) do |remaining|
+          context = BinaryCodecContext.new(@limits, remaining, false, @budget, false, false)
+          parse_binding!(binding, context)
+          {nil, context.input_offset}
+        end
+        finish = @source.position
+        ObjectSharedInlineCallbackReadSlice.new(
+          canonical_name,
+          callback_name,
+          start.to_u64,
+          finish.to_u64,
+          exact_bytes,
+          nil,
+        )
+      end
+      nil
+    end
+
+    private def parse_binding!(binding : BodyBinding, context : BinaryCodecContext) : Nil
+      _canonical_name, owner_kind, owner_path, role = binding
+      case owner_kind
+      when :typed
+        parse_typed!(owner_path, role, context)
+      when :root_dynamic
+        parse_root_dynamic!(owner_path, role, context)
+      when :shared
+        parse_shared!(role, context)
+      else
+        raise UnsupportedFormatError.new("Compact MRK3 MAP tape contains an unsupported body owner")
+      end
+      nil
+    end
+
+    private def parse_typed!(owner_path : String, role : String, context : BinaryCodecContext) : Nil
+      type = @prefix.plan.typed_type_for(owner_path)
+      count = @row_count
+      parse_scalar_role!(type, "typed:#{owner_path}", role, count, context)
+    rescue ex : KeyError
+      raise CorruptPartError.new("Compact MRK3 typed body role has no parsed descriptor: #{ex.message}")
+    end
+
+    private def parse_root_dynamic!(owner_path : String, role : String, context : BinaryCodecContext) : Nil
+      plan = @prefix.root_dynamic_plan_for(owner_path)
+      arm_count = plan.arm_count("root")
+      shared_index = plan.shared_index("root")
+      unless arm_count > 0 && shared_index >= 0 && shared_index < arm_count && arm_count <= 256
+        raise CorruptPartError.new("Compact MRK3 Dynamic plan has an invalid canonical arm roster")
+      end
+
+      if role == "root.discriminators"
+        mode = dynamic_prefix_mode(owner_path)
+        unless mode == DynamicDiscriminatorBodyValidator::BASIC_MODE
+          raise UnsupportedFormatError.new("Compact MRK3 root MAP checkpoint requires BASIC Dynamic tags")
+        end
+        bytes = context.read_slice(@row_count)
+        DynamicDiscriminatorBodyValidator.inspect_body(mode, bytes, @row_count)
+        charge_occurrences!(@row_count)
+        counts = Array(UInt64).new(arm_count, 0_u64)
+        bytes.each do |tag|
+          index = tag.to_i
+          unless index < arm_count
+            raise CorruptPartError.new("Compact MRK3 Dynamic tag is outside the parsed canonical arm roster")
+          end
+          previous = counts[index]
+          if previous == UInt64::MAX
+            raise CorruptPartError.new("Compact MRK3 Dynamic arm occurrence count overflows")
+          end
+          counts[index] = previous + 1_u64
+        end
+        @dynamic_arm_counts[owner_path] = counts
+        return nil
+      end
+
+      arm_index, arm_suffix = parse_arm_role(role, arm_count)
+      counts = @dynamic_arm_counts[owner_path]? ||
+               raise(CorruptPartError.new("Compact MRK3 Dynamic arm body precedes its discriminator callback"))
+      count = counts[arm_index]
+      arm_type = plan.arm_type("root", arm_index)
+      parse_scalar_role!(arm_type, "dynamic:#{owner_path}:#{arm_index}", arm_suffix, count, context)
+    rescue ex : KeyError
+      raise CorruptPartError.new("Compact MRK3 Dynamic body role has no parsed descriptor: #{ex.message}")
+    end
+
+    private def parse_shared!(role : String, context : BinaryCodecContext) : Nil
+      case role
+      when "root.sizes"
+        parse_map_sizes!(context)
+      when "root.elements.field.0.data"
+        parse_map_paths!(context)
+      when "root.elements.field.1.data"
+        parse_map_values!(context)
+      else
+        raise UnsupportedFormatError.new("Compact MRK3 root shared MAP role is outside its String/String grammar")
+      end
+    end
+
+    private def parse_scalar_role!(
+      type : BinaryDataType,
+      owner_key : String,
+      role : String,
+      count : UInt64,
+      context : BinaryCodecContext,
+    ) : Nil
+      case type.tag
+      when BinaryDataType::TAG_UINT8
+        unless role == "root.data"
+          raise UnsupportedFormatError.new("Compact MRK3 typed UInt8 role is outside the admitted fixed-width grammar")
+        end
+        fixed_bytes!(context, count, 1_u64)
+        charge_occurrences!(count)
+      when BinaryDataType::TAG_INT64
+        unless role == "root.data"
+          raise UnsupportedFormatError.new("Compact MRK3 Int64 role is outside the admitted fixed-width grammar")
+        end
+        fixed_bytes!(context, count, 8_u64)
+        charge_occurrences!(count)
+      when BinaryDataType::TAG_STRING
+        if role == "root.string_sizes"
+          parse_string_sizes!(owner_key, role, count, context)
+        elsif role == "root.data"
+          parse_string_data!(owner_key, role, count, context)
+        else
+          raise UnsupportedFormatError.new("Compact MRK3 String role is outside the admitted serializer grammar")
+        end
+      else
+        raise UnsupportedFormatError.new("Compact MRK3 MAP root body descriptor is not in the admitted scalar grammar")
+      end
+      nil
+    end
+
+    private def parse_string_sizes!(owner_key : String, role : String, count : UInt64, context : BinaryCodecContext) : Nil
+      unless @profile.with_size_stream?
+        raise CorruptPartError.new("Compact MRK3 String size callback contradicts the selected serialization profile")
+      end
+      total = 0_u64
+      count.times do
+        size = read_u64_le(context.read_slice(8_u64))
+        if size > UInt64::MAX - total
+          raise CorruptPartError.new("Compact MRK3 String byte total overflows UInt64")
+        end
+        total += size
+      end
+      @string_totals[string_total_key(owner_key, role)] = total
+      nil
+    end
+
+    private def parse_string_data!(owner_key : String, role : String, count : UInt64, context : BinaryCodecContext) : Nil
+      if @profile.with_size_stream?
+        total = @string_totals[string_total_key(owner_key, "root.string_sizes")]? ||
+                raise(CorruptPartError.new("Compact MRK3 String data callback has no preceding size lane"))
+        context.read_slice(total)
+      else
+        charge_occurrences!(count)
+        count.times do
+          context.read_slice(context.read_var_uint)
+        end
+      end
+      nil
+    end
+
+    private def parse_map_sizes!(context : BinaryCodecContext) : Nil
+      if @map_counts
+        raise CorruptPartError.new("Compact MRK3 shared MAP sizes callback is duplicated")
+      end
+      rows = @row_count
+      if rows > UInt64::MAX // 8_u64
+        raise CorruptPartError.new("Compact MRK3 shared MAP size lane length overflows UInt64")
+      end
+      if rows > Int32::MAX.to_u64
+        raise UnsupportedFormatError.new("Compact MRK3 shared MAP row count exceeds the parser domain")
+      end
+      @budget.ensure_future_nodes(rows)
+      @budget.ensure_future_elements(rows)
+      context.ensure_remaining_input_bytes(rows * 8_u64)
+
+      counts = Array(UInt64).new(rows.to_i)
+      total = 0_u64
+      rows.times do
+        count = read_u64_le(context.read_slice(8_u64))
+        if count > Int32::MAX.to_u64 || count > UInt64::MAX - total
+          raise CorruptPartError.new("Compact MRK3 shared MAP entry count exceeds its supported domain")
+        end
+        total += count
+        counts << count
+      end
+      if total > (UInt64::MAX - rows) // 3_u64
+        raise CorruptPartError.new("Compact MRK3 shared MAP traversal work overflows UInt64")
+      end
+      minimum_nodes = rows + total * 3_u64
+      future_elements = rows + total
+      @budget.ensure_future_nodes(minimum_nodes)
+      @budget.ensure_future_elements(future_elements)
+      rows.times do
+        @budget.charge_node
+        @budget.charge_elements(1_u64)
+      end
+      total.times do
+        @budget.charge_node
+        @budget.charge_elements(1_u64)
+      end
+      @map_counts = counts
+      @map_entry_count = total
+      nil
+    end
+
+    private def parse_map_paths!(context : BinaryCodecContext) : Nil
+      counts = @map_counts || raise(CorruptPartError.new("Compact MRK3 MAP paths precede their size lane"))
+      total = @map_entry_count || raise(CorruptPartError.new("Compact MRK3 MAP entry total is missing"))
+      if total > context.remaining_input_bytes
+        raise CorruptPartError.new("Compact MRK3 MAP path lane cannot contain the declared entries")
+      end
+      previous : Bytes? = nil
+      counts.each do |row_entries|
+        previous = nil
+        row_entries.times do
+          path = context.read_slice(context.read_var_uint)
+          if prior = previous
+            if compare_bytes(prior, path) >= 0
+              raise CorruptPartError.new("Compact MRK3 shared MAP paths are not strictly byte-sorted")
+            end
+          end
+          previous = path
+        end
+      end
+      nil
+    end
+
+    private def parse_map_values!(context : BinaryCodecContext) : Nil
+      total = @map_entry_count || raise(CorruptPartError.new("Compact MRK3 MAP values precede their size lane"))
+      if total > context.remaining_input_bytes // 2_u64
+        raise CorruptPartError.new("Compact MRK3 MAP value lane cannot contain the declared entries")
+      end
+      total.times do
+        value_size = context.read_var_uint
+        if value_size == 0_u64
+          raise CorruptPartError.new("Compact MRK3 shared MAP value envelope is empty")
+        end
+        context.read_slice(value_size)
+      end
+      nil
+    end
+
+    private def dynamic_prefix_mode(owner_path : String) : UInt64
+      body_name = @physical_plan.discriminator_stream(owner_path)
+      suffix = ".variant_discr"
+      unless body_name.ends_with?(suffix)
+        raise CorruptPartError.new("Compact MRK3 Dynamic discriminator name has an unexpected suffix")
+      end
+      prefix_name = body_name.byte_slice(0, body_name.bytesize - suffix.bytesize) + ".variant_discr_prefix"
+      schedule_entry_found = false
+      @schedule.prefix_pairs.each do |canonical, callback|
+        if canonical == prefix_name
+          if schedule_entry_found
+            raise CorruptPartError.new("Compact MRK3 Dynamic discriminator prefix is duplicated in its parsed schedule")
+          end
+          schedule_entry_found = true
+        end
+      end
+      unless schedule_entry_found
+        raise CorruptPartError.new("Compact MRK3 Dynamic discriminator prefix is absent from its parsed schedule")
+      end
+      observed = nil.as(Bytes?)
+      @prefix.prefix_callback_count.times do |index|
+        name, bytes = @prefix.prefix_callback_at(index, @budget)
+        if name == prefix_name
+          if observed
+            raise(CorruptPartError.new("Compact MRK3 Dynamic discriminator prefix is duplicated"))
+          end
+          observed = bytes
+        end
+      end
+      bytes = observed || raise(CorruptPartError.new("Compact MRK3 Dynamic discriminator prefix bytes are missing"))
+      unless bytes.size == BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES
+        raise CorruptPartError.new("Compact MRK3 Dynamic discriminator prefix is not exactly eight bytes")
+      end
+      read_u64_le(bytes)
+    rescue ex : KeyError
+      raise CorruptPartError.new("Compact MRK3 Dynamic discriminator prefix has no physical plan: #{ex.message}")
+    end
+
+    private def parse_arm_role(role : String, arm_count : Int32) : Tuple(Int32, String)
+      prefix = "root.arm."
+      unless role.starts_with?(prefix)
+        raise UnsupportedFormatError.new("Compact MRK3 Dynamic body role is not a canonical arm role")
+      end
+      cursor = prefix.bytesize
+      start = cursor
+      while cursor < role.bytesize &&
+            role.byte_at(cursor) >= '0'.ord.to_u8 && role.byte_at(cursor) <= '9'.ord.to_u8
+        cursor += 1
+      end
+      if cursor == start || cursor >= role.bytesize || role.byte_at(cursor) != '.'.ord.to_u8
+        raise UnsupportedFormatError.new("Compact MRK3 Dynamic arm role has no normalized suffix")
+      end
+      arm_index = ((role.byte_slice(start, cursor - start) || "").to_i? ||
+                   raise(CorruptPartError.new("Compact MRK3 Dynamic arm index is malformed")))
+      unless arm_index >= 0 && arm_index < arm_count && arm_index.to_s == role.byte_slice(start, cursor - start)
+        raise CorruptPartError.new("Compact MRK3 Dynamic arm index is outside its parsed roster")
+      end
+      {arm_index, "root" + (role.byte_slice(cursor, role.bytesize - cursor) || "")}
+    end
+
+    private def string_total_key(owner_key : String, role : String) : String
+      "#{owner_key}|#{role}"
+    end
+
+    private def fixed_bytes!(context : BinaryCodecContext, count : UInt64, width : UInt64) : Nil
+      if count > UInt64::MAX // width
+        raise CorruptPartError.new("Compact MRK3 fixed-width callback extent overflows UInt64")
+      end
+      context.read_slice(count * width)
+      nil
+    end
+
+    private def charge_occurrences!(count : UInt64) : Nil
+      return if count == 0_u64
+      @budget.preflight_children(count)
+      count.times { @budget.charge_node }
+      nil
+    end
+
+    private def read_u64_le(bytes : Bytes) : UInt64
+      unless bytes.size == 8
+        raise CorruptPartError.new("Compact MRK3 UInt64 framing field is not eight bytes")
+      end
+      value = 0_u64
+      8.times { |index| value |= bytes[index].to_u64 << (index * 8) }
+      value
+    end
+
+    private def compare_bytes(left : Bytes, right : Bytes) : Int32
+      common = Math.min(left.size, right.size)
+      common.times do |index|
+        return -1 if left[index] < right[index]
+        return 1 if left[index] > right[index]
+      end
+      left.size <=> right.size
+    end
+  end
+end

@@ -689,26 +689,43 @@ module CrystalClick
                                                           context.ensure_consumed
                                                           {slice.bytes, parsed, parsed_offset}
                                                         else
-                                                          reader.with_self_delimited(callback_structure_name) do |bytes|
-                                                            context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false, false)
-                                                            parsed, parsed_offset = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
-                                                                                      DynamicStructureCodec.read_with_statistics_offset(
-                                                                                        context,
-                                                                                        depth,
-                                                                                        depth + 1,
-                                                                                        true,
-                                                                                      )
-                                                                                    else
-                                                                                      value = DynamicStructureCodec.read_prefix_without_statistics(
-                                                                                        context,
-                                                                                        depth,
-                                                                                        depth + 1,
-                                                                                        true,
-                                                                                      )
-                                                                                      {value, context.input_offset}
-                                                                                    end
-                                                            context.ensure_consumed
-                                                            { {bytes, parsed, parsed_offset}, context.input_offset }
+                                                          if reader.responds_to?(:with_grammar_extent)
+                                                            unless statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+                                                              raise UnsupportedFormatError.new("Compact grammar-framed Dynamic prefixes require complete statistics")
+                                                            end
+                                                            parsed, consumed_dynamic_prefix_bytes = reader.with_grammar_extent(callback_structure_name) do |bytes|
+                                                              context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false, false)
+                                                              parsed, parsed_offset = DynamicStructureCodec.read_with_statistics_offset(
+                                                                context,
+                                                                depth,
+                                                                depth + 1,
+                                                                true,
+                                                              )
+                                                              { {parsed, parsed_offset}, context.input_offset }
+                                                            end
+                                                            {consumed_dynamic_prefix_bytes, parsed[0], parsed[1]}
+                                                          else
+                                                            reader.with_self_delimited(callback_structure_name) do |bytes|
+                                                              context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false, false)
+                                                              parsed, parsed_offset = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+                                                                                        DynamicStructureCodec.read_with_statistics_offset(
+                                                                                          context,
+                                                                                          depth,
+                                                                                          depth + 1,
+                                                                                          true,
+                                                                                        )
+                                                                                      else
+                                                                                        value = DynamicStructureCodec.read_prefix_without_statistics(
+                                                                                          context,
+                                                                                          depth,
+                                                                                          depth + 1,
+                                                                                          true,
+                                                                                        )
+                                                                                        {value, context.input_offset}
+                                                                                      end
+                                                              context.ensure_consumed
+                                                              { {bytes, parsed, parsed_offset}, context.input_offset }
+                                                            end
                                                           end
                                                         end
         statistics_offset_observer.try(&.call(structure_name, statistics_offset))
@@ -736,7 +753,11 @@ module CrystalClick
                            capture.call(slice)
                            slice.bytes
                          else
-                           reader.take_inline_fragment(callback_prefix_name)
+                           if reader.responds_to?(:take_exact)
+                             reader.take_exact(callback_prefix_name, BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES)
+                           else
+                             reader.take_inline_fragment(callback_prefix_name)
+                           end
                          end
           unless prefix_bytes.size == BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES
             raise CorruptPartError.new("inline Object discriminator prefix is not eight bytes")
@@ -777,7 +798,11 @@ module CrystalClick
                            capture.call(slice)
                            slice.bytes
                          else
-                           reader.take_inline_fragment(callback_prefix_name)
+                           if reader.responds_to?(:take_exact)
+                             reader.take_exact(callback_prefix_name, BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES)
+                           else
+                             reader.take_inline_fragment(callback_prefix_name)
+                           end
                          end
           unless prefix_bytes.size == BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES
             raise CorruptPartError.new("inline Object discriminator prefix is not eight bytes")
@@ -827,7 +852,11 @@ module CrystalClick
                            capture.call(slice)
                            slice.bytes
                          else
-                           reader.take_inline_fragment(callback_prefix_name)
+                           if reader.responds_to?(:take_exact)
+                             reader.take_exact(callback_prefix_name, OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES)
+                           else
+                             reader.take_inline_fragment(callback_prefix_name)
+                           end
                          end
           unless prefix_bytes.size == OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES
             raise CorruptPartError.new("inline Object LowCardinality prefix is not eight bytes")
