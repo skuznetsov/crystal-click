@@ -11,10 +11,16 @@ full suite, Compact JSON admission or a memory/performance qualification.
 
 Compact JSON/Object remains IN_PROGRESS: the 48-cell stock baseline records
 the current public refusals, and the internal-reader missing-API RED is observed.
+The corrected DEBUG collector now passes a fresh 48-cell capture with actual
+multi-chunk records at all five Object sites, persisted Array size callbacks
+and exact mrk3/mrk4 tape agreement. Root independently authenticates 504 files,
+48 raw CHECK successes and 384 literal rows; three report-contract seeds
+reject. This is verified baseline instrumentation, not a JSON reader GREEN.
 The next reader must consume full static Object statistics and Compact's actual
 multi-chunk schedule, reuse existing codecs and preserve independent child grids.
 See the [W263 frontier](COMPACT_JSON_READER_FRONTIER.md) and
-[coordinate evidence](../.landmark/evidence/compact-object-coordinate-w263.json).
+[coordinate evidence](../.landmark/evidence/compact-object-coordinate-w263.json)
+and [native baseline evidence](../.landmark/evidence/compact-json-w263-native-baseline.json).
 Full all-types/MV/projection goal ACTIVE; performance and <=10% parity deferred.
 This prerequisite is a local atomic commit only; no push.
 

@@ -1,5 +1,29 @@
 # Crystal Click landmarks
 
+## Compact JSON native multi-chunk baseline — W263
+
+- VERIFIED / root adversary ROBUST for baseline instrumentation only, over
+  coordinate commit `820050f761a7f388d89fbd5a9a1820c304229eec`. The DEBUG helper
+  and fresh guarded 48-cell oracle pass; public JSON remains rejected. Root
+  checks 504 live file hashes/sizes, 48 raw CHECK successes, 384 native rows,
+  all six persisted Object/shared triples and the exact 384/144 refusal widths.
+- Actual mrk3 whole-column tapes agree with ordered mrk4 callbacks. Five Object
+  sites retain full static structure statistics, persisted one-row chunk
+  records and a multiple-chunk mark each. Outer Array size witnesses come from
+  their real UInt64 callbacks and match independent per-parent literal counts.
+  Paired reports reuse the mrk4 witness; they are not independent replications.
+- Three isolated report seeds reject same-total reordered Array sizes, merged
+  chunks and a reordered full callback roster. This qualifies the instrument's
+  sensitivity, not production JSON framing or corruption behavior.
+- The disappeared native runtime is recovered from the immutable official
+  artifact with unchanged carrier/expanded/stripped identities. No new runtime
+  pin, source/build equivalence, release helper, JSON GREEN or speed claim.
+- Return pointers: [native baseline evidence](.landmark/evidence/compact-json-w263-native-baseline.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Next: sealed keyless
+  prefix/Compact framer/internal-reader checkpoint, then the unchanged full
+  recursive/public/offline target. Source, instrument, profile, pin or capture
+  drift reopens evidence; no push and full goal ACTIVE.
+
 ## Compact Object saved-pair coordinate prerequisite — W263
 
 - VERIFIED / root adversary ROBUST within the finite piecewise-path scope over

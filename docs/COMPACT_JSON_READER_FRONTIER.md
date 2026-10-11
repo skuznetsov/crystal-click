@@ -1,6 +1,6 @@
 # Compact JSON/Object reader frontier
 
-Document status: W263 native baseline RED qualified; coordinate prerequisite
+Document status: W263 six-layout/multi-chunk native baseline RED qualified; coordinate prerequisite
 VERIFIED within its focused scope; Object reader and native GREEN pending
 (2026-10-11).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
@@ -198,9 +198,58 @@ The next sealed production step is coordinate provenance, not JSON admission:
   public JSON admission guards unchanged. Root executes the failing test and
   the existing W240/W259/W262 regression cohort before proceeding.
 
-Static JSON site identities remain separate from actual Dynamic keys. The
-context/framer/carrier implementation seal will enumerate their exact files
-before those owners change. Offline materialization must use one logical
+### Next core implementation seal
+
+The coordinate prerequisite is committed as
+`820050f761a7f388d89fbd5a9a1820c304229eec`. The missing internal-reader API RED
+permits the next bounded checkpoint; it does not permit public admission.
+The keyless prefix and schedule seam are sealed as follows:
+
+- New own-file owners: `object_document_callback_prefix.cr`,
+  `object_document_callback_prefix_reader.cr`,
+  `object_document_callback_body_materializer.cr`,
+  `compact_static_json_site_manifest.cr`,
+  `compact_json_object_role_schedule.cr`,
+  `compact_json_object_site_framer.cr`,
+  `compact_static_json_prepared_context.cr`,
+  `compact_static_json_bulk_column_reader.cr`.
+- Existing affected owners: `object_document_inline_prefix.cr`,
+  `object_document_inline_plan_reader.cr`,
+  `object_document_inline_body_materializer.cr`, `object_document_codec.cr`,
+  `object_shared_advanced_inline_decoder.cr`. The inline callback-order owner
+  may gain only the narrow role-provider seam required to preserve its existing
+  Wide caller behavior. Root owns `src/crystal_click.cr` and this frontier; the core
+  worker owns the named implementation files and the internal-reader test.
+- Extract a keyless common parsed prefix owner. The old inline prefix retains
+  its real `BinaryDynamicJsonLeafKey`; its PrefixMap and child Dynamic maps
+  remain keyed only by actual Dynamic sites. Static IDs must never be fake
+  Dynamic arm keys. The shared builder accepts an explicit statistics context:
+  old inline parsing remains prefix-only, while static Compact reads preserve
+  complete structure/statistics bytes and offsets. Do not duplicate value serde.
+- Extract shared role materialization from the existing inline materializer.
+  A Compact provider must bind the actual full mrk4 roster and grammar-consume
+  mrk3 tapes, including empty callbacks, full prefix/body/suffix lifecycle and
+  stream-then-chunks order. Do not feed an invented Wide event registry or
+  contiguous coordinate lane into the old callback-order algorithm. Advanced
+  bucket/Copy decoders consume the original site-owned piecewise coordinates.
+- The first internal GREEN is the existing test over three native root JSON
+  version/layout witnesses, including V3 ADVANCED_CHUNKED with multiple chunks
+  and full statistics. All selected marks prepare before EOF-first returns.
+  Root runs the guarded test and the affected legacy Object/Compact regressions
+  before widening to internal recursive Array/Tuple coverage. The full 48-cell
+  recursive/public/offline target remains mandatory, not replaced by this
+  checkpoint. Facade and OfflineColumnValue admission changes are not yet
+  authorized; the static/Dynamic public rejection guards stay intact.
+
+The bounded consumer search is
+`rg -n 'ObjectDocumentInlinePrefix|ObjectDocumentInlinePlanReader|ObjectDocumentInlineBodyMaterializer|ObjectSharedAdvancedInlineDecoder' src spec -g '*.cr'`.
+It identifies the inline path codec/tape callbacks, Object codec loader,
+callback-order owner, advanced decoder and the existing W240 framing/tape
+regressions. Preserve those callers; any additional shared-owner edit requires
+an explicit inventory and seal rather than silent scope growth.
+
+Static JSON site identities remain separate from actual Dynamic keys. Offline
+materialization must use one logical
 budget for retained output plus active physical/normalizer/decoder/carrier
 workspace; independent per-stage caps do not establish that invariant.
 
@@ -266,8 +315,38 @@ Core-reader RED: the guarded DEBUG internal-reader test exits 1 at
 `CompactStaticJsonBulkColumnReader` does not exist. Its selected stock files
 were live-checked against the existing 48-part manifest (504 file hashes).
 This is a missing-API compile discriminator, not JSON decoding evidence.
-The corrected multi-chunk collector still needs its own successful build and
-actual native execution; Ruby syntax alone does not qualify its observations.
+The corrected multi-chunk collector now builds in DEBUG and passes a fresh
+48-cell native baseline. This does not close the internal reader RED or admit
+any public JSON column.
+
+Current multi-chunk baseline evidence:
+`/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS/summary.json`.
+Root's guarded helper build and native baseline both exit 0. Independent live
+audit checks all 504 captured file sizes/hashes, the raw runtime pin, 48 actual
+successful CHECK results and 384 native literal rows. The same six persisted
+triples occur in 32 granules each; UInt64 controls and the complete 384/144
+public/offline refusal products remain intact.
+
+For every CHUNKED cell, the collector compares the actual mrk3 whole-column
+tape to the ordered mrk4 shards. Five distinct Object sites (root, docs,
+tagged.doc, pair.left, pair.right) retain full structure statistics and actual
+split chunk records. Each site has a real multiple-chunk mark. The 160 reported
+site/mark entries contain 736 one-row chunk records; paired mark-format reports
+share the same mrk4 schedule witness and are not independent observations.
+Outer Array sizes are decoded from the named persisted UInt64 callbacks and
+checked against separate literal per-parent vectors, including empty and
+unequal children. Root's three isolated report-contract seeds reject a
+same-total reordered size vector, merged chunk records and a reordered Object
+callback roster. These are auditor sensitivity checks, not production-reader
+corruption tests.
+
+The old runtime directory disappeared before this fresh capture. The official
+immutable artifact was recovered to
+`/private/tmp/crystal-click-w263-runtime-recovery.B9uAPX`; carrier, expanded and
+stripped sizes/hashes match the existing pin exactly. No version substitution,
+source/runtime equivalence or latest-upstream claim is made. The qualified
+baseline and recovery identities are indexed in
+[native baseline evidence](../.landmark/evidence/compact-json-w263-native-baseline.json).
 
 Native baseline evidence:
 `/private/tmp/crystal-click-w263-baseline-six-layouts.bniER3/summary.json`.

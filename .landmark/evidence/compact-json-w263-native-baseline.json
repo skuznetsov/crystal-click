@@ -1,0 +1,99 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W263-native-baseline",
+  "title": "Stock Compact JSON layouts, actual multi-chunk schedules and independent Array size witnesses",
+  "recorded_date": "2026-10-11",
+  "baseline_commit": "820050f761a7f388d89fbd5a9a1820c304229eec",
+  "claim": {
+    "level": "VERIFIED",
+    "root_adversary": "ROBUST within baseline instrumentation and executed report-contract sensitivity checks",
+    "boundary": "Public Compact JSON remains rejected. This is not internal reader GREEN, production framing validation, full-suite evidence or a speed qualification.",
+    "global_goal": "ACTIVE; remaining types/layouts/MV/projections and subsequent <=10% speed qualification are not closed"
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "rollback": "One exact-path local baseline-instrumentation commit; no push or history rewrite"
+  },
+  "verification": {
+    "guard": "COGNI_RUN_SAFE_MIN_FREE_PCT=50; serial root-owned run_safe.sh; native max_threads=1 and max_memory_usage=536870912",
+    "helper_build": {
+      "mode": "DEBUG",
+      "exit": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-instrument-build.2O8XDP/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 build scripts/check_compact_json_w263.cr -o /private/tmp/crystal-click-w263-instrument-build.2O8XDP/check-compact-json-baseline --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "tool_results": ["d2261b", "cde3b3"],
+      "sha256": "f8c28dec05cecb4a0de424d1163e8eb72a6de1d21d79273cee312505718ff194"
+    },
+    "native_baseline": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 300 12288 scripts/probe_compact_json_w263.rb --mode baseline --crystal-helper /private/tmp/crystal-click-w263-instrument-build.2O8XDP/check-compact-json-baseline --evidence-root /private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS --clickhouse /private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped",
+      "tool_results": ["a2864e", "78548f"],
+      "guard_exit": 0,
+      "native_exit": 0,
+      "helper_exit": 0,
+      "status": "expected_json_unsupported",
+      "cells": 48,
+      "parent_rows_per_cell": 8,
+      "mark_rows": [2, 2, 2, 2],
+      "actual_granules": 192,
+      "persisted_triples_and_counts": [[[0, 0, 1], 32], [[2, 0, 1], 32], [[4, 0, 1], 32], [[4, 1, 2], 32], [[4, 2, 2], 32], [[4, 3, 2], 32]],
+      "public_reader_refusals": 384,
+      "offline_recursive_refusals": 144,
+      "chunked_site_mark_entries": 160,
+      "one_row_chunk_records_in_reports": 736,
+      "paired_report_boundary": "mrk3/mrk4 byte agreement is observed; paired reports share their mrk4 schedule witness, not independent replications"
+    },
+    "root_live_audit": {
+      "tool_result": "e873dc",
+      "exit": 0,
+      "checked_part_files": 504,
+      "raw_check_successes": 48,
+      "raw_native_rows": 384,
+      "checks": ["Exact 48-label products", "realpath containment", "live file sizes and SHA-256", "raw version/build pin", "raw per-table CHECK framing", "native/helper output sizes and SHA-256", "all public UInt64 controls", "six actual persisted triples and exact refusal widths"]
+    },
+    "instrument_adversary": {
+      "tool_result": "579377",
+      "exit": 0,
+      "control": "Unmodified actual CHUNKED report passes its validator",
+      "rejected_seeds": ["same-total reordered persisted Array size vector", "two one-row chunks merged into one record", "reordered full Object callback roster"],
+      "boundary": "Isolated in-memory report-contract seeds; not production-reader corruption tests"
+    },
+    "ruby_syntax": {"exit": 0, "tool_result": "0ab963"},
+    "release_helper_or_full_suite_claimed": false
+  },
+  "runtime_recovery": {
+    "reason": "Old temporary runtime directory was observed absent; no cause of disappearance is inferred",
+    "official_url": "https://clickhouse-builds.s3.us-east-1.amazonaws.com/REFs/master/d9bcb5ab007f0f6299f7f973f2642245bab3d028/masterci/build_arm_darwin/clickhouse",
+    "path": "/private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped",
+    "version": "26.10.1.1201",
+    "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+    "carrier_bytes": 185881266,
+    "carrier_sha256": "0e91aa9b4aa2ce12b5522d8bc35c99b93d9da6e88dfe5f811f7ad6b3577c45c2",
+    "expanded_bytes": 919123095,
+    "expanded_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+    "stripped_bytes": 746226224,
+    "stripped_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+    "expansion": "Verified carrier invoked under run_safe.sh with --version; it expands in place and prints the expected official version",
+    "strip_recipe": "/opt/homebrew/opt/llvm/bin/llvm-strip -o /private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped --strip-debug --remove-section=.comment --remove-section=.note /private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse",
+    "tool_results": ["834d3c", "47d3bf", "334e1c", "4d6349", "e43af3", "9c91e7", "56bd79", "212ac1", "3f848a", "2fbf9c", "90194f"],
+    "runtime_pin_changed": false,
+    "carrier_retained_after_in_place_expansion": false
+  },
+  "artifacts": {
+    "summary": {"path": "/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS/summary.json", "sha256": "da4492e3cd037298d27ccabb4d415d16dc5b38fc54071c42183b3a45b642ca4b"},
+    "native_manifest": {"path": "/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS/parts/native_manifest.json", "sha256": "3061107cdf55f6547c03bf210822902202839f84280b45da9379c3ae94b8fffb"},
+    "source_snapshot": {"path": "/private/tmp/clickhouse-w254-upstream.AqeqyC", "revision": "ed30948f095ecb70679986d7d60e27ad770ae27a", "source_runtime_equivalence_claimed": false},
+    "availability": "Referenced runtime and captures are temporary. Loss reopens dependent evidence; surviving packet fields do not recreate execution."
+  },
+  "boundaries": {
+    "allowed_paths": ["scripts/check_compact_json_w263.cr", "scripts/probe_compact_json_w263.rb", "scripts/support/compact_json_w263_fixture.cr", "docs/COMPACT_JSON_READER_FRONTIER.md", "docs/PROJECT_STATUS.md", "LANDMARKS.md", ".landmark/evidence/compact-json-w263-native-baseline.json"],
+    "changed_paths": ["scripts/check_compact_json_w263.cr", "scripts/probe_compact_json_w263.rb", "scripts/support/compact_json_w263_fixture.cr", "docs/COMPACT_JSON_READER_FRONTIER.md", "docs/PROJECT_STATUS.md", "LANDMARKS.md", ".landmark/evidence/compact-json-w263-native-baseline.json"],
+    "source_test_sha256": {
+      "scripts/check_compact_json_w263.cr": "6752000d59766d12e9231de1064fabe74a3c1318db2b6835c430af587fbd4986",
+      "scripts/probe_compact_json_w263.rb": "8a5de3df7f4080daae0e345fa8241cf7ac21206affcbcab417c82d3fa77b7360",
+      "scripts/support/compact_json_w263_fixture.cr": "dead84dd7b465297336e2ba98c219995e9b85929f3fcdeb6d333b869eaf44a30"
+    }
+  },
+  "open": ["Sealed keyless prefix and actual Compact root JSON framer/internal reader", "Full 48-cell recursive/public/offline JSON GREEN", "DEBUG/RELEASE production regressions and corruption checks", "Remaining types/layouts/MV/projection objective and later memory/performance qualification"],
+  "refresh": "Instrument, helper, relevant production bytes, profile, runtime/source pin, capture loss or admission widening reopens dependent evidence. Rebuild and rerun affected exact cells/guards.",
+  "links": ["docs/COMPACT_JSON_READER_FRONTIER.md", "docs/PROJECT_STATUS.md", "LANDMARKS.md", ".landmark/evidence/object-inferred-dynamic-json-w216.json"],
+  "validation_limit": "The skill-referenced template and validate-landmark-graph.sh are absent. Existing curated-evidence shape is reused; JSON/path/hash checks are structural, not a substitute for root-executed DoD and adversary signals."
+}
