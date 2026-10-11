@@ -112,9 +112,12 @@ module CrystalClick
 
     # Reads the complete metadata while exposing the relative start of the
     # statistics suffix (or the V3 statistics flag) for paired mark checks.
-    def self.read_with_statistics_offset(context : BinaryCodecContext) : Tuple(ObjectStructure, Int32)
+    def self.read_with_statistics_offset(
+      context : BinaryCodecContext,
+      structure_depth : Int32 = 1_i32,
+    ) : Tuple(ObjectStructure, Int32)
       version, paths, shared_data_version, bucket_count, legacy_max_dynamic_paths, statistics_offset =
-        read_header(context, false, 1_i32)
+        read_header(context, false, structure_depth)
 
       statistics = if version == 4_u64
                      case context.read_byte

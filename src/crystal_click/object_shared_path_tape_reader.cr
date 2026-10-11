@@ -4,7 +4,7 @@ module CrystalClick
   # Bounded cursor for the ordered, decompressed Data substream callback tape.
   # It keeps lane slices borrowed until each lane's detached owner is
   # preflighted and constructed.
-  class ObjectSharedPathTapeReader
+  class ObjectSharedPathTapeReader < ObjectSharedPathCallbackSource
     @data : Bytes
     @events : Array(ObjectSharedPathSubstreamEvent)
     @budget : BinaryCodecBudget
@@ -67,29 +67,38 @@ module CrystalClick
     end
 
     def take(expected_name : String) : Bytes
-      event = @events[@event_index]? || raise(CorruptPartError.new("Object shared path event tape is truncated"))
-      unless event.matches_name?(expected_name)
-        raise CorruptPartError.new("Object shared path event name or order is invalid")
-      end
-      unless event.relative_offset == @cursor
-        raise CorruptPartError.new("Object shared path event offset disagrees with the consumed Data cursor")
-      end
+      ensure_no_active_parser!
+      _event, following, bytes = current_event(expected_name)
+      commit_event!(following)
+      bytes
+    end
 
-      following = if next_event = @events[@event_index + 1]?
-                    next_event.relative_offset
-                  else
-                    @data.size.to_u64
-                  end
-      if following < @cursor || following > @data.size.to_u64
-        raise CorruptPartError.new("Object shared path event interval is outside the Data slice")
+    protected def borrow_self_delimited(expected_name : String) : Bytes
+      current_event(expected_name)[2]
+    end
+
+    protected def commit_self_delimited(expected_name : String, consumed : Int32) : Nil
+      _event, following, bytes = current_event(expected_name)
+      unless consumed == bytes.size
+        raise CorruptPartError.new("Object shared path parser did not consume its exact callback interval")
       end
-      size = following - @cursor
-      if size > Int32::MAX.to_u64
-        raise CorruptPartError.new("Object shared path event interval exceeds the supported byte domain")
+      commit_event!(following)
+      nil
+    end
+
+    # Fixed-size callbacks are validated before the event cursor is advanced.
+    # This keeps discriminator and LowCardinality prefixes exact even when a
+    # malformed event is followed by an otherwise valid callback.
+    def take_exact(expected_name : String, size : Int32) : Bytes
+      ensure_no_active_parser!
+      if size < 0
+        raise CorruptPartError.new("Object shared path fixed callback size is negative")
       end
-      bytes = @data[@cursor.to_i32, size.to_i32]
-      @cursor = following
-      @event_index += 1
+      _event, following, bytes = current_event(expected_name)
+      unless bytes.size == size
+        raise CorruptPartError.new("Object shared path fixed callback has the wrong byte extent")
+      end
+      commit_event!(following)
       bytes
     end
 
@@ -144,10 +153,7 @@ module CrystalClick
       if @discriminator_prefixes.has_key?(role)
         raise CorruptPartError.new("Object shared path discriminator prefix is duplicated")
       end
-      prefix = take(prefix_name)
-      unless prefix.size == BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES
-        raise CorruptPartError.new("Object shared path discriminator prefix is not eight bytes")
-      end
+      prefix = take_exact(prefix_name, BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES)
       @discriminator_prefixes[role] = prefix
       nil
     end
@@ -204,10 +210,7 @@ module CrystalClick
         raise CorruptPartError.new("Object shared path LowCardinality dictionary lane is duplicated")
       end
 
-      prefix = take(prefix_name)
-      unless prefix.size == OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES
-        raise CorruptPartError.new("Object shared path LowCardinality dictionary prefix is not eight bytes")
-      end
+      prefix = take_exact(prefix_name, OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES)
 
       # Retain only the borrowed eight-byte prefix. Bound the pending-site
       # table and role key before making the entry visible to the body pass.
@@ -325,6 +328,36 @@ module CrystalClick
       @budget.charge_wire_bytes(byte_count)
       @budget.charge_elements(byte_count + offsets.size.to_u64)
       @lanes[role] = BinaryBulkStream.new(bytes, offsets)
+      nil
+    end
+
+    private def current_event(expected_name : String) : Tuple(ObjectSharedPathSubstreamEvent, UInt64, Bytes)
+      event = @events[@event_index]? || raise(CorruptPartError.new("Object shared path event tape is truncated"))
+      unless event.matches_name?(expected_name)
+        raise CorruptPartError.new("Object shared path event name or order is invalid")
+      end
+      unless event.relative_offset == @cursor
+        raise CorruptPartError.new("Object shared path event offset disagrees with the consumed Data cursor")
+      end
+
+      following = if next_event = @events[@event_index + 1]?
+                    next_event.relative_offset
+                  else
+                    @data.size.to_u64
+                  end
+      if following < @cursor || following > @data.size.to_u64
+        raise CorruptPartError.new("Object shared path event interval is outside the Data slice")
+      end
+      size = following - @cursor
+      if size > Int32::MAX.to_u64
+        raise CorruptPartError.new("Object shared path event interval exceeds the supported byte domain")
+      end
+      {event, following, @data[@cursor.to_i32, size.to_i32]}
+    end
+
+    private def commit_event!(following : UInt64) : Nil
+      @cursor = following
+      @event_index += 1
       nil
     end
   end

@@ -90,10 +90,10 @@ module CrystalClick
 
     def self.capture_body!(
       prefix : ObjectDocumentInlinePrefix,
-      tape : ObjectSharedPathTapeReader,
+      tape : T,
       profile : BinaryBulkProfile,
       budget : BinaryCodecBudget,
-    ) : Nil
+    ) : Nil forall T
       physical_plan = physical_plan_for_prefix(prefix, budget)
       unless physical_plan.shared_profile == BinaryBulkProfile.single_stream
         raise UnsupportedFormatError.new("inline Object shared MAP callbacks require the source single-stream profile")

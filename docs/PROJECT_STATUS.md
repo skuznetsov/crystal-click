@@ -1,6 +1,29 @@
 # CrystalClick project status
 
 Current prerequisite (W263, 2026-10-11): VERIFIED / root adversary ROBUST within
+the single-owner, already-preframed callback source and existing inline scope.
+Own-file callback source, keyless Object prefix and prefix reader reuse the
+recursive codecs with full inherited Object/Dynamic prefix statistics. Static
+sites do not fabricate Dynamic keys. Exact retained physical-plan identity is
+checked before generalized decoder/materializer plan, grid or body access;
+legacy Inline registry-backed decoding remains supported.
+
+The exact 18-file cohort passes 131 examples in each DEBUG/RELEASE mode, zero
+failures/errors/pending; formatting and diff checks pass. Root observed and
+fixed caller-budget consumption, foreign-owner and parser-reentry REDs before
+the final refresh. This is not the full suite, native Compact JSON GREEN or a
+memory/performance qualification. Parser reservation is not thread safety;
+budgets/metadata are not rolled back and failed operations must be discarded.
+
+Compact grammar framing over raw mrk3 tails and Complete static body statistics
+offsets remain open. Next: sealed Compact framer/prepared reader, three actual
+native roots including multi-chunk SharedData, then the unchanged 48-cell
+recursive/public/offline target. See the [W263 frontier](COMPACT_JSON_READER_FRONTIER.md)
+and [callback-prefix evidence](../.landmark/evidence/compact-object-callback-prefix-w263.json).
+Full all-types/MV/projection goal ACTIVE; performance and <=10% parity deferred.
+This prerequisite is a local atomic commit only; no push.
+
+Current prerequisite (W263, 2026-10-11): VERIFIED / root adversary ROBUST within
 the saved-pair and piecewise Compact Object path scope. A common coordinate
 contract preserves Wide coordinates; its own-file Compact implementation binds
 original whole-data pairs to authenticated ordered shards without rebasing.

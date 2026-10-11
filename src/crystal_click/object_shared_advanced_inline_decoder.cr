@@ -10,15 +10,18 @@ module CrystalClick
     )
 
     def self.decode(
-      prefix : ObjectDocumentInlinePrefix,
+      prefix : ObjectDocumentCallbackPrefix,
       physical_plan : ObjectDocumentPhysicalPlan,
       grid : StorageOccurrenceGrid,
       budget : BinaryCodecBudget,
+      role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding)? = nil,
+      callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair)? = nil,
     ) : Array(Array(ObjectSharedMapRow))
       context = prefix.nested_context
       if budget.writing? || context.writing?
         raise ArgumentError.new("inline advanced Object decoding requires read-direction contexts")
       end
+      prefix.validate_physical_owner!(physical_plan)
       version = context.shared_data_version
       unless version == 2_u64 || version == 3_u64
         raise ArgumentError.new("inline advanced Object decoding requires SharedData v2 or v3")
@@ -47,26 +50,51 @@ module CrystalClick
         raise CorruptPartError.new("inline advanced Object bucket count differs from its physical plan")
       end
 
-      event_context = prefix.event_schedule_context
-      bindings = ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
-        physical_plan,
-        prefix.plan,
-        context.profile,
-        budget,
-        event_context,
-        true,
-      )
-      pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
-        physical_plan,
-        prefix.plan,
-        context.profile,
-        prefix.callback_prefix,
-        budget,
-        true,
-        true,
-        event_context,
-        true,
-      )
+      bindings, pairs = if inline_prefix = prefix.as?(ObjectDocumentInlinePrefix)
+                          begin
+                            {
+                              role_bindings || prefix.body_role_bindings,
+                              callback_pairs || prefix.body_callback_pairs,
+                            }
+                          rescue ex : ArgumentError
+                            # Preserve the legacy four-argument path only for
+                            # an inline leaf that retained its validated
+                            # recursive owner registry. Static/keyless owners
+                            # must carry or receive an explicit schedule.
+                            unless inline_prefix.physical_plan.same?(physical_plan)
+                              raise CorruptPartError.new("inline advanced callback schedule belongs to a different physical plan")
+                            end
+                            event_context = inline_prefix.event_schedule_context
+                            fallback_bindings = ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
+                              physical_plan,
+                              prefix.plan,
+                              context.profile,
+                              budget,
+                              event_context,
+                              true,
+                            )
+                            fallback_pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
+                              physical_plan,
+                              prefix.plan,
+                              context.profile,
+                              prefix.callback_prefix,
+                              budget,
+                              true,
+                              true,
+                              event_context,
+                              true,
+                            )
+                            {
+                              role_bindings || fallback_bindings,
+                              callback_pairs || fallback_pairs,
+                            }
+                          end
+                        else
+                          {
+                            role_bindings || prefix.body_role_bindings,
+                            callback_pairs || prefix.body_callback_pairs,
+                          }
+                        end
       slice_count = prefix.body_callback_slice_count
       unless bindings.size == pairs.size && pairs.size == slice_count
         raise CorruptPartError.new("inline advanced callback schedule differs from captured body slices")

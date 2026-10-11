@@ -248,6 +248,124 @@ callback-order owner, advanced decoder and the existing W240 framing/tape
 regressions. Preserve those callers; any additional shared-owner edit requires
 an explicit inventory and seal rather than silent scope growth.
 
+### Parser-owned callback-source extension
+
+Root's consumer/source inventory establishes a circular dependency in the
+preframed tape API: `take(name)` needs the next event offset, while Compact mrk3
+discovers that offset by parsing the current prefix. The existing Compact
+cursor already exposes prepaid borrowed remainders and checked parser-offset
+commit. The exact, already-preframed source checkpoint below does not implement
+the separate Compact grammar/source contract; public admission is still rejected.
+
+- Add `object_shared_path_callback_source.cr`. Expand existing owners only in
+  `object_shared_path_tape_reader.cr`, `object_shared_path_codec.cr`,
+  `object_shared_path_json_tape_codec.cr` and `object_structure_codec.cr`.
+  These are core-worker paths in addition to the preceding seal. No change to
+  `compact_binary_bulk_granule_cursor.cr` is required by this contract.
+- `with_self_delimited(name, parser)` borrows input and receives the parser's
+  exact consumed count. The preframed reader must validate name/order/start
+  before invoking the parser, pass only the current event span, and commit
+  only after successful exact consumption. A failed parser, negative count,
+  partial event or out-of-span count must not advance the tape. Same-source
+  parser re-entry, including legacy and fixed reads, rejects before consumption;
+  this is a single-owner reservation, not concurrency synchronization.
+- `take_exact(name, size)` enforces the complete fixed callback extent;
+  discriminator and LowCardinality prefixes still require exactly eight
+  bytes. Empty callbacks remain explicit events. No unconstrained `take(name)`
+  is introduced for an unlabelled mrk3 tape.
+- The Compact owner uses the existing complete-granule precharge once, borrows
+  from its cursor, commits only grammar-observed bytes, and binds each logical
+  role to its retained site. Named mrk4 begin/finish checks must reject wrong
+  roles and trailing bytes. Body slices need grammar-derived or already
+  validated exact boundaries too; the common slice accessor must not become a
+  shortcut that consumes the remaining mrk3 tape or invents Wide offsets.
+- Thread the source through the already sealed Object prefix consumers and
+  the JSON-tape body capture seam. Compact supplies its own role schedule;
+  existing inline/Wide consumers retain their event registry and order. Static
+  IDs remain keyless, while actual Dynamic JSON leaves retain real scoped
+  `BinaryDynamicJsonLeafKey` values.
+- `ObjectStructureCodec.read_with_statistics_offset` may gain a defaulted
+  descriptor-relative depth argument. Existing one-argument callers preserve
+  depth 1; nested callers must not reset or skip the current depth guard.
+  The complete statistics context must also reach the existing full Dynamic
+  prefix codec when inherited PREFIX/PREFIX_EMPTY settings require it. Retain
+  explicit NONE contexts for separate per-path embedded serializations rather
+  than applying complete-prefix parsing indiscriminately.
+
+The source anchors for inherited statistics are
+`SerializationObject.cpp:432-507`, `SerializationDynamic.cpp:271-326` and
+`SerializationVariant.cpp:218-224` at the pinned comparison revision.
+`SerializationObjectSharedData.cpp:375-420` independently establishes the fresh
+Compact per-path profile with explicit NONE at line 388. Do not infer the same
+prefix propagation through LowCardinality: its nested dictionary values are
+serialized later from the suffix (`SerializationLowCardinality.cpp:271-312`).
+The current 48-cell capture contains no JSON-valued ordinary Dynamic arm, so
+that recursive context branch still needs a separate native witness before a
+compatibility claim. The bounded additional consumer
+search is `rg -n 'ObjectSharedPathTapeReader|decode_prefix_type_with_observer' src spec -g '*.cr'`.
+
+Risk is CAUTION: a relaxed commit could silently hide bytes, while a wrong
+statistics context could consume the next callback. Rollback is the existing
+coordinate/baseline commits and one exact-path local checkpoint; no push.
+Root owns `spec/object_shared_path_callback_source_w263_spec.cr`. Its guarded
+DEBUG RED exits 1 at the missing source-contract require before implementation
+(`d00936`); this is a missing-API discriminator, not a behavioral result.
+The spec now also pins a literal full Object statistics prefix at inherited
+depth 3 and refusal at depth 4 under a depth-3 limit without advancing the
+callback. Ten source cases, eight lifecycle cases and five generalized-decoder
+contract cases now pass with affected W240/W259/W260/W262/W263 regressions in
+DEBUG and RELEASE. The unchanged three native root witnesses remain the next
+internal-reader gate, not an executed source-checkpoint qualification. No
+declaration/facade/carrier admission is authorized.
+
+### Preframed common-prefix checkpoint — 2026-10-11
+
+VERIFIED / root adversary ROBUST within the single-owner, already-framed source
+and existing inline-regression scope. The exact 18-file cohort passes 131
+examples in each DEBUG/RELEASE mode, zero failures/errors/pending, under the
+unchanged serial 180-second / 12-GiB guard. Formatting and diff checks pass.
+This is not the full suite or a native Compact JSON reader GREEN.
+
+Own-file callback source, keyless prefix and prefix reader reuse the existing
+recursive Object/Dynamic traversal. Independent literal prefixes exercise full
+Object statistics, inherited descriptor depth and inferred Dynamic statistics.
+Static sites use nil Dynamic keys; actual Dynamic JSON leaves keep their real
+scoped keys. Existing Inline callers retain their registry-backed four-argument
+advanced decoder path. Both generalized body consumers reject a foreign
+physical-plan instance before plan/grid/body access, even when canonical roots
+match; successful Complete static body materialization is not qualified.
+
+Root observed behavioral REDs for inherited statistics, lifecycle guards,
+caller-budget preflight, three foreign-owner paths and parser re-entry. The
+caller-owned node budget is now charged before taking an event. A rejected
+nested parser cannot clear the outer reservation; duplicate-name callbacks
+remain separate ordered events. A diagnostic-only matcher failure was corrected
+separately and is not a second behavioral finding. Correlated Luna review is
+supporting evidence; root executed the falsifiers and final mode refresh.
+
+Important remaining obligations:
+
+- The current source requires an exact callback extent. A raw mrk3 remainder
+  is not admitted. The next Compact framer must accept bounded grammar-observed
+  consumption, retain only the consumed prefix bytes and enforce mrk4 exact
+  named extents. Existing `ensure_consumed` calls must not accidentally treat
+  the remaining whole mrk3 tape as one prefix.
+- Complete static Object/Dynamic statistics offsets must reach body metadata;
+  the generalized materializer still has prefix-only checks and offsets. Its
+  wider signature and early owner refusal do not prove a successful static read.
+- Parser budgets and metadata changes are not rolled back. Older TapeReader
+  slice/LowCardinality budget failures can occur after event consumption; discard
+  the enclosing failed operation, rather than assuming a general retry contract.
+- Retained internal arrays remain mutable references, not immutable or linear
+  ownership proof. No thread synchronization, allocation/RSS, lazy-access,
+  performance, public admission or native compatibility claim is added.
+
+Return pointer: [curated checkpoint evidence](../.landmark/evidence/compact-object-callback-prefix-w263.json).
+Refresh the exact cohort and affected falsifiers after source/test/profile/
+consumer drift or scope widening. Next: the sealed Compact framer/prepared
+reader, three actual native roots including multi-chunk SharedData, then the
+unchanged 48-cell recursive/public/offline target. Full goal ACTIVE; no push.
+
 Static JSON site identities remain separate from actual Dynamic keys. Offline
 materialization must use one logical
 budget for retained output plus active physical/normalizer/decoder/carrier

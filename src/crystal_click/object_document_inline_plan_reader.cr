@@ -4,7 +4,7 @@ module CrystalClick
   # ordinary/advanced body decoders and recursive Dynamic-prefix owners.
   module ObjectDocumentInlinePlanReader
     def self.read_json_leaf_prefix(
-      tape : ObjectSharedPathTapeReader,
+      tape : T,
       descriptor : BinaryDataType,
       key : BinaryDynamicJsonLeafKey,
       json_descriptor_depth : Int32,
@@ -14,7 +14,40 @@ module CrystalClick
       nested_context : ObjectSharedNestedSerializationContext,
       budget : BinaryCodecBudget,
       bare_inferred_root_json : Bool = false,
-    ) : ObjectDocumentInlinePrefix
+      statistics_context : ObjectDocumentCallbackPrefix::StatisticsContext = ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly,
+    ) : ObjectDocumentInlinePrefix forall T
+      read_json_site_prefix(
+        tape,
+        descriptor,
+        key,
+        json_descriptor_depth,
+        physical_prefix,
+        callback_prefix,
+        array_level,
+        nested_context,
+        budget,
+        statistics_context,
+        bare_inferred_root_json,
+      ).as(ObjectDocumentInlinePrefix)
+    end
+
+    # Shared Object callback-prefix builder. A nil Dynamic key is a real
+    # static site identity, never a fabricated Dynamic leaf key. Inline
+    # callers preserve their prefix-only structure context; direct Compact
+    # callers retain and validate the complete statistics-bearing prefix.
+    def self.read_json_site_prefix(
+      tape : T,
+      descriptor : BinaryDataType,
+      key : BinaryDynamicJsonLeafKey?,
+      json_descriptor_depth : Int32,
+      physical_prefix : String,
+      callback_prefix : String,
+      array_level : UInt64,
+      nested_context : ObjectSharedNestedSerializationContext,
+      budget : BinaryCodecBudget,
+      statistics_context : ObjectDocumentCallbackPrefix::StatisticsContext,
+      bare_inferred_root_json : Bool = false,
+    ) : ObjectDocumentCallbackPrefix | ObjectDocumentInlinePrefix forall T
       unless descriptor.tag == BinaryDataType::TAG_JSON
         raise ArgumentError.new("inline Object prefix reader requires a JSON descriptor")
       end
@@ -36,21 +69,30 @@ module CrystalClick
 
       structure_name = PhysicalStreamName.append_literal(physical_prefix, ".object_structure")
       structure_callback_name = PhysicalStreamName.append_literal(callback_prefix, ".object_structure")
-      structure_bytes = tape.take_inline_fragment(structure_callback_name)
-      structure_context = BinaryCodecContext.new(
-        budget.limits,
-        structure_bytes,
-        false,
-        budget,
-        false,
-        false,
-      )
-      object, statistics_offset = ObjectStructureCodec.read_prefix_without_statistics(
-        structure_context,
-        typed_descriptor_root_depth,
-      )
-      structure_context.ensure_consumed
-      unless statistics_offset == structure_bytes.size
+      object, statistics_offset, structure_bytes = tape.with_self_delimited(structure_callback_name) do |bytes|
+        structure_context = BinaryCodecContext.new(
+          budget.limits,
+          bytes,
+          false,
+          budget,
+          false,
+          false,
+        )
+        parsed_object, parsed_offset = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly
+                                         ObjectStructureCodec.read_prefix_without_statistics(
+                                           structure_context,
+                                           typed_descriptor_root_depth,
+                                         )
+                                       else
+                                         ObjectStructureCodec.read_with_statistics_offset(
+                                           structure_context,
+                                           typed_descriptor_root_depth,
+                                         )
+                                       end
+        structure_context.ensure_consumed
+        { {parsed_object, parsed_offset, bytes}, structure_context.input_offset }
+      end
+      unless statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete || statistics_offset == structure_bytes.size
         raise CorruptPartError.new("inline Object structure prefix does not end at its statistics offset")
       end
       unless object.dynamic_path_count <= json_type.max_dynamic_paths
@@ -105,6 +147,7 @@ module CrystalClick
             true,
             capture,
             false,
+            statistics_context: statistics_context,
           )
           reject_json_actuals!(local_sites)
           typed_dynamic_sites[field] = local_sites
@@ -127,6 +170,7 @@ module CrystalClick
             true,
             capture,
             false,
+            statistics_context: statistics_context,
           )
         end
       end
@@ -162,6 +206,7 @@ module CrystalClick
           nested_context,
           nested_json_prefixes,
           virtual_root_dynamic: true,
+          statistics_context: statistics_context,
         )
         root_dynamic_sites[path] = local_sites
         root_dynamic_json_prefixes[path] = nested_json_prefixes
@@ -230,26 +275,50 @@ module CrystalClick
         raise CorruptPartError.new("inline Object child plan is invalid: #{ex.message}")
       end
 
-      ObjectDocumentInlinePrefix.new(
-        key,
-        descriptor,
-        json_descriptor_depth,
-        typed_descriptor_root_depth,
-        inferred_actual_root_depth,
-        physical_prefix,
-        callback_prefix,
-        array_level,
-        nested_context,
-        statistics_offset,
-        plan,
-        structure_set,
-        prefix_callbacks,
-        typed_dynamic_sites,
-        root_dynamic_sites,
-        typed_dynamic_plans,
-        root_dynamic_plans,
-        root_dynamic_json_prefixes,
-      )
+      if dynamic_key = key
+        ObjectDocumentInlinePrefix.new(
+          dynamic_key,
+          descriptor,
+          json_descriptor_depth,
+          typed_descriptor_root_depth,
+          inferred_actual_root_depth,
+          physical_prefix,
+          callback_prefix,
+          array_level,
+          nested_context,
+          statistics_offset,
+          plan,
+          structure_set,
+          prefix_callbacks,
+          typed_dynamic_sites,
+          root_dynamic_sites,
+          typed_dynamic_plans,
+          root_dynamic_plans,
+          root_dynamic_json_prefixes,
+          statistics_context,
+        )
+      else
+        ObjectDocumentCallbackPrefix.new(
+          descriptor,
+          json_descriptor_depth,
+          typed_descriptor_root_depth,
+          inferred_actual_root_depth,
+          physical_prefix,
+          callback_prefix,
+          array_level,
+          nested_context,
+          statistics_offset,
+          statistics_context,
+          plan,
+          structure_set,
+          prefix_callbacks,
+          typed_dynamic_sites,
+          root_dynamic_sites,
+          typed_dynamic_plans,
+          root_dynamic_plans,
+          root_dynamic_json_prefixes,
+        )
+      end
     end
 
     private def self.decode_dynamic_plan(

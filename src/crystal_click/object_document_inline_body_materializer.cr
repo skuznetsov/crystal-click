@@ -7,15 +7,18 @@ module CrystalClick
     alias BodyBinding = ObjectDocumentInlineCallbackOrder::BodyLaneBinding
 
     def self.materialize(
-      prefix : ObjectDocumentInlinePrefix,
+      prefix : ObjectDocumentCallbackPrefix,
       physical_plan : ObjectDocumentPhysicalPlan,
       grid : StorageOccurrenceGrid,
       budget : BinaryCodecBudget,
+      role_bindings : Array(BodyBinding)? = nil,
+      callback_pairs_override : Array(ObjectDocumentInlineCallbackOrder::CallbackPair)? = nil,
     ) : ObjectDocumentStreams
       context = prefix.nested_context
       if budget.writing? || context.writing?
         raise ArgumentError.new("inline Object body materialization requires read-direction contexts")
       end
+      prefix.validate_physical_owner!(physical_plan)
       unless context.shared_data_version == prefix.plan.structures.object.shared_data_version
         raise CorruptPartError.new("inline Object shared-data version differs from its inherited context")
       end
@@ -29,45 +32,53 @@ module CrystalClick
       plan = prefix.plan
       profile = context.profile
       advanced = context.shared_data_version >= 2_u64
-      event_context = prefix.event_schedule_context
-      all_bindings = if advanced
-                       ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
-                         physical_plan,
-                         plan,
-                         profile,
-                         budget,
-                         event_context,
-                         true,
-                       )
-                     else
-                       ObjectDocumentInlineCallbackOrder.body_lane_bindings(
-                         physical_plan,
-                         plan,
-                         profile,
-                         budget,
-                         event_context,
-                         true,
-                       )
-                     end
-      callback_pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
-        physical_plan,
-        plan,
-        profile,
-        prefix.callback_prefix,
-        budget,
-        advanced,
-        true,
-        event_context,
-        true,
-      )
-      unless all_bindings.size == body_callbacks.size &&
+      bound_roles, callback_pairs = if roles = role_bindings
+                                      pairs = callback_pairs_override || prefix.body_callback_pairs
+                                      {roles, pairs}
+                                    else
+                                      inline_prefix = prefix.as?(ObjectDocumentInlinePrefix) ||
+                                                      raise(ArgumentError.new("unbound static Object callback schedule"))
+                                      event_context = inline_prefix.event_schedule_context
+                                      roles = if advanced
+                                                ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
+                                                  physical_plan,
+                                                  plan,
+                                                  profile,
+                                                  budget,
+                                                  event_context,
+                                                  true,
+                                                )
+                                              else
+                                                ObjectDocumentInlineCallbackOrder.body_lane_bindings(
+                                                  physical_plan,
+                                                  plan,
+                                                  profile,
+                                                  budget,
+                                                  event_context,
+                                                  true,
+                                                )
+                                              end
+                                      pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
+                                        physical_plan,
+                                        plan,
+                                        profile,
+                                        prefix.callback_prefix,
+                                        budget,
+                                        advanced,
+                                        true,
+                                        event_context,
+                                        true,
+                                      )
+                                      {roles, pairs}
+                                    end
+      unless bound_roles.size == body_callbacks.size &&
              callback_pairs.size == body_callbacks.size &&
              prefix.body_callback_slice_count == body_callbacks.size
         raise CorruptPartError.new("inline Object body callback count does not match its physical lane plan")
       end
       bindings = [] of BodyBinding
       ordinary_callbacks = [] of Tuple(String, Bytes)
-      all_bindings.each_with_index do |binding, index|
+      bound_roles.each_with_index do |binding, index|
         canonical_name, owner_kind, _owner_path, _role = binding
         pair = callback_pairs[index]
         slice = prefix.body_callback_slice_at(index)
@@ -267,7 +278,14 @@ module CrystalClick
       end
 
       advanced_shared_rows = if advanced
-                               ObjectSharedAdvancedInlineDecoder.decode(prefix, physical_plan, grid, budget)
+                               ObjectSharedAdvancedInlineDecoder.decode(
+                                 prefix,
+                                 physical_plan,
+                                 grid,
+                                 budget,
+                                 bound_roles,
+                                 callback_pairs,
+                               )
                              else
                                [] of Array(ObjectSharedMapRow)
                              end
@@ -289,7 +307,7 @@ module CrystalClick
     end
 
     private def self.read_prefix_callbacks(
-      prefix : ObjectDocumentInlinePrefix,
+      prefix : ObjectDocumentCallbackPrefix,
       budget : BinaryCodecBudget,
     ) : Hash(String, Bytes)
       count = prefix.prefix_callback_count.to_u64
@@ -306,7 +324,7 @@ module CrystalClick
     end
 
     private def self.read_body_callbacks(
-      prefix : ObjectDocumentInlinePrefix,
+      prefix : ObjectDocumentCallbackPrefix,
       budget : BinaryCodecBudget,
     ) : Array(Tuple(String, Bytes))
       count = prefix.body_callback_count.to_u64
@@ -319,7 +337,7 @@ module CrystalClick
     end
 
     private def self.validate_structure_callbacks!(
-      prefix : ObjectDocumentInlinePrefix,
+      prefix : ObjectDocumentCallbackPrefix,
       physical_plan : ObjectDocumentPhysicalPlan,
       prefix_callbacks : Hash(String, Bytes),
       typed_schema : Hash(String, BinaryDataType),

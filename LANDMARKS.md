@@ -1,5 +1,28 @@
 # Crystal Click landmarks
 
+## Preframed Object callback source and keyless prefix — W263
+
+- VERIFIED / root adversary ROBUST within single-owner preframed cursor and
+  existing inline-regression scope over `271c5abc2a749ad658a94f2a65dd84226725d367`.
+  The exact 18-file cohort passes 131 examples per DEBUG/RELEASE mode under the
+  unchanged serial guard, zero failures/errors/pending. Not the full suite.
+- Own-file source/prefix/reader owners reuse recursive serde. Literal full
+  Object/Dynamic statistics and inherited-depth controls pass. Static sites
+  remain keyless; real Dynamic children keep scoped keys and legacy registries.
+- Root REDs establish caller-budget-before-take, exact foreign-plan refusal
+  in capture/decoder/materializer, and same-source parser reservation. Rescued
+  nested re-entry cannot release the outer reservation or consume a second
+  duplicate-name event. Root executed both final modes; Luna review is correlated.
+- No raw mrk3-tail framing, Complete static body GREEN, parser-budget/metadata
+  rollback, immutable-array proof, thread safety, public/native admission or
+  performance claim. Failed operations are discarded; statistics offsets and
+  consumed-prefix retention remain obligations for the actual Compact reader.
+- Return pointers: [checkpoint evidence](.landmark/evidence/compact-object-callback-prefix-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Refresh after source,
+  tests, profile or consumer drift/widening. Next: three native root witnesses,
+  then unchanged 48-cell recursive/public/offline qualification. Goal ACTIVE;
+  memory/performance deferred, local atomic commit only, no push.
+
 ## Compact JSON native multi-chunk baseline — W263
 
 - VERIFIED / root adversary ROBUST for baseline instrumentation only, over
