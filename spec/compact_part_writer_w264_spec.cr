@@ -476,10 +476,6 @@ describe CrystalClick::CompactPartWriter do
       File.exists?(too_long_path).should be_false
 
       string = CrystalClick::BinaryDataType.primitive("String")
-      low_cardinality = CrystalClick::BinaryDataType.low_cardinality(string)
-      low_cardinality_values = ["a", "b"].map do |value|
-        CrystalClick::BinaryValue.low_cardinality(low_cardinality, CrystalClick::BinaryValue.string(value))
-      end
       variant = CrystalClick::BinaryDataType.variant([u64, string] of CrystalClick::BinaryDataType)
       variant_child = if variant.child_at(0).tag == CrystalClick::BinaryDataType::TAG_STRING
                         CrystalClick::BinaryValue.string("variant")
@@ -496,7 +492,6 @@ describe CrystalClick::CompactPartWriter do
       ]
 
       [
-        {"lc", low_cardinality, low_cardinality_values},
         {"variant", variant, variant_values},
         {"dynamic", dynamic, dynamic_values},
       ].each do |name, type, values|

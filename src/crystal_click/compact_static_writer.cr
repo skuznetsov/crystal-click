@@ -1,18 +1,9 @@
 module CrystalClick
-  # Writes the admitted stateless BinaryBulk lanes into one granule-major
-  # Compact tape and the selected plain MRK3/MRK4 coordinate grid. Metadata and
-  # publication remain owned by the table writer.
+  # Writes admitted static BinaryBulk columns into one granule-major Compact
+  # tape and the selected plain MRK3/MRK4 coordinate grid. Ordinary lanes keep
+  # their whole-grid encoding; LowCardinality state is reset independently per
+  # granule. Metadata and publication remain owned by the table writer.
   class CompactStaticWriter
-    private struct EncodedColumn
-      getter plan : CompactStaticCallbackPlan
-      getter streams : BinaryBulkStreams
-      getter callback_roles : Array(String)
-
-      def initialize(@plan : CompactStaticCallbackPlan, @streams : BinaryBulkStreams)
-        @callback_roles = @plan.callback_roles
-      end
-    end
-
     private struct GranuleLayout
       getter raw_size : UInt64
       getter compressed_size : UInt64
@@ -42,18 +33,10 @@ module CrystalClick
       validate_write_plan!(columns, plan, limits, column_count)
 
       plans = plan.column_plans
-      encoded = Array(EncodedColumn).new(column_count)
+      encoded = Array(CompactEncodedColumn).new(column_count)
       columns.each_with_index do |column, index|
         callback_plan = plans[index]
-        granules = column.granules
-        streams = BinaryBulkCodec.encode_with_budget(
-          callback_plan.type,
-          granules,
-          codec_budget,
-          profile: callback_plan.profile,
-        )
-        validate_stream_roster!(callback_plan, streams, mark_count)
-        encoded << EncodedColumn.new(callback_plan, streams)
+        encoded << CompactEncodedColumn.encode(callback_plan, column.granules, codec_budget)
       end
 
       slot_count = plan.slot_count
@@ -74,14 +57,13 @@ module CrystalClick
             # callback, even when every callback for that column is empty.
             position_queries << segment_raw_size
           end
-          column.callback_roles.each do |role|
+          column.plan.each_callback_event do |callback|
             if plan.mark_format.mrk4?
               # MRK4 has one ordered slot per actual callback. Equal offsets
               # are significant when this callback emits no bytes.
               position_queries << segment_raw_size
             end
-            stream = column.streams.stream(role)
-            start, length = stream_extent(stream, mark_index)
+            length = column.callback_bytes(callback, mark_index).size.to_u64
             segment_raw_size = checked_add_u64(segment_raw_size, length)
             if segment_raw_size > Int32::MAX.to_u64
               raise UnsupportedFormatError.new("Compact granule exceeds the in-memory raw tape domain")
@@ -308,38 +290,6 @@ module CrystalClick
       {rows_per_mark.size.to_i32, columns.size.to_i32, row_total}
     end
 
-    private def self.validate_stream_roster!(
-      plan : CompactStaticCallbackPlan,
-      streams : BinaryBulkStreams,
-      mark_count : Int32,
-    ) : Nil
-      unless streams.mark_count == mark_count
-        raise UnsupportedFormatError.new("Compact BinaryBulk streams differ from the selected mark grid")
-      end
-      expected_roles = plan.callback_roles.sort!
-      unless streams.roles == expected_roles
-        raise UnsupportedFormatError.new("Compact BinaryBulk role roster differs from the ordered callback plan")
-      end
-      expected_roles.each do |role|
-        stream = streams.stream(role)
-        unless stream.mark_count == mark_count && stream.offset_count == mark_count + 1
-          raise UnsupportedFormatError.new("Compact BinaryBulk lane has an incomplete offset grid")
-        end
-        previous = 0_u64
-        (mark_count + 1).times do |offset_index|
-          offset = stream.offset_at(offset_index)
-          if offset < previous || offset > stream.byte_size.to_u64
-            raise UnsupportedFormatError.new("Compact BinaryBulk lane offsets are not monotone")
-          end
-          previous = offset
-        end
-        unless previous == stream.byte_size.to_u64
-          raise UnsupportedFormatError.new("Compact BinaryBulk lane terminal offset differs from its bytes")
-        end
-      end
-      nil
-    end
-
     private def self.preflight_mark_grid!(
       slot_count : Int32,
       mark_count : Int32,
@@ -370,7 +320,7 @@ module CrystalClick
     end
 
     private def self.assemble_granule(
-      columns : Array(EncodedColumn),
+      columns : Array(CompactEncodedColumn),
       mark_index : Int32,
       expected_size : UInt64,
     ) : Bytes
@@ -380,16 +330,14 @@ module CrystalClick
       raw = Bytes.new(expected_size.to_i)
       cursor = 0
       columns.each do |column|
-        column.callback_roles.each do |role|
-          stream = column.streams.stream(role)
-          start, length = stream_extent(stream, mark_index)
-          if length > (raw.size - cursor).to_u64
+        column.plan.each_callback_event do |callback|
+          bytes = column.callback_bytes(callback, mark_index)
+          if bytes.size > raw.size - cursor
             raise UnsupportedFormatError.new("Compact callback exceeds its planned raw granule")
           end
-          unless length == 0_u64
-            slice = stream.borrowed_slice(start, length)
-            slice.copy_to(raw[cursor, slice.size])
-            cursor += slice.size
+          unless bytes.empty?
+            bytes.copy_to(raw[cursor, bytes.size])
+            cursor += bytes.size
           end
         end
       end
@@ -397,15 +345,6 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact callbacks do not fill their planned raw granule")
       end
       raw
-    end
-
-    private def self.stream_extent(stream : BinaryBulkStream, mark_index : Int32) : Tuple(UInt64, UInt64)
-      start = stream.offset_at(mark_index)
-      finish = stream.offset_at(mark_index + 1)
-      if finish < start || finish > stream.byte_size.to_u64
-        raise UnsupportedFormatError.new("Compact callback extent is outside its BinaryBulk lane")
-      end
-      {start, finish - start}
     end
 
     private def self.frame_count(raw_size : UInt64, frame_bytes : Int) : Int64

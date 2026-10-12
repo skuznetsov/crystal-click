@@ -1,6 +1,143 @@
 # Compact part writer frontier
 
-## Current extension: static plain MRK4 — W265
+## Current extension: Compact LowCardinality lifecycle — W266
+
+Status: W266 VERIFIED / root adversary ROBUST within the finite LC/plain
+MRK3/MRK4 witness and exact affected cohorts (2026-10-12).
+Baseline: `1b113ed1c8c1c0a3cd458e1d0dbbab64ef079d44` (2026-10-12).
+Risk: CAUTION (persistent recursive serialization and shared physical assembly).
+Rollback: revert only W266-owned changes; preserve the three user-owned W263
+specs, all original captures, and the already committed W265 byte oracle.
+The full types/MV/projection/performance goal remains ACTIVE.
+
+Source anchor: pinned upstream `ed30948f095ecb70679986d7d60e27ad770ae27a`,
+`MergeTreeDataPartWriterCompact.cpp:180-205,210-229`. Each column/granule
+constructs fresh serializer state and executes prefix/body/suffix; Compact sets
+`low_cardinality_max_dictionary_size = 0` and specialized prefix/suffix streams.
+The ordinary PartGlobalDictionary policy stages a whole-grid dictionary and
+reuses UPDATE state. AdditionalKeysOnly also stages a whole-grid key union,
+but writes UPDATE on every nonempty record. Neither whole-grid call is the
+source-owned Compact per-granule contract; calling the existing additional-key
+encoder with one granule preserves its semantics while resetting the key set.
+
+Delta: admit recursively located LowCardinality sites under the
+existing ordinary declaration/carrier gates, with source-owned per-granule
+prefix and self-contained additional-key body records. Reuse logical codec
+semantics and one physical assembler, not parallel writer implementations.
+Retain every empty callback, exact MRK4 prefix/body names, actual slot counts,
+MRK3 whole-column positions, cumulative budgets and staged publication checks.
+Do not change ordinary Wide dictionary policy or silently widen Variant,
+Dynamic/JSON, arbitrary profiles, compressed marks, table metadata or Compact
+MV/projection composition. Those remain separate unqualified boundaries.
+
+Falsifiers and execution order (retained as the slice's qualification contract):
+
+1. Run `spec/compact_part_writer_w266_spec.cr` against the current writer:
+   its owned multi-granule LC positive must fail on the existing rejection,
+   not on a compiler or fixture defect. Test-only preparation precedes code.
+2. Independently INSERT a stock native Compact part with root LC String,
+   nullable LC keys and a recursive Array LC site whose complete middle child
+   granule is empty. Inspect real prefix/body names, flags, coordinates and
+   literal full/middle/last/empty values; source shape alone is not qualification.
+3. Bind the callback lifecycle explicitly and encode each LC-containing
+   granule with a fresh logical additional-keys operation. Preserve the old
+   stateless path/default MRK3 bytes and original refusal/profile boundaries.
+4. Require native ATTACH/CHECK and literal SELECT of both generated mark
+   formats, plus stock-to-Crystal reads. A copy-only poisoned middle prefix or
+   dictionary/index association must be detected by the selected reader.
+5. Run focused and exact affected DEBUG/actual-RELEASE cohorts and old static
+   native/byte-oracle guards serially, with one worker/thread, 12 GiB
+   process-tree and 50%-free limits unchanged. Partitioned optimized runs do
+   not establish combined-RELEASE or full-suite qualification.
+
+Candidate implementation ownership after the owned LC RED: backend Luna owns
+`compact_static_callback_plan.cr`, `compact_static_writer.cr` and new own-file
+`CompactBinaryBulkCallback` / `CompactEncodedColumn` owners. Root owns their
+requires, this frontier, verification and the atomic commit. Test Luna owns
+the new W266 fixture/spec and the narrow old W264 LC-refusal expectation;
+native-tooling Luna owns only the new W266 helper/probe. No worker executes
+compilers, tests or native commands, and no shared LC/String codec is changed.
+
+Keep the body's logical-role roster separate from ordered physical callback
+events: an LC prefix and dictionary body bind the same dictionary role, but
+are distinct MRK4 slots. For an LC-containing column, use the same operation
+budget for one-granule AdditionalKeysOnly calls; emit each eight-byte prefix
+once and preserve its empty dictionary-body callback. For stateless columns,
+retain the existing whole-grid encoding and bytes. One physical assembler
+consumes both event schedules. The normalizer remains bounded to the existing
+self-contained Compact additional-key grammar; do not add part-global replay
+semantics to mimic the Wide writer.
+
+The native capture can run alongside candidate construction once the owned
+RED is observed; any contradictory stock lifecycle witness reopens the
+candidate before publication. Native acceptance remains mandatory for closure.
+
+### Observed W266 scope and qualification
+
+`CompactBinaryBulkCallback` owns each prefix/body event separately from its
+logical role. `CompactEncodedColumn` binds one-granule AdditionalKeysOnly
+operations to a common cumulative budget for LC-containing columns, retaining
+the original whole-grid path for stateless columns. The existing single
+physical assembler consumes both schedules; no shared LC or String codec,
+Wide dictionary policy, publication primitive or reader grammar changed.
+Each LC site emits its eight-byte version prefix on every parent granule,
+including an empty child granule, and retains the zero-byte dictionary body
+as a distinct MRK4 slot. Default MRK3 remains unchanged.
+
+Final serial DEBUG and actual RELEASE each pass two disjoint executables:
+32 writer/consumer paths / 202 examples and 11 LC/reader/adversary paths / 108,
+all zero failures/errors/pending. Production and source/test/script seals are
+held across the final runs. This is a 43-path union, not combined-executable,
+full-suite, all-type or fresh-clone qualification. The unchanged single-worker/
+thread, 12 GiB process-tree and 50%-free guards remain in force. Exact commands,
+revisions and scope: [W266 evidence](../.landmark/evidence/compact-part-writer-w266.json).
+
+The independent native fixture has eight rows, four real marks, root
+`LowCardinality(String)`, `LowCardinality(Nullable(String))` and
+`Array(LowCardinality(Nullable(String)))`; the complete middle Array child
+granule is empty. The final probe retains 33 bounded invocations / 132
+authenticated raw files in `/private/tmp/crystal-click-w266-full.mK58ZB`.
+Stock-to-Crystal reads and generated MRK3/MRK4 native ATTACH, exact schema/
+active Compact eight-row/five-mark census, CHECK=1 and literal full/middle/
+last/empty values pass (8/4/2/0 rows).
+
+Root independently decodes LZ4 and headerless marks, checks LC key/index
+associations, Array UInt64 deltas, repeated prefix/empty callbacks and every
+EOF pair. Stock and generated parts share the exact 601-byte decoded tape;
+all 55 MRK4 logical coordinates and 20 whole-column MRK3 coordinates agree.
+Stock/generated compression frames differ (16/20), not a physical-byte or
+speed claim. Local adversaries cover two LC sites inside a named Tuple,
+all-empty Array children, raw/NUL/empty/NULL Strings and repeated-prefix budgets
+(141-byte success / 140-byte refusal).
+
+A copy-only middle root prefix version 1 -> 2 changes exactly decoded byte
+173; frame extents/marks stay fixed and checksums are resealed. Local selected
+reading raises `UnsupportedFormatError`; unselected `pk` retains 103/104.
+Native ATTACH and CHECK=1 succeed, full/middle SELECT fail with code 117
+(`INCORRECT_DATA`, invalid LC version), and last/empty stay exact. CHECK alone
+does not prove serializer-state semantics. The original part stays unchanged.
+
+The fresh static W265 regression probe adds 68 bounded invocations / 272
+authenticated raw files in `/private/tmp/crystal-click-w266-static-native.lEPMj3`.
+Prior native values/guards and all 85 static logical positions remain intact;
+default MRK3 matches all nine frozen W264 files exactly (17902 bytes).
+The first full W266 run stopped on a Ruby inventory string/symbol key mismatch,
+after positive native reads; correcting only that probe and rerunning in a
+fresh root closes the tooling failure, not a native format RED.
+
+Remaining: Variant/Dynamic/JSON Compact writer lifecycle and context-owned
+layouts, further recursive/key/profile qualification, compressed marks and
+Compact MV/projection composition. The current reader still replays whole-grid
+lifecycle preparation for LC windows; no granule-only-I/O, single-prepare,
+large-part, RSS or performance claim. Prior bounded reader/Wide/metadata work
+remains separately qualified. The full goal stays ACTIVE; no push. Refresh
+after source/test/profile/capture/compiler/consumer drift, evidence loss or
+scope widening; revert only the W266 commit for rollback.
+
+## Previous extension: static plain MRK4 — W265
+
+This checkpoint describes W265's own qualification revision. Its LC exclusion
+is superseded only within W266's bounded scope above.
 
 Status: W265 VERIFIED / root adversary ROBUST within the finite static/plain
 MRK3/MRK4 witness, declared publication/budget guards and exact affected cohort

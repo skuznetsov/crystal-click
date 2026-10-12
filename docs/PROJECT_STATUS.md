@@ -1,6 +1,41 @@
 # CrystalClick project status
 
-Current bounded Compact physical writer (W265, 2026-10-12): VERIFIED / root
+Current bounded Compact LC writer (W266, 2026-10-12): VERIFIED / root adversary
+ROBUST within the finite plain-MRK3/MRK4 fixture and affected cohorts.
+The public `CompactPartWriter.write_uint64_columns` keeps MRK3 as its default
+and accepts explicit MRK4. Two small own-file owners separate callback events
+from logical roles and per-column encoding. LC-containing columns reuse the
+recursive AdditionalKeysOnly codec one granule at a time; stateless columns
+retain their old whole-grid bytes. One shared physical assembler still owns
+LZ4, marks/fold and staged publication.
+
+Final serial DEBUG and actual RELEASE each pass 32 writer/consumer paths / 202
+examples and 11 LC/reader/adversary paths / 108, all zero failures/errors/pending,
+with held production/source-test-script seals and unchanged resource guards.
+This disjoint 43-path union is not combined-executable or full-suite GREEN.
+Stock LC String/Nullable/Array reads and generated MRK3/MRK4 native ATTACH,
+CHECK=1 and literal 8/4/2/0-row windows pass. Root independently authenticates
+132 raw files, the same 601-byte stock/generated decoded payload, every EOF
+pair and all 55 MRK4 logical coordinates. A resealed middle prefix poison
+raises semantic errors locally and in native SELECT even though CHECK=1;
+unselected local `pk` and native last/empty windows remain valid. The old
+static native probe passes and default MRK3 retains all nine frozen W264 files.
+See [W266 evidence](../.landmark/evidence/compact-part-writer-w266.json) and the
+[writer frontier](COMPACT_PART_WRITER_FRONTIER.md).
+
+Next Compact writer boundary: Variant, then context-owned Dynamic/JSON and
+remaining type/layout/profile qualification. Compressed marks, arbitrary
+codecs/profiles, incremental append, arbitrary table metadata and Compact
+MV/projection composition remain open. Local generic admission is not native
+qualification of every LC key type or recursive combination. LC selected reads
+still use whole-grid preparation, not granule-only I/O. Existing bounded Wide/
+metadata MV/projection support remains separately qualified. Full types/MV/
+projections precede performance; the full goal stays ACTIVE, no speed-parity
+claim, local atomic commit only, no push. Three protected W263 specs and the
+52 original captures remain unchanged/outside this commit. Refresh on relevant
+source/test/profile/capture/compiler/consumer drift or temporary-evidence loss.
+
+Previous bounded Compact physical writer checkpoint (W265, 2026-10-12): VERIFIED / root
 adversary ROBUST within the finite static/plain-MRK3/MRK4 witness and exact
 affected cohort. `CompactPartWriter.write_uint64_columns` keeps plain
 MRK3 as its default and admits explicit `mark_format: CompactMarkFormat::Mrk4`.
@@ -23,8 +58,9 @@ native CHECK and exact values; do not report them as native rejection evidence.
 See the [writer frontier](COMPACT_PART_WRITER_FRONTIER.md) and
 [W265 evidence](../.landmark/evidence/compact-part-writer-w265.json).
 
-Remaining Compact writer work: per-granule stateful lifecycle, then
-LowCardinality/Variant/Dynamic/JSON and remaining recursive/profile combinations.
+Remaining work at W265: per-granule stateful lifecycle, then LC/Variant/Dynamic/
+JSON and remaining recursive/profile combinations. W266 supersedes only that
+checkpoint's LC boundary within its finite witness above.
 Local static admission is not native qualification of every admitted type.
 Compressed marks, arbitrary profiles/codecs, incremental append and Compact
 MV/projection composition remain open. Prior bounded Wide/metadata MV/projection
@@ -61,7 +97,8 @@ large-part scale or RSS claim. Outer topology admission does not establish all
 Object inner roles. Other schemas/owners and mixed Wide/Compact JSON `.values`
 remain unqualified. Performance work remains deferred per user priority.
 
-W265 extends the static MRK3 physical writer to plain MRK4 above. Logical serde, role
+W265 extends the static MRK3 writer to plain MRK4; W266 adds the bounded LC
+lifecycle above. Logical serde, role
 plans and value codecs are reused; Wide `.bin`/`.mrk2` envelopes are not
 concatenated. Stateful/context-owned Dynamic/JSON writer integration is the
 next separate native-qualified boundary.

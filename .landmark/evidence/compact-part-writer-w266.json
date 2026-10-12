@@ -1,0 +1,572 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W266 bounded Compact LowCardinality writer lifecycle",
+  "date": "2026-10-12",
+  "baseline": "1b113ed1c8c1c0a3cd458e1d0dbbab64ef079d44",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the finite plain-MRK3/MRK4 LC witness, checked lifecycle/callback association, cumulative budget/publication guards and exact affected cohorts.",
+    "goal_status": "ACTIVE",
+    "scope": "One nonempty sorted-UInt64-key part; default plain MRK3 or explicit plain MRK4; existing stateless codecs plus recursively located LC sites under unchanged declaration/carrier/profile gates; single LZ4 stream, String-v0/BASIC Map and staged publication. Native LC witness: 8 rows, 4 real marks plus EOF, root LowCardinality(String), LowCardinality(Nullable(String)), Array(LowCardinality(Nullable(String))) with an entirely empty middle child granule.",
+    "not_claimed": [
+      "Every LC key type, recursive combination or serializer profile is native-qualified",
+      "Variant/Dynamic/JSON Compact writes, compressed marks or arbitrary codecs",
+      "Incremental append, arbitrary table metadata or Compact MV/projection composition",
+      "Full reader/writer parity or replacement of separate bounded Wide/metadata qualification",
+      "Granule-only I/O, single-prepare, zero allocation, large-part scaling, RSS or speed parity",
+      "Combined-executable, full-suite or fresh-clone qualification",
+      "Latest upstream, all ClickHouse versions or identical source/runtime revisions"
+    ],
+    "evidence_policy": "Curated source-linked index, not proof by field presence, structural validation or model agreement."
+  },
+  "boundaries": {
+    "risk": "CAUTION: persistent recursive serialization, shared assembly and lifecycle state",
+    "changed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/compact_binary_bulk_callback.cr",
+      "src/crystal_click/compact_encoded_column.cr",
+      "src/crystal_click/compact_static_callback_plan.cr",
+      "src/crystal_click/compact_static_writer.cr",
+      "spec/compact_part_writer_w264_spec.cr",
+      "spec/compact_part_writer_w266_spec.cr",
+      "spec/support/compact_part_writer_w266_fixture.cr",
+      "scripts/compact_part_writer_w266_helper.cr",
+      "spec/compact_part_writer_w266_adversary_spec.cr",
+      "scripts/probe_compact_part_writer_w266.rb",
+      "docs/COMPACT_PART_WRITER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-part-writer-w266.json"
+    ],
+    "rollback": "Revert only the atomic W266 commit; preserve user-owned specs and original captures.",
+    "protected_specs": {
+      "spec/compact_json_w263_native_spec.cr": "f1a8c38033477981ebc85928660f7c297d09e85d7e00264d59fcf2f606d0e0ac",
+      "spec/compact_static_json_internal_w263_spec.cr": "497914c5acd908caef6adff695d202fd6a638e292707035dd21a0c3887607ae8",
+      "spec/compact_static_json_root_w263_adversary_spec.cr": "d3d858b157f31e7daee0d171b8d0d0d8684cd0ab0dcd505145308bddfccc0dc6"
+    },
+    "protected_command": "ruby -rdigest -e 'abort \"protected SHA differs: spec/compact_json_w263_native_spec.cr\" unless Digest::SHA256.file(\"spec/compact_json_w263_native_spec.cr\").hexdigest == \"f1a8c38033477981ebc85928660f7c297d09e85d7e00264d59fcf2f606d0e0ac\"; abort \"protected SHA differs: spec/compact_static_json_internal_w263_spec.cr\" unless Digest::SHA256.file(\"spec/compact_static_json_internal_w263_spec.cr\").hexdigest == \"497914c5acd908caef6adff695d202fd6a638e292707035dd21a0c3887607ae8\"; abort \"protected SHA differs: spec/compact_static_json_root_w263_adversary_spec.cr\" unless Digest::SHA256.file(\"spec/compact_static_json_root_w263_adversary_spec.cr\").hexdigest == \"d3d858b157f31e7daee0d171b8d0d0d8684cd0ab0dcd505145308bddfccc0dc6\"; puts \"protected W263 files unchanged\"'",
+    "protected_root_tool": "49088e",
+    "original_captures": {
+      "parts": 52,
+      "files": 544,
+      "bytes": 756378,
+      "command": "/usr/bin/ruby -rjson -rdigest -e 'captures=[[\"/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS\",\"parts/native_manifest.json\",\"3061107cdf55f6547c03bf210822902202839f84280b45da9379c3ae94b8fffb\",48,504,751082],[\"/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix\",\"native_manifest.json\",\"3598d71c810f75a21ca4f61c92cd10f3156d7791a1740e3aac94448f3a4b720d\",2,20,2453],[\"/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU\",\"native_manifest.json\",\"204fb519855352d5a414a517512de73a2c35a6e32081266f2462982f91c2bf39\",2,20,2843]]; totals=[0,0,0]; captures.each do |root,relative,sha,want_parts,want_files,want_bytes|; manifest=File.join(root,relative); raise \"manifest drift #{relative}\" unless Digest::SHA256.file(manifest).hexdigest==sha; parts=JSON.parse(File.read(manifest)).fetch(\"parts\"); parts=parts.values if parts.is_a?(Hash); files=0; bytes=0; parts.each do |part|; path=File.realpath(part.fetch(\"path\")); raise \"part escaped root\" unless path.start_with?(File.realpath(root)+\"/\"); inventory=part.fetch(\"file_inventory\"); names=inventory.map { |entry| entry.fetch(\"path\") }; raise \"physical roster drift\" unless Dir.children(path).sort==names.sort; inventory.each do |entry|; name=entry.fetch(\"path\"); raise \"unsafe inventory name\" unless File.basename(name)==name && ![\".\",\"..\"].include?(name); file=File.join(path,name); stat=File.lstat(file); raise \"nonregular inventory file\" unless stat.file? && !stat.symlink?; raise \"inventory size/hash drift #{name}\" unless stat.size==entry.fetch(\"bytes\") && Digest::SHA256.file(file).hexdigest==entry.fetch(\"sha256\"); files+=1; bytes+=stat.size; end; end; raise \"census drift\" unless [parts.size,files,bytes]==[want_parts,want_files,want_bytes]; totals[0]+=parts.size; totals[1]+=files; totals[2]+=bytes; puts \"#{root}: #{parts.size} parts / #{files} files / #{bytes} bytes unchanged\"; end; puts \"total=#{totals.join(\",\")}\"'",
+      "root_tool": "7723c3"
+    },
+    "authority": "Scoped local implementation and atomic commit; isolated temporary native stores only. No push, original capture mutation, unrelated staging, history rewrite or goal-complete update."
+  },
+  "source_anchors": {
+    "checkout": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+    "revision": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+    "files": [
+      {
+        "path": "src/Storages/MergeTree/MergeTreeDataPartWriterCompact.cpp",
+        "lines": "175-205,210-229",
+        "fact": "Fresh serializer state for each column/granule; prefix/body/suffix; low_cardinality_max_dictionary_size=0 and specialized prefix/suffix streams."
+      },
+      {
+        "path": "src/DataTypes/Serializations/SerializationLowCardinality.cpp",
+        "lines": "281-304,589-603",
+        "fact": "No global dictionary body/suffix under the source-owned Compact max-zero/single-dictionary settings; additional-key index records are self-contained."
+      },
+      {
+        "path": "src/DataTypes/Serializations/ISerialization.h",
+        "lines": "384-385",
+        "fact": "single_dictionary_for_part defaults true; the Compact writer leaves that default in place."
+      },
+      {
+        "path": "src/Storages/MergeTree/MergeTreeReaderCompactSingleBuffer.cpp",
+        "lines": "29-40",
+        "fact": "Per-mark LC dictionary maps are cleared."
+      },
+      {
+        "path": "src/DataTypes/Serializations/ISerialization.cpp",
+        "lines": "336-347",
+        "fact": "Filename escaping applies to named Tuple components; a dot is %2E."
+      },
+      {
+        "path": "src/DataTypes/Serializations/SerializationArray.cpp",
+        "lines": "156-172",
+        "fact": "ArraySizes are per-row UInt64 deltas, not ULEB128."
+      },
+      {
+        "path": "src/Columns/ColumnString.h",
+        "lines": "40,185-195",
+        "fact": "Current strings are not zero-terminated; insertData stores exact payload bytes."
+      },
+      {
+        "path": "src/DataTypes/Serializations/SerializationString.cpp",
+        "lines": "148-169",
+        "fact": "String-v0 writes varUInt(payload length) and payload; no trailing-NUL codec patch is warranted."
+      }
+    ],
+    "interpretation": "Pinned primary source and native observations agree within this scope. The source checkout and native build are distinct revisions."
+  },
+  "design": {
+    "callback_owner": "CompactBinaryBulkCallback is an own-file immutable event owner; prefix and dictionary-body callbacks may share a logical role but are distinct MRK4 slots.",
+    "encoded_owner": "CompactEncodedColumn runs existing AdditionalKeysOnly encoder with one granule and one cumulative operation budget for LC-containing columns. Each dictionary stream must contain exactly one eight-byte version prefix with empty body. Stateless whole-grid encoding remains unchanged.",
+    "physical_owner": "Existing one format-neutral assembler consumes callback_bytes for both sizing and assembly. MRK3 selects the first callback per column; MRK4 selects every event, including empty bodies and terminal pairs.",
+    "unchanged": [
+      "Shared LC/String codecs and Wide dictionary policy",
+      "Reader grammar and whole-grid lifecycle preparation",
+      "Public writer API, sorted UInt64 key contract and default MRK3",
+      "Publication primitive, cumulative budget policy and existing refusal/profile gates"
+    ],
+    "rejected_routes": [
+      "Part-global LC dictionary policy or a whole-grid additional-key union is not the source-owned fresh Compact per-granule contract.",
+      "Do not collapse prefix and empty dictionary body to a single MRK4 slot.",
+      "Do not infer native semantic compatibility from CHECK=1 alone.",
+      "Do not change String payload semantics based on a stale trailing-NUL hypothesis."
+    ]
+  },
+  "qualification": {
+    "guards": {
+      "workers": 1,
+      "threads": 1,
+      "compiler_single_module": true,
+      "outer_process_tree_mib": 12288,
+      "min_free_percent": 50,
+      "native_max_threads": 1,
+      "native_per_process_memory_bytes": 536870912,
+      "native_timeout_seconds": 10,
+      "guard_path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "guard_sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4"
+    },
+    "compiler": {
+      "version": "Crystal 1.21.0",
+      "llvm": "22.1.8",
+      "target": "aarch64-apple-darwin25.6.0"
+    },
+    "behavioral_red": {
+      "root_tool": "312fd5",
+      "examples": 3,
+      "errors": 3,
+      "reason": "Owned multi-granule LC positive encounters the previous LC refusal; earlier fixture/compiler preparation errors are not behavioral RED."
+    },
+    "oracle_corrections": {
+      "initial_debug_root_tool": "b7a3b1",
+      "examples": 108,
+      "failures": 2,
+      "reason": "Only expected named-Tuple escaped callback literals and 16-byte UInt64 ArraySizes zeros were wrong; corrected against pinned source, with no production change."
+    },
+    "writer_paths": [
+      "spec/compact_part_writer_w264_spec.cr",
+      "spec/writer_infrastructure_refactor_root_spec.cr",
+      "spec/multi_column_part_writer_w245_spec.cr",
+      "spec/multi_column_tuple_dynamic_w246_spec.cr",
+      "spec/static_binary_bulk_table_w247_spec.cr",
+      "spec/wide_part_writer_leaf_seam_spec.cr",
+      "spec/wide_part_writer_typed_mark_readback_spec.cr",
+      "spec/compressed_literal_position_plan_w240_spec.cr",
+      "spec/compressed_mark_positions_w194_spec.cr",
+      "spec/compressed_mark_transport_w124_root_spec.cr",
+      "spec/array_object_part_w185_spec.cr",
+      "spec/dynamic_table_budget_w211_spec.cr",
+      "spec/geo_array_w111_hostile_spec.cr",
+      "spec/geo_array_w111_writer_spec.cr",
+      "spec/geometry_recursive_w239_parts_spec.cr",
+      "spec/geometry_w114_consumers_spec.cr",
+      "spec/geometry_w114_reader_hostile_spec.cr",
+      "spec/geometry_w114_writer_spec.cr",
+      "spec/multipoint_w112_consumers_spec.cr",
+      "spec/object_inferred_dynamic_json_physical_w216_spec.cr",
+      "spec/point_w109_writer_spec.cr",
+      "spec/projection_publication_w256_spec.cr",
+      "spec/recursive_tuple_metadata_w218_spec.cr",
+      "spec/simple_aggregate_w161_guards_spec.cr",
+      "spec/simple_aggregate_w168_wide_spec.cr",
+      "spec/static_recursive_selected_metadata_w258_adversary_spec.cr",
+      "spec/wide_array_tuple_w107_metadata_spec.cr",
+      "spec/wide_map_tuple_w108_reader_spec.cr",
+      "spec/wide_ragged_selected_metadata_w261_spec.cr",
+      "spec/compact_part_writer_w265_spec.cr",
+      "spec/compact_part_writer_w265_adversary_spec.cr",
+      "spec/compact_part_writer_w265_publication_spec.cr"
+    ],
+    "lc_paths": [
+      "spec/compact_part_writer_w266_spec.cr",
+      "spec/compact_part_writer_w266_adversary_spec.cr",
+      "spec/compact_typed_w260_spec.cr",
+      "spec/compact_typed_w260_adversary_spec.cr",
+      "spec/binary_low_cardinality_storage_w142_spec.cr",
+      "spec/binary_low_cardinality_bulk_w143_spec.cr",
+      "spec/binary_low_cardinality_float_bulk_w144_spec.cr",
+      "spec/binary_low_cardinality_physical_w145_spec.cr",
+      "spec/array_object_low_cardinality_w185_spec.cr",
+      "spec/object_shared_path_low_cardinality_w196_adversary_spec.cr",
+      "spec/binary_bulk_physical_prefix_w151_spec.cr"
+    ],
+    "runs": [
+      {
+        "cohort": "writer",
+        "mode": "DEBUG",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w266-root.DUvz3j/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 360 12288 spec spec/compact_part_writer_w264_spec.cr spec/writer_infrastructure_refactor_root_spec.cr spec/multi_column_part_writer_w245_spec.cr spec/multi_column_tuple_dynamic_w246_spec.cr spec/static_binary_bulk_table_w247_spec.cr spec/wide_part_writer_leaf_seam_spec.cr spec/wide_part_writer_typed_mark_readback_spec.cr spec/compressed_literal_position_plan_w240_spec.cr spec/compressed_mark_positions_w194_spec.cr spec/compressed_mark_transport_w124_root_spec.cr spec/array_object_part_w185_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/geo_array_w111_hostile_spec.cr spec/geo_array_w111_writer_spec.cr spec/geometry_recursive_w239_parts_spec.cr spec/geometry_w114_consumers_spec.cr spec/geometry_w114_reader_hostile_spec.cr spec/geometry_w114_writer_spec.cr spec/multipoint_w112_consumers_spec.cr spec/object_inferred_dynamic_json_physical_w216_spec.cr spec/point_w109_writer_spec.cr spec/projection_publication_w256_spec.cr spec/recursive_tuple_metadata_w218_spec.cr spec/simple_aggregate_w161_guards_spec.cr spec/simple_aggregate_w168_wide_spec.cr spec/static_recursive_selected_metadata_w258_adversary_spec.cr spec/wide_array_tuple_w107_metadata_spec.cr spec/wide_map_tuple_w108_reader_spec.cr spec/wide_ragged_selected_metadata_w261_spec.cr spec/compact_part_writer_w265_spec.cr spec/compact_part_writer_w265_adversary_spec.cr spec/compact_part_writer_w265_publication_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+        "root_tool": "2cedb1",
+        "examples": 202,
+        "exit": 0,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "cohort": "writer",
+        "mode": "actual RELEASE",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w266-root.DUvz3j/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 360 12288 spec spec/compact_part_writer_w264_spec.cr spec/writer_infrastructure_refactor_root_spec.cr spec/multi_column_part_writer_w245_spec.cr spec/multi_column_tuple_dynamic_w246_spec.cr spec/static_binary_bulk_table_w247_spec.cr spec/wide_part_writer_leaf_seam_spec.cr spec/wide_part_writer_typed_mark_readback_spec.cr spec/compressed_literal_position_plan_w240_spec.cr spec/compressed_mark_positions_w194_spec.cr spec/compressed_mark_transport_w124_root_spec.cr spec/array_object_part_w185_spec.cr spec/dynamic_table_budget_w211_spec.cr spec/geo_array_w111_hostile_spec.cr spec/geo_array_w111_writer_spec.cr spec/geometry_recursive_w239_parts_spec.cr spec/geometry_w114_consumers_spec.cr spec/geometry_w114_reader_hostile_spec.cr spec/geometry_w114_writer_spec.cr spec/multipoint_w112_consumers_spec.cr spec/object_inferred_dynamic_json_physical_w216_spec.cr spec/point_w109_writer_spec.cr spec/projection_publication_w256_spec.cr spec/recursive_tuple_metadata_w218_spec.cr spec/simple_aggregate_w161_guards_spec.cr spec/simple_aggregate_w168_wide_spec.cr spec/static_recursive_selected_metadata_w258_adversary_spec.cr spec/wide_array_tuple_w107_metadata_spec.cr spec/wide_map_tuple_w108_reader_spec.cr spec/wide_ragged_selected_metadata_w261_spec.cr spec/compact_part_writer_w265_spec.cr spec/compact_part_writer_w265_adversary_spec.cr spec/compact_part_writer_w265_publication_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color --release",
+        "root_tool": "afcb43",
+        "examples": 202,
+        "exit": 0,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "cohort": "LC/reader/adversary",
+        "mode": "DEBUG",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w266-root.DUvz3j/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 240 12288 spec spec/compact_part_writer_w266_spec.cr spec/compact_part_writer_w266_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/binary_low_cardinality_storage_w142_spec.cr spec/binary_low_cardinality_bulk_w143_spec.cr spec/binary_low_cardinality_float_bulk_w144_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr spec/array_object_low_cardinality_w185_spec.cr spec/object_shared_path_low_cardinality_w196_adversary_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+        "root_tool": "8ba607",
+        "examples": 108,
+        "exit": 0,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "cohort": "LC/reader/adversary",
+        "mode": "actual RELEASE",
+        "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w266-root.DUvz3j/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 240 12288 spec spec/compact_part_writer_w266_spec.cr spec/compact_part_writer_w266_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/binary_low_cardinality_storage_w142_spec.cr spec/binary_low_cardinality_bulk_w143_spec.cr spec/binary_low_cardinality_float_bulk_w144_spec.cr spec/binary_low_cardinality_physical_w145_spec.cr spec/array_object_low_cardinality_w185_spec.cr spec/object_shared_path_low_cardinality_w196_adversary_spec.cr spec/binary_bulk_physical_prefix_w151_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color --release",
+        "root_tool": "e00ac1",
+        "examples": 108,
+        "exit": 0,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      }
+    ],
+    "cohort_boundary": "32 + 11 disjoint paths / 310 examples per mode in two executables. No combined-executable/full-suite GREEN or requalification of the historical 63-path JSON reader cohort.",
+    "held_seals": {
+      "production": {
+        "file_count": 593,
+        "seal": "472e055f18585e30e2fe6c686128d364b6fc3fab0d7e3c49d3795f6c5761cc33"
+      },
+      "source_test_script": {
+        "file_count": 1968,
+        "seal": "2dc7843d3462539f59a5f70f67147f4ed17ae7c8a6c4d5468197324d226de27e"
+      },
+      "algorithm": "SHA256 of sorted path + NUL + file SHA256 + newline; production src/**/*.cr, source/test/script src/**/*.cr + spec/**/*.cr + regular scripts/**/*.",
+      "command": "ruby -rjson -rdigest -e 'sets={production: Dir.glob(\"src/**/*.cr\").sort, source_test_script: (Dir.glob(\"src/**/*.cr\")+Dir.glob(\"spec/**/*.cr\")+Dir.glob(\"scripts/**/*\").select{|p| File.file?(p)}).sort}; result=sets.transform_values{|ps| {file_count: ps.size, seal: Digest::SHA256.hexdigest(ps.map{|p| p+\"\\0\"+Digest::SHA256.file(p).hexdigest+\"\\n\"}.join)}}; puts JSON.generate(result)'",
+      "before_root_tool": "5c1c2b",
+      "after_root_tool": "52e7fd"
+    },
+    "formatter": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w266-root.DUvz3j/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 120 12288 tool format --check src/crystal_click.cr src/crystal_click/compact_binary_bulk_callback.cr src/crystal_click/compact_encoded_column.cr src/crystal_click/compact_static_callback_plan.cr src/crystal_click/compact_static_writer.cr spec/compact_part_writer_w264_spec.cr spec/compact_part_writer_w266_spec.cr spec/support/compact_part_writer_w266_fixture.cr scripts/compact_part_writer_w266_helper.cr spec/compact_part_writer_w266_adversary_spec.cr",
+      "root_tool": "14416e",
+      "exit": 0
+    },
+    "ruby_syntax": {
+      "command": "ruby -c scripts/probe_compact_part_writer_w266.rb",
+      "exit": 0
+    },
+    "helper_build": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w266-root.DUvz3j/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 360 12288 build scripts/compact_part_writer_w266_helper.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color -o /private/tmp/crystal-click-w266-root.DUvz3j/compact_part_writer_w266_qualified_helper",
+      "root_tool": "fda33a",
+      "exit": 0,
+      "path": "/private/tmp/crystal-click-w266-root.DUvz3j/compact_part_writer_w266_qualified_helper",
+      "sha256": "df42a2057aaea53eb0c144c5236f07e7ea1f9bb2ed8a82474777c3d142720a71"
+    }
+  },
+  "native": {
+    "runtime": {
+      "path": "/private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2"
+    },
+    "full": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 180 12288 scripts/probe_compact_part_writer_w266.rb --clickhouse /private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped --crystal-helper /private/tmp/crystal-click-w266-root.DUvz3j/compact_part_writer_w266_qualified_helper --evidence-root /private/tmp/crystal-click-w266-full.mK58ZB",
+      "root_tool": "b14ff9",
+      "exit": 0,
+      "evidence_root": "/private/tmp/crystal-click-w266-full.mK58ZB",
+      "summary_sha256": "7c108c783249228bdba8fa4504458a4f2008a5b26a52b4a8661573d142a51c4d",
+      "invocations": 33,
+      "raw_files": 132,
+      "probe_source_sha256": "f60c9d83e35a34660043e7ffaf9b256de93b2c9e858f5187cc9fc620a6493a62",
+      "helper_source_sha256": "1785372b68c9e51ce2e2ed3b0861aea1f52a843ee0bdf069f7551dd8452799b5",
+      "exact_positive": "Stock-to-Crystal windows and generated MRK3/MRK4 ATTACH, exact schema/active Compact part census (8 rows/5 marks), CHECK=1 and literal full/middle/last/empty values (8/4/2/0 rows). Raw, empty, NUL and NULL String associations preserved."
+    },
+    "independent_root_audit": {
+      "command": "ruby -rjson -rdigest -e '\nroot=\"/private/tmp/crystal-click-w266-full.mK58ZB\"\ns=JSON.parse(File.read(File.join(root,\"summary.json\")))\nraise \"qualification status\" unless s.fetch(\"status\")==\"mrk3_mrk4_forward_qualification_observed\" && s.fetch(\"invocations\").size==33\nraw_files=0\ns.fetch(\"invocations\").each do |r|\n  %w[argv stdin stdout stderr].each do |kind|\n    path=File.join(root,\"invocations\",r.fetch(kind+\"_file\"))\n    raise \"raw scope\" unless File.realpath(path).start_with?(root+\"/\") && !File.symlink?(path)\n    raise \"raw hash\" unless Digest::SHA256.file(path).hexdigest==r.fetch(kind+\"_sha256\")\n    raise \"raw size\" if kind!=\"argv\" && File.size(path)!=r.fetch(kind+\"_bytes\")\n    raw_files+=1\n  end\n  raise \"process infra\" if r.fetch(\"timed_out\") || r[\"signal\"] || %w[spawn_error stdin_write_error stdout_read_error stderr_read_error].any?{|k|r[k]}\n  raise \"process bound\" unless r.fetch(\"timeout_seconds\")==10 && r.fetch(\"required_outer_run_safe_memory_limit_bytes\")==12288*1024*1024\n  raise \"native bound\" if r.fetch(\"max_memory_usage_applicable\") && (r.fetch(\"max_threads\")!=1 || r.fetch(\"max_memory_usage_bytes\")!=512*1024*1024)\n  raise \"identity\" unless r.fetch(\"binary_sha_before\")==r.fetch(\"expected_binary_sha256\") && r.fetch(\"binary_sha_after\")==r.fetch(\"expected_binary_sha256\")\nend\ns.fetch(\"source_hashes\").each{|p,h|raise \"source drift\" unless Digest::SHA256.file(p).hexdigest==h}\ndef inventory!(path, want)\n  raise \"file roster\" unless Dir.children(path).sort==want.fetch(\"files\").map{|e|e.fetch(\"path\")}.sort\n  want.fetch(\"files\").each do |e|\n    p=File.join(path,e.fetch(\"path\"))\n    raise \"part file identity\" unless File.file?(p) && !File.symlink?(p) && File.size(p)==e.fetch(\"size\") && Digest::SHA256.file(p).hexdigest==e.fetch(\"sha256\")\n  end\nend\ndef u64(bytes,p)\n  raise \"truncated u64\" if p<0 || p>bytes.bytesize-8\n  bytes.byteslice(p,8).unpack1(\"Q<\")\nend\ndef raw_and_frames(path)\n  data=File.binread(File.join(path,\"data.bin\")); raw=\"\".b; frames={}\n  co=0\n  while co<data.bytesize\n    raise \"frame header\" if co>data.bytesize-25 || data.getbyte(co+16)!=0x82\n    cs=data.byteslice(co+17,4).unpack1(\"V\"); size=data.byteslice(co+21,4).unpack1(\"V\")\n    raise \"frame bounds\" if cs<9 || co+16+cs>data.bytesize || raw.bytesize+size>64*1024*1024\n    input=data.byteslice(co+25,cs-9); output=\"\".b; p=0\n    while p<input.bytesize\n      token=input.getbyte(p); p+=1; literals=token>>4\n      if literals==15\n        loop do\n          raise \"literal extension\" if p>=input.bytesize\n          n=input.getbyte(p); p+=1; literals+=n; break if n!=255\n        end\n      end\n      raise \"literal extent\" if literals>input.bytesize-p\n      output << input.byteslice(p,literals); p+=literals\n      break if p==input.bytesize\n      raise \"match offset\" if p>input.bytesize-2\n      distance=input.byteslice(p,2).unpack1(\"v\"); p+=2; count=(token&15)+4\n      if (token&15)==15\n        loop do\n          raise \"match extension\" if p>=input.bytesize\n          n=input.getbyte(p); p+=1; count+=n; break if n!=255\n        end\n      end\n      raise \"match extent\" if distance.zero? || distance>output.bytesize || count>size-output.bytesize\n      count.times { output << output.getbyte(output.bytesize-distance) }\n    end\n    raise \"decoded frame size\" unless output.bytesize==size\n    frames[co]=[raw.bytesize,size]; raw << output; co+=16+cs\n  end\n  raise \"frame EOF\" unless co==data.bytesize\n  [data,raw,frames]\nend\ndef grid!(path, mode, slots, report, data, raw, frames)\n  bytes=File.binread(File.join(path,\"data.#{mode}\")); width=16*slots+8\n  raise \"marks width\" unless bytes.bytesize==width*5\n  coords=[]\n  5.times do |m|\n    rows=u64(bytes,m*width+16*slots)\n    raise \"parent rows\" unless rows==(m==4 ? 0 : 2)\n    positions=Array.new(slots) do |slot|\n      c=u64(bytes,m*width+16*slot); d=u64(bytes,m*width+16*slot+8)\n      if m==4\n        raise \"EOF pair\" unless c==data.bytesize && d.zero?\n        pos=raw.bytesize\n      else\n        f=frames.fetch(c); raise \"in-frame offset\" unless d<=f[1]\n        pos=f[0]+d\n      end\n      r=report.fetch(\"physical_mark_tape\").fetch(\"records\").fetch(m).fetch(\"pairs\").fetch(slot)\n      raise \"reported pair mismatch\" unless [r.fetch(\"compressed_offset\"),r.fetch(\"decompressed_offset\"),r.fetch(\"logical_position\")]==[c,d,pos]\n      pos\n    end\n    coords << positions\n  end\n  raise \"nonmonotone marks\" unless coords.flatten.each_cons(2).all?{|a,b|a<=b}\n  coords\nend\ndef lc_values(bytes, nullable)\n  return [[],[]] if bytes.empty?\n  flags=u64(bytes,0); raise \"LC flags\" unless (flags&0x700)==0x600 && (flags&~0x7ff).zero?\n  width={0=>1,1=>2,2=>4,3=>8}.fetch(flags&255); n=u64(bytes,8); raise \"LC dictionary bound\" if n>4096\n  cursor=16\n  keys=Array.new(n) do |i|\n    length=0; shift=0\n    loop do\n      raise \"LC key varint\" if cursor>=bytes.bytesize || shift>63\n      b=bytes.getbyte(cursor); cursor+=1; length|=(b&127)<<shift\n      break if (b&128).zero?\n      shift+=7\n    end\n    raise \"LC string extent\" if length>bytes.bytesize-cursor\n    value=bytes.byteslice(cursor,length); cursor+=length\n    raise \"LC null reserved key\" if nullable && i.zero? && !value.empty?\n    nullable && i.zero? ? \"N\" : \"S:#{value.unpack1(\"H*\")}\"\n  end\n  count=u64(bytes,cursor); cursor+=8\n  raise \"LC index extent\" unless count<=64 && cursor+count*width==bytes.bytesize\n  values=Array.new(count) do\n    ix=bytes.byteslice(cursor,width).unpack1({1=>\"C\",2=>\"v\",4=>\"V\",8=>\"Q<\"}.fetch(width)); cursor+=width\n    keys.fetch(ix)\n  end\n  [keys,values]\nend\nliteral_root=%w[726564 626c7565 6379616e 676f6c64 726564 626c7565 ff8041 \"\"].map{|h|h==\"\\\"\\\"\" ? \"S:\" : \"S:\"+h}\nliteral_maybe=[\"S:726564\",\"N\",\"N\",\"S:\",\"S:626c7565\",\"S:726564\",\"S:\",\"S:ff8041\"]\nliteral_items=[[\"S:726564\"],[\"N\",\"S:\"],[],[],[\"S:ff8041\"],[\"S:726564\",\"N\"],[\"S:677265656e\"],[\"S:\",\"S:00\",\"N\"]]\nexpected=Array.new(8){|i|{pk:101+i,root:literal_root[i],maybe:literal_maybe[i],items:literal_items[i]}}\nf=s.fetch(\"forward_qualification\")\nparts=[\n  [\"stock\",\"mrk4\",11,s.fetch(\"source\").fetch(\"part_path\"),s.fetch(\"crystal_reader\").fetch(\"report\"),s.fetch(\"source\").fetch(\"part_inventory\")],\n  [\"mrk3\",\"mrk3\",4,f.fetch(\"mrk3\").fetch(\"generated_part\").fetch(\"part_path\"),f.fetch(\"mrk3\").fetch(\"generated_part\").fetch(\"local\").fetch(\"report\"),f.fetch(\"mrk3\").fetch(\"generated_part\").fetch(\"inventory\")],\n  [\"mrk4\",\"mrk4\",11,f.fetch(\"mrk4\").fetch(\"generated_part\").fetch(\"part_path\"),f.fetch(\"mrk4\").fetch(\"generated_part\").fetch(\"local\").fetch(\"report\"),f.fetch(\"mrk4\").fetch(\"generated_part\").fetch(\"inventory\")]\n]\naudit={}; generated_raw={}; coordinate_grids={}\nparts.each do |label,mode,slots,path,report,inv|\n  inventory!(path,inv); data,raw,frames=raw_and_frames(path); coords=grid!(path,mode,slots,report,data,raw,frames); coordinate_grids[label]=coords\n  4.times do |m|\n    pos=coords[m]; stop=coords[m+1][0]; starts=mode==\"mrk4\" ? pos.values_at(0,1,4,7) : pos\n    raise \"pk bytes\" unless raw.byteslice(starts[0],starts[1]-starts[0]).unpack(\"Q<*\")==[101+2*m,102+2*m]\n    3.times do |site|\n      start=starts[site+1]; finish=site==2 ? stop : starts[site+2]\n      raise \"prefix version\" unless u64(raw,start)==1\n      body_start=start+8\n      if site==2\n        sizes=raw.byteslice(body_start,16).unpack(\"Q<*\")\n        raise \"ArraySizes delta\" unless sizes==literal_items[2*m,2].map(&:size)\n        body_start+=16\n      end\n      if mode==\"mrk4\"\n        prefix_slot=[1,4,7][site]; dict_slot=[2,5,9][site]; index_slot=[3,6,10][site]\n        raise \"prefix extent/body association\" unless pos[prefix_slot]+8==pos[prefix_slot+1] && pos[dict_slot]==pos[index_slot] && pos[index_slot]==body_start\n      end\n      wanted=site==0 ? literal_root[2*m,2] : (site==1 ? literal_maybe[2*m,2] : literal_items[2*m,2].flatten)\n      keys,values=lc_values(raw.byteslice(body_start,finish-body_start),site!=0)\n      raise \"LC literal indexes\" unless values==wanted\n      raise \"foreign per-mark keys\" unless (keys-(wanted+[\"N\",\"S:\"])).empty?\n    end\n  end\n  generated_raw[label]=raw\n  audit[label]={slots:slots,records:5,pairs:slots*5,frames:frames.size,compressed_bytes:data.bytesize,raw_bytes:raw.bytesize,raw_sha256:Digest::SHA256.hexdigest(raw),empty_child_mark:1,part_inventory_files:inv.fetch(\"files\").size}\nend\nraise \"stock/generated decoded tape differs\" unless generated_raw.fetch(\"mrk3\")==generated_raw.fetch(\"mrk4\") && generated_raw.fetch(\"stock\")==generated_raw.fetch(\"mrk4\")\nraise \"stock/generated MRK4 logical coordinates\" unless coordinate_grids.fetch(\"stock\")==coordinate_grids.fetch(\"mrk4\")\nraise \"MRK3 whole-column logical coordinates\" unless coordinate_grids.fetch(\"mrk3\")==coordinate_grids.fetch(\"mrk4\").map{|grid|grid.values_at(0,1,4,7)}\n%w[mrk3 mrk4].each do |mode|\n  positive=f.fetch(mode); raise \"CHECK not exact\" unless positive.fetch(\"check\").fetch(\"rows\")==[\"all_1_1_0\\t1\\t\"]\n  windows={\"full\"=>expected,\"middle\"=>expected[2,4],\"last\"=>expected[6,2],\"empty\"=>[]}\n  windows.each do |window,want|\n    r=positive.fetch(\"selects\").fetch(window).fetch(\"invocation\")\n    lines=File.binread(File.join(root,\"invocations\",r.fetch(\"stdout_file\"))).lines.map(&:chomp)\n    tag=\"__W266_NATIVE_GENERATED_#{mode.upcase}_#{window.upcase}__\"\n    fields=lines.select{|line|line.start_with?(tag+\"\\t\")}.map{|line|line.split(\"\\t\",-1).drop(1)}\n    if window==\"empty\"\n      raise \"native empty\" unless fields==[[\"0\"]]\n    else\n      got=fields.map{|v|{pk:Integer(v[0]),root:\"S:\"+v[1],maybe:v[2],items:JSON.parse([v[3]].pack(\"H*\")).map{|x|x.nil? ? \"N\" : x}}}\n      raise \"native independent literals\" unless got==want\n    end\n  end\nend\np=f.fetch(\"poisoned_middle_prefix\")\nmutant=p.fetch(\"copy_audit\").fetch(\"mutant_inventory\")\nmutant_path=File.join(root,\"parts/poison_mrk4/all_1_1_0\")\ninventory!(mutant_path,mutant); _,poison_raw,_=raw_and_frames(mutant_path)\noriginal=generated_raw.fetch(\"mrk4\")\ndiff=(0...original.bytesize).select{|i|original.getbyte(i)!=poison_raw.getbyte(i)}\nraise \"not one-byte version poison\" unless diff==[coordinate_grids.fetch(\"mrk4\")[1][1]] && original.getbyte(diff[0])==1 && poison_raw.getbyte(diff[0])==2\nraise \"selected semantic refusal\" unless p.fetch(\"local_selected_reader\").fetch(\"error_class\")==\"CrystalClick::UnsupportedFormatError\"\nraise \"unselected pk\" unless p.fetch(\"local_unselected_pk_control\").fetch(\"key_values\")==%w[103 104]\nraise \"native poison changed observation\" unless p.fetch(\"native_attach\").fetch(\"state\")==\"success\" && p.fetch(\"native_check\").fetch(\"exact_success\") &&\n  %w[full middle].all?{|w|p.fetch(\"native_selects\").fetch(w).fetch(\"state\")==\"server_exception\"} &&\n  %w[last empty].all?{|w|p.fetch(\"native_selects\").fetch(w).fetch(\"state\")==\"exact_values\"}\nputs JSON.generate({status:\"independent_lc_literals_grid_and_raw_audit_pass\",summary_sha256:Digest::SHA256.file(File.join(root,\"summary.json\")).hexdigest,invocations:33,raw_files:raw_files,parts:audit,stock_and_generated_equal_decoded_tape:true,stock_generated_mrk4_equal_logical_pairs:55,generated_mrk3_equal_whole_column_pairs:20,poison_raw_changed_offsets:diff,poison_native_check:1,poison_native_full_middle:\"server_exception\",poison_native_last_empty:\"exact_values\"})\n'",
+      "root_tool": "925f3d",
+      "observed": {
+        "status": "independent_lc_literals_grid_and_raw_audit_pass",
+        "summary_sha256": "7c108c783249228bdba8fa4504458a4f2008a5b26a52b4a8661573d142a51c4d",
+        "invocations": 33,
+        "raw_files": 132,
+        "parts": {
+          "stock": {
+            "slots": 11,
+            "records": 5,
+            "pairs": 55,
+            "frames": 16,
+            "compressed_bytes": 865,
+            "raw_bytes": 601,
+            "raw_sha256": "6e6e35907d108be440659406575f1584dcb2eea26b74d66e3137be2c66e2ee8a",
+            "empty_child_mark": 1,
+            "part_inventory_files": 11
+          },
+          "mrk3": {
+            "slots": 4,
+            "records": 5,
+            "pairs": 20,
+            "frames": 20,
+            "compressed_bytes": 1140,
+            "raw_bytes": 601,
+            "raw_sha256": "6e6e35907d108be440659406575f1584dcb2eea26b74d66e3137be2c66e2ee8a",
+            "empty_child_mark": 1,
+            "part_inventory_files": 9
+          },
+          "mrk4": {
+            "slots": 11,
+            "records": 5,
+            "pairs": 55,
+            "frames": 20,
+            "compressed_bytes": 1140,
+            "raw_bytes": 601,
+            "raw_sha256": "6e6e35907d108be440659406575f1584dcb2eea26b74d66e3137be2c66e2ee8a",
+            "empty_child_mark": 1,
+            "part_inventory_files": 10
+          }
+        },
+        "stock_and_generated_equal_decoded_tape": true,
+        "stock_generated_mrk4_equal_logical_pairs": 55,
+        "generated_mrk3_equal_whole_column_pairs": 20,
+        "poison_raw_changed_offsets": [
+          173
+        ],
+        "poison_native_check": 1,
+        "poison_native_full_middle": "server_exception",
+        "poison_native_last_empty": "exact_values"
+      },
+      "interpretation": "Independent Ruby LZ4 decoding, headerless mark parsing, LC dictionaries/indexes and native stdout literals; raw-file SHA/lengths, process bounds/pins and part inventories authenticated. Equal decoded bytes/coordinates do not assert equal compressed bytes or speed."
+    },
+    "prefix_poison": {
+      "scope": "Copy of generated MRK4 only; reseal checksums, retain frame extents/mark bytes, change exactly raw byte 173 from prefix version 1 to 2.",
+      "local_selected": "UnsupportedFormatError: unsupported Compact LowCardinality state-prefix version",
+      "local_unselected_pk": [
+        103,
+        104
+      ],
+      "native_attach": "success",
+      "native_check": "success; exact CHECK=1",
+      "native_full_middle": "server_exception; code 117 INCORRECT_DATA / Invalid version for SerializationLowCardinality key column; reading root from mark 1",
+      "native_last_empty": "exact values",
+      "original_source": "unchanged",
+      "interpretation": "Semantic-version sensitivity despite valid checksums; separate ATTACH/CHECK/SELECT outcomes, not a claim of native CHECK rejection."
+    },
+    "static_regression": {
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 TMPDIR=/private/tmp /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 600 12288 scripts/probe_compact_part_writer_w265.rb --clickhouse /private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped --crystal-helper /private/tmp/crystal-click-w266-root.DUvz3j/compact_part_writer_w265_helper --evidence-root /private/tmp/crystal-click-w266-static-native.lEPMj3",
+      "root_tool": "46cf93",
+      "exit": 0,
+      "evidence_root": "/private/tmp/crystal-click-w266-static-native.lEPMj3",
+      "root_audit_command": "ruby -rjson -rdigest -e '\ns=JSON.parse(File.read(\"/private/tmp/crystal-click-w266-static-native.lEPMj3/summary.json\"))\nraise \"static status\" unless s.fetch(\"status\")==\"observed\" && s.fetch(\"invocations\").size==68\nfiles=0\ns.fetch(\"invocations\").each do |r|\n  %w[argv stdin stdout stderr].each do |kind|\n    path=File.join(\"/private/tmp/crystal-click-w266-static-native.lEPMj3/invocations\",r.fetch(kind+\"_file\"))\n    raise \"raw path\" unless File.realpath(path).start_with?(\"/private/tmp/crystal-click-w266-static-native.lEPMj3/\") && File.file?(path) && !File.symlink?(path)\n    raise \"raw sha #{kind}\" unless Digest::SHA256.file(path).hexdigest==r.fetch(kind+\"_sha256\")\n    raise \"raw length #{kind}\" if kind!=\"argv\" && File.size(path)!=r.fetch(kind+\"_bytes\")\n    files+=1\n  end\n  raise \"process bounds\" unless r.fetch(\"timeout_seconds\")==10 && r.fetch(\"required_outer_run_safe_memory_limit_bytes\")==12288*1024*1024 && (!r.fetch(\"max_memory_usage_applicable\") || (r.fetch(\"max_threads\")==1 && r.fetch(\"max_memory_usage_bytes\")==512*1024*1024))\n  raise \"process infra\" if r.fetch(\"timed_out\") || r[\"signal\"] || %w[spawn_error stdin_write_error stdout_read_error stderr_read_error].any?{|k| r[k]}\n  raise \"identity\" unless r.fetch(\"binary_sha_before\")==r.fetch(\"expected_binary_sha256\") && r.fetch(\"binary_sha_after\")==r.fetch(\"expected_binary_sha256\")\nend\nraise \"source hashes\" unless s.fetch(\"source_hashes_before\")==s.fetch(\"source_hashes_after\")\ns.fetch(\"source_hashes_after\").each{|p,h| raise \"source drift\" unless Digest::SHA256.file(p).hexdigest==h}\n%w[runtime helper].each{|key| r=s.fetch(key); raise \"pin drift\" unless r.fetch(\"sha256_before\")==r.fetch(\"sha256_after\") && Digest::SHA256.file(r.fetch(\"path\")).hexdigest==r.fetch(\"sha256_after\")}\nfrozen_root=\"/private/tmp/crystal-click-w264-native.RyQZdG\"\nfrozen_summary_sha=Digest::SHA256.file(File.join(frozen_root,\"summary.json\")).hexdigest\nraise \"frozen summary drift\" unless frozen_summary_sha==\"6bbdc5918ab1c293775d03d3c5394e143b100bf92239d6a8f00134ddfcc14d95\"\nold=File.join(frozen_root,\"generated/all_1_1_0\")\ncurrent=\"/private/tmp/crystal-click-w266-static-native.lEPMj3/parts/generated_mrk3/all_1_1_0\"\nnames=Dir.children(old).sort\nraise \"part census\" unless names.size==9 && names==Dir.children(current).sort\nbytes=0\nfile_shas={}\nnames.each do |name|\n  a=File.join(old,name); b=File.join(current,name)\n  raise \"unsafe file\" unless File.file?(a) && File.file?(b) && !File.symlink?(a) && !File.symlink?(b)\n  raise \"byte oracle #{name}\" unless File.binread(a)==File.binread(b)\n  bytes+=File.size(a); file_shas[name]=Digest::SHA256.file(b).hexdigest\nend\nraise \"bytes\" unless bytes==17902\n%w[generated_mrk3_native generated_native].each do |key|\n  part=s.fetch(key)\n  raise \"native attach\" unless part.fetch(\"attach\").fetch(\"process_classification\")==\"success\"\n  raise \"native check\" unless part.fetch(\"check\").fetch(\"exact_success\")\n  raise \"native windows\" unless part.fetch(\"selects\").values.all?{|v| v.fetch(\"state\")==\"exact_values\"}\nend\nputs JSON.generate({status:\"raw_static_and_frozen_byte_oracle_pass\",summary_sha256:Digest::SHA256.file(\"/private/tmp/crystal-click-w266-static-native.lEPMj3/summary.json\").hexdigest,raw_files:files,frozen_summary_sha256:frozen_summary_sha,equal_files:names.size,equal_bytes:bytes,file_sha256:file_shas,generated_native_windows:{\"mrk3\"=>s.fetch(\"generated_mrk3_windows\"),\"mrk4\"=>s.fetch(\"generated_windows\")},tape_comparison:s.fetch(\"tape_comparison\")})\n'",
+      "root_audit_tool": "58cfbe",
+      "observed": {
+        "status": "raw_static_and_frozen_byte_oracle_pass",
+        "summary_sha256": "24c2586957fc1c81a09ff522ae4180d7ab9042e6cf409dab63be0f492e8267d3",
+        "raw_files": 272,
+        "frozen_summary_sha256": "6bbdc5918ab1c293775d03d3c5394e143b100bf92239d6a8f00134ddfcc14d95",
+        "equal_files": 9,
+        "equal_bytes": 17902,
+        "file_sha256": {
+          "checksums.txt": "0426e5204b5f39cda9f9a53edf79fb2178aa05b2cc777fc0004c7f67042ff062",
+          "columns.txt": "cf697c8d445cecc17be0697150cc3248f53bf538928dc9eca1a620b36ca21566",
+          "count.txt": "2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3",
+          "data.bin": "85c93c2efa737641df25a4be14abd15fbd5800160ebed938d96581b18dbfbddb",
+          "data.mrk3": "5ff4b5f28ce4321a30d6676040bcd587b2076a04b3f0878991d64887323b86d3",
+          "default_compression_codec.txt": "e19f0a8e2aed18b35a258ade0d735df004f417f60e7c6ec237751ac0f4b55959",
+          "metadata_version.txt": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+          "primary.idx": "9be5e8db71d3919cbf06d439605cc434994959dd3e0810c1f5d35325872b3fcc",
+          "serialization.json": "b4aa0589e6d79ccbddc6c1c402a58680c66ee9db61514761c1316f860f955bfb"
+        },
+        "generated_native_windows": {
+          "mrk3": {
+            "full": {
+              "state": "exact_values",
+              "rows": 8,
+              "expected_sha256": "29e3a0df5a969a7c54fe4141254b94d6dda10dff6e90ea837631876ef590e2ad"
+            },
+            "middle": {
+              "state": "exact_values",
+              "rows": 4,
+              "expected_sha256": "e4b249547c3c69cf3b68f2ddf0d44b21a0b6cac99fe66831b3629432d090cadd"
+            },
+            "last": {
+              "state": "exact_values",
+              "rows": 1,
+              "expected_sha256": "32ae347e9fa8751ed2cf0a1b77a0875a274574ce3395f00bb01608a6b3cad658"
+            },
+            "empty": {
+              "state": "exact_values",
+              "rows": 1,
+              "expected_sha256": "c9991d76ffd105601e35aeb4b7f403a8679f6672ee6853f3486e00c6d477eb4c"
+            }
+          },
+          "mrk4": {
+            "full": {
+              "state": "exact_values",
+              "rows": 8,
+              "expected_sha256": "29e3a0df5a969a7c54fe4141254b94d6dda10dff6e90ea837631876ef590e2ad"
+            },
+            "middle": {
+              "state": "exact_values",
+              "rows": 4,
+              "expected_sha256": "e4b249547c3c69cf3b68f2ddf0d44b21a0b6cac99fe66831b3629432d090cadd"
+            },
+            "last": {
+              "state": "exact_values",
+              "rows": 1,
+              "expected_sha256": "32ae347e9fa8751ed2cf0a1b77a0875a274574ce3395f00bb01608a6b3cad658"
+            },
+            "empty": {
+              "state": "exact_values",
+              "rows": 1,
+              "expected_sha256": "0dd6d452d53a349db3d7937e3e39a9161d1335fe3e7b60678688b89f1eb5d3aa"
+            }
+          }
+        },
+        "tape_comparison": {
+          "stock_raw_sha256": "eedef77934e10961fc7eabaca07bb87fdf2177ad6f3b9648088a63b3487b44f7",
+          "crystal_raw_sha256": "eedef77934e10961fc7eabaca07bb87fdf2177ad6f3b9648088a63b3487b44f7",
+          "stock_raw_bytes": 8970,
+          "crystal_raw_bytes": 8970,
+          "default_mrk3_raw_sha256": "eedef77934e10961fc7eabaca07bb87fdf2177ad6f3b9648088a63b3487b44f7",
+          "default_mrk3_raw_bytes": 8970,
+          "equal_logical_mark_coordinates": true,
+          "compressed_coordinate_bytes_compared": false,
+          "native_logical_coordinates": [
+            [
+              0,
+              16,
+              32,
+              39,
+              41,
+              57,
+              73,
+              73,
+              73,
+              89,
+              90,
+              98,
+              102,
+              104,
+              120,
+              136,
+              142
+            ],
+            [
+              150,
+              166,
+              182,
+              203,
+              205,
+              221,
+              237,
+              239,
+              255,
+              271,
+              274,
+              298,
+              301,
+              303,
+              319,
+              335,
+              344
+            ],
+            [
+              360,
+              376,
+              392,
+              8591,
+              8593,
+              8609,
+              8625,
+              8627,
+              8643,
+              8659,
+              8662,
+              8686,
+              8700,
+              8702,
+              8718,
+              8734,
+              8738
+            ],
+            [
+              8746,
+              8762,
+              8778,
+              8788,
+              8790,
+              8806,
+              8822,
+              8823,
+              8831,
+              8847,
+              8851,
+              8883,
+              8896,
+              8898,
+              8914,
+              8930,
+              8946
+            ],
+            [
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970,
+              8970
+            ]
+          ]
+        }
+      },
+      "interpretation": "Fresh current-production W265 helper/probe: native stateless MRK3/MRK4, old guards/tape/coordinates and nine-file frozen default-MRK3 byte oracle preserved."
+    },
+    "first_full_tooling_failure": {
+      "evidence_root": "/private/tmp/crystal-click-w266-full.nAtYo4",
+      "fatal_error": "KeyError: key not found: \"size\"",
+      "invocations_before_stop": 23,
+      "reason": "Probe's source inventory uses Ruby symbol :size, but one poison metadata check fetched string size. The positive native path had already passed; only the probe key was changed and the complete full mode rerun in a fresh isolated root. Not a native format RED."
+    },
+    "availability": "All raw records, captured/generated/mutant parts, binaries and source pins are local temporary artifacts, not committed datasets. Loss requires regeneration/requalification; the packet alone is not proof."
+  },
+  "adversary": {
+    "verdict": "ROBUST within the declared finite scope",
+    "independence": "Luna source/test/tooling review is same-lineage and correlated. Root independently executes every serial command, checks current code/source, authenticates raw records and independently reconstructs LZ4/marks/LC/native literal oracles.",
+    "local_counterexamples": [
+      "Named Tuple with two independent LC sites and escaped callback names",
+      "Every child granule empty: repeated prefixes retained, dictionary/index bodies empty, ArraySizes UInt64 zero deltas",
+      "Exact repeated-prefix cumulative budget: 141 passes / 140 rejects; public metadata+key+LC cap refusal leaves no stage",
+      "Old stateless callback/slot/publication guards and byte oracle unchanged"
+    ],
+    "residual": "Finite tiny String/Nullable/Array native witness; no large dictionaries/all key widths, every recursive owner/profile, granule-only-I/O or scale/performance result."
+  },
+  "continuity": {
+    "next": "Variant Compact writer lifecycle, then context-owned Dynamic/JSON and remaining types/layouts/profiles; Compact MV/projections before measured memory/performance optimization.",
+    "prior_frontiers": "W265 stateless writer and W263 bounded public/offline Compact JSON reader, plus existing bounded Wide/metadata MV/projection work, remain revision-scoped separate evidence.",
+    "decay_trigger": "Relevant source, tests/consumer, fixture/profile, compiler/flags/runtime/pins or capture changes; temporary-evidence loss or scope widening.",
+    "refresh": "Refresh source/pins, execute exact affected cohorts under unchanged serial guards, regenerate stock-first native qualification and repeat literal/coordinate/byte/poison guards before recomposing claims.",
+    "failure_policy": "Reopen only dependent claims; preserve captures and user-owned files, do not infer capability from guards or CHECK. Goal remains ACTIVE; no push."
+  }
+}

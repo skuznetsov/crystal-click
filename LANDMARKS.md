@@ -1,5 +1,47 @@
 # Crystal Click landmarks
 
+## Bounded Compact LowCardinality writer lifecycle — W266
+
+- VERIFIED / root adversary ROBUST over baseline
+  `1b113ed1c8c1c0a3cd458e1d0dbbab64ef079d44`, finite plain-MRK3/MRK4 LC witness
+  and exact affected cohorts (2026-10-12). Final serial DEBUG and actual RELEASE
+  each pass 32 paths / 202 and 11 paths / 108, zero failures/errors/pending.
+  Held production/source-test-script seals; no combined-executable/full-suite
+  claim. Single worker/thread, 12 GiB process-tree and 50%-free guards unchanged.
+- `CompactBinaryBulkCallback` separates physical prefix/body events from
+  logical roles. `CompactEncodedColumn` reuses one-granule AdditionalKeysOnly
+  calls with a cumulative budget; stateless encoding stays unchanged. One
+  physical assembler emits repeated eight-byte LC prefixes, distinct empty
+  dictionary-body slots, all MRK3/MRK4 positions and EOF pairs. No shared LC/
+  String codec, Wide policy, reader grammar or publication primitive change.
+- Independent stock/native witness: eight rows/four real marks, LC String,
+  nullable LC keys and an Array LC site with an entirely empty middle child
+  granule. Final root `/private/tmp/crystal-click-w266-full.mK58ZB` (`b14ff9`):
+  33 bounded invocations / 132 authenticated raw files. Stock-to-Crystal reads,
+  both generated formats ATTACH/CHECK=1 and literal 8/4/2/0 values pass. Root
+  independently checks key/index associations and raw MRK3/MRK4 grids:
+  same 601-byte decoded tape, all 55 MRK4 / 20 MRK3 logical positions (`925f3d`).
+  Stock/generated compression frames differ (16/20), not speed/physical parity.
+- Resealed copy-only middle root prefix 1 -> 2 changes only decoded byte 173.
+  Local selected reader rejects its version; local unselected pk gives 103/104.
+  Native ATTACH/CHECK=1 pass, full/middle SELECT give code 117 / invalid LC
+  version, last/empty remain exact. Checksum success is not serde-state proof.
+  First full tooling run stopped on a Ruby symbol/string size key mismatch,
+  not native format failure; fresh-root corrected run passes.
+- Prior static probe: 68 invocations / 272 authenticated raw files; all nine
+  frozen W264 default-MRK3 files equal (17902 bytes, `58cfbe`). Local adversaries
+  cover named-Tuple independent LC sites, all-empty children and repeated-prefix
+  budgets. All 52 original captures / 544 files / 756378 bytes and three
+  protected W263 specs remain unchanged and outside staging.
+- Return pointers: [writer frontier](docs/COMPACT_PART_WRITER_FRONTIER.md) and
+  [W266 evidence](.landmark/evidence/compact-part-writer-w266.json).
+  Next: Variant/Dynamic/JSON writer lifecycle, remaining combinations/profiles,
+  Compact MV/projections, then measured optimization. LC selected reads still
+  replay whole-grid preparation. Prior Wide/metadata support is separate; full
+  goal ACTIVE, no full writer parity, RSS or <=10% speed claim, local commit
+  only/no push. Refresh after relevant source/test/profile/capture/compiler/
+  consumer drift, evidence loss or widening. Rollback: revert W266 only.
+
 ## Bounded static Compact plain-MRK4 writer extension — W265
 
 - VERIFIED / root adversary ROBUST over baseline
