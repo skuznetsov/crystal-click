@@ -168,6 +168,42 @@ module CrystalClick
       nil
     end
 
+    # Metadata-only prepared-site binding for an MRK3 root Object. The byte
+    # shard has already been authenticated by validate_shard_provenance! when
+    # its coordinate context was constructed; this additionally proves that
+    # it is the single whole-column slot and exact saved mark interval named by
+    # the prepared root identity.
+    def validate_mrk3_site!(
+      column_name : String,
+      physical_prefix : String,
+      mark_index : Int,
+      shards : Array(CompactPartPhysicalShard),
+    ) : Nil
+      unless @mode.mrk3? && !column_name.empty? &&
+             PhysicalStreamName.escape(column_name) == physical_prefix &&
+             shards.size == 1
+        raise_invalid_mrk3_site!
+      end
+
+      shard = shards[0]
+      unless shard.stream_name.nil? &&
+             @columns_substreams.slot_column_matches?(shard.slot_index, column_name) &&
+             mark_index >= 0 && mark_index < @mark_index.mark_count
+        raise_invalid_mrk3_site!
+      end
+
+      start = @mark_index.position_at(mark_index, shard.slot_index)
+      finish = if shard.slot_index + 1 < @mark_index.slot_count
+                 @mark_index.position_at(mark_index, shard.slot_index + 1)
+               else
+                 @mark_index.position_at(mark_index + 1, 0)
+               end
+      unless shard.logical_start == start && shard.logical_end == finish
+        raise_invalid_mrk3_site!
+      end
+      nil
+    end
+
     # Detached parent-row grid validated while the Compact mark index was
     # opened. Typed consumers use the same grid as the physical windows; this
     # snapshot does not read or authenticate payload bytes.
@@ -315,6 +351,10 @@ module CrystalClick
         offset += rows
       end
       offset
+    end
+
+    private def raise_invalid_mrk3_site! : Nil
+      raise CorruptPartError.new("Compact MRK3 prepared site is not bound to its selected root mark slot")
     end
 
     private def grid_contains_interval?(slot_index : Int, start : Int64, finish : Int64) : Bool

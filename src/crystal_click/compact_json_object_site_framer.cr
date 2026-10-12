@@ -7,6 +7,7 @@ module CrystalClick
     @events : Array(Tuple(String, Bytes))
     @event_index : Int32
     @logical_event_names : Array(String)
+    @positional_events : Array(Tuple(String, UInt64, UInt64))
     @grammar_parser_active : Bool
     @finished : Bool
     @tape_size : UInt64
@@ -24,8 +25,10 @@ module CrystalClick
       if physical_context.nil? != site_identity.nil?
         raise ArgumentError.new("Compact inline coordinate context requires both physical owner and site identity")
       end
-      if physical_context && !mode.mrk4?
-        raise UnsupportedFormatError.new("authenticated Compact inline path coordinates require named mrk4 shards")
+      if physical = physical_context
+        unless physical.mode == mode
+          raise CorruptPartError.new("Compact inline coordinate owner uses a different mark format")
+        end
       end
       @coordinate_context = if physical = physical_context
                               CompactObjectSharedInlineCoordinateContext.new(
@@ -58,6 +61,7 @@ module CrystalClick
       end
       @event_index = 0
       @logical_event_names = [] of String
+      @positional_events = [] of Tuple(String, UInt64, UInt64)
       @grammar_parser_active = false
       @finished = false
       @path_position = 0_u64
@@ -115,6 +119,10 @@ module CrystalClick
           raise CorruptPartError.new("Compact mrk3 grammar parser consumed outside its borrowed remainder")
         end
 
+        finish = checked_position_end(start, consumed)
+        validate_path_extent!(start.to_u64, finish.to_u64)
+        track_position = preflight_positional_event!(start.to_u64, finish.to_u64)
+
         # Extent validation precedes the only cursor mutation. Any parser
         # exception or invalid count leaves the source position and logical
         # schedule untouched; parser budget consumption is intentionally not
@@ -123,6 +131,7 @@ module CrystalClick
         observed = @cursor.consumed_slice(start)
         advance_path_position(consumed)
         @logical_event_names << expected_name
+        record_positional_event!(expected_name, start.to_u64, finish.to_u64) if track_position
         {value, observed}
       ensure
         @grammar_parser_active = false
@@ -146,7 +155,13 @@ module CrystalClick
         @event_index += 1
         advance_path_position(size)
       else
+        start = @cursor.position
+        finish = checked_position_end(start, size)
+        validate_path_extent!(start.to_u64, finish.to_u64)
+        track_position = preflight_positional_event!(start.to_u64, finish.to_u64)
         observed = @cursor.read_exact(size)
+        advance_path_position(size)
+        record_positional_event!(expected_name, start.to_u64, finish.to_u64) if track_position
       end
       @logical_event_names << expected_name
       observed
@@ -190,6 +205,36 @@ module CrystalClick
       )
     end
 
+    # Build an MRK3 body slice from the exact cursor interval
+    # returned by the grammar parser. MRK3 has no physical callback labels;
+    # these tape-relative coordinates are therefore bound to the shard-backed
+    # path context rather than inferred from a persisted role name.
+    def inline_callback_slice(
+      canonical_name : String,
+      callback_name : String,
+      relative_start : Int32,
+      relative_end : Int32,
+      bytes : Bytes,
+    ) : ObjectSharedInlineCallbackReadSlice
+      if @cursor.mrk4?
+        raise ArgumentError.new("positional Compact inline slices are only defined for mrk3 tapes")
+      end
+      if relative_start < 0 || relative_end < relative_start ||
+         relative_end - relative_start != bytes.size || relative_end > @cursor.position
+        raise CorruptPartError.new("Compact mrk3 inline callback interval differs from its parsed tape extent")
+      end
+      context = @coordinate_context
+      ObjectSharedInlineCallbackReadSlice.new(
+        canonical_name,
+        callback_name,
+        relative_start.to_u64,
+        relative_end.to_u64,
+        bytes,
+        context,
+        context ? @budget : nil,
+      )
+    end
+
     def validate_expected_events!(names : Array(String)) : Nil
       @cursor.validate_expected_events!(names)
       unless @logical_event_names == names
@@ -223,6 +268,10 @@ module CrystalClick
       callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair),
       budget : BinaryCodecBudget,
     ) : Nil
+      unless @cursor.mrk4?
+        validate_prepared_mrk3_source!(prefix, physical_plan, role_bindings, callback_pairs, budget)
+        return nil
+      end
       unless @cursor.mrk4? && @finished
         raise UnsupportedFormatError.new("prepared Compact Advanced source requires a successfully finished mrk4 capture")
       end
@@ -300,18 +349,142 @@ module CrystalClick
         raise CorruptPartError.new("prepared Compact source intervals do not cover the authenticated callback path")
       end
 
-      # Some direct-reader captures have not bound the Object body schedule
-      # onto the prefix. Bind only the schedule derived above, and only after
-      # the complete finished source has passed roster, byte, context, and
-      # interval validation. Existing bindings must match exactly; a repeated
-      # validation is therefore safe and does not attempt to bind twice.
-      begin
-        unless prefix.body_role_bindings == schedule.body_bindings &&
-               prefix.body_callback_pairs == schedule.body_pairs
-          raise CorruptPartError.new("prepared Compact prefix retained a different body-role binding")
+      # Advanced publication consumes this source validator as its owner
+      # boundary, so it must bind the derived schedule before preparing the
+      # deferred decoder holder. Ordinary MAP materialization binds its own
+      # schedule immediately afterward; binding here would make that normal
+      # publication path attempt a forbidden second bind.
+      if schedule.advanced
+        begin
+          unless prefix.body_role_bindings == schedule.body_bindings &&
+                 prefix.body_callback_pairs == schedule.body_pairs
+            raise CorruptPartError.new("prepared Compact prefix retained a different body-role binding")
+          end
+        rescue ex : ArgumentError
+          prefix.bind_body_schedule!(schedule.body_bindings, schedule.body_pairs)
         end
-      rescue ex : ArgumentError
-        prefix.bind_body_schedule!(schedule.body_bindings, schedule.body_pairs)
+      end
+      nil
+    end
+
+    private def validate_prepared_mrk3_source!(
+      prefix : ObjectDocumentCallbackPrefix,
+      physical_plan : ObjectDocumentPhysicalPlan,
+      role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding),
+      callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair),
+      budget : BinaryCodecBudget,
+    ) : Nil
+      unless @finished
+        raise UnsupportedFormatError.new("prepared Compact MRK3 source requires a successfully finished capture")
+      end
+      unless @budget.same?(budget)
+        raise ArgumentError.new("prepared Compact source must retain its exact capture budget operation")
+      end
+      coordinate_context = @coordinate_context ||
+                           raise(CorruptPartError.new("prepared Compact MRK3 source has no authenticated coordinate context"))
+      site_identity = coordinate_context.site_identity
+      mark_prefix = prefix.physical_prefix + ":mark="
+      unless site_identity.starts_with?(mark_prefix)
+        raise CorruptPartError.new("prepared Compact MRK3 source belongs to a different physical site")
+      end
+      mark_suffix = site_identity.byte_slice(mark_prefix.bytesize, site_identity.bytesize - mark_prefix.bytesize) || ""
+      mark_index = mark_suffix.to_i?
+      unless mark_index && mark_index >= 0 && mark_index.to_s == mark_suffix
+        raise CorruptPartError.new("prepared Compact MRK3 source has a noncanonical physical mark identity")
+      end
+      unless site_identity == "#{prefix.physical_prefix}:mark=#{mark_index}"
+        raise CorruptPartError.new("prepared Compact MRK3 source has a different physical mark identity")
+      end
+      prefix.validate_physical_owner!(physical_plan)
+      unless ObjectDocumentInlineCallbackOrder.canonical_root_prefix(physical_plan) == prefix.physical_prefix
+        raise CorruptPartError.new("prepared Compact prefix differs from its bound physical plan")
+      end
+      coordinate_context.validate_mrk3_site!(
+        prefix.callback_prefix,
+        prefix.physical_prefix,
+        mark_index,
+      )
+      unless prefix.statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+        raise UnsupportedFormatError.new("prepared Compact Advanced source requires complete Object statistics")
+      end
+
+      schedule = CompactJsonObjectRoleSchedule.build(
+        prefix,
+        physical_plan,
+        prefix.nested_context.profile,
+        budget,
+      )
+      unless schedule.body_bindings == role_bindings && schedule.body_pairs == callback_pairs
+        raise CorruptPartError.new("prepared Compact body roles differ from the parsed Object schedule")
+      end
+      prefix_pairs = schedule.prefix_pairs
+      unless prefix.prefix_callback_count == prefix_pairs.size
+        raise CorruptPartError.new("prepared Compact prefix callbacks differ from the parsed Object schedule")
+      end
+      body_count = prefix.body_callback_count
+      unless body_count == callback_pairs.size && prefix.body_callback_slice_count == body_count
+        raise CorruptPartError.new("prepared Compact body callbacks differ from the parsed Object schedule")
+      end
+      unless @logical_event_names == schedule.event_names &&
+             @positional_events.size == schedule.event_names.size
+        raise CorruptPartError.new("prepared Compact MRK3 source did not consume its exact positional callback roster")
+      end
+
+      path_position = 0_u64
+      event_index = 0
+      prefix_pairs.each_with_index do |pair, index|
+        parsed_name, parsed_bytes = prefix.prefix_callback_at(index, budget)
+        event_name, event_start, event_end = @positional_events[event_index]? ||
+                                             raise(CorruptPartError.new("prepared Compact prefix callback is missing from its positional source"))
+        finish = checked_add(path_position, parsed_bytes.size.to_u64)
+        unless pair[1] == parsed_name && event_name == parsed_name &&
+               event_start == path_position && event_end == finish
+          raise CorruptPartError.new("prepared Compact MRK3 prefix callback differs from its positional source interval")
+        end
+        coordinate_context.validate_path_bytes!(event_start, parsed_bytes, budget)
+        path_position = finish
+        event_index += 1
+      end
+
+      callback_pairs.each_with_index do |pair, index|
+        parsed_name, parsed_bytes = prefix.body_callback_at(index, budget)
+        slice = prefix.body_callback_slice_at(index)
+        event_name, event_start, event_end = @positional_events[event_index]? ||
+                                             raise(CorruptPartError.new("prepared Compact body callback is missing from its positional source"))
+        finish = checked_add(path_position, parsed_bytes.size.to_u64)
+        unless parsed_name == pair[0] && event_name == pair[1] &&
+               slice.canonical_name == pair[0] && slice.callback_name == pair[1] &&
+               same_bytes?(parsed_bytes, slice.bytes) && slice.context.same?(coordinate_context) &&
+               slice.relative_start == path_position && slice.relative_end == finish &&
+               event_start == path_position && event_end == finish
+          raise CorruptPartError.new("prepared Compact MRK3 body bytes or interval differ from their positional source")
+        end
+        coordinate_context.validate_path_bytes!(event_start, parsed_bytes, budget)
+        path_position = finish
+        event_index += 1
+      end
+
+      unless event_index == @positional_events.size && path_position == @path_position &&
+             path_position == @cursor.position.to_u64 &&
+             path_position == coordinate_context.path_data_size.to_u64 &&
+             path_position == @tape_size
+        raise CorruptPartError.new("prepared Compact MRK3 source intervals do not cover its authenticated tape")
+      end
+
+      # Advanced publication consumes this source validator as its owner
+      # boundary, so it must bind the derived schedule before preparing the
+      # deferred decoder holder. Ordinary MAP materialization binds its own
+      # schedule immediately afterward; binding here would make that normal
+      # publication path attempt a forbidden second bind.
+      if schedule.advanced
+        begin
+          unless prefix.body_role_bindings == schedule.body_bindings &&
+                 prefix.body_callback_pairs == schedule.body_pairs
+            raise CorruptPartError.new("prepared Compact prefix retained a different body-role binding")
+          end
+        rescue ex : ArgumentError
+          prefix.bind_body_schedule!(schedule.body_bindings, schedule.body_pairs)
+        end
       end
       nil
     end
@@ -343,6 +516,8 @@ module CrystalClick
       bytes = checked_add(bytes, sizeof(UInt64).to_u64)
       bytes = checked_add(bytes, instance_sizeof(Array(String)).to_u64)
       bytes = checked_add(bytes, checked_multiply(@logical_event_names.size.to_u64, sizeof(Pointer(String)).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Array(Tuple(String, UInt64, UInt64))).to_u64)
+      bytes = checked_add(bytes, checked_multiply(@positional_events.size.to_u64, sizeof(Tuple(String, UInt64, UInt64)).to_u64))
       bytes
     end
 
@@ -379,6 +554,46 @@ module CrystalClick
       if @path_position > @coordinate_context.not_nil!.path_data_size.to_u64
         raise CorruptPartError.new("Compact inline callback path exceeds its authenticated shard extent")
       end
+      nil
+    end
+
+    private def checked_position_end(start : Int32, consumed : Int32) : Int32
+      if start < 0 || consumed < 0 || consumed > Int32::MAX - start
+        raise CorruptPartError.new("Compact static JSON callback position overflows its tape domain")
+      end
+      start + consumed
+    end
+
+    private def validate_path_extent!(start : UInt64, finish : UInt64) : Nil
+      return unless context = @coordinate_context
+      if finish < start || finish > context.path_data_size.to_u64
+        raise CorruptPartError.new("Compact inline callback path exceeds its authenticated shard extent")
+      end
+      nil
+    end
+
+    # Positional callback tuples are provenance, not just diagnostics: account
+    # for every retained interval on the capture operation before advancing
+    # the shared cursor. Unauthenticated raw-grammar captures remain available
+    # to diagnostics but cannot mint positional provenance or prepared owners.
+    private def preflight_positional_event!(start : UInt64, finish : UInt64) : Bool
+      return false unless @coordinate_context
+      previous_end = @positional_events.empty? ? 0_u64 : @positional_events.last[2]
+      unless finish >= start && start == previous_end
+        raise CorruptPartError.new("Compact MRK3 callback intervals are not contiguous in physical tape order")
+      end
+      @budget.ensure_future_nodes(1_u64)
+      @budget.ensure_future_elements(1_u64)
+      @budget.charge_node
+      @budget.charge_elements(1_u64)
+      true
+    end
+
+    private def record_positional_event!(name : String, start : UInt64, finish : UInt64) : Nil
+      # The callback name is already retained in @logical_event_names and
+      # comes from the frozen schedule. Reuse that owner instead of allocating
+      # a second String for every positional interval.
+      @positional_events << {name, start, finish}
       nil
     end
 

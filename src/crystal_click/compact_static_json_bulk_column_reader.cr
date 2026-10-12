@@ -315,11 +315,7 @@ module CrystalClick
           raise CorruptPartError.new("Compact static JSON physical window differs from its validated mark grid")
         end
         site_identity = "#{@manifest.physical_prefix}:mark=#{mark_index}"
-        framer = if @context.mode.mrk4?
-                   CompactJsonObjectSiteFramer.new(@context.mode, granule.shards, budget, @context, site_identity)
-                 else
-                   CompactJsonObjectSiteFramer.new(@context.mode, granule.shards, budget)
-                 end
+        framer = CompactJsonObjectSiteFramer.new(@context.mode, granule.shards, budget, @context, site_identity)
         observed_dynamic_offsets = Hash(String, Int32).new
         statistics_offset_observer = ->(name : String, offset : Int32) do
           if previous = observed_dynamic_offsets[name]?
@@ -358,11 +354,6 @@ module CrystalClick
         prefix.bind_physical_plan!(physical_plan)
 
         reject_nested_static_json_sites!(prefix, budget)
-        # The MRK3 body tape framer recognizes only the single-MAP lane set;
-        # bucketed MAP and later shared layouts need distinct role framing.
-        if @context.mode.mrk3? && prefix.plan.structures.object.shared_data_version >= 1_u64
-          raise UnsupportedFormatError.new("Compact mrk3 static JSON non-MAP shared-data layouts are not admitted")
-        end
         schedule = CompactJsonObjectRoleSchedule.build(prefix, physical_plan, @ordinary_profile, budget)
         if advanced_layout.nil?
           advanced_layout = schedule.advanced
@@ -398,6 +389,9 @@ module CrystalClick
         prefix.finish_body_capture!(schedule.body_pairs.size)
         framer.validate_expected_events!(schedule.event_names)
         framer.finish!
+        unless schedule.advanced
+          framer.validate_prepared_source!(prefix, physical_plan, schedule.body_bindings, schedule.body_pairs, budget)
+        end
 
         grid = StorageOccurrenceGrid.new(
           [granule.row_count] of UInt64,

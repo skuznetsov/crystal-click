@@ -19,6 +19,10 @@ module CrystalClick
     @dynamic_arm_counts : Hash(String, Array(UInt64))
     @map_counts : Array(UInt64)?
     @map_entry_count : UInt64?
+    @bucket_counts : Hash(String, Array(UInt64))
+    @bucket_entry_counts : Hash(String, UInt64)
+    @bucket_seen_roles : Hash(String, Set(String))
+    @advanced_grammar : CompactJsonObjectSharedAdvancedTapeGrammar?
 
     private def initialize(
       @prefix : ObjectDocumentCallbackPrefix,
@@ -34,6 +38,22 @@ module CrystalClick
       @dynamic_arm_counts = Hash(String, Array(UInt64)).new
       @map_counts = nil
       @map_entry_count = nil
+      @bucket_counts = Hash(String, Array(UInt64)).new
+      @bucket_entry_counts = Hash(String, UInt64).new
+      @bucket_seen_roles = Hash(String, Set(String)).new
+      @advanced_grammar = if @schedule.advanced
+                            CompactJsonObjectSharedAdvancedTapeGrammar.new(
+                              @prefix,
+                              @physical_plan,
+                              @schedule,
+                              @row_count,
+                              @profile,
+                              @limits,
+                              @budget,
+                            )
+                          else
+                            nil
+                          end
     end
 
     def self.capture_body!(
@@ -67,8 +87,18 @@ module CrystalClick
         capture_one!(binding, pair)
       end
 
-      unless @map_counts && @map_entry_count
-        raise CorruptPartError.new("Compact MRK3 root MAP schedule omitted its shared sizes lane")
+      shared_version = @prefix.plan.structures.object.shared_data_version
+      case shared_version
+      when 0_u64
+        unless @map_counts && @map_entry_count
+          raise CorruptPartError.new("Compact MRK3 root MAP schedule omitted its shared sizes lane")
+        end
+      when 1_u64
+        finish_bucket_maps!
+      when 2_u64, 3_u64
+        (@advanced_grammar || raise(CorruptPartError.new("Compact MRK3 Advanced grammar owner is missing"))).finish!
+      else
+        raise UnsupportedFormatError.new("Compact MRK3 shared-data version is outside the admitted role grammar")
       end
       nil
     end
@@ -83,14 +113,7 @@ module CrystalClick
           {nil, context.input_offset}
         end
         finish = @source.position
-        ObjectSharedInlineCallbackReadSlice.new(
-          canonical_name,
-          callback_name,
-          start.to_u64,
-          finish.to_u64,
-          exact_bytes,
-          nil,
-        )
+        @source.inline_callback_slice(canonical_name, callback_name, start, finish, exact_bytes)
       end
       nil
     end
@@ -107,7 +130,11 @@ module CrystalClick
       when :root_dynamic
         parse_root_dynamic!(owner_path, role, context, borrowed_tape)
       when :shared
-        parse_shared!(role, context)
+        parse_shared!(owner_path, role, context)
+      when :advanced_bucket, :advanced_copy
+        grammar = @advanced_grammar ||
+                  raise(CorruptPartError.new("Compact MRK3 Advanced role has no prepared grammar owner"))
+        grammar.parse!(owner_path, role, context, borrowed_tape)
       else
         raise UnsupportedFormatError.new("Compact MRK3 MAP tape contains an unsupported body owner")
       end
@@ -207,7 +234,14 @@ module CrystalClick
       nil
     end
 
-    private def parse_shared!(role : String, context : BinaryCodecContext) : Nil
+    private def parse_shared!(owner_path : String, role : String, context : BinaryCodecContext) : Nil
+      if @prefix.plan.structures.object.shared_data_version == 1_u64
+        parse_bucket_shared!(owner_path, role, context)
+        return nil
+      end
+      unless @prefix.plan.structures.object.shared_data_version == 0_u64 && owner_path == "0"
+        raise CorruptPartError.new("Compact MRK3 root MAP lane has a different shared owner")
+      end
       case role
       when "root.sizes"
         parse_map_sizes!(context)
@@ -252,6 +286,152 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact MRK3 MAP root body descriptor is not in the admitted scalar grammar")
       end
       nil
+    end
+
+    private def parse_bucket_shared!(owner_path : String, role : String, context : BinaryCodecContext) : Nil
+      bucket_index = owner_bucket_index(owner_path)
+      physical_bucket = @physical_plan.shared_bucket(bucket_index)
+      unless physical_bucket.stream_names.has_key?(role)
+        raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS role is absent from its physical bucket roster")
+      end
+      seen = @bucket_seen_roles[owner_path]? || begin
+        created = Set(String).new
+        @bucket_seen_roles[owner_path] = created
+        created
+      end
+      unless seen.add?(role)
+        raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS role is duplicated within its bucket")
+      end
+
+      case role
+      when "root.sizes"
+        parse_bucket_sizes!(owner_path, context)
+      when "root.elements.field.0.data"
+        parse_bucket_string_data!(owner_path, role, context, true)
+      when "root.elements.field.1.data"
+        parse_bucket_string_data!(owner_path, role, context, false)
+      else
+        raise UnsupportedFormatError.new("Compact MRK3 MAP_WITH_BUCKETS role is outside its String/String bucket grammar")
+      end
+      nil
+    end
+
+    private def parse_bucket_sizes!(owner_path : String, context : BinaryCodecContext) : Nil
+      if @bucket_counts.has_key?(owner_path)
+        raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS sizes role is duplicated")
+      end
+      rows = @row_count
+      if rows > UInt64::MAX // 8_u64
+        raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS sizes lane length overflows UInt64")
+      end
+      if rows > Int32::MAX.to_u64
+        raise UnsupportedFormatError.new("Compact MRK3 MAP_WITH_BUCKETS row count exceeds the parser domain")
+      end
+      @budget.ensure_future_nodes(rows)
+      @budget.ensure_future_elements(rows)
+      context.ensure_remaining_input_bytes(rows * 8_u64)
+
+      counts = Array(UInt64).new(rows.to_i)
+      total = 0_u64
+      rows.times do
+        count = read_u64_le(context.read_slice(8_u64))
+        if count > Int32::MAX.to_u64 || count > UInt64::MAX - total
+          raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS entry count exceeds its supported domain")
+        end
+        total += count
+        counts << count
+      end
+      if total > (UInt64::MAX - rows) // 3_u64
+        raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS traversal work overflows UInt64")
+      end
+      minimum_nodes = rows + total * 3_u64
+      future_elements = rows + total
+      @budget.ensure_future_nodes(minimum_nodes)
+      @budget.ensure_future_elements(future_elements)
+      rows.times do
+        @budget.charge_node
+        @budget.charge_elements(1_u64)
+      end
+      total.times do
+        @budget.charge_node
+        @budget.charge_elements(1_u64)
+      end
+      @bucket_counts[owner_path] = counts
+      @bucket_entry_counts[owner_path] = total
+      nil
+    end
+
+    private def parse_bucket_string_data!(
+      owner_path : String,
+      role : String,
+      context : BinaryCodecContext,
+      paths : Bool,
+    ) : Nil
+      counts = @bucket_counts[owner_path]? ||
+               raise(CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS String data precedes its sizes lane"))
+      total = @bucket_entry_counts[owner_path]? ||
+              raise(CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS entry total is missing"))
+      if role == "root.elements.field.1.data" &&
+         !(@bucket_seen_roles[owner_path]?.try(&.includes?("root.elements.field.0.data")) || false)
+        raise(CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS values precede their path lane"))
+      end
+      if total > context.remaining_input_bytes
+        raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS String lane cannot contain its declared entries")
+      end
+
+      if paths
+        previous : Bytes? = nil
+        counts.each do |row_entries|
+          previous = nil
+          row_entries.times do
+            path = context.read_slice(context.read_var_uint)
+            if prior = previous
+              if compare_bytes(prior, path) >= 0
+                raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS paths are not strictly byte-sorted")
+              end
+            end
+            previous = path
+          end
+        end
+      else
+        total.times do
+          value_size = context.read_var_uint
+          if value_size == 0_u64
+            raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS value string is empty")
+          end
+          context.read_slice(value_size)
+        end
+      end
+      nil
+    end
+
+    private def finish_bucket_maps! : Nil
+      unless @bucket_counts.size == @physical_plan.shared_bucket_count &&
+             @bucket_entry_counts.size == @physical_plan.shared_bucket_count &&
+             @bucket_seen_roles.size == @physical_plan.shared_bucket_count
+        raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS tape omitted a configured bucket")
+      end
+      @physical_plan.shared_bucket_count.times do |index|
+        owner_path = index.to_s
+        expected_roles = @physical_plan.shared_bucket(index).stream_names.keys.to_set
+        observed_roles = @bucket_seen_roles[owner_path]? ||
+                         raise(CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS bucket omitted all roles"))
+        unless observed_roles == expected_roles && expected_roles.size == 3
+          raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS roles do not exactly cover their physical bucket")
+        end
+        unless @bucket_counts.has_key?(owner_path) && @bucket_entry_counts.has_key?(owner_path)
+          raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS bucket omitted its size-derived entry roster")
+        end
+      end
+      nil
+    end
+
+    private def owner_bucket_index(owner_path : String) : Int32
+      index = owner_path.to_i?
+      unless index && index >= 0 && index.to_s == owner_path && index < @physical_plan.shared_bucket_count
+        raise CorruptPartError.new("Compact MRK3 MAP_WITH_BUCKETS owner path is not a canonical bucket index")
+      end
+      index
     end
 
     private def parse_string_sizes!(owner_key : String, role : String, count : UInt64, context : BinaryCodecContext) : Nil

@@ -1,6 +1,45 @@
 # CrystalClick project status
 
 Current bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
+root adversary ROBUST for all 48 captured root JSON cells. Plain MRK3 now joins
+MRK4 for the twelve formerly refused MAP_WITH_BUCKETS/ADVANCED/ADVANCED_CHUNKED
+cells: Object wire v4 / Dynamic v3, SharedData v1/v2/v3, two buckets, S0/S1 and
+BASIC/COMPACT. All cells match independent native rows and Float64 bits for
+EOF-first, single-mark, cross-mark and full reads. This is the finite internal
+root matrix, not general JSON or public/recursive/offline JSON admission.
+
+The exact 47-path cohort passes 308 examples in each final serial DEBUG and
+RELEASE mode, zero failures/errors/pending. The final diagnostic exits 0 with
+48 physical-layout/native-row successes and 48 readers / 192 operations.
+Existing recursive value codecs and prepared decoders are reused; MRK3 gains
+bucket-local MAP framing, an own-file Advanced grammar owner and authenticated
+positional callback intervals. A measured relabeling failure required an exact
+selected-column/mark-slot guard. Fifteen adversaries cover late structure,
+sealed-bucket refusal, deferred inner semantics, provenance and budget boundaries.
+Original capture inventories, sibling manifests and three protected specs remain
+unchanged. See the
+[MRK3 shared-layout evidence](../.landmark/evidence/compact-static-json-mrk3-shared-layouts-w263.json)
+and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md).
+
+Next: integrate JSON sites into recursive Compact consumers and the public/offline
+selected-column API, then implement the separate Compact physical writer. Start
+with bounded static MRK3, then MRK4, then context-owned Dynamic/JSON extension.
+Logical serde, role plans and value codecs are reusable. Shared `data.bin`
+callback ordering, global marks, metadata/checksums, staged readback and native
+ClickHouse interoperability need a new backend; current Wide `.bin`/`.mrk2`
+envelopes cannot simply be concatenated. No Compact writer exists yet.
+
+Mixed-version/arbitrary-bucket/profile qualification, compressed marks, remaining
+types/layouts, MV/projections and subsequent performance remain open. Full goal
+ACTIVE; no full-suite/speed-parity claim, local atomic commit only, no push.
+Refresh after source/test/profile/capture/compiler/consumer drift or widening.
+
+## Earlier revision-scoped checkpoints
+
+The following records describe the state at their own qualification revision.
+Their former refusals and next steps do not override the current frontier above.
+
+Previous bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
 root adversary ROBUST for 36 root JSON cells. Existing Object/Dynamic v1/v2/v3
 MAP on plain MRK3/MRK4 and v3 ADVANCED_CHUNKED on plain MRK4 are joined by
 eight MRK4 MAP_WITH_BUCKETS/ADVANCED cells (Object wire v4, SharedData v1/v2,
@@ -38,11 +77,6 @@ are not. Full types/layouts, MV/projection composition and subsequent
 performance remain required. Full goal ACTIVE; no speed/full-suite claim,
 local atomic commit only, no push. Refresh after source/test/profile/capture/
 compiler/consumer drift or scope widening.
-
-## Earlier revision-scoped checkpoints
-
-The following records describe the state at their own qualification revision.
-Their former refusals and next steps do not override the current frontier above.
 
 Previous bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
 root adversary ROBUST for three stock root JSON cells: V1/Dynamic-v1/MAP MRK3,

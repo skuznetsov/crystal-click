@@ -72,6 +72,19 @@ module CrystalClick
       end
     end
 
+    # Non-copying root-column identity check used when binding one MRK3
+    # whole-column shard to a prepared static-site owner. MRK4 substream slots
+    # are intentionally not interpreted as root columns here.
+    def slot_column_matches?(index : Int, column_name : String) : Bool
+      return false unless @mode.mrk3?
+      return false if index < 0
+      if slot = @slots[index]?
+        slot.column_name == column_name && slot.stream_name.nil?
+      else
+        false
+      end
+    end
+
     def slot_count_for(column_name : String) : Int32
       slots = @slots_by_column[column_name]? || raise(ArgumentError.new("unknown Compact column"))
       slots.size.to_i32

@@ -1,5 +1,41 @@
 # Crystal Click landmarks
 
+## Compact root JSON MRK3 bucketed MAP and Advanced shared layouts — W263
+
+- VERIFIED / root adversary ROBUST over `d8d150479d030b52f71c86279a9b55f8f00907b1`
+  within twelve new plain-MRK3 root cells: Object wire v4 / Dynamic v3,
+  SharedData v1/v2/v3, two buckets, S0/S1 and BASIC/COMPACT. Final exact 47-path
+  cohort: 308 examples in each serial DEBUG/RELEASE mode, zero failures/errors/
+  pending. Final authenticated diagnostic: 48 layout/native-literal checks and
+  48 readers / 192 operations pass, exit 0. Internal finite matrix only.
+- Unchanged native RED first observes twelve explicit capability errors. The
+  first candidate exposes four premature MAP schedule binds and four fixed-S0
+  nested String profile errors. Fresh bulk settings do not replace the retained
+  Dynamic serialization profile; native S1 uses UInt64 raw byte sizes and raw
+  bytes without NUL terminators. Two frozen positive files retain their hashes.
+- Existing logical codecs/decoders remain. MRK3 adds bucket-local MAP framing,
+  an own-file Advanced parent-lane grammar and authenticated positional spans.
+  The source's seven lanes per bucket plus Copy are contiguous even when
+  CHUNKED; saved pairs corroborate grammar, not delimit it. Ordinary MAP binds
+  once in its materializer; Advanced binds only after authenticated preparation.
+- Measured guard RED accepts another/out-of-grid mark and rejects another column
+  only at a later roster comparison. The metadata-only fix checks raw column,
+  escaped root prefix and exact saved selected slot before publication. Fifteen
+  adversaries pass, including both logical preflight limits and unauthenticated
+  nonpublication. Auth/raw byte-charge delta is body slice size, not zero.
+  One-bucket refusal is a sealed-scope guard, not body contradiction evidence.
+- Root checks actual sources, independent literal/bit oracles and final unchanged
+  seals; Luna evidence is correlated. All 504 original native files, sibling
+  manifests and three protected specs remain unchanged. No public/recursive JSON,
+  arbitrary buckets/profiles, compressed marks, Compact writer or speed claim.
+- Return pointers: [MRK3 shared-layout evidence](.landmark/evidence/compact-static-json-mrk3-shared-layouts-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Next: recursive/public/
+  offline JSON, then static MRK3 writer, MRK4 and context-owned Dynamic/JSON.
+  Reuse recursive logical serde, not Wide lane envelopes. Full types, MV/
+  projections and later performance remain required. Goal ACTIVE; atomic local
+  commit only, no push. Refresh after source/test/profile/capture/compiler/
+  consumer drift or widening. Older sections are revision-scoped history.
+
 ## Compact root JSON MRK4 bucketed MAP and Advanced shared layouts — W263
 
 - VERIFIED / root adversary ROBUST over `0e75688f40eea66d6731f2836e8068f68e28e5b5`

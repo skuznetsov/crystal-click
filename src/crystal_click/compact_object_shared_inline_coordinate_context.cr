@@ -54,6 +54,12 @@ module CrystalClick
       @path_data_size
     end
 
+    # Bind a prepared MRK3 Object site to this exact retained whole-column
+    # shard and its selected mark-grid interval without rereading payload data.
+    def validate_mrk3_site!(column_name : String, physical_prefix : String, mark_index : Int) : Nil
+      @physical.validate_mrk3_site!(column_name, physical_prefix, mark_index, @shards)
+    end
+
     # Verifies a callback payload against the authenticated, piecewise shard
     # view without concatenating the original source intervals.
     def validate_path_bytes!(relative_start : UInt64, bytes : Bytes, budget : BinaryCodecBudget) : Nil

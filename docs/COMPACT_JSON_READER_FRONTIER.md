@@ -4,18 +4,226 @@ Document status: W263 six-layout/multi-chunk native baseline RED qualified; coor
 VERIFIED within its focused scope; advanced inline preparation prerequisite
 VERIFIED; bounded internal V1 MRK3/MAP, V2 MRK4/MAP and V3 MRK4/ADVANCED_CHUNKED
 roots, bounded MRK3 COMPACT Dynamic frames, propagated ordinary String-v1,
-and MRK4 MAP_WITH_BUCKETS/ADVANCED in 36 root cells VERIFIED;
+and MRK3/MRK4 MAP_WITH_BUCKETS/ADVANCED/ADVANCED_CHUNKED in all 48 captured
+root cells VERIFIED;
 recursive/public/offline native GREEN pending
 (2026-10-11).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
-Current transition: bind persisted JSON/Object sites to the existing recursive
-Compact lifecycle, Object codecs and public selected-column consumers. The full
+Current transition: bind persisted JSON/Object sites to the existing recursive Compact lifecycle,
+Object codecs and public selected-column consumers. The full
 types, MV/projection and subsequent memory/performance objective remains ACTIVE.
 This transition does not redefine completion or establish <=10% speed parity.
 
 The latest qualification below governs current admission. Older checkpoint
 sections are revision-scoped history; their former refusals and next steps do
 not override a later qualification.
+
+## MRK3 shared-data checkpoint — qualified within scope
+
+Qualification over `d8d150479d030b52f71c86279a9b55f8f00907b1`: the exact
+47-path cohort passes 308 examples in each final serial DEBUG and RELEASE run
+(root tools `29ef15`, `3ca128`), zero failures/errors/pending. The final original
+capture diagnostic (`69bf80`, exit 0) authenticates all 48 physical layouts and
+native literal rows and passes all 48 readers / 192 EOF-first, single-mark,
+cross-mark and full operations. Production and source/test/script seals are
+unchanged across the final runs and diagnostic. This is the captured finite
+internal-root matrix, not all JSON layouts or public/recursive admission.
+
+The twelve new cells are plain MRK3 Object wire v4 / Dynamic v3, SharedData
+v1 MAP_WITH_BUCKETS, v2 ADVANCED and v3 ADVANCED_CHUNKED, two buckets,
+String-v0/v1 and Variant-BASIC/COMPACT. The unchanged native positive oracle
+pins rows, Float64 bits, complete-first/empty-later statistics and exact mark
+operations. Original stock fixtures have an empty bucket and a nonempty bucket;
+they do not establish two nonempty buckets or arbitrary chunk/profile coverage.
+
+MRK3 now retains authenticated positional callback extents. Bucket MAP counts
+and role completion are bucket-local. A separate Advanced tape grammar owner
+frames seven contiguous lanes per bucket and the Copy trio; nested Dynamic arm
+envelopes use their retained String profile. Existing value codecs and prepared
+decoders remain the semantic boundary. Advanced saved pairs corroborate framed
+extents; they are not unproved delimiters. All positional descriptors use the
+same operation budget and are preflighted before cursor/roster mutation.
+
+Fifteen new adversaries include three per-layout late version, sealed-bucket
+and deferred inner-tag checks, plus exact selected-slot/budget, wrong-column,
+wrong/in-grid and out-of-grid mark, unauthenticated nonpublication and failed
+preflight controls. Source review and measured RED separate physical ownership
+from a merely canonical `:mark=N` label. A metadata-only MRK3 guard now checks
+the retained shard against its raw column and exact selected saved mark slot,
+before callback comparison; it adds no payload read or detached grid snapshot.
+Generic coordinate and MRK4 named-role behavior remain unchanged.
+
+The one-bucket mutation is transport-valid but outside the sealed schedule;
+its early refusal is not a body-contradiction test. Inner BinaryValue semantics
+remain deferred to selected decoding. The authenticated/raw wire-budget delta
+equals retained body byte sizes because authenticated slice construction checks
+those bytes; a zero-delta assumption was refuted, not turned into a production
+change. Instrumentation compile errors and a zero-example filter are not RED.
+
+Root adversary ROBUST within this finite scope, based on actual source checks,
+measured guard RED/GREEN, unchanged native literals and both regression modes.
+Luna reviews remain correlated. The original 504-file capture, sibling manifests
+and three user-owned specs are unchanged. Formatting covers owned candidate
+files; the two frozen positive oracle files retain their original hashes.
+See [MRK3 shared-layout evidence](../.landmark/evidence/compact-static-json-mrk3-shared-layouts-w263.json).
+Refresh after source/test/profile/capture/compiler/consumer drift or widening.
+
+Next: recursive/public/offline JSON admission, then a separate Compact writer
+backend. Static MRK3 writing should precede MRK4 and context-owned Dynamic/JSON
+extension. Recursive logical codecs are reusable, Wide physical lane envelopes
+are not. Mixed-version marks, arbitrary buckets, compressed marks, full types,
+MV/projection composition and performance remain open. Full goal ACTIVE;
+local atomic commit only, no push or <=10% speed-parity claim.
+
+### Transition anchor and measured RED
+
+Anchor: `d8d150479d030b52f71c86279a9b55f8f00907b1`. The current native
+diagnostic has 36 passing root cells and twelve explicit MRK3 non-MAP
+refusals. The selected transition must add capability, not merely remove a
+guard or relabel Unsupported as corruption: read the stock MRK3 root cells
+for Object wire v4 / Dynamic v3, SharedData v1 MAP_WITH_BUCKETS, v2 ADVANCED
+and v3 ADVANCED_CHUNKED, two buckets, S0/S1 and BASIC/COMPACT.
+
+The existing recursive value codecs and authenticated physical-plan owners
+remain the serde boundary. MRK3 provides an unlabelled granule byte tape,
+unlike MRK4's persisted callback roster. Its framer must derive the exact
+bucket-specific prefix/body/suffix spans and callback order from source
+grammar, without inventing MRK4 names or using column-local offsets as
+whole-data saved-pair coordinates. No values may escape before preparation
+of the complete selected-root mark grid. Inner value semantics stay deferred
+where the existing lazy-reader contract permits them.
+
+Risk is CAUTION; rollback is the atomic feature commit over the anchor above.
+The strongest likely failure is assigning repeated bucket MAP roles or
+Advanced/Copy coordinates to the wrong bytes while still producing plausible
+rows. Matching falsifiers must include authenticated original native rows and
+Float64 bits, EOF-first/single/cross/full reads, late structural corruption
+with valid transport, selected inner corruption, budget/owner boundaries and
+preserved existing profiles. A new native positive spec must first fail at
+the present explicit guard. Root owns guarded serial execution; Luna owns
+disjoint implementation/test work only after source inventory and measured RED.
+
+DoD: the exact previously qualified 45-path cohort plus the new positive and
+adversary specs must pass in DEBUG and RELEASE. The original 48-cell diagnostic
+must authenticate all physical layouts and native rows and read all 48 root
+cells, with no pending/skipped cases or weakened old controls. If investigation
+reveals a different indispensable boundary, update this transition before
+widening implementation rather than hiding it behind a fixture exception.
+
+Recursive/public/offline JSON, arbitrary buckets, mixed-version marks,
+compressed marks, physical Compact writing, remaining types/MV/projections
+and performance remain separate unclosed obligations of the full active goal.
+No public admission or speed claim follows from this root matrix alone.
+
+### Measured RED and implementation ownership
+
+Root tool `9f50c2` executes the new twelve-cell positive spec against unchanged
+production (`src` seal `efdc1f0d972ef759f4c940a5489d5d2d91fad1c9860be3df0a70d1c51e611e27`):
+12 examples, zero assertion failures, twelve explicit existing Unsupported
+errors, zero pending. The positive spec is frozen at SHA-256
+`7694af027d0f555266e61e1eb08abfef3bc6cedb20eef860ad0766c2f78ef79f`;
+its authenticated fixture is frozen at
+`c4024df76e30da6a9281522aa9e4566c137d0c9948289e4d59159a969d3aec81`.
+Earlier attempts exposed helper-only null/hex APIs, an ambiguous layout-prefix
+match and a full-part-vs-root Object-site mismatch; none is reader RED.
+
+The source scatter hypothesis is refuted at the bucket-qualified parent-lane
+boundary. Pinned `SerializationObjectSharedData.cpp:635-714,743-885` writes
+seven contiguous lanes per bucket, then the Copy trio. CHUNKED groups all
+chunks within each lane. Nested Dynamic callbacks all return the parent Data
+buffer (`:396-420`); they do not interrupt that parent extent. Source evidence
+establishes ordering, not provenance of the separately pinned runtime binary.
+Use a sequential grammar owner, not a synthetic named roster or scatter layer.
+
+Implementation ownership is disjoint:
+
+- Engine Luna: `compact_static_json_bulk_column_reader.cr`,
+  `compact_json_object_site_framer.cr`, `compact_json_object_map_tape_framer.cr`
+  and, if needed, one separate MRK3 prepared-source validator class. Preserve
+  MRK4's named-event validator; introduce an MRK3 ordered byte-extent law with
+  authenticated owner/site, exact same budget and complete EOF coverage. MAP
+  counts are bucket-local. All body slices use that authenticated context.
+- Grammar Luna: new `compact_json_object_shared_advanced_tape_grammar.cr` only.
+  Sequentially frame the seven bucket lanes and Copy from source grammar;
+  nested Data Dynamic prefixes/discriminators/arm envelopes determine the Data
+  end without constructing values. Saved pairs corroborate recovered intervals,
+  never supply an unproven delimiter. Reuse existing materializers/decoders.
+- Test Luna: new MRK3 shared-layout adversary spec and support fixture only.
+  Root owns the positive test freeze, old matrix expectation transition, SDD,
+  serial execution, final hostile review and exact-path local commit.
+
+The first executable probe is the unchanged
+`spec/compact_static_json_mrk3_shared_layouts_native_w263_spec.cr`, run with the
+same pinned evidence roots, serial `run_safe.sh` guard and flags as the prior
+45-path qualification. Its expected signal changes from twelve Unsupported
+errors to twelve native literal/bit/profile successes. Final DoD adds that
+spec and the new adversaries to the prior exact cohort in both DEBUG and
+RELEASE, then runs `scripts/check_compact_static_json_root_matrix_w263.cr`
+against the original capture: 48 layout/native checks and 48 reader successes.
+Old native guard cases must become genuine positives, not pending/deleted
+cases; unrelated negative controls and the three user-owned specs are preserved.
+
+### First candidate: two distinct counterexamples
+
+The first guarded candidate run (root tools `c720cc`, `e945a6`) executes the
+unchanged twelve-cell positive spec: four successes, zero assertion failures,
+eight errors, zero pending. Four MAP cells expose premature schedule binding
+before the existing one-time materializer bind. The four propagated S1
+Advanced cells refute the helper's fixed nested-S0 framing/callback census;
+the corresponding four S0 Advanced cells pass.
+
+This is not evidence of a source/runtime mismatch. In the pinned source,
+`DataTypeObject.cpp:185-187` and `DataTypeDynamic.cpp:62-67` propagate
+`SerializationInfoSettings` into the already-created Dynamic serializer;
+`SerializationDynamic.cpp:1310-1313` uses those retained settings to create
+child serializers. The fresh `SerializeBinaryBulkSettings` at
+`SerializationObjectSharedData.cpp:376-388` controls the bulk operation, not
+that retained String profile. `SerializationString.cpp:865-895,938-1003`
+writes S1's per-row UInt64 raw byte sizes, followed by the raw character lane,
+and emits the additional size callback even for an empty arm. The pinned
+`ColumnString.h:40,141-142,185-193` stores strings without NUL terminators;
+zero lengths are valid. The older terminator-inclusive interpretation was
+refuted by this source, not admitted as a framing requirement.
+The helper must use the explicitly admitted propagated profile; Copy's
+separately constructed String serializer is a different boundary. Preserve
+the frozen positive oracle and existing non-propagated profile refusal.
+
+### Prepared-site provenance guard
+
+Source review exposes a distinct metadata boundary: authenticating a shard
+against some saved slot interval does not bind a canonical `:mark=N` label to
+that exact mark or column. The ordinary reader supplies the correct label,
+but a direct framer caller can relabel an independently valid shard. A
+canonical spelling check alone is insufficient evidence of physical identity.
+
+Before admitting the prepared MRK3 owner, add a metadata-only guard that binds
+the root column and selected mark to the retained shard's exact saved slot
+interval. No new payload read, exposed mutable roster or detached grid snapshot
+is needed. Engine ownership may additionally cover
+`compact_part_physical_context.cr`, `compact_columns_substreams.cr` and
+`compact_object_shared_inline_coordinate_context.cr` for this narrow check.
+Preserve generic coordinate contexts and existing MRK4 named-role behavior.
+Test ownership remains the separate MRK3 shared-layout adversary spec/fixture.
+First demonstrate that authenticated bytes can currently accept a different
+canonical mark label; then require wrong-mark, wrong-column and out-of-grid
+labels to fail before prepared publication, while the correctly bound source
+still reads native literals. Include exact-budget and failed-preflight checks
+for the new positional descriptor roster. These checks extend the same atomic
+rollback and DEBUG/RELEASE DoD, not the admitted type/layout frontier.
+
+The valid guard RED is the complete fifteen-case adversary run (root tools
+`940ca9`, `b4b4d3`): fifteen examples, four failures, zero errors/pending.
+Authenticated mark-zero bytes publish under both another in-grid mark and
+an out-of-grid canonical label. A real `docs` slot mislabeled as root reaches
+the later callback-roster rejection instead of the selected-slot guard.
+Those three failures authorize the metadata-only fix. The fourth failure
+is a separate wire-budget calibration assumption: authenticated slices
+charge their byte validation while raw diagnostics do not; it must be
+source-derived, not removed to make the test pass. Earlier fixture type
+errors and a zero-example literal filter were instrumentation failures, not
+behavioral RED evidence. Before the guard change, the corrected reader
+passes the unchanged twelve native positives (`67ed0f`, `c9e53c`, twelve
+examples, zero failures/errors/pending).
 
 ## MRK4 MAP_WITH_BUCKETS / ADVANCED checkpoint — qualified within scope
 
