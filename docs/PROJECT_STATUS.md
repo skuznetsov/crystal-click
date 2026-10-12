@@ -1,5 +1,35 @@
 # CrystalClick project status
 
+Current bounded Compact physical writer (W264, 2026-10-12): VERIFIED / root
+adversary ROBUST within the static/plain-MRK3 witness and exact affected cohort.
+`CompactPartWriter.write_uint64_columns` writes a nonempty sorted-UInt64-key
+part using shared recursive logical codecs, ordered granule/column/callback
+assembly, one LZ4 stream, complete marks/checksums, staged readback and exclusive
+publication. Neutral infrastructure preserves the existing Wide byte formats
+and refusal behavior. The exact Map(String, UInt64) Compact batch bridge is
+added without bypassing typed admission or widening other Map carriers.
+
+Final DEBUG: 620 examples / exact 92 paths. Actual RELEASE: the same disjoint
+union in two executables, 194 + 426 examples, plus a separately counted 37-case
+overlapping W264/W260 boundary; all zero failures/errors/pending. The combined
+RELEASE compiler hit the unchanged 12 GiB process-tree guard before tests, so
+there is no combined-RELEASE or full-suite GREEN claim. The final fresh native
+probe records a separately INSERTed stock Compact reference with identical
+decoded tape/checksum-fold, then native ATTACH, CHECK=1 and literal full/
+middle/last/empty reads of the generated eight-column, eight-row, four-mark+
+EOF part. Stale checksum, fold-only checker sensitivity and resealed malformed
+mark controls retain distinct ATTACH/CHECK/SELECT outcomes. See the
+[writer frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+[W264 evidence](../.landmark/evidence/compact-part-writer-w264.json).
+
+Compact writer continuation: MRK4/per-substream marks, then stateful serializers
+and context-owned Dynamic/JSON. The current native default is MRK4; this finite
+writer witness explicitly requests plain MRK3, String-v0 and BASIC Map. Local
+static admission is not native qualification of every admitted type. Compressed
+marks, arbitrary profiles/codecs, incremental append and Compact MV/projection
+composition remain open. Full types/MV/projections precede performance per the
+user's priority; the full goal remains ACTIVE, with no speed-parity claim.
+
 Current bounded recursive/public/offline Compact JSON qualification (W263,
 2026-10-12): VERIFIED / root adversary ROBUST within the unchanged 48-part
 native capture and four captured declaration shapes: root JSON, Array(JSON),
@@ -29,12 +59,10 @@ large-part scale or RSS claim. Outer topology admission does not establish all
 Object inner roles. Other schemas/owners and mixed Wide/Compact JSON `.values`
 remain unqualified. Performance work remains deferred per user priority.
 
-Next proposed storage phase: the separate Compact physical writer. Start
-with bounded static MRK3, then MRK4, then context-owned Dynamic/JSON extension.
-Logical serde, role plans and value codecs are reusable. Shared `data.bin`
-callback ordering, global marks, metadata/checksums, staged readback and native
-ClickHouse interoperability need a new backend; current Wide `.bin`/`.mrk2`
-envelopes cannot simply be concatenated. No Compact writer exists yet.
+W264 supplies the first static MRK3 physical writer above. Logical serde, role
+plans and value codecs are reused; Wide `.bin`/`.mrk2` envelopes are not
+concatenated. MRK4 and stateful/context-owned Dynamic/JSON writer integration
+are the next separate native-qualified boundaries.
 
 Mixed-version/arbitrary-bucket/profile qualification, compressed marks, remaining
 types/layouts, MV/projections and subsequent performance remain open. Full goal

@@ -1,5 +1,48 @@
 # Crystal Click landmarks
 
+## Bounded static Compact MRK3 physical writer — W264
+
+- VERIFIED / root adversary ROBUST over baseline
+  `b91dafb547ba77e0667e936cd86ec5ae3687bbb3` within the declared static/plain-MRK3
+  writer and finite eight-column native witness. Exact 92-path DEBUG: 620
+  examples. Same disjoint union in actual RELEASE: 29 paths / 194 and 63 paths /
+  426 examples; overlapping W264/W260 boundary: 37 separately, all zero failures/
+  errors/pending. Combined RELEASE compile hit the unchanged 12 GiB RSS guard
+  before tests, not test GREEN or runtime memory evidence.
+- Reuse recursive logical codecs, ordered physical roles and neutral checksum/
+  index/exclusive-publish helpers. Assemble granule -> column -> callback into
+  shared LZ4 `data.bin`; retain zero-byte callbacks and global saved pairs.
+  Complete plain MRK3, metadata, checksum-fold and staged typed readback precede
+  publication. Old Wide aliases preserve bytes, stage prefix and refusals.
+  Exact Map(String, UInt64) typed conversion preserves order/duplicates/raw
+  String bytes/MAX UInt64; no generic carrier-gate bypass.
+- Behavioral REDs expose caller alias publication, post-open grid allocation,
+  missing exact Map carrier and undercounted physical workspace. The calibrated
+  old observer reaches callback three (`420091`); full-workspace preflight
+  refuses before the value window at callback two (`2cdd57`). Transport bounds
+  cover their declared owners, not every allocation, transitive capacity or RSS.
+- Final fresh native probe (`13b17e`) records 33 bounded raw invocations in
+  `/private/tmp/crystal-click-w264-native.RyQZdG`. Separately INSERTed stock
+  Compact and generated part have the same 8970-byte decoded tape and saved/
+  computed fold. Generated ATTACH / active Compact / CHECK=1 / literal 8/4/1/0
+  reads pass; `data.bin`/`data.mrk3` stay unchanged, while native metadata adds
+  `invalidated_system_columns.txt`. Stale checksum gives CHECK=0. Fold-only
+  poison gives CHECK=1 and unchanged rows. Resealed mark poison gives CHECK=1
+  but CorruptPartError publicly and native SELECT code 33. CHECK alone is not
+  structural/fold proof. Earlier probe stops are INCONCLUSIVE, not format RED.
+- Source/runtime pins are distinct; native DDL explicitly requests MRK3 because
+  current per-substream default is MRK4. Root verifies actual source, raw native
+  observations, corrupt controls and source seals; Luna review is correlated.
+  Protected specs and original native captures stay unchanged and uncommitted;
+  two protected specs remain exact-cohort local reproduction prerequisites.
+- Return pointers: [writer frontier](docs/COMPACT_PART_WRITER_FRONTIER.md) and
+  [W264 evidence](.landmark/evidence/compact-part-writer-w264.json). Next: MRK4,
+  stateful/context-owned Dynamic/JSON, remaining layouts/types and Compact
+  MV/projections; then measured optimization. Goal ACTIVE, no <=10% speed,
+  full-suite or full writer-parity claim; atomic local commit only, no push.
+  Refresh after source/test/profile/capture/compiler/consumer drift or widening.
+  Older checkpoints below remain revision-scoped history.
+
 ## Bounded recursive/public/offline Compact JSON readers — W263
 
 - VERIFIED / root adversary ROBUST over `39b16a039e78806be3df4a9f31e0b198055b0160`

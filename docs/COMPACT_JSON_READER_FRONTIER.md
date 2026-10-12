@@ -79,13 +79,15 @@ Compact compatibility. Two source-observed limitations remain explicit:
   can still fail Unsupported. All-zero child marks and arbitrary owners,
   buckets, mixed versions/profiles and untested chunks remain unqualified.
 
-Next proposed storage phase: a separate bounded Compact writer, static plain
-MRK3 first, MRK4 next, then context-owned Dynamic/JSON. Logical traversal,
-codecs, role plans and publication machinery are reusable. Current compressed
-Wide lane `.bin`/`.mrk2` envelopes are not a Compact emitter. Shared `data.bin`,
-mark-major callback order, prefix/body/suffix state, codec flush boundaries,
-saved pairs, metadata and Compact checksums require a physical coordinator and
-native ClickHouse cross-read qualification. No Compact writer is implemented.
+The separately qualified [W264 writer](COMPACT_PART_WRITER_FRONTIER.md) now
+supplies a bounded static/plain-MRK3 physical coordinator, reusing logical
+traversal, codecs, role plans and neutral publication machinery, not compressed
+Wide `.bin`/`.mrk2` lane envelopes. Its finite stock-reference/native cross-read
+does not write JSON or qualify every locally admitted static declaration.
+Next writer boundaries are MRK4 and stateful/context-owned Dynamic/JSON:
+per-granule prefix/body/suffix state, propagated profiles and source-owned
+statistics require their own native falsifiers rather than relabeling the
+stateless tape-slicing shortcut. The reader qualification above is unchanged.
 
 ## Recursive/public continuation seal — historical admission RED
 

@@ -17,6 +17,7 @@ module CrystalClick
                      type_name == "Array(Nullable(UInt64))" ||
                      type_name == "LowCardinality(String)" ||
                      type_name == WideVariantStringUInt64TypePlan::TYPE ||
+                     type_name == "Map(String, UInt64)" ||
                      type_name == "Map(String, Array(Nullable(UInt64)))"
       return true if type_name == WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_STRING
 
@@ -145,6 +146,12 @@ module CrystalClick
         end
         batch.retain_binary_value_typed_owner(converted)
         batch.install_compact_map_string_array_nullable_uint64_values(column, Slice.new(converted.to_unsafe, converted.size), expected_rows)
+      when "Map(String, UInt64)"
+        converted = Array(Array(Tuple(String, UInt64))).new(values.size) do |index|
+          map_string_uint64(values[index], type)
+        end
+        batch.retain_binary_value_typed_owner(converted)
+        batch.install_compact_map_string_uint64_values(column, Slice.new(converted.to_unsafe, converted.size), expected_rows)
       else
         if tuple_plan = WideTupleTypePlan.for_type(type_name)
           converted = tuple_rows(tuple_plan, type, values)
@@ -297,6 +304,35 @@ module CrystalClick
         child_array = value.element_at(index + 1)
         raise CorruptPartError.new("Compact Map key is not String") unless key.type.name == "String"
         entries << {key.as_string, array_nullable_uint64(child_array, type.child_at(1))}
+        index += 2
+      end
+      entries
+    end
+
+    private def self.map_string_uint64(value : BinaryValue, type : BinaryDataType) : Array(Tuple(String, UInt64))
+      unless value.type == type && type.name == "Map(String, UInt64)" &&
+             type.tag == BinaryDataType::TAG_MAP && type.child_count == 2
+        raise CorruptPartError.new("Compact Map(String, UInt64) has an invalid descriptor")
+      end
+      key_type = type.child_at(0)
+      value_type = type.child_at(1)
+      unless key_type.name == "String" && key_type.tag == BinaryDataType::TAG_STRING &&
+             value_type.name == "UInt64" && value_type.tag == BinaryDataType::TAG_UINT64
+        raise CorruptPartError.new("Compact Map(String, UInt64) has invalid key/value types")
+      end
+      unless value.element_count.even?
+        raise CorruptPartError.new("Compact Map value has an incomplete key/value pair")
+      end
+
+      entries = Array(Tuple(String, UInt64)).new(value.element_count // 2)
+      index = 0
+      while index < value.element_count
+        key = value.element_at(index)
+        mapped_value = value.element_at(index + 1)
+        unless key.type == key_type && mapped_value.type == value_type
+          raise CorruptPartError.new("Compact Map entry differs from its exact key/value declaration")
+        end
+        entries << {key.as_string, mapped_value.as_uint64}
         index += 2
       end
       entries

@@ -9,6 +9,7 @@ module CrystalClick
                                      Array(VariantStringUInt64Value) |
                                      Array(Tuple(UInt64, String)) |
                                      Array(Array(Tuple(UInt64, String))) |
+                                     Array(Array(Tuple(String, UInt64))) |
                                      Array(Array(Tuple(String, Array(UInt64?)))) |
                                      Array(WideTupleRow) |
                                      Array(WideArrayTupleRow)
@@ -514,6 +515,16 @@ module CrystalClick
       end
       raise CorruptPartError.new("Compact Map carrier row count mismatch") unless values.size == expected_rows
       @map_string_array_nullable_uint64_values[column] = values
+      nil
+    end
+
+    def install_compact_map_string_uint64_values(column : String, values : Slice(Array(Tuple(String, UInt64))), expected_rows : Int32) : Nil
+      index = column_index(column)
+      unless WidePart.supports_map_string_uint64_type?(@column_types[index])
+        raise CorruptPartError.new("Compact Map(String, UInt64) carrier received an unsupported declaration")
+      end
+      raise CorruptPartError.new("Compact Map(String, UInt64) carrier row count mismatch") unless values.size == expected_rows
+      @map_string_uint64_values[column] = values
       nil
     end
 
