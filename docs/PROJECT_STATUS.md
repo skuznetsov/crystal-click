@@ -1,6 +1,49 @@
 # CrystalClick project status
 
 Current bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
+root adversary ROBUST for 28 existing-layout root JSON cells: Object/Dynamic
+v1/v2/v3 MAP on plain MRK3/MRK4 and v3 ADVANCED_CHUNKED on plain MRK4, each
+with String-v0/v1 and Variant-BASIC/COMPACT. All admitted cells match independent
+native root rows and Float64 bits for EOF-first, single-mark, cross-mark and
+full reads. This is internal root qualification, not public, recursive or
+offline JSON admission.
+
+The exact 43-path cohort passes 251 examples in each final serial DEBUG and
+RELEASE run, zero failures/errors/pending. Propagated root JSON now selects
+the ordinary String-v1 profile from authenticated metadata; Object shared
+MAP/Copy retains String-v0. A separate Complete/WithSizeStream extent guard
+checks adjacent ordinary String size/data bindings before publication without
+value decoding or a second byte charge. Four native extent poisons refuse at
+EOF; well-framed inner BinaryValue corruption remains deferred, and the
+synthetic propagation-false control keeps SingleStream. This guard does not
+validate occurrence cardinality; extra zero lengths may survive EOF prep.
+
+The final authenticated 48-cell diagnostic has 48 physical-layout/native-row
+successes, 28 passing root cells and 20 explicit UnsupportedFormatError cells
+(12 MRK3 non-MAP, 8 MRK4 MAP_WITH_BUCKETS/ADVANCED). Its exit 1 is expected,
+not a full-matrix GREEN. Copy-only profile and guard-call reversals restore
+exactly 14 profile failures and 4 native EOF no-raise failures respectively;
+their controls pass. The initial logical/physical-name pairing regression was
+caught and corrected before qualification. Original capture files, sibling
+manifests and three protected specs remain unchanged. See the
+[String-profile evidence](../.landmark/evidence/compact-static-json-string-profile-w263.json)
+and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md).
+
+Remaining frontier: other JSON shared layouts/profiles, compressed marks and
+the full recursive/public/offline gate. Existing Static/Dynamic Compact public
+readers keep their separately qualified finite profiles, not general JSON
+admission. Compact writing still needs a physical coordinator and publication
+backend; recursive value codecs are reusable, Wide `.bin`/`.mrk2` envelopes
+are not. Remaining types/layouts, MV/projection composition and later
+performance remain required. Full goal ACTIVE; no speed/full-suite claim,
+local atomic commit only, no push.
+
+## Earlier revision-scoped checkpoints
+
+The following records describe the state at their own qualification revision.
+Their former refusals and next steps do not override the current frontier above.
+
+Previous bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
 root adversary ROBUST for three stock root JSON cells: V1/Dynamic-v1/MAP MRK3,
 V2/Dynamic-v2/MAP MRK4 and V3/Dynamic-v3/ADVANCED_CHUNKED MRK4, all
 String-v0/Variant-BASIC with eight rows and four two-row marks, plus a separate
@@ -27,7 +70,7 @@ remain unchanged. See the
 [COMPACT frame evidence](../.landmark/evidence/compact-static-json-mrk3-compact-w263.json)
 and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md).
 
-Current remaining frontier: other JSON profiles/layouts, String-v1, compressed
+The previous remaining frontier was other JSON profiles/layouts, String-v1, compressed
 marks and the full 48-cell recursive/public/offline gate. MAP preparation checks
 outer String framing, not nested value semantics; well-framed semantic errors
 may fail only on selected decoding. Static/Dynamic Compact public readers remain
@@ -37,11 +80,6 @@ recursive value codecs are reusable, current Wide `.bin`/`.mrk2` envelopes are n
 Remaining types/layouts, MV/projection composition and later performance remain
 required. Full goal ACTIVE; no speed/full-suite claim, local atomic commit only,
 no push.
-
-## Earlier revision-scoped checkpoints
-
-The following records describe the state at their own qualification revision.
-Their former refusals and next steps do not override the current frontier above.
 
 The preceding CHUNKED checkpoint's five-path cohort passes 11 examples, the affected 23-path
 cohort passes 155 examples and the six-path native MAP cohort passes eight

@@ -124,9 +124,16 @@ module CrystalClick
       # SharedVariant String arm. With propagation enabled that arm follows
       # the part's String version; without propagation Dynamic resets to v0.
       dynamic_shared_string_v1 = selected_type.contains_dynamic? && propagated && string_version == 1
+      # JSON keeps typed paths in its declaration and discovers Dynamic paths
+      # in the Object prefix, not as nominal BinaryDataType children. Object
+      # forwards propagated serialization settings to those paths, so select their
+      # ordinary String-v1 profile from authenticated part metadata here.
+      json_propagated_string_v1 = selected_type.tag == BinaryDataType::TAG_JSON &&
+                                  propagated && string_version == 1
       if string_v1 && selected_type.tag == BinaryDataType::TAG_STRING ||
          string_v1 && propagated ||
-         dynamic_shared_string_v1
+         dynamic_shared_string_v1 ||
+         json_propagated_string_v1
         profile = BinaryBulkProfile.with_size_stream
       else
         profile = BinaryBulkProfile.single_stream

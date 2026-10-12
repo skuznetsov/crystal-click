@@ -167,6 +167,11 @@ module CrystalClick
       budget.charge_elements(preflight[2]) if preflight[2] > 0_u64
       preflight[1].times { budget.charge_node }
 
+      if prefix.statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete &&
+         profile.with_size_stream?
+        ObjectDocumentStringSizeBodyValidator.validate!(bindings, ordinary_callbacks)
+      end
+
       bindings.each_with_index do |binding, index|
         name, owner_kind, owner_path, role = binding
         body = ordinary_callbacks[index][1]

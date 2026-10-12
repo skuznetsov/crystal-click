@@ -3,7 +3,8 @@
 Document status: W263 six-layout/multi-chunk native baseline RED qualified; coordinate prerequisite
 VERIFIED within its focused scope; advanced inline preparation prerequisite
 VERIFIED; bounded internal V1 MRK3/MAP, V2 MRK4/MAP and V3 MRK4/ADVANCED_CHUNKED
-roots and bounded MRK3 COMPACT Dynamic frames VERIFIED;
+roots, bounded MRK3 COMPACT Dynamic frames, and propagated ordinary String-v1
+in 28 existing-layout root cells VERIFIED;
 recursive/public/offline native GREEN pending
 (2026-10-11).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
@@ -15,6 +16,176 @@ This transition does not redefine completion or establish <=10% speed parity.
 The latest qualification below governs current admission. Older checkpoint
 sections are revision-scoped history; their former refusals and next steps do
 not override a later qualification.
+
+## Root String-v1 profile and EOF extent checkpoint — qualified within scope
+
+Qualification over `5da83124018ba422f04e575cfcd318720901906f`: the exact
+43-path cohort passes 251 examples in each final serial DEBUG and RELEASE run
+(tools `1d2a1c`, `841395`), zero failures/errors/pending. Production and
+source/test/script seals are unchanged across both runs and the final
+diagnostic. The authenticated original 48-cell diagnostic (tool `3bc5d0`,
+exit 1) has 48 physical-layout/native-literal successes, 28 passing root cells
+and exactly 20 explicit UnsupportedFormatError cells. Its nonzero exit is an
+expected remaining-capability signal, not a full-matrix GREEN.
+
+The admitted cells are Object/Dynamic v1, v2 and v3 MAP on plain MRK3/MRK4,
+plus v3 ADVANCED_CHUNKED on plain MRK4, each with String-v0/v1 and
+Variant-BASIC/COMPACT. Twelve MRK3 non-MAP cells remain explicit refusals;
+eight MRK4 MAP_WITH_BUCKETS/ADVANCED cells stay in their separate pending RED.
+All admitted cells match independent native root rows and Float64 bits for
+EOF-first, single-mark, cross-mark and full reads. This is internal root
+qualification, not recursive, public, offline or writer admission.
+
+Root JSON ordinary String-v1 is selected from authenticated propagated
+serialization metadata; Object shared MAP/Copy String-v0 remains separate.
+A new own-file extent guard runs after existing preflight and before prepared
+state publication, only for Complete/WithSizeStream ordinary owners. It scans
+borrowed LE UInt64 lengths with subtractive payload exhaustion, without
+decoding values or charging captured bytes again. Dynamic SharedVariant's
+outer String envelope is ordinary; its inner BinaryValue remains deferred.
+The guard does not prove occurrence cardinality: extra zero lengths may pass
+EOF preparation. PrefixOnly recursive consumers are unchanged.
+
+Root rejected the first validator candidate: imposing logical role suffixes
+on native callback names caused two errors in thirteen unit tests (tool
+`2d36b6`). Pairing now uses adjacent owner/path/logical-role bindings, while
+checking each canonical callback name separately. The corrected cohort
+passes all thirteen unit and six native adversary examples. A final copy-only
+profile reversal restores fourteen profile failures (tool `b01ed4`); removing
+only the materializer guard call restores four native EOF no-raise failures,
+with all thirteen direct validator and both native controls still passing
+(tool `4f2574`). Root adversary ROBUST within this finite extent/profile scope;
+Luna's same-lineage source review is correlated, not independent evidence.
+
+The original 504-file capture, two sibling capture manifests and three
+protected specs remain unchanged. See
+[String-profile evidence](../.landmark/evidence/compact-static-json-string-profile-w263.json).
+Refresh after production/test/profile/capture/compiler/consumer drift or
+scope widening. Next: the separate eight-cell MRK4 shared-layout RED, then
+remaining MRK3 layouts and recursive/public/offline qualification. Compact
+writing needs its own physical coordinator; types, MV/projection composition
+and subsequent performance remain open. Goal ACTIVE; local atomic commit
+only, no push or speed-parity claim.
+
+### Transition anchor and causal history
+
+Anchor: `5da83124018ba422f04e575cfcd318720901906f`. The original baseline
+capture at `/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS` is
+unchanged: 48 parts, 504 regular files, 751082 bytes and 384 native row
+literals. Root ran the new authenticated root-only diagnostic against that
+anchor (tool `c7c202`, exit 1): every physical layout/native literal check
+passed; 14 cells passed EOF-first, single, cross-mark and full reads, while
+34 had capability or decoding errors. All existing String-v0 MAP profiles
+and String-v0 MRK4 ADVANCED_CHUNKED profiles passed. Their 14 String-v1
+siblings failed as CorruptPartError, not missing physical files. The remaining
+20 cells hit explicit shared-layout refusals. This diagnostic is not public,
+offline, recursive or writer qualification, and its nonzero exit must not be
+called a full matrix GREEN.
+
+The current hypothesis is metadata-to-profile selection, not a missing String
+codec: `CompactSerializationProfile` searches nominal descriptor children for
+String/Dynamic, while JSON has an empty child roster and keeps typed paths in
+its Object declaration. Native propagated String-v1 root rosters contain
+`root.label.size`, `root.note.SharedVariant.size`, `root.note.String.size`
+and `root.sample.SharedVariant.size`. Object shared MAP strings still use the
+separate default String-v0 serialization. A direct ordinary-profile assertion
+before reading values must distinguish this hypothesis from downstream
+callback-order or discriminator-codec faults.
+
+Risk is CAUTION; rollback is the anchor above. Do not broaden role schedules,
+recursive/public/offline admission, compressed marks or Compact writing in
+this transition. The strongest failure mode is applying the ordinary profile
+to shared MAP/Copy strings, or changing non-propagated/nested admission by
+accident. Keep the shared profile separate and validate propagated-v1,
+non-propagated-v0 and String-v0 controls.
+
+Execution ownership and DoD:
+
+1. Luna inventory owner adds only
+   `scripts/check_compact_static_json_root_matrix_w263.cr` and
+   `spec/compact_static_json_root_matrix_native_w263_spec.cr`: authenticate the
+   exact original capture; qualify 28 existing-layout root profiles and retain
+   12 explicit MRK3 shared-layout refusals. The other eight MRK4 MAP_WITH_BUCKETS
+   and ADVANCED profiles remain a separately named pending transition.
+2. Root first observes the profile assertion/native RED against unchanged
+   production. Only then may Luna engine owner edit
+   `src/crystal_click/compact_serialization_profile.cr`, with a JSON ordinary
+   String profile chosen from authenticated metadata rather than inferred
+   physical filenames. Any additional production path needs new causal
+   evidence and an updated boundary before editing.
+3. DoD: guarded serial DEBUG and RELEASE runs of the new native matrix spec
+   plus the exact prior 39-path/189-example root cohort and the protected root
+   adversary spec. All requested admitted reads must match stock row literals
+   and Float64 bits, without touching the three protected user-owned specs.
+   The root diagnostic should then show 28 passing cells and exactly 20
+   explicit UnsupportedFormatError cells, not zero failures for all 48.
+4. Falsifiers: size-lane grammar corruption must fail before prepared state
+   publication; correctly framed unselected BinaryValue corruption must remain
+   deferred; propagation=false must not fabricate size lanes; JSON shared MAP
+   strings must retain v0. Reversing only the profile fix in an isolated copy
+   must restore the specific native/profile RED. Root hostile review, exact
+   path/hash/diff checks and an atomic local commit follow the observed DoD.
+   No push and no memory/performance or speed-parity claim.
+
+### Causal EOF String-size extent RED — bounded guard prerequisite
+
+After the one-class profile correction, the focused native matrix passed
+41 examples and the authenticated diagnostic reached 28 admitted cells, with
+20 explicit shared-layout refusals. Reversing only that correction in an
+isolated source copy restored the same 14 profile-assertion failures. These
+observations do not yet close this transition: the new three-case adversary
+run (tool `542356`, exit 1) has one genuine failure. Replacing the first
+late-mark `root.label.size` UInt64 with MAX preserves the authenticated MRK4
+callback boundaries, but EOF preparation accepts it. The deferred inner
+SharedVariant-tag and synthetic propagation-false controls passed.
+
+Root inspected the causal seam: MRK4 captures named callback extents, while
+`ObjectDocumentInlineBodyMaterializer` treats zero-prefix ordinary size/data
+lanes as opaque buffers. The selected decoder checks lengths only when values
+are requested. Pinned upstream `SerializationString.cpp:963-1002` writes
+position-independent UInt64 lengths followed by exactly their total payload
+bytes. This is an extent relation, not a reason to eagerly decode values.
+
+The additional authorized production surface is one new class,
+`src/crystal_click/object_document_string_size_body_validator.cr`, and its
+bounded call in `src/crystal_click/object_document_inline_body_materializer.cr`
+and its integration require in `src/crystal_click.cr`.
+For Complete/WithSizeStream callers only, validate ordinary typed,
+typed-Dynamic and root-Dynamic String roles using the already-matched owner,
+path and adjacent logical size/data bindings. Require whole UInt64 words and
+exact total payload extent; reject missing, foreign or mismatched pairs before
+streams/prepared state are returned. Exclude shared MAP and advanced Copy
+owners. The scan borrows previously captured and budgeted bytes, creates no
+value/string buffers, and must not charge those bytes a second time.
+
+This guard certifies byte grammar and total extent only. It does not derive
+String entry counts from rows, Arrays or Dynamic discriminators; cardinality
+and inner BinaryValue semantics remain selected-decoder obligations. Extra
+zero lengths are not promised detectable by this guard. Do not expand this
+prerequisite into recursive cardinality admission or new shared layouts.
+
+Risk remains CAUTION with rollback at `5da8312`. Add overrun and underconsumption
+controls and a later-mark Dynamic SharedVariant size mutation to the owned
+adversary spec, plus direct pairing/empty/grammar tests in
+`spec/object_document_string_size_body_validator_w263_spec.cr`. Observe the
+native adversary RED before implementing the guard. The same serial DEBUG and
+RELEASE root cohort, new native/profile/adversary specs, direct guard tests and
+protected root adversary form the DoD. Retain the held-out eight-layout RED
+outside this commit and rerun the existing-profile controls after the guard.
+
+Root observed the extended native RED before guard implementation (tool
+`409db2`, exit 1): six examples, four failures, zero errors/pending. MAX,
+`[7,6]` overrun, `[5,6]` underconsumption and a positive captured late-mark
+Dynamic SharedVariant outer-size mutation all fail specifically because EOF
+preparation raises nothing. Both semantic-deferral and synthetic propagation
+controls pass. The Dynamic mutation reads its dense source size vector rather
+than guessing its entry count from the mark's two outer rows.
+
+Return pointer: after this profile transition, resume the eight MRK4
+MAP_WITH_BUCKETS/ADVANCED candidates. Root already observed their genuine
+role-schedule RED (tool `76f277`, eight examples, eight UnsupportedFormatError
+errors). MRK3 bucket framing, recursive/public/offline JSON, Compact writing,
+MV/projection parity and the subsequent performance goal remain open.
 
 ## Bounded COMPACT Dynamic frames in MRK3 MAP — qualified within the named stock witness
 

@@ -1,5 +1,42 @@
 # Crystal Click landmarks
 
+## Compact root JSON propagated String-v1 and EOF extent guard — W263
+
+- VERIFIED / root adversary ROBUST over `5da83124018ba422f04e575cfcd318720901906f`
+  within 28 authenticated existing-layout root cells: MAP Object/Dynamic v1/v2/v3
+  on plain MRK3/MRK4 and v3 ADVANCED_CHUNKED on plain MRK4, S0/S1 and
+  Variant-BASIC/COMPACT. Final serial DEBUG/RELEASE: exact 43-path cohort,
+  251 examples per mode, zero failures/errors/pending. Not public or recursive
+  JSON, offline admission, a Compact writer or full 48-cell GREEN.
+- Root JSON's ordinary String-v1 comes from authenticated propagated metadata;
+  nominal descriptor children omit its typed/discovered paths. Object shared
+  MAP/Copy keeps default String-v0. Complete/WithSizeStream ordinary size/data
+  lanes are checked after preflight and before publication by an own-file guard:
+  adjacent owner/path/logical roles, exact canonical callback names, whole LE
+  UInt64 words and subtractive exact payload exhaustion. No value decoding or
+  repeated byte charge. PrefixOnly recursive consumers stay unchanged.
+- Refuted route: logical `.string_sizes/.data` suffixes are not native callback
+  spellings `.size/bare_name`; two positive unit errors exposed the candidate's
+  false pairing constraint. Corrected pairing preserves all native controls.
+  Four authenticated late-mark MAX/overrun/underconsumption/SharedVariant size
+  poisons now refuse at EOF; framed inner BinaryValue poison stays deferred.
+  Extent is not occurrence cardinality; additional zero entries may pass EOF.
+- Final copy-only profile reversal restores 14 profile assertion failures;
+  removing only the guard call restores 4 native no-raise failures while 13
+  direct guard cases and 2 native controls pass. Root checks actual diffs,
+  independent literal oracles and unchanged production/test seals; Luna review
+  is correlated. All 504 original capture files, sibling manifests and protected
+  specs remain unchanged. Mutation helpers qualify selected root pairs only.
+- Final authenticated diagnostic: 48 layout/native-row successes, 28 readers
+  pass, 20 explicit capability refusals (12 MRK3 non-MAP; 8 MRK4
+  MAP_WITH_BUCKETS/ADVANCED). Next: separate eight-cell MRK4 RED, then remaining
+  layouts and recursive/public/offline consumers. Compact writing needs a
+  physical coordinator; MV/projections and later performance remain required.
+  Goal ACTIVE; local atomic commit only, no push or speed claim. Refresh after
+  source/test/profile/capture/compiler/consumer drift or widening. Return pointers:
+  [String-profile evidence](.landmark/evidence/compact-static-json-string-profile-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md).
+
 ## Bounded internal MRK3 COMPACT Dynamic frames — W263
 
 - VERIFIED / root adversary ROBUST over BASIC/NULL checkpoint
