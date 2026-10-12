@@ -1,5 +1,55 @@
 # Crystal Click landmarks
 
+## Context-owned declared Compact JSON writer — W269
+
+- VERIFIED / root adversary ROBUST over baseline
+  `5e62ad32fc902e2112b2ed98ba63d9d2b3e86451` within the finite context-bound
+  Object V3 (wire 4), String0, MAP/one-bucket and MAP_WITH_BUCKETS/two-bucket,
+  BASIC/COMPACT, plain-MRK3/MRK4 witness (2026-10-12). Focused specs: 19 examples.
+  Final serial DEBUG and actual RELEASE each pass 127 disjoint paths / 876
+  examples in five executables: 202 writer + 108 LC + 59 Variant + 109 Dynamic
+  + 398 JSON, zero failures/errors/pending. Held seals; no combined/full-suite/
+  fresh-clone claim. One worker/thread, unchanged 12 GiB / 50%-free guards.
+- Own-file `CompactJsonWriteContext`, input, callback-plan and encoded-column
+  owners bind explicit `CompactPartColumn.json` storage/context inputs. Reuse
+  Object/Dynamic codecs, recursive occurrence grids and the sole physical
+  assembler; do not rebuild whole-part statistics from sample/mark values.
+  Version-correct later prefixes and unresolved-relocation refusal stay intact.
+  Staged semantic comparison covers Object paths/nested values independently
+  of zero scalar bytes or public BinaryValue identity; separate equal decodes
+  pass, changed path/value mutants refuse. Logical budgets are not RSS proof.
+- Final native root `/private/tmp/crystal-click-w269-native.Dr5s2A`
+  (`c576de` / `165466`): four stock MRK4 cells and eight generated cells,
+  134 native/helper invocations / 536 authenticated raw files. Four declared
+  topologies contain five independent Object sites, including late shared paths
+  and zero-child marks. Native ATTACH/CHECK=1 and literal 6/2/1/0-row windows
+  pass. Independent root source/raw audit (`0f26e3`) checks every generated
+  tape/mark/EOF and first/later-prefix statistics; decoded MAP 2259/2293 and
+  MAP_WITH_BUCKETS 2506/2540 bytes match across generated mark formats.
+  Native rosters are 84/99 slots, not one shared layout. Source/runtime pins
+  differ; no latest/all-version, compressed-byte parity or speed claim.
+- Copy-only resealed middle Object 4 -> 3 changes decoded byte 1193 only.
+  CHECK=1 is nonsemantic; selected local/native reads refuse, key/root controls
+  pass. Same-column late/empty observations do not establish locality. No W269
+  unsealed-control or granule-only-I/O claim; local preparation visits the grid.
+- Fresh current-helper Variant/LC/static/Dynamic native/raw guards pass (249
+  invocations / 996 raw files). All nine frozen W264 static files remain equal
+  (17902 bytes); three user-owned specs and original 52 parts / 544 files /
+  756378 bytes stay unchanged and excluded from staging.
+- OPEN: typed-Dynamic Array(UInt8) under nonempty Array(JSON) on MRK3 lacks
+  a physical body-owner handler despite logical plan admission. Staged readback
+  refuses with no publication/residue; this is safety, not capability closure.
+  Bool/UInt64 framing is narrowly native-qualified. Next falsifier is a native
+  positive for that broader body owner; Dynamic-owned JSON, advanced/chunked
+  layouts and Compact MV/projection composition remain separate frontiers.
+- Return pointers: [writer frontier](docs/COMPACT_PART_WRITER_FRONTIER.md),
+  [project status](docs/PROJECT_STATUS.md) and
+  [W269 evidence](.landmark/evidence/compact-part-writer-w269.json).
+  Full goal ACTIVE; types/MV/projections before optimization, no <=10% speed
+  claim. Local atomic commit only/no push. Refresh after relevant source/test/
+  profile/compiler/runtime/capture drift, evidence loss or widening. Rollback:
+  revert W269 only, preserve protected specs and original captures.
+
 ## Context-owned Compact Dynamic writer — W268
 
 - VERIFIED / root adversary ROBUST over baseline

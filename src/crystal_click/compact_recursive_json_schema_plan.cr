@@ -90,8 +90,8 @@ module CrystalClick
       @limits : BinaryCodecLimits,
       @budget : BinaryCodecBudget,
     )
-      unless !@budget.writing? && self.class.admitted_schema?(@schema) &&
-             (@schema.tuple? || @schema.array?) && @schema.has_json?
+      reader_schema = !@budget.writing? && (@schema.tuple? || @schema.array?) && @schema.has_json?
+      unless self.class.admitted_schema?(@schema) && (@budget.writing? || reader_schema)
         raise UnsupportedFormatError.new("recursive Compact JSON schema is outside the captured static-site subset")
       end
       context = PhysicalStreamPlanContext.new(@limits)
@@ -109,12 +109,24 @@ module CrystalClick
       @json_sites.dup
     end
 
+    def json_site_count : Int32
+      @json_sites.size
+    end
+
     def array_sites : Array(ArraySite)
       @array_sites.dup
     end
 
+    def array_site_count : Int32
+      @array_sites.size
+    end
+
     def uint8_sites : Array(UInt8Site)
       @uint8_sites.dup
+    end
+
+    def uint8_site_count : Int32
+      @uint8_sites.size
     end
 
     def json_site(key : String) : JsonSite
@@ -148,6 +160,24 @@ module CrystalClick
       end
       @array_sites.each { |site| names << String.new(site.callback_name.to_slice) }
       append_body_names(@schema, "root", names, schedules)
+      names
+    end
+
+    # Writer counterpart: the inline Object encoder already returns canonical
+    # to callback-name pairs, so writer planning need not fabricate reader
+    # schedules. Keep the reader-owned overload above unchanged.
+    def expected_event_names(
+      prefixes : Hash(String, Array(String)),
+      body_pairs : Hash(String, Array(ObjectDocumentInlineCallbackOrder::CallbackPair)),
+    ) : Array(String)
+      names = Array(String).new
+      @json_sites.each do |site|
+        callbacks = prefixes[site.key]? ||
+                    raise(CorruptPartError.new("recursive Compact Object prefix schedule is missing"))
+        callbacks.each { |name| names << String.new(name.to_slice) }
+      end
+      @array_sites.each { |site| names << String.new(site.callback_name.to_slice) }
+      append_body_names(@schema, "root", names, body_pairs)
       names
     end
 
@@ -301,6 +331,28 @@ module CrystalClick
       elsif schema.tuple?
         schema.child_count.times do |index|
           append_body_names(schema.child_at(index), tuple_child_key(key, index), output, schedules)
+        end
+      end
+      nil
+    end
+
+    private def append_body_names(
+      schema : StorageColumnSchema,
+      key : String,
+      output : Array(String),
+      body_pairs : Hash(String, Array(ObjectDocumentInlineCallbackOrder::CallbackPair)),
+    ) : Nil
+      if schema.object?
+        pairs = body_pairs[key]? ||
+                raise(CorruptPartError.new("recursive Compact Object body schedule is missing"))
+        pairs.each { |_canonical, callback| output << String.new(callback.to_slice) }
+      elsif schema.bulk?
+        output << String.new(uint8_site(key).callback_name.to_slice)
+      elsif schema.array?
+        append_body_names(schema.child_at(0), array_child_key(key), output, body_pairs)
+      elsif schema.tuple?
+        schema.child_count.times do |index|
+          append_body_names(schema.child_at(index), tuple_child_key(key, index), output, body_pairs)
         end
       end
       nil

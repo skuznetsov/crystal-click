@@ -36,7 +36,9 @@ module CrystalClick
       reserve_input_descriptors!(write_transport_budget, key_name, columns)
       value_inputs = Array(CompactPartWriteInput).new(columns.size)
       columns.each do |column|
-        if column.dynamic_context?
+        if column.json_context?
+          value_inputs << column.json_input
+        elsif column.dynamic_context?
           value_inputs << column.dynamic_input
         else
           value_inputs << column.static_input
@@ -50,8 +52,16 @@ module CrystalClick
       backend_columns = Array(CompactPartWriteInput).new(columns.size + 1)
       backend_columns << key_input
       value_inputs.each { |input| backend_columns << input }
-      has_dynamic_columns = value_inputs.any? { |input| input.is_a?(CompactDynamicColumnInput) }
-      write_plan : CompactStaticWritePlan | CompactPartWritePlan = if has_dynamic_columns
+      # JSON callback planning retains a second reference grid to authenticate
+      # its exact bound input. Reserve those containers before the plan copies
+      # them; recursive values remain shared immutable owners.
+      value_inputs.each do |input|
+        if json_input = input.as?(CompactJsonColumnInput)
+          write_transport_budget.reserve_result_bytes(to_i64(json_input.granule_workspace_bytes))
+        end
+      end
+      has_context_columns = value_inputs.any? { |input| !input.is_a?(CompactStaticColumnInput) }
+      write_plan : CompactStaticWritePlan | CompactPartWritePlan = if has_context_columns
         CompactPartWritePlan.new(
           backend_columns,
           limits,
@@ -305,6 +315,7 @@ module CrystalClick
       input_owner_bytes = {
         instance_sizeof(CompactStaticColumnInput).to_u64,
         instance_sizeof(CompactDynamicColumnInput).to_u64,
+        instance_sizeof(CompactJsonColumnInput).to_u64,
       }.max
       bytes = checked_add_u64(bytes, checked_multiply_u64(input_count, input_owner_bytes))
       bytes = checked_add_u64(bytes, checked_multiply_u64(input_count, instance_sizeof(BinaryBulkProfile).to_u64))
@@ -556,12 +567,19 @@ module CrystalClick
         transport_budget,
       )
       value_inputs.each do |input|
+        if json_input = input.as?(CompactJsonColumnInput)
+          CompactJsonPartReadbackValidator.validate!(
+            stage, json_input, keys.size.to_u64, rows, planned_data_size,
+            slot_count, limits, reader_limits, codec_budget, transport_budget,
+          )
+          next
+        end
         validate_column_values!(
           stage,
           input.name,
           input.type,
           keys,
-          input,
+          input.as(CompactStaticColumnInput | CompactDynamicColumnInput),
           rows,
           planned_data_size,
           slot_count,
@@ -578,7 +596,7 @@ module CrystalClick
       name : String,
       type : BinaryDataType,
       keys : Array(UInt64),
-      input : CompactPartWriteInput?,
+      input : (CompactStaticColumnInput | CompactDynamicColumnInput)?,
       rows : Array(UInt64),
       planned_data_size : UInt64,
       slot_count : Int,
@@ -639,9 +657,7 @@ module CrystalClick
           value = values[row]
           if input_column = input
             expected = input_column.granules[mark_index][row]
-            unless binary_values_equal?(value, expected)
-              raise CorruptPartError.new("staged Compact values differ from the immutable input")
-            end
+            CompactPartValueComparison.binary!(value, expected, codec_budget)
           else
             unless value.type == type && !value.is_null? && decode_uint64(value) == keys[mark_offset + row]
               raise CorruptPartError.new("staged Compact key values differ from the immutable input")
@@ -660,20 +676,8 @@ module CrystalClick
       nil
     end
 
-    private def self.binary_values_equal?(left : BinaryValue, right : BinaryValue) : Bool
-      return false unless left.type == right.type && left.is_null? == right.is_null? &&
-                          left.byte_size == right.byte_size && left.child_count == right.child_count
-      left.byte_size.times do |index|
-        return false unless left.byte_at(index) == right.byte_at(index)
-      end
-      left.child_count.times do |index|
-        return false unless binary_values_equal?(left.child_at(index), right.child_at(index))
-      end
-      true
-    end
-
     private def self.column_result_workspace(
-      input : CompactPartWriteInput?,
+      input : (CompactStaticColumnInput | CompactDynamicColumnInput)?,
       mark_index : Int,
       rows : UInt64,
     ) : UInt64
@@ -707,6 +711,16 @@ module CrystalClick
       )
       value.child_count.times do |child|
         bytes = checked_add_u64(bytes, binary_value_workspace(value.child_at(child)))
+      end
+      if value.type.tag == BinaryDataType::TAG_JSON
+        row = value.json_row
+        bytes = checked_add_u64(bytes, instance_sizeof(BinaryJsonRow).to_u64)
+        bytes = checked_add_u64(bytes, instance_sizeof(Array(Tuple(String, BinaryValue))).to_u64)
+        bytes = checked_add_u64(bytes, checked_multiply_u64(row.path_count.to_u64, sizeof(Tuple(String, BinaryValue)).to_u64))
+        row.path_count.times do |index|
+          bytes = checked_add_u64(bytes, instance_sizeof(String).to_u64 + row.path_byte_size(index).to_u64 + 1_u64)
+          bytes = checked_add_u64(bytes, binary_value_workspace(row.value_at(index)))
+        end
       end
       bytes
     end

@@ -1,5 +1,5 @@
 module CrystalClick
-  # Writes admitted static and explicitly bound Dynamic BinaryBulk columns
+  # Writes admitted static and explicitly bound Dynamic/Object columns
   # into one granule-major Compact tape and selected MRK3/MRK4 coordinate
   # grid. Metadata and publication remain owned by the table writer.
   class CompactStaticWriter
@@ -79,6 +79,10 @@ module CrystalClick
           dynamic_plan = callback_plan.as?(CompactDynamicCallbackPlan) ||
                          raise(ArgumentError.new("Compact mixed Dynamic callback plan differs from its input"))
           encoded << CompactDynamicEncodedColumn.encode(dynamic_plan, column.granules, codec_budget)
+        when CompactJsonColumnInput
+          json_plan = callback_plan.as?(CompactJsonCallbackPlan) ||
+                      raise(ArgumentError.new("Compact mixed JSON callback plan differs from its input"))
+          encoded << CompactJsonEncodedColumn.encode(json_plan, codec_budget)
         else
           raise UnsupportedFormatError.new("unsupported Compact mixed writer input")
         end

@@ -268,6 +268,21 @@ module CrystalClick
         end
         fixed_bytes!(context, count, 1_u64)
         charge_occurrences!(count)
+      when BinaryDataType::TAG_BOOL
+        unless role == "root.data"
+          raise UnsupportedFormatError.new("Compact MRK3 Bool role is outside the admitted fixed-width grammar")
+        end
+        # This framer authenticates the lane extent; the common Binary decoder
+        # remains the sole owner of Bool value validation and decoding.
+        fixed_bytes!(context, count, 1_u64)
+        charge_occurrences!(count)
+      when BinaryDataType::TAG_UINT64
+        unless role == "root.data"
+          raise UnsupportedFormatError.new("Compact MRK3 UInt64 role is outside the admitted fixed-width grammar")
+        end
+        # Keep value decoding in the common Binary decoder after framing.
+        fixed_bytes!(context, count, 8_u64)
+        charge_occurrences!(count)
       when BinaryDataType::TAG_INT64
         unless role == "root.data"
           raise UnsupportedFormatError.new("Compact MRK3 Int64 role is outside the admitted fixed-width grammar")

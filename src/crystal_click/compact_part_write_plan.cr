@@ -1,10 +1,10 @@
 module CrystalClick
-  alias CompactPartWriteInput = CompactStaticColumnInput | CompactDynamicColumnInput
-  alias CompactPartCallbackPlan = CompactStaticCallbackPlan | CompactDynamicCallbackPlan
-  alias CompactPartEncodedColumn = CompactEncodedColumn | CompactDynamicEncodedColumn
+  alias CompactPartWriteInput = CompactStaticColumnInput | CompactDynamicColumnInput | CompactJsonColumnInput
+  alias CompactPartCallbackPlan = CompactStaticCallbackPlan | CompactDynamicCallbackPlan | CompactJsonCallbackPlan
+  alias CompactPartEncodedColumn = CompactEncodedColumn | CompactDynamicEncodedColumn | CompactJsonEncodedColumn
 
   # Ordered mixed Compact physical plan. It composes the existing strict
-  # static callback plan with explicit Dynamic plans while retaining one
+  # static callback plan with explicit Dynamic/Object plans while retaining one
   # schema-order substream roster and mark-slot grid.
   class CompactPartWritePlan
     getter mark_format : CompactMarkFormat
@@ -52,6 +52,8 @@ module CrystalClick
                           CompactStaticCallbackPlan.new(column, limits, @variant_discriminator_mode)
                         when CompactDynamicColumnInput
                           CompactDynamicCallbackPlan.new(column, limits, budget, @variant_discriminator_mode)
+                        when CompactJsonColumnInput
+                          CompactJsonCallbackPlan.new(column, limits, budget, @variant_discriminator_mode)
                         else
                           raise UnsupportedFormatError.new("unsupported Compact callback input")
                         end
@@ -134,6 +136,10 @@ module CrystalClick
         dynamic_plan = callback_plan.as?(CompactDynamicCallbackPlan) || return false
         dynamic_input.profile == dynamic_plan.profile && dynamic_input.map_basic? &&
           dynamic_plan.same_context?(dynamic_input.dynamic_context)
+      elsif json_input = input.as?(CompactJsonColumnInput)
+        json_plan = callback_plan.as?(CompactJsonCallbackPlan) || return false
+        json_input.profile == json_plan.profile && json_input.map_basic? &&
+          json_plan.same_context?(json_input.json_context) && json_plan.same_input?(json_input)
       else
         false
       end

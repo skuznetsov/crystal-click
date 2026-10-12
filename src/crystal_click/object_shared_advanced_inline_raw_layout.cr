@@ -65,9 +65,23 @@ module CrystalClick
       {String.new(callback[0].to_slice), copy_bytes(callback[1])}
     end
 
+    # Budgeted detached accessor for writer owners that retain callback
+    # fragments beyond this layout's lifetime. Charge the name and payload
+    # before allocating either copy.
+    def prefix_callback_at(index : Int, budget : BinaryCodecBudget) : Callback
+      detached_callback(@prefix_callbacks[index], budget)
+    end
+
     def body_callback_at(index : Int) : Callback
       callback = @body_callbacks[index]
       {String.new(callback[0].to_slice), copy_bytes(callback[1])}
+    end
+
+    # Budgeted detached accessor for writer owners that retain callback
+    # fragments beyond this layout's lifetime. Charge the name and payload
+    # before allocating either copy.
+    def body_callback_at(index : Int, budget : BinaryCodecBudget) : Callback
+      detached_callback(@body_callbacks[index], budget)
     end
 
     def relocation_at(index : Int) : ObjectSharedInlineCallbackRelocation
@@ -96,6 +110,17 @@ module CrystalClick
 
     private def copy_bytes(bytes : Bytes) : Bytes
       Bytes.new(bytes.size) { |index| bytes[index] }
+    end
+
+    private def detached_callback(callback : Callback, budget : BinaryCodecBudget) : Callback
+      wire_bytes = checked_add(callback[0].bytesize.to_u64, callback[1].size.to_u64, budget)
+      budget.ensure_future_nodes(2_u64)
+      budget.ensure_future_elements(2_u64)
+      budget.charge_wire_bytes(wire_bytes)
+      budget.charge_node
+      budget.charge_node
+      budget.charge_elements(2_u64)
+      {String.new(callback[0].to_slice), copy_bytes(callback[1])}
     end
 
     private def relocation_validation_work(count : UInt64) : UInt64

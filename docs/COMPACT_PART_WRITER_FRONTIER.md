@@ -1,6 +1,133 @@
 # Compact part writer frontier
 
-## Current transition: context-owned Compact Dynamic writer — W268
+## Current transition: context-owned declared Compact JSON writer — W269
+
+Status: VERIFIED / root adversary ROBUST within the finite context-bound JSON
+witness and exact affected cohorts (2026-10-12). Baseline:
+`5e62ad32fc902e2112b2ed98ba63d9d2b3e86451` (W268). The full objective remains
+ACTIVE: complete type/layout compatibility and MV/projection composition before
+memory/performance optimization. This transition is not an all-JSON-layout claim.
+
+Risk: CAUTION (persistent Object/Dynamic serialization and staged publication).
+Rollback: revert only the W269-owned feature; preserve the three untracked
+user-owned W263 specs, all original native captures, and W264-W268 byte/native
+regression oracles. Do not relax existing reader/profile/resource guards.
+
+Admitted slice: explicit `CompactPartColumn.json(name, schema, granules,
+context)` input using `StorageColumnValue` and an exact static-site map of
+`ObjectDocumentPlan`s. The four native-qualified declarations are root
+JSON, Array(JSON), Array(Tuple(JSON, UInt8)), and Tuple(JSON, JSON). Each site's
+first-block structure and statistics are supplied authority, not inferred from
+the first mark or recomputed across the whole part. Initial layouts are Object
+V3 (wire value 4), MAP with one bucket / MAP_WITH_BUCKETS with two buckets,
+String0 single-stream profiles, BASIC/COMPACT Dynamic discriminator framing,
+and plain MRK3/MRK4. Dynamic-owned JSON sites, advanced/chunked layouts and
+unsupported typed/actual callback grammars remain executable refusals and open
+work for later transitions; no broader goal is silently excluded.
+
+OPEN: broader typed-Dynamic/recursive MRK3 body framing. Logical plan admission
+does not establish a physical body-owner handler. A nonempty Array(JSON) with
+typed Dynamic Array(UInt8) reaches staged readback and refuses with
+`UnsupportedFormatError` "Compact MRK3 MAP tape contains an unsupported body
+owner"; the no-publication/no-staging-residue guard passes. This preserves
+safety, not the requested capability. Narrow Bool/UInt64 body-width framing is
+native-qualified below; the common decoder still owns semantic validation.
+
+Design: reuse `StorageColumnSchema`/`StorageColumnValue` occurrence grids,
+`ObjectDocumentCodec`, Object/Dynamic structure codecs and
+`ObjectDocumentColumnWriter.inline_raw_layout_at_child_site`. The existing
+callback grammar owns prefix/body order; the existing Compact assembler owns
+granule-major data.bin, MRK3/MRK4 coordinates, EOF, compression and checksums.
+Unresolved relocation sidecars must be rejected in this initial layout slice,
+never discarded. Later prefixes use version-correct PREFIX_EMPTY semantics;
+omitting a whole prefix or writing just a descriptor is not equivalent.
+
+Baseline falsifier: the new existing-API positive spec compiled at unchanged
+production HEAD, then reached `UnsupportedFormatError` "Compact static writer
+does not admit JSON state" at `compact_static_callback_plan.cr:37`. Root tool
+`d44cff`, exit 1, one example / zero assertion failures / one error. The exact
+positive source SHA256 is
+`37dc03c2a2a62364a12126e1ee8a19054fc18935090ea049efb6fcb0422213cc`.
+An earlier fixture-only Array-to-Slice compile correction is not behavioral RED.
+After the explicit context API exists, preserve unbound binary_bulk JSON as a
+negative and establish positives through explicit storage/context binding.
+
+Implementation ownership and DoD:
+
+- Luna implementation: four own-file `CompactJsonWriteContext`,
+  `CompactJsonColumnInput`, `CompactJsonCallbackPlan`, `CompactJsonEncodedColumn`
+  owners and narrowly shared schema traversal. Root: public input, mixed-plan
+  aliases/dispatch, existing assembler integration, metadata and staged readback.
+- Luna tests: new W269 fixture, positive/adversary specs and baseline phase
+  conversion. Luna native evidence: new W269 fixture/helper/probe only. Original
+  captures and user specs are outside all ownership/staging sets.
+- Root runs guarded focused specs, affected consumer cohorts in DEBUG and actual
+  RELEASE, then stock-first INSERT-to-Crystal and generated-to-stock ATTACH,
+  CHECK and literal full/middle/last/empty reads. Root audits raw callback/mark
+  order, first-block/later-prefix statistics and EOF independently of encoding.
+  CHECK alone is not a semantic value oracle. Use disposable copy-only,
+  checksum-resealed defects and clean controls; qualify only measured witnesses.
+- Staged readback compares complete Object paths and nested values, including
+  JSON retained outside scalar byte/child storage. Public BinaryValue identity
+  equality must not replace semantic validation. Changed path/value mutants and
+  independently decoded equal values discriminate this boundary.
+- DoD commands are root-only guarded `crystal spec` focused/affected cohorts,
+  `crystal build --release` for the W269 helper, and the new Ruby native probe;
+  expected signals are zero test failures/errors/pending and independently
+  exact stock/generated values plus mutant rejection. Exact commands, pins and
+  evidence seals are recorded in the W269 evidence packet below.
+
+Strongest failures: callbacks or sample statistics rebuilt per mark; JSON path
+differences hidden by zero scalar bytes; Array child occurrence counts confused
+with physical rows; advanced saved coordinates emitted without relocation.
+Guard each before staged publication and attack independent sites, late shared
+paths and zero-child marks. Source pin remains
+`ed30948f095ecb70679986d7d60e27ad770ae27a`; source and native runtime are distinct.
+No latest-version, all-types, speed or granule-only-I/O claim follows.
+
+### Executed W269 qualification
+
+- Focused public/baseline/adversary specs: 19 examples, zero failures/errors/
+  pending. Five disjoint affected cohorts cover 127 paths / 876 examples in
+  DEBUG and the same 876 in actual RELEASE, all zero failures/errors/pending.
+  These are five executables per profile, not a combined/full-suite or
+  self-contained fresh-clone qualification. Production and source/spec/script
+  seals hold across final runs; resource guards are unchanged.
+- Four stock MRK4 cells are captured before candidate inspection; eight
+  generated MRK3/MRK4 x MAP/MAP_WITH_BUCKETS x BASIC/COMPACT cells pass native
+  ATTACH, CHECK=1 and literal full/middle/last/empty 6/2/1/0-row windows.
+  The final probe has 134 native/helper invocations / 536 authenticated raw
+  files, not 134 native invocations. Five independent Object sites span the
+  four declared topologies, including late shared paths and zero-child marks.
+- Root's separate source/raw auditor (`0f26e3`) passes the full generated
+  matrix and resealed mutant. It checks prefix order/statistics, all marks and
+  EOF, 2259/2293-byte MAP and 2506/2540-byte MAP_WITH_BUCKETS decoded tapes.
+  Corresponding generated MRK3/MRK4 tapes and shared payloads agree; stock
+  rosters remain layout-specific (84 versus 99 slots). Source revision
+  `ed30948f095ecb70679986d7d60e27ad770ae27a` and native 26.10.1.1201 build
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028` are distinct pins.
+- A copy-only, checksum-resealed middle Object wire-version 4 -> 3 changes
+  decoded byte 1193 only. Native ATTACH/CHECK=1 coexist with selected native/
+  local semantic refusal; independent key/root controls are exact. Same-column
+  late/empty outcomes are observations, not locality proof. No W269 unsealed
+  mutant or granule-only-I/O claim follows; local preparation visits the grid.
+- Semantic staging guards distinguish changed Object paths/nested values from
+  independently decoded equal values; absent Nothing/NULL and retained typed
+  NULL keep their different contracts. Context detachment, depth, missing/
+  replaced statistics, unsupported profiles and cumulative operation-budget
+  guards pass. Logical byte estimates are not RSS or allocation-order evidence;
+  V1/V2 later-prefix tests are local, not an all-version native qualification.
+- Fresh current-helper Variant, LC, static and Dynamic native/raw guards pass
+  (249 invocations / 996 raw files). All nine frozen W264 static files remain
+  identical (17902 bytes). Three user-owned W263 specs and original 52 parts /
+  544 files / 756378 bytes remain unchanged and excluded from staging.
+- See [W269 evidence](../.landmark/evidence/compact-part-writer-w269.json) for
+  exact commands, hashes, raw references and decay/refresh boundaries. Next:
+  broader MRK3 body framing, Dynamic-owned JSON and remaining advanced/chunked
+  layouts/profiles, then Compact MV/projection composition. Performance remains
+  deferred; the full goal stays ACTIVE. Local atomic commit only, no push.
+
+## Previous transition: context-owned Compact Dynamic writer — W268
 
 Status: W268 VERIFIED / root adversary ROBUST within the finite context-owned
 Dynamic witness, plain-MRK3/MRK4 modes and exact affected cohorts (2026-10-12).

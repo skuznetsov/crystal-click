@@ -8,12 +8,18 @@ module CrystalClick
 
     @granules : Array(Array(BinaryValue))
     @dynamic_context : CompactDynamicWriteContext?
+    @json_schema : StorageColumnSchema?
+    @json_granules : Array(Array(StorageColumnValue))?
+    @json_context : CompactJsonWriteContext?
 
     private def initialize(
       @name : String,
       @type : BinaryDataType,
       @granules : Array(Array(BinaryValue)),
       @dynamic_context : CompactDynamicWriteContext?,
+      @json_schema : StorageColumnSchema? = nil,
+      @json_granules : Array(Array(StorageColumnValue))? = nil,
+      @json_context : CompactJsonWriteContext? = nil,
     )
     end
 
@@ -45,11 +51,33 @@ module CrystalClick
       new(owned_name, type, owned_granules, dynamic_context)
     end
 
+    # Static Object sites retain their schema/value carriers and an explicit
+    # first-block serialization context, rather than flattening JSON into an
+    # ordinary BinaryValue byte lane.
+    def self.json(
+      name : String,
+      schema : StorageColumnSchema,
+      granules : Array(Array(StorageColumnValue)),
+      json_context : CompactJsonWriteContext,
+    ) : CompactPartColumn
+      unless CompactRecursiveJsonSchemaPlan.admitted_schema?(schema)
+        raise UnsupportedFormatError.new("Compact JSON column schema is outside the admitted static-site subset")
+      end
+      type = BinaryRecursiveDataTypeNameReader.parse_canonical(schema.declaration) ||
+             raise UnsupportedFormatError.new("Compact JSON column requires a canonical JSON-bearing descriptor")
+      owned_granules = Array(Array(StorageColumnValue)).new(granules.size)
+      granules.each { |rows| owned_granules << rows.dup }
+      new(
+        String.new(name.to_slice), type, [] of Array(BinaryValue), nil,
+        schema, owned_granules, json_context,
+      )
+    end
+
     # Internal bridge to the Compact-only physical backend. This intentionally
     # does not accept a Wide profile, map mode, or other ignored writer option.
     def static_input : CompactStaticColumnInput
-      if @dynamic_context
-        raise UnsupportedFormatError.new("Compact Dynamic input requires an explicit Dynamic write context")
+      if @dynamic_context || @json_context
+        raise UnsupportedFormatError.new("context-owned Compact input cannot use the static input bridge")
       end
       detached_granules = Array(Array(BinaryValue)).new(@granules.size)
       @granules.each do |rows|
@@ -70,8 +98,21 @@ module CrystalClick
       !@dynamic_context.nil?
     end
 
+    def json_input : CompactJsonColumnInput
+      context = @json_context || raise UnsupportedFormatError.new("unbound Compact JSON input is not admitted")
+      schema = @json_schema || raise UnsupportedFormatError.new("Compact JSON input has no schema")
+      granules = @json_granules || raise UnsupportedFormatError.new("Compact JSON input has no storage values")
+      CompactJsonColumnInput.new(@name, schema, granules, context, @type)
+    end
+
+    def json_context? : Bool
+      !@json_context.nil?
+    end
+
     def input_workspace_bytes : UInt64
-      if context = @dynamic_context
+      if context = @json_context
+        checked_workspace_add(json_granule_workspace_bytes, context.retained_workspace_bytes)
+      elsif context = @dynamic_context
         checked_workspace_add(dynamic_granule_workspace_bytes, context.retained_workspace_bytes)
       else
         static_input_workspace_bytes
@@ -108,6 +149,20 @@ module CrystalClick
           bytes,
           checked_workspace_multiply(rows.size.to_u64, sizeof(Pointer(BinaryValue)).to_u64),
         )
+      end
+      bytes
+    end
+
+    private def json_granule_workspace_bytes : UInt64
+      granules = @json_granules || raise UnsupportedFormatError.new("Compact JSON input has no storage values")
+      bytes = instance_sizeof(Array(Array(StorageColumnValue))).to_u64
+      bytes = checked_workspace_add(
+        bytes,
+        checked_workspace_multiply(granules.size.to_u64, sizeof(Pointer(Array(StorageColumnValue))).to_u64),
+      )
+      granules.each do |rows|
+        bytes = checked_workspace_add(bytes, instance_sizeof(Array(StorageColumnValue)).to_u64)
+        bytes = checked_workspace_add(bytes, checked_workspace_multiply(rows.size.to_u64, sizeof(Pointer(StorageColumnValue)).to_u64))
       end
       bytes
     end

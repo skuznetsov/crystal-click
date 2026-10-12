@@ -1,6 +1,51 @@
 # CrystalClick project status
 
-Current context-owned Compact Dynamic writer (W268, 2026-10-12): VERIFIED /
+Current context-owned declared Compact JSON writer (W269, 2026-10-12): VERIFIED /
+root adversary ROBUST within the finite Object V3 (wire 4), String0,
+MAP/one-bucket and MAP_WITH_BUCKETS/two-bucket, BASIC/COMPACT, plain-MRK3/MRK4
+witness and exact affected cohorts. `CompactPartColumn.json` explicitly binds
+immutable `CompactJsonWriteContext` site plans to storage values. Own-file
+input/callback/encoded-column owners reuse Object/Dynamic serde and existing
+recursive occurrence grids; one physical assembler handles static/LC/Variant/
+Dynamic/JSON. First-block statistics are supplied authority, not inferred from
+the first mark or recomputed over the part. Later prefixes remain version-correct.
+
+The native witness covers root JSON, Array(JSON), Array(Tuple(JSON, UInt8)) and
+Tuple(JSON, JSON), five independent Object sites, typed UInt64/String paths,
+ordinary Dynamic Bool/String/UInt64 arms, late shared values and zero-child
+marks. It does not qualify every admitted recursive descriptor. OPEN: nonempty
+Array(JSON) with typed Dynamic Array(UInt8) on MRK3 still reaches a missing
+physical body-owner handler and refuses before publication, with no staging
+residue. That guard establishes safety, not recursive layout compatibility.
+Dynamic-owned JSON and remaining advanced/chunked layouts remain open.
+
+Focused specs pass 19 examples. Final serial DEBUG and actual RELEASE each pass
+127 disjoint paths / 876 examples in five executables, zero failures/errors/
+pending; no combined/full-suite/fresh-clone claim. Four stock MRK4 cells read
+in Crystal; all eight generated mark/layout/mode cells pass ATTACH/CHECK=1
+and literal full/middle/last/empty 6/2/1/0-row windows. Root authenticates
+536 raw files from 134 native/helper invocations and separately audits all
+generated tapes, prefix statistics, mark grids and EOF. Corresponding generated
+MRK3/MRK4 decoded tapes agree; this is not compressed-byte or speed parity.
+
+A copy-only resealed middle Object wire-version 4 -> 3 defect at byte 1193
+passes CHECK but selected local/native reads reject semantically. Key/root
+controls stay exact. Semantic staged readback also rejects changed Object
+paths/values despite zero scalar bytes, and accepts separately decoded equal
+values. Fresh Variant/LC/static/Dynamic native guards pass; nine frozen static
+files, three protected W263 specs and all original captures are unchanged.
+See [W269 evidence](../.landmark/evidence/compact-part-writer-w269.json) and the
+[writer frontier](COMPACT_PART_WRITER_FRONTIER.md).
+
+Next: broader MRK3 body framing, Dynamic-owned JSON, remaining layouts/profiles/
+combinations and Compact MV/projection composition. Prior bounded Wide/metadata
+MV/projections remain separately qualified. No all-types, granule-only-I/O,
+large-part/RSS, allocation-order or speed-parity claim. Full types/MV/projections
+precede memory/performance; full goal ACTIVE. Local atomic commit only, no push.
+Refresh after relevant source/test/profile/compiler/runtime/capture drift,
+temporary-evidence loss or widening.
+
+Previous context-owned Compact Dynamic writer (W268, 2026-10-12): VERIFIED /
 root adversary ROBUST within the finite plain-MRK3/MRK4, BASIC/COMPACT witness
 and exact affected cohorts. `CompactDynamicWriteContext` snapshots each site's
 actual roster, version and full first-block statistics;
@@ -165,8 +210,9 @@ remain unqualified. Performance work remains deferred per user priority.
 W265 extends the static MRK3 writer to plain MRK4; W266 adds bounded LC and
 W267 adds recursive BASIC/COMPACT Variant lifecycle above. Logical serde, role
 plans and value codecs are reused; Wide `.bin`/`.mrk2` envelopes are not
-concatenated. Stateful/context-owned Dynamic/JSON writer integration is the
-next separate native-qualified boundary.
+concatenated. W268 and W269 add the separately qualified context-owned Dynamic
+and declared JSON writer witnesses above. Remaining layouts and Compact
+MV/projection composition are still separate native-qualified boundaries.
 
 Mixed-version/arbitrary-bucket/profile qualification, compressed marks, remaining
 types/layouts, MV/projections and subsequent performance remain open. Full goal
