@@ -3,14 +3,14 @@ module CrystalClick
   # the frozen role schedule and existing descriptors/count lanes, retaining
   # only callback slices. It never materializes BinaryValue/ObjectDocument
   # values to discover a callback boundary.
-  class CompactJsonObjectMapTapeFramer
+  class CompactJsonObjectMapTapeFramer(T)
     alias BodyBinding = ObjectDocumentInlineCallbackOrder::BodyLaneBinding
     alias CallbackPair = ObjectDocumentInlineCallbackOrder::CallbackPair
 
     @prefix : ObjectDocumentCallbackPrefix
     @physical_plan : ObjectDocumentPhysicalPlan
     @schedule : CompactJsonObjectRoleSchedule
-    @source : CompactJsonObjectSiteFramer
+    @source : T
     @row_count : UInt64
     @profile : BinaryBulkProfile
     @limits : BinaryCodecLimits
@@ -28,7 +28,7 @@ module CrystalClick
       @prefix : ObjectDocumentCallbackPrefix,
       @physical_plan : ObjectDocumentPhysicalPlan,
       @schedule : CompactJsonObjectRoleSchedule,
-      @source : CompactJsonObjectSiteFramer,
+      @source : T,
       @row_count : UInt64,
       @profile : BinaryBulkProfile,
       @limits : BinaryCodecLimits,
@@ -60,12 +60,12 @@ module CrystalClick
       prefix : ObjectDocumentCallbackPrefix,
       physical_plan : ObjectDocumentPhysicalPlan,
       schedule : CompactJsonObjectRoleSchedule,
-      source : CompactJsonObjectSiteFramer,
+      source : T,
       row_count : UInt64,
       profile : BinaryBulkProfile,
       limits : BinaryCodecLimits,
       budget : BinaryCodecBudget,
-    ) : Nil
+    ) : Nil forall T
       new(prefix, physical_plan, schedule, source, row_count, profile, limits, budget).capture_body!
     end
 
@@ -272,6 +272,14 @@ module CrystalClick
         unless role == "root.data"
           raise UnsupportedFormatError.new("Compact MRK3 Int64 role is outside the admitted fixed-width grammar")
         end
+        fixed_bytes!(context, count, 8_u64)
+        charge_occurrences!(count)
+      when BinaryDataType::TAG_FLOAT64
+        unless role == "root.data"
+          raise UnsupportedFormatError.new("Compact MRK3 Float64 role is outside the admitted fixed-width grammar")
+        end
+        # The grammar-only framer locates this authenticated lane; the existing
+        # Object decoder remains the sole owner of Float64 value decoding.
         fixed_bytes!(context, count, 8_u64)
         charge_occurrences!(count)
       when BinaryDataType::TAG_STRING

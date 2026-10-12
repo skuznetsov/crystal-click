@@ -297,9 +297,13 @@ module CrystalClick
         next unless slice.authenticated_context?
 
         context = slice.context
-        next unless context.is_a?(CompactObjectSharedInlineCoordinateContext)
-
-        compact = context.as(CompactObjectSharedInlineCoordinateContext)
+        compact_bytes = if context.is_a?(CompactObjectSharedInlineCoordinateContext)
+                          context.as(CompactObjectSharedInlineCoordinateContext).retained_workspace_bytes
+                        elsif context.is_a?(CompactRecursiveObjectSharedInlineCoordinateContext)
+                          context.as(CompactRecursiveObjectSharedInlineCoordinateContext).retained_workspace_bytes
+                        else
+                          next
+                        end
         compact_slice_retained = true
         bytes = checked_add(bytes, instance_sizeof(ObjectSharedInlineCallbackReadSlice).to_u64)
         bytes = checked_add(bytes, string_owner_bytes(slice.canonical_name.bytesize))
@@ -309,10 +313,10 @@ module CrystalClick
         # census; that overlap is conservative and does not imply a copy.
         bytes = checked_add(bytes, slice.byte_size.to_u64)
 
-        identity = compact.object_id
+        identity = context.object_id
         unless seen_contexts.has_key?(identity)
           seen_contexts[identity] = true
-          bytes = checked_add(bytes, compact.retained_workspace_bytes)
+          bytes = checked_add(bytes, compact_bytes)
         end
       end
 

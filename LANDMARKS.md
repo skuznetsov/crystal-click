@@ -1,5 +1,46 @@
 # Crystal Click landmarks
 
+## Bounded recursive/public/offline Compact JSON readers — W263
+
+- VERIFIED / root adversary ROBUST over `39b16a039e78806be3df4a9f31e0b198055b0160`
+  within the unchanged 48-part/four-declaration capture. Exact 63-path cohort:
+  426 examples in each serial DEBUG/actual RELEASE mode, zero failures/errors/
+  pending. Focused native/adversary run: 65; narrow Dynamic DDL cohort: ten.
+  Complete root diagnostic: 48 layouts/native rows and 48 readers / 192
+  operations pass. Production/source-test-script seals match across final runs.
+- Root JSON, Array(JSON), Array(Tuple(doc JSON, slot UInt8)) and Tuple(left JSON,
+  right JSON) preserve existing public carriers, caller column order and
+  Compact-only offline cumulative limits. Independent site prefixes/grids and
+  exact selected parent lifecycle retain original whole-data coordinates;
+  existing logical codecs are reused. Seventeen new adversaries cover count/
+  association, callback/byte/column/mark ownership, later corruption and budgets.
+- Refuted fixture route: Advanced raw-tape re-encoding with only outer mark
+  remapping invalidates inner pairs. In-place LZ4 edits also fail safe incomplete/
+  aliased-byte checks. Those refusals are not count-mismatch proof. Final MAP
+  MRK3 copy changes only two logical size words, remaps all outer marks and
+  authenticates the entire intended tape before independent row comparison.
+- W257's old whitespace-Dynamic guard is independently RED on unchanged HEAD;
+  W262 already admits that spelling. The narrow comparison uses the descriptor
+  only when it matches the selected type. Exact whitespace-positive transform/
+  detached-part readback and real unsupported/ambiguity guards pass. Not a new
+  native server cross-read. First RELEASE exit 143 has no test result; only
+  timeout increases for the successful retry, all safety guards remain.
+- Root checks actual sources, native/literal oracles, adversaries and final
+  unchanged seals; Luna evidence is correlated. Original captures, frozen
+  positive pair and three protected user-owned specs stay untouched. Protected
+  inputs remain outside the commit; exact-cohort reproduction needs them.
+- Open: repeated whole-grid preparation under cumulative transport limits;
+  topology admission does not cover arbitrary Object inner roles. No all-zero
+  child-mark witness, arbitrary owners/buckets/profiles, compressed marks,
+  mixed Wide/Compact JSON values, Compact writer or scale/speed claim.
+- Return pointers: [recursive/public evidence](.landmark/evidence/compact-recursive-json-public-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Next proposed storage
+  phase: static MRK3 writer, MRK4, then context-owned Dynamic/JSON. Reuse logical
+  serde/role plans/publication, not compressed Wide lane envelopes. Full types,
+  MV/projections and later performance remain required. Goal ACTIVE; atomic
+  local commit only, no push. Refresh after source/test/profile/capture/compiler/
+  consumer drift or scope widening. Older checkpoints below are historical.
+
 ## Compact root JSON MRK3 bucketed MAP and Advanced shared layouts — W263
 
 - VERIFIED / root adversary ROBUST over `d8d150479d030b52f71c86279a9b55f8f00907b1`

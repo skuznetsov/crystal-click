@@ -201,8 +201,13 @@ module CrystalClick
                                  else
                                    nil
                                  end
+      json_schema = if !json_path && source_name == column_name
+                      CompactJsonColumnAdapter.schema_for_json_declaration(selected_type)
+                    else
+                      nil
+                    end
       object_root = WidePart.json_type?(selected_type)
-      unless object_root || dynamic_type || simple_aggregate_bulk_type || aggregate_function_bulk_type || qbit_bulk_type || custom_geo_bulk_type ||
+      unless object_root || json_schema || dynamic_type || simple_aggregate_bulk_type || aggregate_function_bulk_type || qbit_bulk_type || custom_geo_bulk_type ||
              generic_static_bulk_type || WidePart.supports_typed_type?(selected_type) || WidePart.catalog_type(selected_type)
         raise UnsupportedFormatError.new("selected table column type is unsupported")
       end
@@ -228,6 +233,20 @@ module CrystalClick
           count_binding[2],
           expected_rows
         )
+      end
+
+      if schema = json_schema
+        json_values = CompactJsonValuesMaterializer.materialize(
+          self,
+          candidates,
+          column_name,
+          selected_type,
+          schema,
+          expected_rows,
+          max_string_bytes,
+          max_tuple_cells
+        )
+        return json_values if json_values
       end
 
       if object_root
@@ -1826,8 +1845,17 @@ module CrystalClick
           unless part_source_name == ddl_source[0] && part_source_type == ddl_source[2]
             raise UnsupportedFormatError.new("table DDL and selected Object schema differ")
           end
-        elsif part_source_name != ddl_source[0] || part_source_type != (WidePart.catalog_type(ddl_source[1]) || ddl_source[1])
-          raise UnsupportedFormatError.new("table DDL and selected part column types differ")
+        else
+          expected_part_type = WidePart.catalog_type(ddl_source[1]) || ddl_source[1]
+          if ddl_source[1].includes?("Dynamic")
+            _dynamic_candidate, dynamic_type = OfflineDynamicBulkColumnDeclaration.resolve(ddl_source[1])
+            if dynamic_type && dynamic_type.name == ddl_source[2]
+              expected_part_type = ddl_source[2]
+            end
+          end
+          unless part_source_name == ddl_source[0] && part_source_type == expected_part_type
+            raise UnsupportedFormatError.new("table DDL and selected part column types differ")
+          end
         end
       end
       reader.column_types.each do |column_name, part_type|

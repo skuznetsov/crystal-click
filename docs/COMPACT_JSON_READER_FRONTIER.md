@@ -5,11 +5,11 @@ VERIFIED within its focused scope; advanced inline preparation prerequisite
 VERIFIED; bounded internal V1 MRK3/MAP, V2 MRK4/MAP and V3 MRK4/ADVANCED_CHUNKED
 roots, bounded MRK3 COMPACT Dynamic frames, propagated ordinary String-v1,
 and MRK3/MRK4 MAP_WITH_BUCKETS/ADVANCED/ADVANCED_CHUNKED in all 48 captured
-root cells VERIFIED;
-recursive/public/offline native GREEN pending
-(2026-10-11).
+root cells VERIFIED; bounded recursive/public/offline readers VERIFIED within
+the unchanged 48-part capture and four captured declaration shapes
+(2026-10-12).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
-Current transition: bind persisted JSON/Object sites to the existing recursive Compact lifecycle,
+Qualified transition: bind persisted JSON/Object sites to the existing recursive Compact lifecycle,
 Object codecs and public selected-column consumers. The full
 types, MV/projection and subsequent memory/performance objective remains ACTIVE.
 This transition does not redefine completion or establish <=10% speed parity.
@@ -17,6 +17,237 @@ This transition does not redefine completion or establish <=10% speed parity.
 The latest qualification below governs current admission. Older checkpoint
 sections are revision-scoped history; their former refusals and next steps do
 not override a later qualification.
+
+## Recursive/public/offline checkpoint — qualified within scope
+
+Qualification over `39b16a039e78806be3df4a9f31e0b198055b0160`:
+the exact 63-path affected-consumer cohort passes 426 examples in each final
+serial DEBUG and actual RELEASE run (root tools `077f56`, `4c0469`), zero
+failures/errors/pending. The focused frozen-native/adversary run passes 65
+examples (`4c5695`); the narrow Dynamic DDL regression cohort passes ten
+(`814a42`). The complete retained root diagnostic (`d11234`, exit 0) checks
+all 48 physical layouts/native rows and passes 48 readers / 192 operations.
+Final production/source-test-script seals match their pre-run seals; original
+capture pins, frozen positive pair and all three protected specs are unchanged.
+See [the curated evidence](../.landmark/evidence/compact-recursive-json-public-w263.json)
+for exact commands, input prerequisites, hashes, causal RED and residuals.
+
+The four qualified declarations are root JSON, `Array(JSON)`,
+`Array(Tuple(doc JSON, slot UInt8))` and `Tuple(left JSON, right JSON)` with
+the capture's exact JSON schema. Public selected reads preserve caller column
+order and existing ObjectDocument, ObjectDocument-array and StorageColumnValue
+carriers. Compact-only offline `.values` uses cumulative checked row/String/
+Tuple limits. Physical integration retains independent site prefixes, grids
+and original whole-data coordinates, completes the selected parent lifecycle
+before publication, and reuses existing logical Object codecs. This is not
+admission of arbitrary JSON-containing recursive schemas or inner Object roles.
+
+Seventeen owned adversaries cover parent association/count mismatch, empty/EOF
+preflight, callback/sibling/column provenance, authenticated shard bytes and
+marks, same-operation budget ownership, cumulative offline limits and later
+candidate corruption before callbacks. Equal-total Array redistribution is
+valid changed data. Re-encoding an Advanced tape while remapping only outer
+marks invalidated inner saved pairs; two in-place LZ4 approaches were rejected
+by incomplete/aliased-byte fixture checks. Their apparent refusals were not
+valid count-mismatch evidence. The final MAP MRK3 disposable-copy mutation
+changes only two logical size words, remaps all outer marks, authenticates the
+entire reopened tape and independently checks changed row association.
+
+An old W257 whitespace-Dynamic refusal was independently RED on unchanged HEAD.
+W262 already admits that lexical form. The narrow DDL/part comparison now uses
+the resolved Dynamic descriptor only when it matches the selected type; source
+identity and JSON comparisons are unchanged. An exact whitespace-positive
+transform and detached Wide-part readback pass; actual unsupported caps,
+aliases, ambiguity and DDL mismatches still refuse before callbacks. This is
+not a new native ClickHouse writer cross-read.
+
+The first RELEASE attempt stopped with exit 143 before any test output. It is
+not a failed assertion or test GREEN. A watchdog is visible in the runner, but
+the signal issuer is not retained. Only the timeout changed from 180 to 360
+seconds for the successful retry; the 12 GiB/50%-free guards, one compiler,
+code, oracles, exact cohort and actual `--release` mode stayed unchanged.
+
+Root adversary verdict: ROBUST within the stated finite scope, not general
+Compact compatibility. Two source-observed limitations remain explicit:
+
+- Public preflight and reads can repeat whole-grid preparation under a shared
+  consumptive transport budget. A scan can exhaust cumulative work limits even
+  when one preparation fits. No single-preparation/granule-only-I/O, large-part
+  scale or RSS claim is made; optimization remains deferred per user priority.
+- A supported outer topology is not proof of every Object inner role. The
+  finite MRK3 framer supports the captured scalar grammar; other typed roles
+  can still fail Unsupported. All-zero child marks and arbitrary owners,
+  buckets, mixed versions/profiles and untested chunks remain unqualified.
+
+Next proposed storage phase: a separate bounded Compact writer, static plain
+MRK3 first, MRK4 next, then context-owned Dynamic/JSON. Logical traversal,
+codecs, role plans and publication machinery are reusable. Current compressed
+Wide lane `.bin`/`.mrk2` envelopes are not a Compact emitter. Shared `data.bin`,
+mark-major callback order, prefix/body/suffix state, codec flush boundaries,
+saved pairs, metadata and Compact checksums require a physical coordinator and
+native ClickHouse cross-read qualification. No Compact writer is implemented.
+
+## Recursive/public continuation seal — historical admission RED
+
+The following pre-edit contract and RED record describe this transition before
+the qualification above. Future-tense instructions are historical, not a new
+request to rerun or replace frozen oracles.
+
+Anchor: `39b16a039e78806be3df4a9f31e0b198055b0160`. The captured root
+qualification is unchanged. The next capability is the existing public carriers
+for `root`, `docs Array(JSON)`, `tagged Array(Tuple(doc JSON, slot UInt8))`
+and `pair Tuple(left JSON, right JSON)` over the original 48-part matrix.
+Each JSON site keeps an independent prefix, occurrence grid, frozen roster and
+whole-`data.bin` coordinate owner. Parent Array sizes associate decoded child
+values with rows; equal nominal JSON declarations do not permit sibling reuse.
+This is recursive physical integration, not a second logical value codec.
+
+The existing protected public native spec requires a `green` capture manifest;
+the available immutable capture is `baseline`. Running that combination would
+fail in fixture authentication, not demonstrate reader RED. Do not relabel the
+manifest, change the protected spec or weaken its gate. New owned files
+`spec/compact_json_recursive_public_native_w263_spec.cr` and
+`spec/support/compact_json_recursive_public_w263_fixture.cr` will authenticate
+the baseline as baseline, pin its complete roster/inventories and compare the
+native rows with the existing independent literals before testing successful
+public reads. Missing evidence must fail, not silently omit examples.
+
+First probe: the unchanged production must pass each cell's UInt64 control and
+native authentication, then fail the positive recursive/public reads at its
+actual Compact declaration guard. Root executes this probe serially before any
+production edit; compile/helper failures are not behavioral RED. Freeze the
+positive oracle after valid RED. Exact production ownership and the shared
+recursive reader contract are sealed after source inventory, before edits.
+
+Risk: CAUTION (physical serialization and public admission). Rollback is an
+atomic feature commit over the anchor; originals and three protected specs
+remain untouched. The strongest failure is plausible child values bound to the
+wrong parent row, tuple sibling, callback interval or selected mark. Guard
+checks must include empty/unequal arrays, independent sibling literals, full/
+single/cross/EOF reads, later corruption before callbacks, saved-pair/site
+provenance and the same operation's checked budgets. Root JSON must retain the
+ObjectDocument carrier, direct Array(JSON) the ObjectDocument-array carrier,
+and recursive containers StorageColumnValue. Empty candidate and EOF paths
+must prepare the complete selected physical grid; offline `.values` needs its
+own Compact-aware opening rather than an accidental Wide-only fallback.
+
+DoD: the exact previous 47-path/308-example cohort plus the new immutable native
+matrix and owned recursive/public adversaries, in serial DEBUG and RELEASE;
+all 48 root diagnostic cells must remain green. Additional affected consumer
+regressions are enumerated with the production seal. There must be no skipped/
+pending cells, native-data regeneration or changed literal expectations. This
+does not admit JSON in arbitrary Dynamic/Variant arms, mixed profiles,
+compressed marks, Compact writing, projection backends or performance parity.
+Those remain obligations of the full ACTIVE goal, not exclusions from it.
+
+### Measured admission RED and production ownership
+
+Root tool `5ae43c` executes the owned positive matrix on unchanged production
+(`src` SHA-256 `1934c50f23218491cf4649162cd4529a508ca944cb65a693ca9a2fd336d3855f`):
+48 examples, zero assertion failures, 48 errors, zero pending, exit 1.
+The retained first/last failure samples all reach the existing Compact
+declaration guard at `compact_part_table.cr:69`, after native authentication
+and the two PK controls. The long output is truncated; it is not a retained
+full per-cell exception ledger. This establishes real public admission RED,
+not a completed recursive physical test or the later offline assertions.
+The positive spec is frozen at
+`0e1ad349c246f81272e4e19f7c9172fe0e2b3afe341382214d874ad5c0e60ef8`;
+its support helper at
+`390d580927432f26e6811a11cfa2cff8899461cddc4e0830170ef5b4d353fc83`.
+Original metadata and protected specs retain their previous hashes.
+
+The engine contract is `CompactRecursiveJsonColumnReader.open(part, column,
+expected_schema, limits:, transport_limits:, codec_budget:, transport_budget:)`,
+`read_marks(first_mark, count, observer?) -> Array(Array(StorageColumnValue))`,
+`validate_complete_schedule(observer?)`, and the existing Compact reader
+metadata/workspace accessors. `storage_value_shape_for_mark(mark_index)` returns
+only metadata derived from authenticated occurrence grids, without decoding;
+its element count includes both Array children and Tuple slots. It is used to
+preflight compatibility carriers, not to replace parent/child row counts.
+Root JSON delegates to the qualified root reader.
+Recursive Array/Tuple sites use one authenticated whole-column granule cursor,
+independent site prefix/schedule/grid owners, and a parent lifecycle ledger.
+The only ordinary recursive leaf newly needed by this capture is UInt8; other
+BinaryBulk leaves need a separate source-backed consumer seam and qualification,
+not fictitious complete child windows. This slice qualifies the four captured
+declaration shapes, not all possible recursive schemas or leaf combinations.
+
+The parent ledger finishes exact prefix/body/suffix traversal and the whole
+cursor before site preparation can validate or publish. MRK3 child extents keep
+original shard/column/mark provenance; MRK4 keeps exact named source order.
+No fabricated child shards, rebased persisted pairs or weakened root-only MRK3
+guard are permitted. Site coordinates may be noncontiguous, but each callback
+maps to its original whole-data interval. Preparation and decode retain the
+same operation budget. Physical parent rows, inherited logical occurrences and
+Array child occurrences remain separate typed counts. Array-level and type
+descriptor-depth inheritance are independent; SharedData version is neither.
+
+Engine ownership: new `compact_recursive_json_*.cr` and
+`compact_recursive_object_shared_inline_coordinate_context.cr`; narrow shared
+source protocol changes in `compact_json_object_map_tape_framer.cr` and
+`compact_static_json_advanced_prepared_mark.cr`, plus the new Compact context's
+retained capture census in `object_shared_advanced_inline_prepared.cr`.
+The Advanced prepared-mark owner now retains its child occurrence grid for
+decode; its logical census must include that grid and both detached count
+arrays. This is a named retained-owner check, not allocator capacity or RSS.
+The narrow selected-profile predicate in `compact_serialization_profile.cr`
+must recognize implicit JSON paths under the admitted Array/Tuple containers:
+their nominal descriptors do not enumerate the paths' String children. Keep
+the existing propagated-versions rule and metadata validation; the native S1
+recursive cells and old profile regressions are its guard. This is a
+source-anchored consumer fix, not a separate logical codec or a fabricated
+root-column profile.
+`compact_static_json_bulk_column_reader.cr` gains only a checked
+`read_marks_with_budget(first_mark, count, budget, observer)` entry to its
+existing read core. It rejects write-direction, mismatched limits and a budget
+foreign to any explicitly supplied owner. Existing overloads keep implicit
+per-call freshness and explicit cumulative semantics. Root delegation and
+StorageColumnValue wrapper assembly must share this single operation budget;
+the original root matrix and same/foreign-budget controls guard the seam.
+Root source review found that slot/name/interval equality is not byte provenance,
+and authentication against some saved grid interval is not selected-parent
+ownership. The additional narrow engine seam in `compact_part_physical_context.cr`
+is `validate_parent_granule!`: exact selected column roster, mark-specific saved
+intervals, physical row count/offset and authenticated payload bytes. Recursive
+site extents must resolve to authenticated parent shard owners, not retain an
+untrusted metadata-equivalent shard. Guard tests cover altered bytes, wrong
+column, relabeled mark and wrong physical row metadata. This is source-review
+evidence until those tests are executed; it is not a behavioral RED claim.
+Existing root framing/coordinate checks and Wide reader stay unchanged.
+Facade ownership: `compact_json_column_adapter.cr`,
+`compact_json_mark_preflight.cr`, `compact_part_table.cr`,
+`offline_column_value.cr`, `offline_table.cr`, and
+`offline_table/compact_json_values_materializer.cr`. Preserve the BinaryValue/
+Dynamic path and Wide Object materializer. Mixed Wide/Compact JSON `.values`
+candidates must fail closed before allocation in this unqualified slice.
+Admission is limited to the four captured structural topologies; arbitrary
+Tuple branches with Array children do not share this phase schedule and must
+fail closed. The new metadata-only admission falsifier checks this boundary.
+Root owns `src/crystal_click.cr`, docs, serial tests and final integration.
+Any other production path requires a revised ownership seal before editing.
+
+Owned adversaries: `spec/compact_json_recursive_public_w263_adversary_spec.cr`
+and `spec/support/compact_json_recursive_public_w263_mutant_fixture.cr`.
+Do not edit the frozen positive pair or protected originals. Equal-total Array
+size redistribution is valid changed data, not structural corruption; use
+immutable row oracles or explicitly check changed association. Additional DoD
+includes a cumulative offline Tuple-cell discriminator calibrated from the
+authenticated per-mark recursive carriers: every fresh per-mark control must
+fit the selected cap while the full result refuses it. The separate 15-cell
+lower-bound refusal alone cannot establish that budgets do not reset per mark.
+Additional DoD
+paths are `recursive_array_table_w187_spec.cr`,
+`recursive_storage_compact_w188_spec.cr`,
+`recursive_storage_reader_budget_w186_spec.cr`,
+`recursive_storage_values_budget_w186_spec.cr`,
+`recursive_storage_table_w186_spec.cr`, `object_offline_table_w130_spec.cr`,
+`pk_candidates_spec.cr` and `offline_materialized_view_transform_w257_spec.cr`,
+all under `spec/`. The changed offline result union also requires
+`offline_dynamic_ddl_w262_spec.cr`, `offline_catalog_w95_tuple_values_spec.cr`,
+`aggregate_count_offline_w177_spec.cr`, `offline_catalog_w82_spec.cr`,
+`offline_catalog_w83_spec.cr` and `offline_catalog_w85_spec.cr`. Together this
+is the exact 63-path cohort, including the prior 47-path static/Dynamic Compact
+facade regressions. No compiler/native work runs in parallel.
 
 ## MRK3 shared-data checkpoint — qualified within scope
 

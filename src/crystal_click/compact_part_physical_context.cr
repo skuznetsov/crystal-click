@@ -168,6 +168,73 @@ module CrystalClick
       nil
     end
 
+    # Binds the exact detached shard snapshot consumed by the caller's parent
+    # ledger to the selected column and saved physical mark. Unlike
+    # validate_shard_provenance!, this does not accept a shard merely because
+    # its interval happens to match some mark in the part. Identity,
+    # coordinates, row metadata, and authenticated payload are checked as one
+    # parent-column certificate.
+    def validate_parent_granule!(
+      column_name : String,
+      granule : CompactPartPhysicalGranule,
+      shards : Array(CompactPartPhysicalShard),
+    ) : Nil
+      if column_name.empty? || granule.mark < 0 || granule.mark >= @mark_index.mark_count
+        raise CorruptPartError.new("Compact parent granule does not identify a selected physical mark")
+      end
+
+      slot_count = begin
+        @columns_substreams.slot_count_for(column_name)
+      rescue ex : ArgumentError
+        raise CorruptPartError.new("Compact parent granule names an unknown selected column")
+      end
+      @budget.preflight_records(slot_count.to_i64)
+      @budget.reserve_records(slot_count.to_i64)
+      slots = begin
+        @columns_substreams.slots_for(column_name)
+      rescue ex : ArgumentError
+        raise CorruptPartError.new("Compact parent granule names an unknown selected column")
+      end
+      unless !slots.empty? && slots.size == slot_count && shards.size == slots.size
+        raise CorruptPartError.new("Compact parent granule shard roster differs from its selected column")
+      end
+
+      expected_row_offset = 0_u64
+      granule.mark.times do |mark|
+        rows = @mark_index.row_count_at(mark)
+        if rows > UInt64::MAX - expected_row_offset
+          raise CorruptPartError.new("Compact parent row offset overflows UInt64")
+        end
+        expected_row_offset += rows
+      end
+      expected_rows = @mark_index.row_count_at(granule.mark)
+      unless granule.row_offset == expected_row_offset && granule.row_count == expected_rows
+        raise CorruptPartError.new("Compact parent granule row metadata differs from its saved mark")
+      end
+
+      shards.each_with_index do |shard, index|
+        slot = slots[index]
+        unless shard.slot_index == slot.index && shard.stream_name == slot.stream_name
+          raise CorruptPartError.new("Compact parent granule callback order differs from its selected column roster")
+        end
+        expected_start = @mark_index.position_at(granule.mark, slot.index)
+        expected_end = if slot.index + 1 < @mark_index.slot_count
+                         @mark_index.position_at(granule.mark, slot.index + 1)
+                       else
+                         @mark_index.position_at(granule.mark + 1, 0)
+                       end
+        unless shard.logical_start == expected_start && shard.logical_end == expected_end
+          raise CorruptPartError.new("Compact parent granule interval differs from its selected saved mark slot")
+        end
+      end
+
+      # This second source read is intentional: detached shard objects are
+      # public values, so their bytes must be rebound to authenticated payload
+      # provenance before any child path can retain them.
+      validate_shard_provenance!(shards)
+      nil
+    end
+
     # Metadata-only prepared-site binding for an MRK3 root Object. The byte
     # shard has already been authenticated by validate_shard_provenance! when
     # its coordinate context was constructed; this additionally proves that

@@ -222,11 +222,33 @@ module CrystalClick
       mark_count : Int,
       workspace_observer : Proc(UInt64, Nil),
     ) : Array(Array(ObjectDocument))
-      validate_selection!(first_mark, mark_count)
-      # One budget covers EOF preparation and every selected mark in this
-      # operation. A caller-supplied budget remains cumulative across calls;
-      # otherwise this is the fresh per-call budget.
       request_budget = @codec_budget || BinaryCodecBudget.new(@limits)
+      read_marks_with_budget(first_mark, mark_count, request_budget, workspace_observer)
+    end
+
+    # Internal composition seam for the recursive SCV reader. One explicit
+    # request budget covers Object decoding and its enclosing wrapper-shape
+    # precharge; an explicitly-budgeted reader cannot be rebound to a foreign
+    # operation. An implicit reader may share a caller-owned same-limits read
+    # budget without changing the public read_marks fresh-budget behavior.
+    def read_marks_with_budget(
+      first_mark : Int,
+      mark_count : Int,
+      request_budget : BinaryCodecBudget,
+      workspace_observer : Proc(UInt64, Nil),
+    ) : Array(Array(ObjectDocument))
+      if request_budget.writing?
+        raise ArgumentError.new("Compact static JSON read requires a read-direction codec budget")
+      end
+      unless request_budget.limits == @limits
+        raise ArgumentError.new("Compact static JSON request budget differs from its read limits")
+      end
+      if explicit_budget = @codec_budget
+        unless explicit_budget.same?(request_budget)
+          raise ArgumentError.new("Compact static JSON read requires its explicitly supplied budget operation")
+        end
+      end
+      validate_selection!(first_mark, mark_count)
       advanced_marks = nil.as(Array(CompactStaticJsonAdvancedPreparedMark)?)
       if @advanced_layout == true || @prepared_context.nil?
         advanced_marks = ensure_prepared!(request_budget, workspace_observer)

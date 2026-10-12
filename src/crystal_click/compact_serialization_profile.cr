@@ -125,10 +125,11 @@ module CrystalClick
       # the part's String version; without propagation Dynamic resets to v0.
       dynamic_shared_string_v1 = selected_type.contains_dynamic? && propagated && string_version == 1
       # JSON keeps typed paths in its declaration and discovers Dynamic paths
-      # in the Object prefix, not as nominal BinaryDataType children. Object
-      # forwards propagated serialization settings to those paths, so select their
-      # ordinary String-v1 profile from authenticated part metadata here.
-      json_propagated_string_v1 = selected_type.tag == BinaryDataType::TAG_JSON &&
+      # in the Object prefix, not as nominal BinaryDataType children. A
+      # container containing JSON still propagates serialization settings to
+      # those paths, so select the inherited ordinary String-v1 profile from
+      # authenticated part metadata here.
+      json_propagated_string_v1 = selected_type.contains_json? &&
                                   propagated && string_version == 1
       if string_v1 && selected_type.tag == BinaryDataType::TAG_STRING ||
          string_v1 && propagated ||

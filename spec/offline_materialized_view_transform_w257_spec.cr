@@ -543,11 +543,71 @@ describe CrystalClick::OfflineCatalog do
     end
   end
 
+  it "normalizes whitespace-only Dynamic DDL through transform and reads native output" do
+    root = File.tempname("crystal-click-w257-transform-dynamic-whitespace-")
+    begin
+      source_columns = w257_admission_source_columns.gsub(
+        "`payload` Dynamic(max_types=1)",
+        "`payload` Dynamic(max_types=1 )"
+      )
+      source_columns.should contain("`payload` Dynamic(max_types=1 )")
+      source_columns.should_not contain("`payload` Dynamic(max_types=1),")
+      catalog, _database_path, target_path = w257_admission_catalog(root, source_columns)
+      payload_column = catalog.table("lab", "source").columns.find { |column| column.name == "payload" }
+      payload_column.not_nil!.type.should eq("Dynamic(max_types=1 )")
+      destination = w257_transform_destination(target_path)
+      callback_count = 0
+      transformed_keys = [] of UInt64
+      transformed_values = [] of UInt64
+
+      result = catalog.transform_materialized_view_part(
+        "lab", "view", "all_1_1_0", ["pk", "payload"], "all_9_9_0",
+        rows_per_mark: 2, batch_rows: 2
+      ) do |input|
+        callback_count += 1
+        input.column_types.should eq([
+          {"pk", "UInt64"},
+          {"payload", "Dynamic(max_types=1)"},
+        ])
+        input.row_count.should eq(2_u64)
+
+        input.each_batch do |batch|
+          keys = batch.values_for("pk")
+          payloads = batch.dynamic_bulk_values_for("payload")
+          keys.size.should eq(payloads.size)
+          keys.each_with_index do |key, index|
+            transformed_keys << key * 10_u64
+            transformed_values << payloads[index].child_at(0).as_uint64 * 10_u64
+          end
+        end
+
+        w257_admission_output(transformed_keys, transformed_values)
+      end
+
+      callback_count.should eq(1)
+      result.should eq(destination)
+      File.directory?(result).should be_true
+
+      reader = CrystalClick::WidePartTable.open_selected_typed([result], ["id", "value"])
+      reader.column_types.should eq([{"id", "UInt64"}, {"value", "UInt64"}])
+      rows = [] of Tuple(UInt64, UInt64)
+      reader.scan_typed do |batch|
+        keys = batch.values_for("id")
+        values = batch.values_for("value")
+        keys.size.should eq(values.size)
+        keys.each_with_index { |key, index| rows << {key, values[index]} }
+      end
+      rows.should eq([{10_u64, 170_u64}, {20_u64, 230_u64}])
+    ensure
+      FileUtils.rm_rf(root)
+    end
+  end
+
   it "keeps canonical, nominal, alias, DDL/part, and JSON-path ambiguity guards before callback" do
     cases = [
       {
-        "noncanonical Dynamic declaration",
-        "`pk` UInt64, `payload` Dynamic(max_types=1 ), `trace` Array(Tuple(doc JSON(max_dynamic_types=1, max_dynamic_paths=1, t UInt8), sample Dynamic(max_types=1)))",
+        "explicit Dynamic default cap",
+        "`pk` UInt64, `payload` Dynamic(max_types=32), `trace` Array(Tuple(doc JSON(max_dynamic_types=1, max_dynamic_paths=1, t UInt8), sample Dynamic(max_types=1)))",
         ["pk", "payload"] of String,
         "selected table column type is unsupported",
       },

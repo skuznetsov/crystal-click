@@ -99,5 +99,6 @@ module CrystalClick
                              Array(Tuple(UInt64, String?)) | Array(Tuple(String, String?)) |
                              OfflineArrayMapUInt64NumericValue | OfflineArrayMapStringNumericValue |
                              OfflineArrayMapUInt64NullableNumericValue | OfflineArrayMapStringNullableNumericValue |
-                             Tuple(UInt64, String) | WideTupleRow | WideArrayTupleRow | WideMapTupleRow | ObjectDocument | Nil
+                             Tuple(UInt64, String) | WideTupleRow | WideArrayTupleRow | WideMapTupleRow |
+                             ObjectDocument | Array(ObjectDocument) | StorageColumnValue | Nil
 end

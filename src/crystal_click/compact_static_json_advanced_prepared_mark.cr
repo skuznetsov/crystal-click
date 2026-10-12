@@ -11,6 +11,7 @@ module CrystalClick
     @inferred_actual_root_depth : Int32
     @ordinary_streams : ObjectDocumentStreams
     @shared_prepared : ObjectSharedAdvancedInlinePrepared
+    @grid : StorageOccurrenceGrid
     @logical_row_count : UInt64
 
     def self.prepare_from_source(
@@ -22,7 +23,7 @@ module CrystalClick
       callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair),
       statistics_offsets : Hash(String, Int32),
       ordinary_profile : BinaryBulkProfile,
-      source_framer : CompactJsonObjectSiteFramer,
+      source_framer : CompactJsonObjectSiteFramer | CompactRecursiveJsonObjectSiteSource,
       workspace_observer : Proc(UInt64, Nil)? = nil,
     ) : CompactStaticJsonAdvancedPreparedMark
       nested_context = prefix.nested_context
@@ -93,6 +94,7 @@ module CrystalClick
         prefix.inferred_actual_root_depth,
         ordinary_streams,
         shared_prepared,
+        grid,
         logical_rows,
       )
       if observer = workspace_observer
@@ -109,6 +111,7 @@ module CrystalClick
       @inferred_actual_root_depth : Int32,
       @ordinary_streams : ObjectDocumentStreams,
       @shared_prepared : ObjectSharedAdvancedInlinePrepared,
+      @grid : StorageOccurrenceGrid,
       @logical_row_count : UInt64,
     )
     end
@@ -150,9 +153,10 @@ module CrystalClick
         ),
       )
 
-      decoded_marks = ObjectDocumentCodec.decode_with_budget(
+      decoded_marks = ObjectDocumentCodec.decode_child_site_with_budget(
         @typed_schema,
         streams,
+        @grid,
         budget,
         first_mark: 0,
         mark_count: 1,
@@ -181,9 +185,16 @@ module CrystalClick
       bytes = checked_add(bytes, sizeof(Pointer(BinaryBulkProfile)).to_u64)
       bytes = checked_add(bytes, sizeof(Pointer(ObjectDocumentStreams)).to_u64)
       bytes = checked_add(bytes, sizeof(Pointer(ObjectSharedAdvancedInlinePrepared)).to_u64)
+      bytes = checked_add(bytes, grid_workspace_bytes)
       bytes = checked_add(bytes, typed_schema_workspace_bytes)
       bytes = checked_add(bytes, ordinary_stream_workspace_bytes(@ordinary_streams))
       checked_add(bytes, @shared_prepared.retained_workspace_bytes)
+    end
+
+    private def grid_workspace_bytes : UInt64
+      bytes = instance_sizeof(StorageOccurrenceGrid).to_u64
+      bytes = checked_add(bytes, 2_u64 * instance_sizeof(Array(UInt64)).to_u64)
+      checked_add(bytes, checked_multiply(@grid.mark_count.to_u64, 2_u64 * sizeof(UInt64).to_u64))
     end
 
     private def streams_with_advanced_rows(

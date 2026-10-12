@@ -9,11 +9,15 @@ module CrystalClick
 
     private alias CompactColumnReader = CompactBinaryBulkColumnReader | CompactDynamicBulkColumnReader
     private alias SelectedReader = {String, String, BinaryDataType, CompactColumnReader}
+    private alias SelectedCarrier = CompactJsonColumnMark
+    private alias MaterializedMark = {Array(Array(BinaryValue)), Array(SelectedCarrier), UInt64}
 
     @columns : Array(String)
     @column_types : Array({String, String})
     @column_sources : Array({String, String, String})
     @readers : Array(SelectedReader)
+    @json_readers : Array(CompactJsonColumnAdapter)
+    @column_reader_slots : Array(Tuple(Symbol, Int32))
     @part_name : String
     @part_path : String
     @mark_row_counts : Array(UInt64)
@@ -54,6 +58,8 @@ module CrystalClick
       end
 
       @readers = Array(SelectedReader).new(@columns.size)
+      @json_readers = Array(CompactJsonColumnAdapter).new(@columns.size)
+      @column_reader_slots = Array(Tuple(Symbol, Int32)).new(@columns.size)
       @column_types = Array({String, String}).new(@columns.size)
       @column_sources = Array({String, String, String}).new(@columns.size)
       @mark_row_counts = [] of UInt64
@@ -65,6 +71,42 @@ module CrystalClick
           raise CorruptPartError.new("selected column is absent from Compact columns.txt")
         end
         dynamic_type = compact_dynamic_type(source_type)
+        json_schema = dynamic_type ? nil : CompactJsonColumnAdapter.schema_for_json_declaration(source_type)
+        if schema = json_schema
+          json_reader = CompactJsonColumnAdapter.open(
+            @part_path,
+            column,
+            source_type,
+            schema,
+            transport_budget: budget,
+          )
+          unless json_reader.schema_declaration == schema.declaration &&
+                 json_reader.source_declaration == source_type
+            raise CorruptPartError.new("selected Compact JSON declaration differs from its physical schema")
+          end
+          if existing_rows = row_count
+            unless json_reader.row_count == existing_rows
+              raise CorruptPartError.new("selected Compact columns have different parent row counts")
+            end
+            unless json_reader.mark_row_counts == @mark_row_counts
+              raise CorruptPartError.new("selected Compact columns have different parent mark grids")
+            end
+          else
+            row_count = json_reader.row_count
+            @mark_row_counts = json_reader.mark_row_counts
+          end
+
+          @column_reader_slots << {:json, @json_readers.size}
+          @json_readers << json_reader
+          @column_types << {String.new(column.to_slice), String.new(json_reader.schema_declaration.to_slice)}
+          @column_sources << {
+            String.new(column.to_slice),
+            String.new(column.to_slice),
+            String.new(source_type.to_slice),
+          }
+          next
+        end
+
         type = dynamic_type || StaticBinaryBulkColumnDeclaration.parse(source_type) ||
                raise(UnsupportedFormatError.new("selected Compact declaration is outside static or Dynamic BinaryBulk admission"))
         if dynamic_type.nil? && !BinaryValueTypedBatchAdapter.admitted?(type)
@@ -101,6 +143,7 @@ module CrystalClick
           @mark_row_counts = reader.mark_row_counts
         end
 
+        @column_reader_slots << {:binary, @readers.size}
         @readers << {String.new(column.to_slice), String.new(source_type.to_slice), type, reader}
         @column_types << {String.new(column.to_slice), String.new(source_type.to_slice)}
         @column_sources << {
@@ -236,12 +279,12 @@ module CrystalClick
         end
         next unless row_start < row_end
 
-        values_by_column, retained_charge = materialize_mark(mark_index, mark_rows)
+        values_by_column, json_carriers, retained_charge = materialize_mark(mark_index, mark_rows)
         cursor = row_start
         while cursor < row_end
           remaining = row_end - cursor
           slice_rows = remaining < batch_rows.to_u64 ? remaining : batch_rows.to_u64
-          emit_batch(mark_index, mark_start, cursor, slice_rows, values_by_column) { |batch| yield batch }
+          emit_batch(mark_index, mark_start, cursor, slice_rows, values_by_column, json_carriers) { |batch| yield batch }
           cursor += slice_rows
         end
         # The logical charge bounds one selected mark at a time. Values and
@@ -270,12 +313,45 @@ module CrystalClick
           next if other_index == reader_index
           other_retained_workspace = checked_add(other_retained_workspace, other_entry[3].retained_workspace_bytes)
         end
+        @json_readers.each do |other_reader|
+          other_retained_workspace = checked_add(other_retained_workspace, other_reader.retained_workspace_bytes)
+        end
         if other_retained_workspace > limit
           raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
         end
         reader_workspace_limit = limit - other_retained_workspace
         workspace_observer = ->(workspace_bytes : UInt64) do
-          if workspace_bytes > reader_workspace_limit
+          begin
+            if workspace_bytes > reader_workspace_limit
+              raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+            end
+          rescue ex : BoundsError
+            raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+          end
+          nil
+        end
+        reader.validate_complete_schedule(workspace_observer)
+      end
+
+      @json_readers.each_with_index do |reader, reader_index|
+        other_retained_workspace = 0_u64
+        @readers.each do |entry|
+          other_retained_workspace = checked_add(other_retained_workspace, entry[3].retained_workspace_bytes)
+        end
+        @json_readers.each_with_index do |other_reader, other_index|
+          next if other_index == reader_index
+          other_retained_workspace = checked_add(other_retained_workspace, other_reader.retained_workspace_bytes)
+        end
+        if other_retained_workspace > limit
+          raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+        end
+        reader_workspace_limit = limit - other_retained_workspace
+        workspace_observer = ->(workspace_bytes : UInt64) do
+          begin
+            if workspace_bytes > reader_workspace_limit
+              raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+            end
+          rescue ex : BoundsError
             raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
           end
           nil
@@ -288,16 +364,54 @@ module CrystalClick
     private def materialize_mark(
       mark_index : Int32,
       rows : UInt64,
-    ) : {Array(Array(BinaryValue)), UInt64}
+    ) : MaterializedMark
       remaining_bytes = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
       retained_workspace = 0_u64
       @readers.each do |entry|
         retained_workspace = checked_add(retained_workspace, entry[3].retained_workspace_bytes)
       end
+      @json_readers.each do |reader|
+        retained_workspace = checked_add(retained_workspace, reader.retained_workspace_bytes)
+      end
       if retained_workspace > remaining_bytes
         raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
       end
       remaining_bytes -= retained_workspace
+
+      # The recursive reader authenticates child occurrences before decoding.
+      # Use that metadata to preflight every selected JSON carrier before any
+      # JSON payload is materialized or a callback can observe this mark.
+      json_preflights = Array(CompactJsonMarkPreflight).new(@json_readers.size)
+      json_carrier_bytes = 0_u64
+      json_carrier_nodes = 0_u64
+      json_carrier_elements = 0_u64
+      json_shape_nodes = 0_u64
+      json_shape_tuple_cells = 0_u64
+      json_shape_elements = 0_u64
+      json_recursive_shape_bytes = 0_u64
+      json_peak_transient_bytes = 0_u64
+      @json_readers.each do |reader|
+        preflight = reader.mark_preflight(mark_index, rows)
+        json_preflights << preflight
+        json_carrier_bytes = checked_add(json_carrier_bytes, preflight.carrier_bytes)
+        json_carrier_nodes = checked_add(json_carrier_nodes, preflight.carrier_nodes)
+        json_carrier_elements = checked_add(json_carrier_elements, preflight.carrier_elements)
+        json_shape_nodes = checked_add(json_shape_nodes, preflight.shape.nodes)
+        json_shape_tuple_cells = checked_add(json_shape_tuple_cells, preflight.shape.tuple_cells)
+        json_shape_elements = checked_add(json_shape_elements, preflight.shape.elements)
+
+        if reader.carrier_kind == :recursive
+          json_recursive_shape_bytes = checked_add(json_recursive_shape_bytes, preflight.shape.bytes)
+          if preflight.temporary_bytes > json_peak_transient_bytes
+            json_peak_transient_bytes = preflight.temporary_bytes
+          end
+        else
+          transient = checked_add(preflight.temporary_bytes, preflight.shape.bytes)
+          if transient > json_peak_transient_bytes
+            json_peak_transient_bytes = transient
+          end
+        end
+      end
 
       # All selected reader contexts stay live for this mark. Charge their
       # aggregate retained owner before allocating results or decoding values.
@@ -368,7 +482,74 @@ module CrystalClick
         end
         cursor += slice_rows
       end
-      {values_by_column, checked_add(retained_total, carrier_bytes)}
+
+      # Binary owners have already been decoded and bounded above. Subtract
+      # their logical result charge, but keep every reader base in the JSON
+      # budget's workspace so mixed selections share one aggregate ceiling.
+      binary_owner_bytes = checked_add(retained_total - retained_workspace, carrier_bytes)
+      if binary_owner_bytes > WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
+        raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+      end
+      # Preserve the established BinaryValue/Dynamic-only accounting exactly:
+      # the OfflineColumnValue reservation below exists solely to own the new
+      # JSON carrier sidecar and must not add an empty owner to old selections.
+      if @json_readers.empty?
+        return {values_by_column, [] of SelectedCarrier, checked_add(retained_total, carrier_bytes)}
+      end
+      json_limit = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64 - binary_owner_bytes
+      json_budget = ObjectValuesMaterializationBudget.new(logical_limit: json_limit)
+      json_preflight_workspace = checked_add(
+        retained_workspace,
+        checked_add(json_recursive_shape_bytes, json_peak_transient_bytes),
+      )
+      begin
+        json_budget.reserve_base(
+          0_u64,
+          json_carrier_bytes,
+          json_preflight_workspace,
+          descriptor_nodes: json_carrier_nodes,
+          descriptor_elements: json_carrier_elements,
+        )
+        ensure_json_shape_limits!(
+          json_budget,
+          json_shape_nodes,
+          json_shape_tuple_cells,
+          json_shape_elements,
+        )
+      rescue ex : BoundsError
+        raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+      end
+
+      json_carriers = Array(SelectedCarrier).new(@json_readers.size)
+      @json_readers.each_with_index do |reader, reader_index|
+        preflight = json_preflights[reader_index]
+        other_retained_workspace = retained_workspace - reader.retained_workspace_bytes
+        peak_workspace = 0_u64
+        workspace_observer = ->(current_workspace_bytes : UInt64) do
+          begin
+            active_workspace = checked_add(other_retained_workspace, current_workspace_bytes)
+            expected_peak = checked_add(preflight.temporary_bytes, preflight.shape.bytes)
+            json_budget.ensure_workspace(checked_add(active_workspace, expected_peak))
+            if active_workspace > peak_workspace
+              peak_workspace = active_workspace
+            end
+          rescue ex : BoundsError
+            raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+          end
+          nil
+        end
+
+        values = reader.storage_values_for_mark(mark_index, rows, workspace_observer)
+        carrier = reader.carrier_for(values)
+        reader.charge_carrier!(json_budget, values, carrier, preflight, peak_workspace)
+        json_carriers << carrier
+      end
+
+      {
+        values_by_column,
+        json_carriers,
+        checked_add(checked_add(retained_total, carrier_bytes), json_budget.retained_logical_bytes),
+      }
     end
 
     private def emit_batch(
@@ -377,6 +558,7 @@ module CrystalClick
       row_offset : UInt64,
       rows : UInt64,
       values_by_column : Array(Array(BinaryValue)),
+      json_carriers : Array(SelectedCarrier),
       & : WidePartTableBatch -> Nil
     ) : Nil
       row_end = row_offset + rows
@@ -394,22 +576,59 @@ module CrystalClick
         [] of WidePartNumericSlice,
         row_count: rows,
       )
-      @readers.each_with_index do |entry, column_index|
-        values = values_by_column[column_index]
-        slice = Slice.new(values.to_unsafe + row_offset.to_i, rows.to_i)
-        if entry[2].contains_dynamic?
-          batch.install_dynamic_bulk_values(entry[0], slice, rows.to_i32)
+      @column_reader_slots.each do |kind, reader_index|
+        if kind == :binary
+          entry = @readers[reader_index]
+          values = values_by_column[reader_index]
+          slice = Slice.new(values.to_unsafe + row_offset.to_i, rows.to_i)
+          if entry[2].contains_dynamic?
+            batch.install_dynamic_bulk_values(entry[0], slice, rows.to_i32)
+          else
+            BinaryValueTypedBatchAdapter.install(
+              batch,
+              entry[0],
+              entry[2],
+              slice,
+              rows.to_i32,
+            )
+          end
         else
-          BinaryValueTypedBatchAdapter.install(
-            batch,
-            entry[0],
-            entry[2],
-            slice,
-            rows.to_i32,
-          )
+          reader = @json_readers[reader_index]
+          carrier = json_carriers[reader_index]
+          case carrier
+          when Array(ObjectDocument)
+            slice = Slice.new(carrier.to_unsafe + row_offset.to_i, rows.to_i)
+            batch.install_object_documents(reader.column_name, slice, rows.to_i)
+          when Array(Array(ObjectDocument))
+            slice = Slice.new(carrier.to_unsafe + row_offset.to_i, rows.to_i)
+            batch.install_array_object_documents(reader.column_name, slice, rows.to_i)
+          when Array(StorageColumnValue)
+            slice = Slice.new(carrier.to_unsafe + row_offset.to_i, rows.to_i)
+            batch.install_recursive_values(reader.column_name, slice, rows.to_i)
+          else
+            raise CorruptPartError.new("selected Compact JSON carrier kind is unknown")
+          end
         end
       end
       yield batch
+      nil
+    end
+
+    private def ensure_json_shape_limits!(
+      budget : ObjectValuesMaterializationBudget,
+      nodes : UInt64,
+      tuple_cells : UInt64,
+      elements : UInt64,
+    ) : Nil
+      unless nodes <= budget.max_nodes - budget.node_count
+        raise BoundsError.new("Object recursive node limit exceeded")
+      end
+      unless tuple_cells <= budget.max_tuple_cells - budget.tuple_cells
+        raise BoundsError.new("Object Tuple cell limit exceeded")
+      end
+      unless elements <= budget.max_elements - budget.element_count
+        raise BoundsError.new("Object recursive element limit exceeded")
+      end
       nil
     end
 
