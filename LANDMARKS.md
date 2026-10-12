@@ -1,5 +1,55 @@
 # Crystal Click landmarks
 
+## Recursive typed-Dynamic Compact framing — W270
+
+- VERIFIED / root adversary ROBUST over W269 baseline
+  `f4e0c6f0bc6cb299267d96f0c60da791ec5d4b94` within the finite native witnesses
+  and affected cohorts (2026-10-12). Frozen public-writer RED and unchanged
+  GREEN precede qualification; frozen MRK4 name-pair RED establishes the
+  canonical/raw callback-domain defect. Recursive value serde is reused;
+  own-file extent grammar and Compact physical coordination are distinct.
+- Independent read plans compare exact descriptor/profile/site/depth/arm/
+  version/cap/role layout, excluding deliberately stripped statistics.
+  Parsed prefixes retain statistical authority; encoder identity is unchanged.
+  Canonical physical and raw logical callback identities remain paired, not
+  interchangeable. Preserve legacy raw selectors and explicit physical
+  selectors; reject canonical mismatch without raw-name fallback.
+- Final DEBUG and actual RELEASE each pass 890 unique examples / 133 paths:
+  five disjoint cohorts contribute 876, six new focused paths 14. The focused
+  executable passes 34 with 20 overlaps. Held seals: production 606 files,
+  source/spec/script 2008; separate executables, no full-suite/fresh-clone
+  claim. Root-only serial one-worker/thread, unchanged 12 GiB / 50%-free guards.
+- Native root `/private/tmp/crystal-click-w270-native.gQR1oe` (`ac751f`),
+  independent root audit `4d73c4`: 207 invocations / 828 authenticated raw
+  files. Four stock MRK4 cells and eight generated MRK3/MRK4 cells qualify
+  Array(Nullable(Int64)) typed Dynamic arms across four JSON topologies / five
+  sites. Object V3 (wire 4), String0, MAP/one-bucket or MAP_WITH_BUCKETS/two-
+  bucket, BASIC/COMPACT; exact 6/2/1/0-row windows. Two separate generated
+  Array(JSON)/Array(UInt8) BASIC cells qualify both mark formats and exact
+  native 8/2/1/0 windows/dynamicType. Local UInt8 COMPACT is not native proof.
+  Native/source pins differ; no latest/all-version/physical-byte/speed claim.
+- Copy-only resealed middle-root ArraySizes byte 0 -> 1 keeps frame/mark
+  extents but causes local CorruptPartError and native 117 INCORRECT_DATA
+  (compact discriminator granule 6, root_json, mark 1), despite CHECK=1.
+  Independent key/array controls stay exact; no granule-I/O locality claim.
+  Auditor label, Ruby-method, CHECK-key and copied-exit-code construction
+  errors are not production RED; corrected final auditor passes held captures.
+- Fresh final-source Variant/LC/static/Dynamic probes and frozen raw auditors
+  pass (249 invocations / 996 raw files). Nine frozen static files remain
+  identical (17902 bytes); three protected W263 specs and original 52 parts /
+  544 files / 756378 bytes stay unchanged and outside staging.
+- Return pointers: [writer frontier](docs/COMPACT_PART_WRITER_FRONTIER.md),
+  [project status](docs/PROJECT_STATUS.md),
+  [W270 evidence](.landmark/evidence/compact-part-writer-w270.json).
+  Next falsifier: stock-first Dynamic-owned JSON or advanced/chunked writer
+  positive with nonuniform/empty/NULL marks, later prefixes and semantic
+  copy-only corruption. Then Compact MV/projections, then optimization.
+  Public writer remains whole-part sorted UInt64-key, not arbitrary-key or
+  append. Full goal ACTIVE; <=10% speed objective unmeasured. Local atomic
+  commit only/no push. Refresh on relevant source/test/profile/compiler/
+  runtime/capture drift, temporary-evidence loss or widening. Rollback: revert
+  W270 only; preserve protected specs, captures and frozen byte/native oracles.
+
 ## Context-owned declared Compact JSON writer — W269
 
 - VERIFIED / root adversary ROBUST over baseline
@@ -36,9 +86,10 @@
   invocations / 996 raw files). All nine frozen W264 static files remain equal
   (17902 bytes); three user-owned specs and original 52 parts / 544 files /
   756378 bytes stay unchanged and excluded from staging.
-- OPEN: typed-Dynamic Array(UInt8) under nonempty Array(JSON) on MRK3 lacks
-  a physical body-owner handler despite logical plan admission. Staged readback
+- At W269, OPEN: typed-Dynamic Array(UInt8) under nonempty Array(JSON) on MRK3
+  lacks a physical body-owner handler despite logical plan admission. Staged readback
   refuses with no publication/residue; this is safety, not capability closure.
+  W270 above qualifies the finite named witness, not all recursive layouts.
   Bool/UInt64 framing is narrowly native-qualified. Next falsifier is a native
   positive for that broader body owner; Dynamic-owned JSON, advanced/chunked
   layouts and Compact MV/projection composition remain separate frontiers.

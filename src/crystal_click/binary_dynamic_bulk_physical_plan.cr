@@ -259,6 +259,65 @@ module CrystalClick
       @prepared.same?(plan)
     end
 
+    # A reader may hold the exact structures parsed from an Object prefix while
+    # this physical owner was prepared independently from the corresponding
+    # write-side Object plan. Those plans are distinct objects by design. This
+    # bounded comparison proves that they describe the same physical grammar
+    # without weakening the encoder's identity-only contract above.
+    #
+    # Statistics are intentionally excluded: physical planning removes them
+    # from Dynamic structures, while the parsed prefix plan remains the sole
+    # authority for prefix callbacks and their statistics.
+    def same_prepared_layout?(plan : BinaryDynamicBulkPlan) : Bool
+      return false if @prepared.has_json_object_bindings? || plan.has_json_object_bindings?
+      return false unless @json_object_names.empty?
+      return false unless @prepared.type == plan.type && @prepared.profile == plan.profile
+      return false unless @prepared.site_count == plan.site_count
+      return false unless @prepared.role_count == plan.role_count
+      return false unless @data_names.size.to_u64 == plan.role_count
+      return false unless @structure_names.size == plan.site_count
+
+      # A role-key match alone is insufficient: descriptors such as UInt8 and
+      # String may share a physical role shape. Compare the exact declared
+      # site type, inherited depth, and every canonical actual arm instead.
+      @prepared.each_site_path do |path|
+        return false unless plan.has_site?(path)
+        return false unless @prepared.type_for_site(path) == plan.type_for_site(path)
+        return false unless @prepared.depth_for_site(path) == plan.depth_for_site(path)
+
+        prepared_structure = @prepared.structure_for(path)
+        candidate_structure = plan.structure_for(path)
+        return false unless same_structure_layout?(prepared_structure, candidate_structure)
+
+        prepared_arm_count = @prepared.arm_count(path)
+        return false unless prepared_arm_count == plan.arm_count(path)
+        prepared_arm_count.times do |index|
+          return false unless @prepared.arm_type(path, index) == plan.arm_type(path, index)
+        end
+
+        structure_role = String.build do |builder|
+          builder << path
+          builder << ".dynamic_structure"
+        end
+        return false unless @structure_names.has_key?(structure_role)
+      end
+
+      plan.each_site_path do |path|
+        return false unless @prepared.has_site?(path)
+      end
+
+      # Equal counts plus exact membership establish the complete data-role
+      # key set; the structure-role set was checked per site above.
+      plan.each_data_role do |role|
+        return false unless @data_names.has_key?(role)
+        return false unless @prepared.has_data_role?(role)
+      end
+      @prepared.each_data_role do |role|
+        return false unless plan.has_data_role?(role)
+      end
+      true
+    end
+
     def data_stream_names : Hash(String, String)
       detached_copy(@data_names)
     end
@@ -294,6 +353,18 @@ module CrystalClick
 
     def marks_file_for(role : String, hashed : Bool = false) : String
       file_for_data_role(role, ".mrk2", hashed)
+    end
+
+    private def same_structure_layout?(left : DynamicStructure, right : DynamicStructure) : Bool
+      return false unless left.version == right.version
+      return false unless left.legacy_max_dynamic_types == right.legacy_max_dynamic_types
+      return false unless left.shared_index == right.shared_index
+      return false unless left.type_count == right.type_count
+
+      left.type_count.times do |index|
+        return false unless left.type_at(index) == right.type_at(index)
+      end
+      true
     end
 
     private def file_for_data_role(role : String, extension : String, hashed : Bool) : String

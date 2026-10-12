@@ -1,6 +1,50 @@
 # CrystalClick project status
 
-Current context-owned declared Compact JSON writer (W269, 2026-10-12): VERIFIED /
+Current recursive typed-Dynamic Compact framing (W270, 2026-10-12): VERIFIED /
+root adversary ROBUST within the finite native witnesses and affected cohorts.
+Compact reader/writer already reuse recursive logical codecs; one physical
+assembler owns granule-major data.bin, marks, metadata, compression and staged
+publication. W270 adds typed Dynamic extent framing and a canonical-physical/
+raw-logical callback-name bridge, not another value serializer or public API.
+Independent read plans compare exact layout rather than object identity;
+encoder identity and parsed-prefix statistical authority remain unchanged.
+Legacy raw selectors and explicit physical selectors stay separate, without
+fallback. Current writing is whole-part sorted UInt64-key writing, not
+arbitrary-key or incremental append.
+
+Four stock MRK4 cells and eight generated MRK3/MRK4 cells qualify typed
+Dynamic Array(Nullable(Int64)) arms under root JSON, Array(JSON),
+Array(Tuple(JSON, UInt8)) and Tuple(JSON, JSON), with five independent sites.
+Profiles: Object V3 (wire 4), String0, MAP/one-bucket or MAP_WITH_BUCKETS/two-
+bucket, BASIC/COMPACT. A separate generated Array(JSON) witness qualifies
+Array(UInt8) in BASIC and both mark formats. Native windows are 6/2/1/0 rows
+for the main matrix and 8/2/1/0 for UInt8; local COMPACT positives do not
+qualify native UInt8 COMPACT. NULL is separate from SharedVariant counts.
+Root authenticates 207 invocation quartets / 828 raw files and independently
+checks marks, selected typed lanes/prefixes and literal local/native values.
+
+Final DEBUG and actual RELEASE each pass 890 unique examples / 133 paths:
+five disjoint affected cohorts contribute 876, six new focused paths 14.
+The focused eight-path executable passes 34 with 20 overlapping examples.
+Held final source seals; separate executables, not combined/full-suite/fresh-
+clone GREEN. A checksum-resealed one-byte ArraySizes defect passes CHECK=1
+but selected local/native reads reject; native exit 117 INCORRECT_DATA and
+independent key/array controls are checked from raw captures. Fresh previous
+Variant/LC/static/Dynamic native guards pass (249 invocations / 996 raw files).
+Nine frozen static files, three protected W263 specs and all original 52
+parts / 544 files / 756378 bytes are unchanged.
+
+Next: Dynamic-owned JSON and remaining advanced/chunked/profile/mark layouts,
+then Compact MV/projection composition, then memory/performance. Prior bounded
+Wide/metadata MV/projections remain separately qualified. No all-type/layout,
+granule-only-I/O, large-part/RSS or speed-parity claim; <=10% remains unmeasured
+and the full goal ACTIVE. Source and native executable have distinct pins.
+Local atomic commit only/no push; refresh on source/test/profile/compiler/
+runtime/capture drift, temporary-evidence loss or widening. See
+[W270 evidence](../.landmark/evidence/compact-part-writer-w270.json) and the
+[writer frontier](COMPACT_PART_WRITER_FRONTIER.md).
+
+Previous context-owned declared Compact JSON writer (W269, 2026-10-12): VERIFIED /
 root adversary ROBUST within the finite Object V3 (wire 4), String0,
 MAP/one-bucket and MAP_WITH_BUCKETS/two-bucket, BASIC/COMPACT, plain-MRK3/MRK4
 witness and exact affected cohorts. `CompactPartColumn.json` explicitly binds
@@ -13,10 +57,11 @@ the first mark or recomputed over the part. Later prefixes remain version-correc
 The native witness covers root JSON, Array(JSON), Array(Tuple(JSON, UInt8)) and
 Tuple(JSON, JSON), five independent Object sites, typed UInt64/String paths,
 ordinary Dynamic Bool/String/UInt64 arms, late shared values and zero-child
-marks. It does not qualify every admitted recursive descriptor. OPEN: nonempty
-Array(JSON) with typed Dynamic Array(UInt8) on MRK3 still reaches a missing
+marks. It does not qualify every admitted recursive descriptor. At W269, OPEN:
+nonempty Array(JSON) with typed Dynamic Array(UInt8) on MRK3 reaches a missing
 physical body-owner handler and refuses before publication, with no staging
-residue. That guard establishes safety, not recursive layout compatibility.
+residue. W270 above qualifies that finite witness; the W269 guard alone
+established safety, not recursive layout compatibility.
 Dynamic-owned JSON and remaining advanced/chunked layouts remain open.
 
 Focused specs pass 19 examples. Final serial DEBUG and actual RELEASE each pass

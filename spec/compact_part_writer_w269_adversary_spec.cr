@@ -417,24 +417,47 @@ describe "W269 Compact JSON writer adversaries" do
     end
   end
 
-  it "fails closed on nonempty nested typed-Dynamic Array(UInt8) under Compact MRK3 before publication" do
-    parent = File.tempname("crystal-click-w269-mrk3-typed-dynamic-guard-")
+  it "publishes and reads nonempty nested typed-Dynamic Array(UInt8) under Compact MRK3" do
+    parent = File.tempname("crystal-click-w269-mrk3-typed-dynamic-")
     part_path = File.join(parent, "all_1_1_0")
     begin
       Dir.mkdir(parent)
       column = w269a_nonempty_nested_typed_dynamic_column
       columns = [column] of CrystalClick::CompactPartColumn
-      error = expect_raises(CrystalClick::UnsupportedFormatError) do
-        w269a_write(
-          part_path,
-          columns,
-          CrystalClick::CompactMarkFormat::Mrk3,
-          CrystalClick::CompactVariantDiscriminatorMode::Compact,
-        )
+      w269a_write(
+        part_path,
+        columns,
+        CrystalClick::CompactMarkFormat::Mrk3,
+        CrystalClick::CompactVariantDiscriminatorMode::Compact,
+      ).should eq(part_path)
+      File.exists?(part_path).should be_true
+
+      json_type, _object_plan = w269a_nested_typed_dynamic_parts
+      schema = CrystalClick::StorageColumnSchema.parse(
+        CrystalClick::BinaryDataType.array(json_type).name,
+      )
+      reader = CrystalClick::CompactRecursiveJsonColumnReader.open(
+        part_path,
+        "nested_typed_dynamic",
+        schema,
+      )
+      reader.mark_count.should eq(CompactPartWriterW269Fixture::MARK_COUNT)
+      reader.row_count.should eq(CompactPartWriterW269Fixture::ROW_COUNT.to_u64)
+      actual_rows = reader.read_marks(0, reader.mark_count).flatten
+      actual_rows.size.should eq(CompactPartWriterW269Fixture::ROW_COUNT)
+      dynamic_type = CrystalClick::BinaryDataType.dynamic(max_types: 1)
+      array_type = CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.primitive("UInt8"))
+      actual_rows.each_with_index do |outer, index|
+        outer.array_values.size.should eq(1)
+        payload = outer.array_values[0].object_document.value_for("payload")
+        payload.type.should eq(dynamic_type)
+        payload.is_null?.should be_false
+        actual_array = payload.child_at(0)
+        actual_array.type.should eq(array_type)
+        actual_array.element_count.should eq(1)
+        actual_array.child_at(0).byte_at(0).should eq((index + 1).to_u8)
       end
-      error.message.should eq("Compact MRK3 MAP tape contains an unsupported body owner")
-      File.exists?(part_path).should be_false
-      Dir.children(parent).should be_empty
+      reader.read_marks(reader.mark_count, 0).should be_empty
     ensure
       FileUtils.rm_rf(parent)
     end

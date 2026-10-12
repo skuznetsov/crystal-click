@@ -43,6 +43,16 @@ module CrystalClick
         @body_pairs.dup
       end
 
+      def each_prefix_pair(&block : CallbackPair -> Nil) : Nil
+        @prefix_pairs.each { |pair| yield pair }
+        nil
+      end
+
+      def each_body_pair(&block : CallbackPair -> Nil) : Nil
+        @body_pairs.each { |pair| yield pair }
+        nil
+      end
+
       def prefix_callback_count : Int32
         @prefix_pairs.size
       end
@@ -77,6 +87,7 @@ module CrystalClick
     @structure_sources : Hash(String, StructureSource)
     @body_callbacks : Hash(String, String)
     @callback_events : Array(CompactBinaryBulkCallback)
+    @physical_callback_names : Array(String)
 
     def initialize(
       input : CompactJsonColumnInput,
@@ -237,6 +248,51 @@ module CrystalClick
       unless ordered_names.size == expected_count && ordered_names.all? { |name| seen_callback_names.includes?(name) }
         raise UnsupportedFormatError.new("Compact JSON callback schedule differs from its bound physical role roster")
       end
+
+      # Keep the logical event names untouched for ObjectDocument encoding.
+      # MRK4 metadata instead needs an exact one-to-one physical projection
+      # from the canonical/raw pairs produced by the existing Object planner.
+      # Charge the temporary lookup/set and retained physical-reference array
+      # before allocating any of those containers; the canonical strings are
+      # already retained by their site bindings and are not copied here.
+      callback_count = ordered_names.size.to_u64
+      added_nodes = checked_add(3_u64, checked_multiply(callback_count, 2_u64))
+      added_elements = checked_multiply(callback_count, 4_u64)
+      budget.ensure_future_nodes(added_nodes)
+      budget.ensure_future_elements(added_elements)
+      added_nodes.times { budget.charge_node }
+      budget.charge_elements(added_elements) if added_elements > 0_u64
+
+      canonical_by_callback = Hash(String, String).new(initial_capacity: ordered_names.size)
+      seen_canonical = Set(String).new(initial_capacity: ordered_names.size)
+      @site_bindings.each_value do |binding|
+        binding.each_prefix_pair do |canonical, callback|
+          register_physical_pair!(canonical_by_callback, seen_canonical, canonical, callback)
+        end
+        binding.each_body_pair do |canonical, callback|
+          register_physical_pair!(canonical_by_callback, seen_canonical, canonical, callback)
+        end
+      end
+      array_sites.each do |site|
+        register_physical_pair!(canonical_by_callback, seen_canonical, site.callback_name, site.callback_name)
+      end
+      uint8_sites.each do |site|
+        register_physical_pair!(canonical_by_callback, seen_canonical, site.callback_name, site.callback_name)
+      end
+      unless canonical_by_callback.size == expected_count
+        raise UnsupportedFormatError.new("Compact JSON physical callback projection is not a complete roster")
+      end
+      @physical_callback_names = Array(String).new(ordered_names.size)
+      ordered_names.each do |name|
+        physical_name = canonical_by_callback[name]? ||
+                        raise UnsupportedFormatError.new("Compact JSON logical callback has no parsed physical-name pair")
+        @physical_callback_names << physical_name
+      end
+      unless @physical_callback_names.size == ordered_names.size &&
+             @physical_callback_names.all? { |name| seen_canonical.includes?(name) }
+        raise UnsupportedFormatError.new("Compact JSON physical callback projection changed its ordered roster")
+      end
+
       @callback_events = Array(CompactBinaryBulkCallback).new(ordered_names.size)
       ordered_names.each do |name|
         @callback_events << CompactBinaryBulkCallback.new(name, name, 0)
@@ -246,6 +302,15 @@ module CrystalClick
 
     def callback_names : Array(String)
       @callback_events.map(&.name)
+    end
+
+    def physical_callback_name_count : Int32
+      @physical_callback_names.size
+    end
+
+    def each_physical_callback_name(&block : String -> Nil) : Nil
+      @physical_callback_names.each { |name| yield name }
+      nil
     end
 
     def callback_event_count : Int32
@@ -467,6 +532,20 @@ module CrystalClick
       nil
     end
 
+    private def register_physical_pair!(
+      canonical_by_callback : Hash(String, String),
+      seen_canonical : Set(String),
+      canonical : String,
+      callback : String,
+    ) : Nil
+      if canonical.empty? || callback.empty? || canonical_by_callback.has_key?(callback) ||
+         !seen_canonical.add?(canonical)
+        raise UnsupportedFormatError.new("Compact JSON physical callback projection is invalid or not one-to-one")
+      end
+      canonical_by_callback[callback] = canonical
+      nil
+    end
+
     private def same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
       left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
         left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
@@ -477,6 +556,13 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact JSON bound input grid workspace overflows UInt64")
       end
       left + right
+    end
+
+    private def checked_multiply(left : UInt64, right : UInt64) : UInt64
+      if left > 0_u64 && right > UInt64::MAX // left
+        raise UnsupportedFormatError.new("Compact JSON physical callback projection workspace overflows UInt64")
+      end
+      left * right
     end
   end
 end

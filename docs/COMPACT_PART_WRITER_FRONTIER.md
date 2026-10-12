@@ -1,6 +1,248 @@
 # Compact part writer frontier
 
-## Current transition: context-owned declared Compact JSON writer — W269
+## Current transition: recursive typed-Dynamic Compact MRK3 framing — W270
+
+Status: VERIFIED / root adversary ROBUST within the finite native witnesses and
+affected cohorts (2026-10-12). Baseline:
+`f4e0c6f0bc6cb299267d96f0c60da791ec5d4b94` (W269). The previous goal turn made
+progress: W269 is an atomic qualified feature, not a full-goal completion.
+Full types/layouts and MV/projections still precede memory/performance; the
+full goal remains ACTIVE with the eventual <=10% speed objective unmeasured.
+
+Admitted extension: grammar-only recursive framing of typed Dynamic body
+callbacks in plain MRK3 Object tapes, using canonical site plans, prefix modes,
+role descriptors and occurrence counts, without reimplementing value serde.
+The matched stock/generated matrix qualifies Array(Nullable(Int64)) ordinary
+arms under the four W269 JSON declarations in BASIC/COMPACT and MRK3/MRK4.
+A separate generated Array(JSON) witness qualifies Array(UInt8) ordinary arms
+in BASIC and both mark formats. Local COMPACT positives for UInt8 do not imply
+native COMPACT qualification. Root and typed Dynamic owners retain separate
+count/state keys. Logical plan admission is not universal physical qualification.
+
+Rejected/guard-only surface remains load-bearing: unbound JSON/Dynamic input,
+Dynamic-owned JSON callbacks, unsupported typed/actual profile grammars,
+unresolved advanced relocations, compressed marks and unqualified versions/
+layouts remain open work, not silently excluded from the full objective.
+Do not turn an unknown owner into an empty callback, borrow a future callback's
+bytes, or use a value decoder to guess lane boundaries. No new public API,
+performance rewrite or relaxation of common semantic/profile/resource guards.
+
+Risk: CAUTION (persistent recursive framing and a shared reader consumer).
+Rollback: revert only W270-owned changes; preserve all three user-owned W263
+specs, original native captures and W264-W269 byte/native oracles. Strongest
+failure: parent Object rows, Dynamic arm rows and Array child rows diverge but
+the framer consumes the wrong extent without rejecting before publication.
+Guard: exact role/order/count association, checked cumulative budgets, seeded
+size/discriminator defects and no-publication/no-staging-residue on refusal.
+
+Execution and ownership:
+
+1. Luna tests own new W270 baseline/fixture/positive/adversary specs. Root runs
+   the existing-public-API positive at unchanged production HEAD and records
+   behavioral RED before opening production edits. Compiler/oracle errors are
+   not behavioral RED. Convert the superseded W269 refusal only after a measured
+   positive, retaining a genuine unsupported-owner safety test.
+2. Luna production owns `compact_json_object_map_tape_framer.cr` and the approved
+   new `compact_json_typed_dynamic_tape_grammar.cr` owner. Enumerate shared
+   consumers first; use canonical parsed plans and a common physical traversal.
+   The measured read/write-plan identity mismatch also admits a bounded
+   structural read-layout comparator in `binary_dynamic_bulk_physical_plan.cr`;
+   the encoder's identity-only guard remains unchanged. Physical planning strips
+   statistics intentionally; the parsed prefix retains statistical authority.
+   Root integrates only scope expansions required by observed evidence.
+3. Luna native evidence owns new W270 helper/fixture/probe files, preferring
+   reusable support over broad probe duplication. Stock-first rosters, prefix
+   statistics and literal native values must not derive from candidate output.
+4. Root alone runs compiler/spec/native checks serially under unchanged one-
+   worker/thread, 12 GiB process-tree and 50%-free guards. Native oracle remains
+   pinned 26.10.1.1201; source `ed30948f095ecb70679986d7d60e27ad770ae27a` is
+   a distinct revision. Capture full/middle/last/empty windows and independently
+   audit byte extents, callbacks, every mark and EOF. CHECK alone is not semantic
+   proof. Copy-only checksum-resealed defects retain clean independent controls.
+
+### Observed transition history
+
+The following observations record intermediate source states, not the final
+qualification. Final commands, seals and scope are recorded below.
+
+Observed baseline: the frozen positive public-writer test compiled at unchanged
+W269 production HEAD and ran one example with one `UnsupportedFormatError`,
+exit 1: "Compact MRK3 MAP tape contains an unsupported body owner" from the
+framer's `parse_binding!` during staged readback. The baseline test SHA-256 is
+`953f6b4a1ebb9bfe422f8a3ea3377a1922a4ef9bce26a93a006644552d9baca5`, fixture
+`63ef3c9a42b45fb03ba58ef47816aab64634480bca4c9aad98d44475eac37125`, and
+unchanged framer
+`a1bcc43c3e7fb946a949d2e8f50af18ea1b161d4eba0c3845dc5802902547d87`.
+Root executed the planned baseline command with the declared guard, one worker,
+one thread and successful 81%-free preflight (execution result `8b539b`). This
+opens the bounded grammar implementation; it is not native qualification.
+
+The first implementation attempt compiles but still fails that same frozen
+positive with a read-side prepared-plan identity mismatch (root `5017db`, one
+error / exit 1). The physical owner independently prepares a statistics-free
+write plan, while the callback-prefix owner retains its parsed read plan. This
+is not evidence of corrupt input. Bind exact descriptor/profile/site/role
+content without relaxing the existing encoder identity contract.
+
+After the bounded read-layout matcher, root reran the exact frozen baseline
+and fixture without changes: one example, zero failures/errors/pending, exit 0
+(`c6f3af`, 77%-free preflight). This is a local public-writer/readback positive,
+not yet a native-qualified recursive compatibility claim. Native fixture
+review also corrected Dynamic statistics: NULL is not SharedVariant and does
+not increment either arm count (`ColumnDynamic.cpp:1705-1723`). The matched
+five-site sample keeps one NULL per site separately from non-null arm counts.
+
+Fixture-context discriminator: the frozen spec fixture inherits eight rows /
+four marks from the **spec** W269 fixture; the separate **scripts** native main
+matrix has six rows / three marks. A source-review truncation allegation mixed
+those contexts and was refuted by the live constants and unchanged baseline
+hashes. Keep the original RED/GREEN fixture frozen. The independent native
+UInt8 fixture uses eight explicit keys / four marks, includes an empty ordinary
+Array arm before a nonempty arm, and supplies full-block counts `[3, 0]`;
+the baseline's `[1, 0]` is a first-mark sample, not that
+native full-block authority. Serialized prefix counts require a raw audit.
+
+Stock construction falsifiers: JSON text, named Tuple-to-JSON, and typed
+JSON-to-JSON casts each choose `Array(Nullable(Int64))`, not `Array(UInt8)`
+(root `5cb1ab` and `a7b5ba`, native exit 0). The matched stock/generated matrix
+must use the observed actual type. A separate generated `Array(JSON)` witness
+with typed Dynamic `Array(UInt8)` must pass native reads and `dynamicType`;
+standalone Dynamic would not qualify the newly crossed Object boundary.
+
+Measured stock MRK4 name-domain falsifier: the matched native matrix reaches
+a real reader refusal before body capture (`e59fb7`), not a helper-envelope or
+fixture failure. The root diagnostic (`b80782`, exit 0) parses the untouched
+stock prefix and observes 23 physical callbacks in the same traversal order
+as the schedule. The first difference is slot 10: the schedule uses logical
+callback `root_json.payload.Array(Nullable(Int64)).size0`, while native MRK4
+stores `root_json.payload.Array%28Nullable%28Int64%29%29.size0`. The same
+distinction applies to the arm's Nullable and value lanes. All remaining
+names match. This opens only a Compact physical/logical name-domain bridge:
+retain canonical/raw pairs for common getter identity, project canonical
+names for physical roster/mark lookup and writer metadata, and preserve exact
+ordered validation and empty callbacks. Shared serde and the common callback
+producer must remain unchanged. Root must first run a frozen focused name-
+domain test RED, then validate both read/write consumers and stock/generated
+MRK3/MRK4. Existing Wide/inline names and earlier frozen bytes are guards.
+The focused name-domain test now independently reproduces the writer-side
+defect (`aa0c28`): two examples, one failure at exact MRK4 roster equality,
+exit 1. Its frozen SHA-256 is
+`54f09360917c010b505e1004d9b4a1742b2c3dc84c7362d090c060f1c666b991`.
+The Array(JSON) site's typed Array lane is `size1`; an earlier `size0`
+selection failed before the target assertion and was corrected as a test
+construction error, not counted as behavioral RED. The measured raw-versus-
+canonical mismatch now opens the bounded Compact bridge. The frozen two-
+example name test and the 30-example focused cohort pass in DEBUG and actual
+RELEASE after that bridge; native qualification is still IN_PROGRESS.
+
+The bridge has two read consumers: the root static reader and the recursive
+Array/Tuple reader. Source inspection confirms that the recursive site source
+receives both names but currently sends the raw getter identity to the parent
+MRK4 cursor. Its site-local logical validation must remain exact; the parent
+ledger must receive the exact canonical physical sequence. This admits only
+the necessary site-source/recursive-reader wiring in addition to the root
+reader and JSON-only write-plan metadata projection. Parent cursor, common
+callback producer and value serde contracts are not relaxed.
+
+Direct-call compatibility falsifier: the post-bridge JSON DEBUG cohort runs
+398 examples with zero assertion failures but three errors (`447521`). All
+three unchanged W263 chunked site-framer coordinate/provenance tests select
+physical `shared`/`payload` callbacks while supplying unrelated canonical
+slice labels. The base callback-source contract is single-name; its Wide
+sibling and the old Compact method select the raw callback name. Parser-
+produced pairs instead define pair zero as the canonical physical name and
+pair one as the logical getter identity. Do not silently change the existing
+direct-call method or weaken physical checks with a raw-name fallback.
+
+Bounded correction: preserve `take_inline_fragment_slice` as the legacy raw
+selector and add explicit internal `take_physical_inline_fragment_slice` for
+the two parser-pair consumers in the static and recursive Compact readers.
+Both methods retain canonical/raw slice labels, exact ordered validation and
+authenticated coordinate provenance. Only the two site sources and two reader
+call sites may change; public writer APIs, common serde, Wide, mark cursor and
+parent ledger stay unchanged. The unchanged three W263 tests plus a new no-
+fallback physical-selector adversary and the frozen W270 pair witness are
+the discriminators. Rebuild the native helper at the final source before
+consuming any native result; the earlier bridge helper is not that final seal.
+
+The current sandbox rejects `ps`, which the unchanged process-tree limiter
+requires. An escalated local diagnostic restores that observation without
+changing the 12 GiB limit, 50%-free threshold or one-worker/thread policy;
+non-escalated launcher refusals are not compiler, test or capability results.
+
+### Final qualification and continuation
+
+Executed DoD: the unchanged frozen positive and six new focused paths pass;
+the eight-path focused executable passes 34 examples in DEBUG and actual
+RELEASE. Five disjoint affected cohorts pass 876 examples / 127 paths in each
+mode: writer 202, LC 108, Variant 59, Dynamic 109, JSON 398. Adding six new
+paths gives 890 unique examples / 133 paths per mode; the focused executable
+overlaps 20 existing examples. These are separate executables, not combined,
+full-suite or fresh-clone GREEN. Exact expanded commands and results are in
+[W270 evidence](../.landmark/evidence/compact-part-writer-w270.json).
+
+The final production seal is 606 files /
+`a6fdc16beaa0c88f9f02e33d681e4d950597dbabce96cbb60896ab5c975050d7`;
+the source/spec/script seal is 2008 files /
+`e9f0afe669ae57275d4bfe29b476b188bbee27217d773a3fca36063e2165770a`.
+Both remain held across the final checks. All compiler/native work runs
+serially with one Crystal worker/thread, 12 GiB process-tree and 50%-free
+guards. The final release helper is rebuilt from this source, not reused from
+the earlier bridge state.
+
+Native root `/private/tmp/crystal-click-w270-native.gQR1oe`: four stock MRK4
+cells, eight generated MRK3/MRK4 cells and two separate generated UInt8 BASIC
+cells pass local/native literal values. The main matrix uses Object V3 (wire
+4), String0, MAP/one-bucket or MAP_WITH_BUCKETS/two-bucket and BASIC/COMPACT.
+Its four topologies contain five independent Object sites, typed ordinary
+Array(Nullable(Int64)) arms, late shared String arms, NULL and empty-child
+marks. Native full/middle/last/empty windows return 6/2/1/0 rows. The separate
+Array(JSON) UInt8 witness uses eight rows / four marks, full-block ordinary/
+shared counts `[3, 0]`, and native 8/2/1/0-row windows with exact dynamicType.
+NULL counts are not SharedVariant counts; the baseline's first-mark sample
+is not substituted for this native full-block authority.
+
+Root independently authenticates 207 invocation quartets / 828 raw files,
+literal native/local outputs, all mark coordinates, selected MRK4 typed-
+Dynamic prefixes/lanes and corresponding generated MRK3/MRK4 decoded tapes.
+Source revision `ed30948f095ecb70679986d7d60e27ad770ae27a` and native build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028` remain distinct pins; no latest,
+all-version, compressed-byte parity or speed claim follows.
+
+Copy-only semantic falsifier: change one middle-root ArraySizes byte 0 -> 1
+without changing frame/mark extents, then reseal data checksums. CHECK=1 does
+not establish semantic validity. Local reads reject with CorruptPartError;
+native selected root reads reject with exit 117 / INCORRECT_DATA, unexpected
+compact discriminator granule 6, root_json, mark 1. Independent key/array
+controls remain exact. This is not a granule-I/O-locality result.
+
+Auditor construction failures are kept separate from production RED: wrong
+UInt8 label prefixes, Ruby `empty()` rather than `empty?`, a stock/generated
+CHECK key mismatch, and a copied W269 exit-33 predicate. Immutable W270 stderr
+establishes exit 117; the corrected predicate retains the preexisting success/
+mismatch branch. Final source/raw audit passes without rewriting captures.
+
+Fresh final-source Variant/LC/static/Dynamic helpers, probes and frozen raw
+auditors pass: 249 invocations / 996 raw files. Nine frozen W264 static files
+remain byte-identical (17902 bytes). Three user-owned W263 specs and all
+original 52 parts / 544 files / 756378 bytes remain unchanged and outside
+staging. No resource/profile/semantic guard is relaxed. Read-layout comparison
+is structural and statistics-free; encoder identity and parsed prefix
+statistical authority remain unchanged. Legacy raw selectors and explicit
+canonical physical selectors remain separate, with no raw-name fallback.
+
+Next falsifier: admit a named Dynamic-owned JSON or advanced/chunked writer
+layout only after a stock-first native positive survives nonuniform counts,
+empty/NULL marks, later prefixes and a copy-only semantic defect. Remaining
+layouts/profiles (including String1 and compressed marks), Compact MV/
+projection composition and broader writer keys remain open. Current public
+writing is whole-part sorted UInt64-key writing, not arbitrary-key or
+incremental append. Full types/MV/projections precede measured optimization;
+the <=10% speed objective remains unmeasured and the full goal ACTIVE.
+Refresh on relevant source/test/profile/compiler/runtime/capture drift,
+temporary-evidence loss or scope widening. Local atomic commit only; no push.
+
+## Previous transition: context-owned declared Compact JSON writer — W269
 
 Status: VERIFIED / root adversary ROBUST within the finite context-bound JSON
 witness and exact affected cohorts (2026-10-12). Baseline:
@@ -25,8 +267,10 @@ and plain MRK3/MRK4. Dynamic-owned JSON sites, advanced/chunked layouts and
 unsupported typed/actual callback grammars remain executable refusals and open
 work for later transitions; no broader goal is silently excluded.
 
-OPEN: broader typed-Dynamic/recursive MRK3 body framing. Logical plan admission
-does not establish a physical body-owner handler. A nonempty Array(JSON) with
+At W269, OPEN: broader typed-Dynamic/recursive MRK3 body framing. W270 above
+qualifies the named Array(UInt8) witness, not all recursive combinations.
+Logical plan admission does not establish a physical body-owner handler.
+At that source state, a nonempty Array(JSON) with
 typed Dynamic Array(UInt8) reaches staged readback and refuses with
 `UnsupportedFormatError` "Compact MRK3 MAP tape contains an unsupported body
 owner"; the no-publication/no-staging-residue guard passes. This preserves

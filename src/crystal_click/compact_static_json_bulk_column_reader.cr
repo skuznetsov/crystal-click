@@ -404,12 +404,16 @@ module CrystalClick
         else
           schedule.body_pairs.each do |canonical_name, callback_name|
             prefix.capture_body_callback_from!(canonical_name, callback_name, budget) do
-              framer.take_inline_fragment_slice(canonical_name, callback_name)
+              framer.take_physical_inline_fragment_slice(canonical_name, callback_name)
             end
           end
         end
         prefix.finish_body_capture!(schedule.body_pairs.size)
-        framer.validate_expected_events!(schedule.event_names)
+        if @context.mode.mrk4?
+          framer.validate_expected_events!(schedule.physical_event_names(budget), schedule.event_names)
+        else
+          framer.validate_expected_events!(schedule.event_names)
+        end
         framer.finish!
         unless schedule.advanced
           framer.validate_prepared_source!(prefix, physical_plan, schedule.body_bindings, schedule.body_pairs, budget)

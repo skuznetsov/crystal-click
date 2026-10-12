@@ -1,3 +1,5 @@
+require "./compact_json_typed_dynamic_tape_grammar"
+
 module CrystalClick
   # Grammar-only boundary finder for the bounded root JSON MAP tape. It walks
   # the frozen role schedule and existing descriptors/count lanes, retaining
@@ -17,6 +19,7 @@ module CrystalClick
     @budget : BinaryCodecBudget
     @string_totals : Hash(String, UInt64)
     @dynamic_arm_counts : Hash(String, Array(UInt64))
+    @typed_dynamic_grammars : Hash(String, CompactJsonTypedDynamicTapeGrammar)
     @map_counts : Array(UInt64)?
     @map_entry_count : UInt64?
     @bucket_counts : Hash(String, Array(UInt64))
@@ -36,6 +39,16 @@ module CrystalClick
     )
       @string_totals = Hash(String, UInt64).new
       @dynamic_arm_counts = Hash(String, Array(UInt64)).new
+      typed_dynamic_owners = @prefix.plan.typed_dynamic_count.to_u64
+      if typed_dynamic_owners == UInt64::MAX
+        raise CorruptPartError.new("Compact JSON typed-Dynamic owner count overflows its parser domain")
+      end
+      typed_dynamic_state_nodes = typed_dynamic_owners + 1_u64
+      @budget.preflight_children(typed_dynamic_state_nodes)
+      typed_dynamic_state_nodes.times { @budget.charge_node }
+      @typed_dynamic_grammars = Hash(String, CompactJsonTypedDynamicTapeGrammar).new(
+        initial_capacity: typed_dynamic_owners.to_i,
+      )
       @map_counts = nil
       @map_entry_count = nil
       @bucket_counts = Hash(String, Array(UInt64)).new
@@ -87,6 +100,13 @@ module CrystalClick
         capture_one!(binding, pair)
       end
 
+      unless @typed_dynamic_grammars.size == @prefix.plan.typed_dynamic_count
+        raise CorruptPartError.new("Compact JSON typed-Dynamic body schedule omitted a declared typed Dynamic owner")
+      end
+      @typed_dynamic_grammars.each_value do |grammar|
+        grammar.finish!
+      end
+
       shared_version = @prefix.plan.structures.object.shared_data_version
       case shared_version
       when 0_u64
@@ -129,6 +149,8 @@ module CrystalClick
         parse_typed!(owner_path, role, context)
       when :root_dynamic
         parse_root_dynamic!(owner_path, role, context, borrowed_tape)
+      when :typed_dynamic
+        parse_typed_dynamic!(owner_path, role, context, borrowed_tape)
       when :shared
         parse_shared!(owner_path, role, context)
       when :advanced_bucket, :advanced_copy
@@ -139,6 +161,44 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact MRK3 MAP tape contains an unsupported body owner")
       end
       nil
+    end
+
+    private def parse_typed_dynamic!(
+      owner_path : String,
+      role : String,
+      context : BinaryCodecContext,
+      borrowed_tape : Bytes,
+    ) : Nil
+      unless @prefix.plan.has_typed_dynamic?(owner_path)
+        raise CorruptPartError.new("Compact JSON body callback has no declared typed-Dynamic owner: #{owner_path.inspect}")
+      end
+      grammar = @typed_dynamic_grammars[owner_path]? || begin
+        type = @prefix.plan.typed_type_for(owner_path)
+        unless type.contains_dynamic?
+          raise CorruptPartError.new("Compact JSON typed-Dynamic owner has no declared Dynamic site: #{owner_path.inspect}")
+        end
+        plan = @prefix.typed_dynamic_plan_for(owner_path)
+        unless plan.type == type
+          raise CorruptPartError.new("Compact JSON typed-Dynamic plan descriptor differs from its declaration: #{owner_path.inspect}")
+        end
+        physical = @physical_plan.typed_dynamic(owner_path)
+        created = CompactJsonTypedDynamicTapeGrammar.new(
+          @prefix,
+          @schedule.prefix_pairs,
+          physical,
+          plan,
+          @row_count,
+          @profile,
+          @limits,
+          @budget,
+        )
+        @typed_dynamic_grammars[owner_path] = created
+        created
+      end
+      grammar.parse!(role, context, borrowed_tape)
+      nil
+    rescue ex : KeyError
+      raise CorruptPartError.new("Compact JSON typed-Dynamic callback has no prepared owner: #{ex.message}")
     end
 
     private def parse_typed!(owner_path : String, role : String, context : BinaryCodecContext) : Nil

@@ -78,11 +78,12 @@ if ENV["CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT"]?
       mixed_body = CompactStaticJsonMrk3NullW263Fixture.body_capture_evidence(source[:path], 0)
       null_body = CompactStaticJsonMrk3NullW263Fixture.body_capture_evidence(source[:path], 1)
       # Dynamic mode lookup rereads all three prefix callbacks; each
-      # prefix_callback_at lookup is charged before the body role walk.
-      mixed_body[:body_nodes].should eq(mixed_body[:bindings].size.to_i64 + 12_i64)
-      mixed_body[:body_elements].should eq(mixed_body[:bindings].size.to_i64 + 12_i64)
-      null_body[:body_nodes].should eq(null_body[:bindings].size.to_i64 + 11_i64)
-      null_body[:body_elements].should eq(null_body[:bindings].size.to_i64 + 11_i64)
+      # prefix_callback_at lookup is charged before the body role walk. The
+      # framer also budgets its empty typed-Dynamic registry as one node/edge.
+      mixed_body[:body_nodes].should eq(mixed_body[:bindings].size.to_i64 + 13_i64)
+      mixed_body[:body_elements].should eq(mixed_body[:bindings].size.to_i64 + 13_i64)
+      null_body[:body_nodes].should eq(null_body[:bindings].size.to_i64 + 12_i64)
+      null_body[:body_elements].should eq(null_body[:bindings].size.to_i64 + 12_i64)
 
       [mixed_body, null_body].each_with_index do |body, mark_index|
         body[:callbacks].size.should eq(body[:bindings].size)

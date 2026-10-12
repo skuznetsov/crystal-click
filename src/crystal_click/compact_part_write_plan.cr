@@ -57,7 +57,18 @@ module CrystalClick
                         else
                           raise UnsupportedFormatError.new("unsupported Compact callback input")
                         end
-        names = callback_plan.callback_names
+        names = if @mark_format.mrk4? && (json_plan = callback_plan.as?(CompactJsonCallbackPlan))
+                  count = json_plan.physical_callback_name_count
+                  budget.ensure_future_nodes(1_u64)
+                  budget.ensure_future_elements(count.to_u64)
+                  budget.charge_node
+                  budget.charge_elements(count.to_u64) if count > 0
+                  physical_names = Array(String).new(count)
+                  json_plan.each_physical_callback_name { |stream_name| physical_names << stream_name }
+                  physical_names
+                else
+                  callback_plan.callback_names
+                end
         if names.empty?
           raise UnsupportedFormatError.new("Compact column has no physical callbacks")
         end

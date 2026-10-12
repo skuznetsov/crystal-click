@@ -609,7 +609,12 @@ module CrystalClick
         else
           frozen_events = copy_strings(expected_events)
         end
-        ledger.finish_mark!(expected_events)
+        physical_events = if ledger.mode.mrk4?
+                            physical_callback_names(expected_events, schedules, array_sites, uint8_sites, budget)
+                          else
+                            expected_events
+                          end
+        ledger.finish_mark!(physical_events)
 
         # Only after the entire parent mark has completed may any noncontiguous
         # child Object site publish streams or an Advanced prepared owner.
@@ -756,7 +761,7 @@ module CrystalClick
         else
           capture.schedule.body_pairs.each do |canonical_name, callback_name|
             prefix.capture_body_callback_from!(canonical_name, callback_name, budget) do
-              source.take_inline_fragment_slice(canonical_name, callback_name)
+              source.take_physical_inline_fragment_slice(canonical_name, callback_name)
             end
           end
         end
@@ -1530,6 +1535,75 @@ module CrystalClick
         values << value
       end
       values
+    end
+
+    # The recursive schema plan freezes the logical serializer traversal, but
+    # MRK4's parent cursor is keyed by the canonical side of the pairs emitted
+    # by the parsed Object callback planner. Keep the logical list untouched
+    # for per-site validation; project only the list passed to the physical
+    # ledger. Array-size and ordinary UInt8 callbacks are identity pairs.
+    private def physical_callback_names(
+      logical_names : Array(String),
+      schedules : Hash(String, CompactJsonObjectRoleSchedule),
+      array_sites : Array(CompactRecursiveJsonSchemaPlan::ArraySite),
+      uint8_sites : Array(CompactRecursiveJsonSchemaPlan::UInt8Site),
+      budget : BinaryCodecBudget,
+    ) : Array(String)
+      count = logical_names.size.to_u64
+      if count > Int32::MAX.to_u64
+        raise CorruptPartError.new("Compact recursive JSON callback roster exceeds its supported size")
+      end
+      added_nodes = checked_add(3_u64, checked_multiply(count, 2_u64))
+      added_elements = checked_multiply(count, 4_u64)
+      budget.ensure_future_nodes(added_nodes)
+      budget.ensure_future_elements(added_elements)
+      added_nodes.times { budget.charge_node }
+      budget.charge_elements(added_elements) if added_elements > 0_u64
+
+      canonical_by_callback = Hash(String, String).new(initial_capacity: logical_names.size)
+      seen_canonical = Set(String).new(initial_capacity: logical_names.size)
+      schedules.each_value do |schedule|
+        schedule.prefix_pairs.each do |canonical, callback|
+          register_physical_callback_pair!(canonical_by_callback, seen_canonical, canonical, callback)
+        end
+        schedule.body_pairs.each do |canonical, callback|
+          register_physical_callback_pair!(canonical_by_callback, seen_canonical, canonical, callback)
+        end
+      end
+      array_sites.each do |site|
+        register_physical_callback_pair!(canonical_by_callback, seen_canonical, site.callback_name, site.callback_name)
+      end
+      uint8_sites.each do |site|
+        register_physical_callback_pair!(canonical_by_callback, seen_canonical, site.callback_name, site.callback_name)
+      end
+      unless canonical_by_callback.size.to_u64 == count
+        raise CorruptPartError.new("Compact recursive JSON physical callback projection is not a complete roster")
+      end
+
+      physical_names = Array(String).new(logical_names.size)
+      logical_names.each do |logical_name|
+        physical_name = canonical_by_callback[logical_name]? ||
+                        raise(CorruptPartError.new("Compact recursive JSON logical callback has no parsed physical-name pair"))
+        physical_names << physical_name
+      end
+      unless physical_names.size == logical_names.size &&
+             physical_names.all? { |name| seen_canonical.includes?(name) }
+        raise CorruptPartError.new("Compact recursive JSON physical callback projection changed its ordered roster")
+      end
+      physical_names
+    end
+
+    private def register_physical_callback_pair!(
+      canonical_by_callback : Hash(String, String),
+      seen_canonical : Set(String),
+      canonical : String,
+      callback : String,
+    ) : Nil
+      if callback.empty? || canonical.empty? || canonical_by_callback.has_key?(callback) || !seen_canonical.add?(canonical)
+        raise CorruptPartError.new("Compact recursive JSON physical callback pairs are not a one-to-one roster")
+      end
+      canonical_by_callback[callback] = canonical
+      nil
     end
 
     private def checked_byte_count(count : UInt64, width : UInt64, label : String) : Int32

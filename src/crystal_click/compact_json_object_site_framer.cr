@@ -168,19 +168,23 @@ module CrystalClick
     end
 
     def take_inline_fragment(expected_name : String) : Bytes
+      take_inline_fragment_as(expected_name, expected_name)
+    end
+
+    private def take_inline_fragment_as(physical_name : String, logical_name : String) : Bytes
       ensure_no_active_parser!
       ensure_no_active_grammar_parser!
       unless @cursor.mrk4?
         raise UnsupportedFormatError.new("Compact mrk3 body fragments require descriptor-owned grammar framing")
       end
-      name, _observed = current_event(expected_name)
+      name, _observed = current_event(physical_name)
       @cursor.begin_event(name)
       bytes = @cursor.remaining_slice
       @cursor.advance_borrowed_prefix(bytes.size)
       @cursor.finish_event
       @event_index += 1
       advance_path_position(bytes.size)
-      @logical_event_names << expected_name
+      @logical_event_names << logical_name
       bytes
     end
 
@@ -188,7 +192,27 @@ module CrystalClick
       canonical_name : String,
       callback_name : String,
     ) : ObjectSharedInlineCallbackReadSlice
-      bytes = take_inline_fragment(callback_name)
+      # Compatibility path for direct callers: select by callback_name and
+      # retain canonical_name separately as the returned slice's label.
+      take_inline_fragment_slice_from(callback_name, canonical_name, callback_name)
+    end
+
+    # Parsed Compact schedules pair the canonical physical MRK4 name with the
+    # raw logical getter name. Select only the physical name; never fall back
+    # to the raw name if the canonical event is absent.
+    def take_physical_inline_fragment_slice(
+      canonical_physical_name : String,
+      raw_callback_name : String,
+    ) : ObjectSharedInlineCallbackReadSlice
+      take_inline_fragment_slice_from(canonical_physical_name, canonical_physical_name, raw_callback_name)
+    end
+
+    private def take_inline_fragment_slice_from(
+      physical_name : String,
+      canonical_name : String,
+      callback_name : String,
+    ) : ObjectSharedInlineCallbackReadSlice
+      bytes = take_inline_fragment_as(physical_name, callback_name)
       relative_start, relative_end = if @coordinate_context
                                        {@path_position - bytes.size.to_u64, @path_position}
                                      else
@@ -236,8 +260,12 @@ module CrystalClick
     end
 
     def validate_expected_events!(names : Array(String)) : Nil
-      @cursor.validate_expected_events!(names)
-      unless @logical_event_names == names
+      validate_expected_events!(names, names)
+    end
+
+    def validate_expected_events!(physical_names : Array(String), logical_names : Array(String)) : Nil
+      @cursor.validate_expected_events!(physical_names)
+      unless @logical_event_names == logical_names
         raise CorruptPartError.new("Compact logical callback traversal differs from the frozen serializer schedule")
       end
       nil
@@ -318,7 +346,8 @@ module CrystalClick
         parsed_name, parsed_bytes = prefix.prefix_callback_at(index, budget)
         event_name, event_bytes = @events[event_index]? ||
                                   raise(CorruptPartError.new("prepared Compact prefix callback is missing from its source"))
-        unless pair[1] == parsed_name && event_name == parsed_name && same_bytes?(event_bytes, parsed_bytes)
+        unless pair[0] == parsed_name && pair[1] == parsed_name && event_name == pair[0] &&
+               same_bytes?(event_bytes, parsed_bytes)
           raise CorruptPartError.new("prepared Compact prefix bytes differ from their authenticated callback source")
         end
         path_position = checked_add(path_position, event_bytes.size.to_u64)
@@ -331,7 +360,7 @@ module CrystalClick
         event_name, event_bytes = @events[event_index]? ||
                                   raise(CorruptPartError.new("prepared Compact body callback is missing from its source"))
         finish = checked_add(path_position, event_bytes.size.to_u64)
-        unless parsed_name == pair[0] && event_name == pair[1] &&
+        unless parsed_name == pair[0] && event_name == pair[0] &&
                slice.canonical_name == pair[0] && slice.callback_name == pair[1] &&
                same_bytes?(event_bytes, parsed_bytes) && same_bytes?(event_bytes, slice.bytes) &&
                slice.context.same?(coordinate_context) && slice.relative_start == path_position &&

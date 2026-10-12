@@ -54,8 +54,10 @@ if ENV["CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT"]?
           {"root.maybe.variant_discr_prefix", "0100000000000000"},
         ],
       ]
-      expected_body_nodes = [20_i64, 19_i64, 21_i64]
-      expected_body_elements = [20_i64, 19_i64, 21_i64]
+      # The body framer also budgets its typed-Dynamic grammar registry as one
+      # state node/edge when this fixture has no typed-Dynamic owners.
+      expected_body_nodes = [21_i64, 20_i64, 22_i64]
+      expected_body_elements = [21_i64, 20_i64, 22_i64]
       expected_body_extents = [
         [2, 6, 4, 0, 6, 16, 0, 0],
         [2, 6, 3, 0, 0, 16, 0, 0],

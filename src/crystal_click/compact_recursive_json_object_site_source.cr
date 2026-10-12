@@ -105,16 +105,40 @@ module CrystalClick
     end
 
     def take_inline_fragment(expected_name : String) : Bytes
+      take_inline_fragment_as(expected_name, expected_name)
+    end
+
+    private def take_inline_fragment_as(physical_name : String, logical_name : String) : Bytes
       ensure_body_state!
-      capture = @ledger.capture_site_inline_fragment(self, expected_name)
-      append_capture(expected_name, capture)
+      capture = @ledger.capture_site_inline_fragment(self, physical_name)
+      append_capture(logical_name, capture)
     end
 
     def take_inline_fragment_slice(
       canonical_name : String,
       callback_name : String,
     ) : ObjectSharedInlineCallbackReadSlice
-      bytes = take_inline_fragment(callback_name)
+      # Compatibility path for direct callers: select by callback_name and
+      # retain canonical_name separately as the returned slice's label.
+      take_inline_fragment_slice_from(callback_name, canonical_name, callback_name)
+    end
+
+    # Parsed Compact schedules distinguish the canonical physical ledger name
+    # from the raw logical getter name. This path is exact and has no raw-name
+    # fallback.
+    def take_physical_inline_fragment_slice(
+      canonical_physical_name : String,
+      raw_callback_name : String,
+    ) : ObjectSharedInlineCallbackReadSlice
+      take_inline_fragment_slice_from(canonical_physical_name, canonical_physical_name, raw_callback_name)
+    end
+
+    private def take_inline_fragment_slice_from(
+      physical_name : String,
+      canonical_name : String,
+      callback_name : String,
+    ) : ObjectSharedInlineCallbackReadSlice
+      bytes = take_inline_fragment_as(physical_name, callback_name)
       captured = @captured.last? || raise(CorruptPartError.new("recursive Compact inline fragment capture is missing"))
       unless captured.name == callback_name
         raise CorruptPartError.new("recursive Compact inline fragment differs from its captured callback")

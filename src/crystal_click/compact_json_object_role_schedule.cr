@@ -109,5 +109,24 @@ module CrystalClick
 
       new(prefix_pairs, body_pairs, bindings, names, advanced)
     end
+
+    # Physical MRK4 metadata and cursor rosters use the canonical side of the
+    # parser-produced pairs. `event_names` remains the raw logical callback
+    # roster consumed by the Object decoder.
+    def physical_event_names(budget : BinaryCodecBudget) : Array(String)
+      count = @prefix_pairs.size.to_u64 + @body_pairs.size.to_u64
+      if count > Int32::MAX.to_u64
+        raise UnsupportedFormatError.new("Compact static JSON physical callback roster exceeds its supported size")
+      end
+      budget.ensure_future_nodes(1_u64)
+      budget.ensure_future_elements(count)
+      budget.charge_node
+      budget.charge_elements(count) if count > 0_u64
+
+      names = Array(String).new(count.to_i)
+      @prefix_pairs.each { |canonical, _callback| names << canonical }
+      @body_pairs.each { |canonical, _callback| names << canonical }
+      names
+    end
   end
 end
