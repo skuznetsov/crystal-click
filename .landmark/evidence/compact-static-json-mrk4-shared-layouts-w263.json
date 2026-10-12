@@ -1,0 +1,388 @@
+{
+  "schema": "crystal-click-curated-evidence-v1",
+  "slice": "W263 bounded Compact root JSON MRK4 MAP_WITH_BUCKETS and ADVANCED, preserving MRK3 capability refusals",
+  "date": "2026-10-11",
+  "baseline": "0e75688f40eea66d6731f2836e8068f68e28e5b5",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within eight newly admitted native root cells, fourteen new discriminators, twelve MRK3 refusals and the exact 45-path cohort",
+    "goal_status": "ACTIVE",
+    "scope": "36 authenticated root cells: Object/Dynamic v1/v2/v3 MAP on plain MRK3/MRK4 plus Object wire v4 SharedData v1 MAP_WITH_BUCKETS, v2 ADVANCED and v3 ADVANCED_CHUNKED on plain MRK4. Eight new cells have two buckets, S0/S1, BASIC/COMPACT, eight rows and four two-row marks. Internal root only.",
+    "not_claimed": [
+      "Complete 48-cell reader matrix or full-suite GREEN",
+      "Mixed-version marks, arbitrary buckets, untested profiles or compressed marks",
+      "Recursive JSON, public selected-column or offline JSON admission",
+      "Eager inner BinaryValue semantics, shared MAP String-v0 envelope validation at MRK4 EOF or occurrence-cardinality proof",
+      "Compact physical writer or native writer interoperability",
+      "All part columns or nested saved-pair coordinates in mutation copies",
+      "Complete logical memory/RSS bounds, zero allocation, thread safety or performance",
+      "All types, MV/projection composition or <=10% speed parity",
+      "Latest ClickHouse or identical source/runtime revisions"
+    ],
+    "evidence_policy": "This packet is a curated evidence index, not proof from field presence or shape validation."
+  },
+  "qualification": {
+    "production_seal": "efdc1f0d972ef759f4c940a5489d5d2d91fad1c9860be3df0a70d1c51e611e27",
+    "production_seal_before_tool": "5fd4dc",
+    "production_seal_after_tool": "b23c5b",
+    "source_test_script_seal": "2d7adaa985d2ff0684fa518c18f6ab6ca4f87339f483352dbdef8bbd32228990",
+    "source_test_script_seal_before_tool": "e91000",
+    "source_test_script_seal_after_tool": "bf8a10",
+    "production_seal_command": "rg --files src -g '*.cr' | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256",
+    "source_test_script_seal_command": "rg --files src spec scripts -g '*.cr' | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256",
+    "seal_scope": "Includes protected and other source files; only the exact cohort below was executed as DoD.",
+    "owned_and_relevant_file_hashes": {
+      "src/crystal_click/compact_json_object_role_schedule.cr": "a536456b5d0183d68916675c145f9a167788a07a0a47e867b35733bc46ead082",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr": "a498070d9b6a66b523348bf32f2c6fbdc051654bdc6d6bf521f5a60d2088e806",
+      "spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr": "85ec2b711ed531466923aa70cdfcdfabcbf760d166ace6ee2a0e3ce2d7ae4a68",
+      "spec/compact_static_json_mrk4_shared_layouts_adversary_w263_spec.cr": "dcc65a5d75d6544cba5b20c8ed3583b59208852a49d937ea82f8868e72407ac9",
+      "spec/support/compact_static_json_mrk4_shared_layouts_adversary_w263_fixture.cr": "1746d91b5a3eb7d1ef82de956263f5c5881b0b4e2908b8ca680ab5abe105987b",
+      "scripts/check_compact_static_json_root_matrix_w263.cr": "4447b346aefd3f8f8a0dd1b422aa17bb7840717afb9fd056572cd0d3592bd7c4",
+      "spec/compact_static_json_root_matrix_native_w263_spec.cr": "3668d42f1de807930cb2d6d524403c665afca724711a90870cea5acd3a4d1d90"
+    },
+    "owned_hash_tool": "582326",
+    "protected_unchanged": {
+      "spec/compact_json_w263_native_spec.cr": "f1a8c38033477981ebc85928660f7c297d09e85d7e00264d59fcf2f606d0e0ac",
+      "spec/compact_static_json_internal_w263_spec.cr": "497914c5acd908caef6adff695d202fd6a638e292707035dd21a0c3887607ae8",
+      "spec/compact_static_json_root_w263_adversary_spec.cr": "d3d858b157f31e7daee0d171b8d0d0d8684cd0ab0dcd505145308bddfccc0dc6"
+    },
+    "protected_refresh_tool": "b7606b",
+    "unchanged_native_spec": {
+      "path": "spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr",
+      "sha256": "85ec2b711ed531466923aa70cdfcdfabcbf760d166ace6ee2a0e3ce2d7ae4a68",
+      "policy": "Previously held-out eight-cell spec is unchanged across native RED, candidate GREEN, final cohort and gate ablation; included in this feature commit."
+    },
+    "compiler": {
+      "version": "Crystal 1.21.0 (2026-07-16)",
+      "llvm": "22.1.8",
+      "target": "aarch64-apple-darwin25.6.0",
+      "tool": "3a62a4"
+    },
+    "source": {
+      "path": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+      "revision": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+      "clean_diff_refresh_tool": "a02799"
+    },
+    "runtime": {
+      "path": "/private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "hash_refresh_tool": "492db8",
+      "pin_policy": "Version/build are capture pins, not a new runtime query. Source/runtime pins are distinct; no new stock generation."
+    }
+  },
+  "native_capture": {
+    "root": "/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS",
+    "summary_sha256": "da4492e3cd037298d27ccabb4d415d16dc5b38fc54071c42183b3a45b642ca4b",
+    "manifest_sha256": "3061107cdf55f6547c03bf210822902202839f84280b45da9379c3ae94b8fffb",
+    "parts": 48,
+    "regular_files": 504,
+    "bytes": 751082,
+    "native_rows": 384,
+    "hash_refresh_tool": "39eac3",
+    "siblings": [
+      {
+        "root": "/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix",
+        "manifest": "native_manifest.json",
+        "sha256": "3598d71c810f75a21ca4f61c92cd10f3156d7791a1740e3aac94448f3a4b720d"
+      },
+      {
+        "root": "/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU",
+        "manifest": "native_manifest.json",
+        "sha256": "204fb519855352d5a414a517512de73a2c35a6e32081266f2462982f91c2bf39"
+      }
+    ],
+    "authentication": "Final diagnostic authenticates every original part inventory and metadata, checks stock literal rows independently, then exercises four reader operations per cell. Native and adversary specs authenticate their original source before any copied mutation. Original captures remain unmodified; temporary mutation copies are not stock writer outputs."
+  },
+  "causal_reds": [
+    {
+      "tool": "74e1ad",
+      "exit": 1,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "started_utc": "2026-10-12 00:36:07 UTC",
+      "observed_utc": "2026-10-12 00:36:54 UTC",
+      "examples": 8,
+      "failures": 0,
+      "errors": 8,
+      "pending": 0,
+      "observation": "Unchanged eight native MRK4 target cells all hit role-schedule Unsupported before production admission."
+    },
+    {
+      "tool": "da622c",
+      "exit": 1,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 run scripts/check_compact_static_json_root_matrix_w263.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -- /private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS",
+      "observation": "Schedule-only admission reads 36 cells but misclassifies four MRK3 bucketed MAP cells as Corrupt duplicated sizes. The other eight MRK3 non-MAP cells stay Unsupported."
+    },
+    {
+      "tool": "15b31c",
+      "exit": 1,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/compact_static_json_root_matrix_native_w263_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "started_utc": "2026-10-12 00:59:30 UTC",
+      "observed_utc": "2026-10-12 00:59:52 UTC",
+      "examples": 41,
+      "failures": 4,
+      "errors": 0,
+      "pending": 0,
+      "observation": "Unchanged native MRK3 guard expectations distinguish Unsupported capability refusal from Corrupt data; four v1 bucketed cells fail. Named Tuple roles hypothesis refuted."
+    }
+  ],
+  "production_change": {
+    "files": [
+      "src/crystal_click/compact_json_object_role_schedule.cr",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr"
+    ],
+    "behavior": "Reuse existing ordinary MAP bucket materializer and Advanced v2/v3 source-only owner. Admit only v1/two-bucket MAP and v2/two-bucket Advanced in the bounded role gate; preserve v0/one and v3/two. Existing shared single-stream check and exact bindings remain. MRK3 refuses every non-MAP version before body capture.",
+    "unchanged": "No decoder, framer, materializer, recursive registry, public dispatch, profile selection, coordinate or memory-budget implementation changes.",
+    "strongest_failure": "Gate broadening leaked v1 MRK3 into single-map grammar and produced the wrong error class. Measured native RED preceded early containment.",
+    "risk": "CAUTION",
+    "rollback": "Atomic local feature commit can be reverted to baseline; no remote mutation or performance claim."
+  },
+  "verification": {
+    "cohort_paths": [
+      "spec/compact_static_json_mrk3_compact_native_w263_spec.cr",
+      "spec/compact_static_json_mrk3_compact_w263_adversary_spec.cr",
+      "spec/compact_static_json_mrk3_null_native_w263_spec.cr",
+      "spec/compact_static_json_mrk3_null_w263_adversary_spec.cr",
+      "spec/object_shared_path_callback_source_w263_spec.cr",
+      "spec/compact_object_shared_coordinate_w263_spec.cr",
+      "spec/object_shared_inline_coordinate_w240_adversary_spec.cr",
+      "spec/object_shared_inline_relocation_w240_adversary_spec.cr",
+      "spec/object_shared_advanced_inline_w240_adversary_spec.cr",
+      "spec/object_document_inline_framing_w240_spec.cr",
+      "spec/object_shared_path_json_tape_w240_spec.cr",
+      "spec/compact_physical_context_w259_spec.cr",
+      "spec/compact_physical_context_w259_adversary_spec.cr",
+      "spec/compact_typed_w260_spec.cr",
+      "spec/compact_typed_w260_adversary_spec.cr",
+      "spec/compact_dynamic_w262_spec.cr",
+      "spec/compact_dynamic_w262_adversary_spec.cr",
+      "spec/object_structure_inline_prefix_w240_adversary_spec.cr",
+      "spec/object_document_inline_depth_w240_adversary_spec.cr",
+      "spec/object_shared_descendant_json_w243_spec.cr",
+      "spec/object_document_callback_prefix_lifecycle_w263_spec.cr",
+      "spec/object_shared_advanced_decoder_contract_w263_spec.cr",
+      "spec/object_shared_chunk_structure_read_span_w263_spec.cr",
+      "spec/object_shared_chunk_structure_split_budget_w240_spec.cr",
+      "spec/object_shared_advanced_inline_preparation_w263_spec.cr",
+      "spec/compact_json_object_site_framer_w263_spec.cr",
+      "spec/compact_json_object_site_framer_mrk3_w263_spec.cr",
+      "spec/compact_static_json_mrk4_map_native_w263_spec.cr",
+      "spec/compact_static_json_mrk4_map_w263_adversary_spec.cr",
+      "spec/compact_static_json_mrk4_map_budget_w263_spec.cr",
+      "spec/compact_static_json_mrk3_map_native_w263_spec.cr",
+      "spec/compact_static_json_mrk3_map_w263_adversary_spec.cr",
+      "spec/compact_static_json_mrk3_map_budget_w263_spec.cr",
+      "spec/compact_static_json_mrk4_chunked_native_w263_spec.cr",
+      "spec/compact_static_json_mrk4_chunked_w263_adversary_spec.cr",
+      "spec/compact_static_json_mrk4_chunked_budget_w263_spec.cr",
+      "spec/compact_json_object_site_framer_mrk4_chunked_w263_spec.cr",
+      "spec/compact_static_json_advanced_prepared_mark_w263_spec.cr",
+      "spec/compact_static_json_internal_w263_spec.cr",
+      "spec/compact_static_json_root_matrix_native_w263_spec.cr",
+      "spec/compact_static_json_string_profile_w263_adversary_spec.cr",
+      "spec/object_document_string_size_body_validator_w263_spec.cr",
+      "spec/compact_static_json_root_w263_adversary_spec.cr",
+      "spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr",
+      "spec/compact_static_json_mrk4_shared_layouts_adversary_w263_spec.cr"
+    ],
+    "examples_per_mode": 273,
+    "expected_signal": "Zero failures/errors/pending, unchanged source/test seals, native literal equality and preserved capability refusals.",
+    "debug": {
+      "tool": "034b10",
+      "exit": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/compact_static_json_mrk3_compact_native_w263_spec.cr spec/compact_static_json_mrk3_compact_w263_adversary_spec.cr spec/compact_static_json_mrk3_null_native_w263_spec.cr spec/compact_static_json_mrk3_null_w263_adversary_spec.cr spec/object_shared_path_callback_source_w263_spec.cr spec/compact_object_shared_coordinate_w263_spec.cr spec/object_shared_inline_coordinate_w240_adversary_spec.cr spec/object_shared_inline_relocation_w240_adversary_spec.cr spec/object_shared_advanced_inline_w240_adversary_spec.cr spec/object_document_inline_framing_w240_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr spec/object_structure_inline_prefix_w240_adversary_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_document_callback_prefix_lifecycle_w263_spec.cr spec/object_shared_advanced_decoder_contract_w263_spec.cr spec/object_shared_chunk_structure_read_span_w263_spec.cr spec/object_shared_chunk_structure_split_budget_w240_spec.cr spec/object_shared_advanced_inline_preparation_w263_spec.cr spec/compact_json_object_site_framer_w263_spec.cr spec/compact_json_object_site_framer_mrk3_w263_spec.cr spec/compact_static_json_mrk4_map_native_w263_spec.cr spec/compact_static_json_mrk4_map_w263_adversary_spec.cr spec/compact_static_json_mrk4_map_budget_w263_spec.cr spec/compact_static_json_mrk3_map_native_w263_spec.cr spec/compact_static_json_mrk3_map_w263_adversary_spec.cr spec/compact_static_json_mrk3_map_budget_w263_spec.cr spec/compact_static_json_mrk4_chunked_native_w263_spec.cr spec/compact_static_json_mrk4_chunked_w263_adversary_spec.cr spec/compact_static_json_mrk4_chunked_budget_w263_spec.cr spec/compact_json_object_site_framer_mrk4_chunked_w263_spec.cr spec/compact_static_json_advanced_prepared_mark_w263_spec.cr spec/compact_static_json_internal_w263_spec.cr spec/compact_static_json_root_matrix_native_w263_spec.cr spec/compact_static_json_string_profile_w263_adversary_spec.cr spec/object_document_string_size_body_validator_w263_spec.cr spec/compact_static_json_root_w263_adversary_spec.cr spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr spec/compact_static_json_mrk4_shared_layouts_adversary_w263_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "started_utc": "2026-10-12 01:00:59 UTC",
+      "observed_utc": "2026-10-12 01:01:47 UTC",
+      "examples": 273,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "release": {
+      "tool": "f33af2",
+      "exit": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-release.f4Xdtp/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/compact_static_json_mrk3_compact_native_w263_spec.cr spec/compact_static_json_mrk3_compact_w263_adversary_spec.cr spec/compact_static_json_mrk3_null_native_w263_spec.cr spec/compact_static_json_mrk3_null_w263_adversary_spec.cr spec/object_shared_path_callback_source_w263_spec.cr spec/compact_object_shared_coordinate_w263_spec.cr spec/object_shared_inline_coordinate_w240_adversary_spec.cr spec/object_shared_inline_relocation_w240_adversary_spec.cr spec/object_shared_advanced_inline_w240_adversary_spec.cr spec/object_document_inline_framing_w240_spec.cr spec/object_shared_path_json_tape_w240_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr spec/object_structure_inline_prefix_w240_adversary_spec.cr spec/object_document_inline_depth_w240_adversary_spec.cr spec/object_shared_descendant_json_w243_spec.cr spec/object_document_callback_prefix_lifecycle_w263_spec.cr spec/object_shared_advanced_decoder_contract_w263_spec.cr spec/object_shared_chunk_structure_read_span_w263_spec.cr spec/object_shared_chunk_structure_split_budget_w240_spec.cr spec/object_shared_advanced_inline_preparation_w263_spec.cr spec/compact_json_object_site_framer_w263_spec.cr spec/compact_json_object_site_framer_mrk3_w263_spec.cr spec/compact_static_json_mrk4_map_native_w263_spec.cr spec/compact_static_json_mrk4_map_w263_adversary_spec.cr spec/compact_static_json_mrk4_map_budget_w263_spec.cr spec/compact_static_json_mrk3_map_native_w263_spec.cr spec/compact_static_json_mrk3_map_w263_adversary_spec.cr spec/compact_static_json_mrk3_map_budget_w263_spec.cr spec/compact_static_json_mrk4_chunked_native_w263_spec.cr spec/compact_static_json_mrk4_chunked_w263_adversary_spec.cr spec/compact_static_json_mrk4_chunked_budget_w263_spec.cr spec/compact_json_object_site_framer_mrk4_chunked_w263_spec.cr spec/compact_static_json_advanced_prepared_mark_w263_spec.cr spec/compact_static_json_internal_w263_spec.cr spec/compact_static_json_root_matrix_native_w263_spec.cr spec/compact_static_json_string_profile_w263_adversary_spec.cr spec/object_document_string_size_body_validator_w263_spec.cr spec/compact_static_json_root_w263_adversary_spec.cr spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr spec/compact_static_json_mrk4_shared_layouts_adversary_w263_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "started_utc": "2026-10-12 01:01:55 UTC",
+      "observed_utc": "2026-10-12 01:02:58 UTC",
+      "examples": 273,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "focused": {
+      "tool": "d53535",
+      "exit": 0,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr spec/compact_static_json_mrk4_shared_layouts_adversary_w263_spec.cr spec/compact_static_json_root_matrix_native_w263_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "started_utc": "2026-10-12 01:00:29 UTC",
+      "observed_utc": "2026-10-12 01:00:51 UTC",
+      "examples": 63,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "guard": {
+      "min_free_memory_percent": 50,
+      "workers": 1,
+      "threads": 1,
+      "wall_seconds": 180,
+      "rss_mebibytes": 12288,
+      "policy": "Root-owned serial compiler/native execution. Existing guard requires unsandboxed ps for process-group isolation; permission was obtained without disabling it."
+    },
+    "diagnostic": {
+      "tool": "472a1e",
+      "exit": 1,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 run scripts/check_compact_static_json_root_matrix_w263.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace -- /private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS",
+      "started_utc": "2026-10-12 01:03:08 UTC",
+      "observed_utc": "2026-10-12 01:03:22 UTC",
+      "cells": 48,
+      "layout_native_literal_pass": 48,
+      "reader_pass": 36,
+      "explicit_unsupported": 12,
+      "error_class": "CrystalClick::UnsupportedFormatError",
+      "failed_labels": [
+        "obj_v3_dyn_v3_map_with_buckets_mrk3_s0_variant_basic",
+        "obj_v3_dyn_v3_map_with_buckets_mrk3_s0_variant_compact",
+        "obj_v3_dyn_v3_map_with_buckets_mrk3_s1_variant_basic",
+        "obj_v3_dyn_v3_map_with_buckets_mrk3_s1_variant_compact",
+        "obj_v3_dyn_v3_advanced_mrk3_s0_variant_basic",
+        "obj_v3_dyn_v3_advanced_mrk3_s0_variant_compact",
+        "obj_v3_dyn_v3_advanced_mrk3_s1_variant_basic",
+        "obj_v3_dyn_v3_advanced_mrk3_s1_variant_compact",
+        "obj_v3_dyn_v3_advanced_chunked_mrk3_s0_variant_basic",
+        "obj_v3_dyn_v3_advanced_chunked_mrk3_s0_variant_compact",
+        "obj_v3_dyn_v3_advanced_chunked_mrk3_s1_variant_basic",
+        "obj_v3_dyn_v3_advanced_chunked_mrk3_s1_variant_compact"
+      ],
+      "nonzero_policy": "Expected remaining-capability diagnostic, not full-matrix GREEN."
+    },
+    "format": {
+      "tool": "f33dae",
+      "exit": 0,
+      "command": "/opt/homebrew/bin/crystal tool format --check src/crystal_click/compact_json_object_role_schedule.cr src/crystal_click/compact_static_json_bulk_column_reader.cr spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr spec/compact_static_json_mrk4_shared_layouts_adversary_w263_spec.cr spec/support/compact_static_json_mrk4_shared_layouts_adversary_w263_fixture.cr"
+    },
+    "strongest_fallback": "Independent native literal oracle and copy-only gate ablation, not model agreement."
+  },
+  "adversary": {
+    "verdict": "ROBUST within the declared finite root/profile scope",
+    "same_lineage_review": "Luna traced the actual source and challenged MRK3 containment. Its review is correlated and ran no tests; root independently inspected source, reproduced the RED and executed DoD.",
+    "new_examples": 14,
+    "discriminators": [
+      "Eight valid-metadata Object/id callback-name reorderings retain exact physical slot bytes and intervals, then refuse before prepared publication.",
+      "Per-layout checksum-valid late structural path-length poison preserves callback extents/frame geometry and refuses even at EOF before publication.",
+      "Per-layout same-width inner String tag poison leaves EOF preparation and a clean mark readable, but fails selected late-mark decoding.",
+      "Per-layout late Object bucket-count 2-to-1 header is independently reparsed and explicitly Unsupported before publication."
+    ],
+    "fixture_scope": "MAP_WITH_BUCKETS has only outer MRK4 coordinates; Advanced remaps authenticated whole-data saved pairs using existing root-only rewriter before same-length poison. Helpers do not qualify arbitrary nested JSON saved pairs or other Advanced columns.",
+    "native_byte_probe_tool": "175701",
+    "native_anchors": {
+      "map_object_late_hex": "040000000000000002046e6f74650673616d706c65010200",
+      "advanced_bucket_one_late_prefix_hex": "02010b7a7a5f6f766572666c6f77",
+      "shared_late_values_hex": "0c150a6f766572666c6f772d370c150a6f766572666c6f772d38",
+      "header_bucket_count_relative_offset": 22,
+      "inner_string_tag_relative_offset": 1
+    },
+    "eof_boundary": "All selected-root marks are prepared before values are exposed. MRK4 ordinary MAP borrows shared-value extents and does not validate String-v0 envelopes at EOF. Advanced checks structural/saved-pair metadata. Inner BinaryValue semantics remain selected-deferred. Earlier ordinary String-v1 guard does not establish occurrence cardinality.",
+    "final_gate_ablation": {
+      "tool": "596740",
+      "exit": 1,
+      "command": "env COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_NULL_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-null-native.wUI7ix CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w263-static-root-debug.PUvust/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 180 12288 spec spec/compact_static_json_root_matrix_native_w263_spec.cr spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "started_utc": "2026-10-12 01:03:29 UTC",
+      "observed_utc": "2026-10-12 01:04:26 UTC",
+      "root": "/private/tmp/crystal-click-w263-shared-layouts-ablation.mfgLSn",
+      "examples": 49,
+      "failures": 0,
+      "errors": 8,
+      "pending": 0,
+      "unsupported_error_occurrences": 8,
+      "controls_passing": 41,
+      "source_diff_tools": [
+        "ed2e18",
+        "cf738d",
+        "3f90c4"
+      ],
+      "observation": "Isolated final source differs only in two reversed admission predicates. Final MRK3 guard remains present; all old controls pass while eight new native cells fail Unsupported."
+    },
+    "residual": "Per-mark consistency freezes broad Advanced classification and event names, not exact v2/v3 version equality. Stock writer selects a per-part version, but no source reader law requires exact equality; mixed-version parts remain unqualified rather than claimed invalid."
+  },
+  "source_anchors": [
+    {
+      "path": "src/Storages/MergeTree/MergeTreeIOSettings.cpp",
+      "lines": "104-109",
+      "fact": "Shared-data version chosen in part writer settings."
+    },
+    {
+      "path": "src/Storages/MergeTree/MergeTreeDataPartWriterCompact.cpp",
+      "lines": "175-230",
+      "fact": "Granule prefix/body/suffix lifecycle; part settings copied into serializer settings."
+    },
+    {
+      "path": "src/DataTypes/Serializations/SerializationObject.h",
+      "lines": "40-44",
+      "fact": "The serializer's named V3 enum has wire value 4; named and wire version numbers differ."
+    },
+    {
+      "path": "src/DataTypes/Serializations/SerializationObject.cpp",
+      "lines": "351-352,411-430",
+      "fact": "Object writes the selected enum as UInt64; V3 (wire value 4) records shared-data version and bucket count."
+    },
+    {
+      "path": "src/DataTypes/Serializations/SerializationObjectSharedData.cpp",
+      "lines": "145-203,648-885,1550-1594",
+      "fact": "v2/v3 reuse seven bucket roles plus three Copy roles, but v2 uses one chunk and v3 chunk loop; row totals and at least one chunk checked."
+    }
+  ],
+  "instrumentation": [
+    {
+      "tool": "e38b40",
+      "observation": "Sandbox ps unavailable: guard exits 75 before tests. Retried with approved access; no guard bypass."
+    },
+    {
+      "tool": "13d00f",
+      "examples": 14,
+      "errors": 8,
+      "observation": "Initial reorder helper tried to parse renamed id bytes as Object outside the reader expectation. Fixed fixture inspection only; remaining six discriminators already passed."
+    },
+    {
+      "tool": "175701",
+      "observation": "Native byte probe passed after two temporary probe compilation corrections; probe errors were instrumentation, not capability RED."
+    }
+  ],
+  "boundaries": {
+    "allowed_paths": [
+      "src/crystal_click/compact_json_object_role_schedule.cr",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr",
+      "spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr",
+      "spec/compact_static_json_mrk4_shared_layouts_adversary_w263_spec.cr",
+      "spec/support/compact_static_json_mrk4_shared_layouts_adversary_w263_fixture.cr",
+      "docs/COMPACT_JSON_READER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-static-json-mrk4-shared-layouts-w263.json"
+    ],
+    "changed_paths": [
+      "src/crystal_click/compact_json_object_role_schedule.cr",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr",
+      "spec/compact_static_json_mrk4_shared_layouts_native_w263_spec.cr",
+      "spec/compact_static_json_mrk4_shared_layouts_adversary_w263_spec.cr",
+      "spec/support/compact_static_json_mrk4_shared_layouts_adversary_w263_fixture.cr",
+      "docs/COMPACT_JSON_READER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-static-json-mrk4-shared-layouts-w263.json"
+    ],
+    "protected_paths": [
+      "spec/compact_json_w263_native_spec.cr",
+      "spec/compact_static_json_internal_w263_spec.cr",
+      "spec/compact_static_json_root_w263_adversary_spec.cr"
+    ],
+    "preserved_authority": "User-authorized local type/layout implementation with hostile review and atomic commit. No push, external writes, new dataset generation or goal completion.",
+    "next_frontier": "Twelve MRK3 non-MAP layouts and recursive/public/offline qualification. Compact physical writer requires a separate coordinator, then remaining types/MV/projections and performance.",
+    "refresh_on": [
+      "Production/test/profile/capture/compiler/consumer drift",
+      "Scope widening"
+    ],
+    "failure_policy": "Reopen dependent claims when seals/oracles/guards drift or fail; do not promote safe refusal to capability completion.",
+    "validation_policy": "Repo evidence template and landmark graph validator are absent (root bc71d0). Validate JSON, exact paths/hashes and observed outputs directly; shape is not substantive proof."
+  }
+}

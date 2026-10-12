@@ -1,5 +1,39 @@
 # Crystal Click landmarks
 
+## Compact root JSON MRK4 bucketed MAP and Advanced shared layouts — W263
+
+- VERIFIED / root adversary ROBUST over `0e75688f40eea66d6731f2836e8068f68e28e5b5`
+  within eight additional native MRK4 root cells: Object wire v4, SharedData
+  v1 MAP_WITH_BUCKETS or v2 ADVANCED, two buckets, S0/S1 and BASIC/COMPACT.
+  Existing recursive codecs/owners are reused; no public or writer admission.
+  Exact 45-path cohort: 273 examples in each serial DEBUG/RELEASE mode, zero
+  failures/errors/pending, unchanged production/source/test/script seals.
+- Four native MRK3 guard failures refuted the schedule-only containment and
+  the claim that named Tuple fields would force an earlier Unsupported role.
+  Both buckets emit the same logical MAP roles; single-map state rejects the
+  second sizes lane as Corrupt. The reader now refuses non-MAP SharedData
+  before MRK3 body capture. Final diagnostic: all 48 layout/native-row checks
+  pass, 36 readers pass, twelve MRK3 cells explicitly refuse Unsupported.
+- Fourteen adversaries check exact reordered rosters, checksum-valid late
+  structure poison, deferred selected-mark inner String corruption and
+  rejected bucket-count change. An early test inspection tried to parse
+  relabeled id bytes as Object; corrected fixture inspection, not production.
+  Native mutation copies preserve outer extents/frame geometry and remap
+  Advanced saved pairs before same-length poison. MRK4 MAP EOF preparation
+  does not validate shared-value String-v0 envelopes or inner semantics.
+- Final copy-only two-predicate gate reversal restores eight Unsupported
+  errors with all 41 controls passing; the new MRK3 guard stays intact.
+  Root checks actual source paths, independent literals and finite guards;
+  same-lineage Luna review is correlated. Original captures/siblings and three
+  protected specs remain unchanged. No full-suite or memory/performance claim.
+- Return pointers: [shared-layout evidence](.landmark/evidence/compact-static-json-mrk4-shared-layouts-w263.json)
+  and [W263 frontier](docs/COMPACT_JSON_READER_FRONTIER.md). Next: twelve MRK3
+  non-MAP cells and recursive/public/offline qualification, then the separate
+  Compact writer backend. Mixed-version marks, arbitrary buckets, remaining
+  types/MV/projections and performance stay open. Goal ACTIVE; local atomic
+  commit only, no push. Refresh after source/test/profile/capture/compiler/
+  consumer drift or widening. Older checkpoints below are revision-scoped.
+
 ## Compact root JSON propagated String-v1 and EOF extent guard — W263
 
 - VERIFIED / root adversary ROBUST over `5da83124018ba422f04e575cfcd318720901906f`

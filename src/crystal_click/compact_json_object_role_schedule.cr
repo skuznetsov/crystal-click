@@ -1,6 +1,6 @@
 module CrystalClick
-  # Frozen root Object schedule for the bounded Compact MAP and
-  # ADVANCED_CHUNKED checkpoints. It owns the source-order prefix roster and
+  # Frozen root Object schedule for the bounded Compact MAP, MAP_WITH_BUCKETS,
+  # ADVANCED and ADVANCED_CHUNKED checkpoints. It owns the source-order prefix roster and
   # the existing callback-order owner's body-role projection; it does not
   # invent a Wide event registry.
   class CompactJsonObjectRoleSchedule
@@ -29,13 +29,15 @@ module CrystalClick
       budget : BinaryCodecBudget,
     ) : CompactJsonObjectRoleSchedule
       object = prefix.plan.structures.object
-      advanced = object.shared_data_version == 3_u64 && physical_plan.shared_bucket_count == 2
-      map = object.shared_data_version == 0_u64 && physical_plan.shared_bucket_count == 1
+      shared_version = object.shared_data_version
+      bucket_count = physical_plan.shared_bucket_count
+      advanced = (shared_version == 2_u64 || shared_version == 3_u64) && bucket_count == 2
+      map = (shared_version == 0_u64 && bucket_count == 1) || (shared_version == 1_u64 && bucket_count == 2)
       unless advanced || map
-        raise UnsupportedFormatError.new("Compact static JSON role schedule admits only root MAP or V3 ADVANCED_CHUNKED shared data")
+        raise UnsupportedFormatError.new("Compact static JSON role schedule admits only root MAP/MAP_WITH_BUCKETS or ADVANCED/CHUNKED shared data with their sealed bucket counts")
       end
       unless physical_plan.shared_profile == BinaryBulkProfile.single_stream
-        raise UnsupportedFormatError.new("Compact static JSON MAP schedule requires the source single-stream profile")
+        raise UnsupportedFormatError.new("Compact static JSON role schedule requires the source single-stream profile")
       end
 
       prefix_pairs = ObjectDocumentInlineCallbackOrder.prefix_callback_pairs(

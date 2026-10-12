@@ -1,42 +1,43 @@
 # CrystalClick project status
 
 Current bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
-root adversary ROBUST for 28 existing-layout root JSON cells: Object/Dynamic
-v1/v2/v3 MAP on plain MRK3/MRK4 and v3 ADVANCED_CHUNKED on plain MRK4, each
-with String-v0/v1 and Variant-BASIC/COMPACT. All admitted cells match independent
-native root rows and Float64 bits for EOF-first, single-mark, cross-mark and
-full reads. This is internal root qualification, not public, recursive or
-offline JSON admission.
+root adversary ROBUST for 36 root JSON cells. Existing Object/Dynamic v1/v2/v3
+MAP on plain MRK3/MRK4 and v3 ADVANCED_CHUNKED on plain MRK4 are joined by
+eight MRK4 MAP_WITH_BUCKETS/ADVANCED cells (Object wire v4, SharedData v1/v2,
+two buckets), each with String-v0/v1 and Variant-BASIC/COMPACT. All admitted
+cells match independent native rows and Float64 bits for EOF-first,
+single-mark, cross-mark and full reads. This is internal root qualification,
+not public, recursive or offline JSON admission.
 
-The exact 43-path cohort passes 251 examples in each final serial DEBUG and
-RELEASE run, zero failures/errors/pending. Propagated root JSON now selects
-the ordinary String-v1 profile from authenticated metadata; Object shared
-MAP/Copy retains String-v0. A separate Complete/WithSizeStream extent guard
-checks adjacent ordinary String size/data bindings before publication without
-value decoding or a second byte charge. Four native extent poisons refuse at
-EOF; well-framed inner BinaryValue corruption remains deferred, and the
-synthetic propagation-false control keeps SingleStream. This guard does not
-validate occurrence cardinality; extra zero lengths may survive EOF prep.
+The exact 45-path cohort passes 273 examples in each final serial DEBUG and
+RELEASE run, zero failures/errors/pending. Existing recursive codecs and
+source-authenticated owners are reused. Production changes only admit the
+bounded shared layouts and preserve the early MRK3 non-MAP refusal; a
+schedule-only wrong-error-class regression was caught by four native guards.
+Fourteen new adversaries check callback reorder, late malformed structure,
+deferred inner String-tag failure and rejected bucket-count mutation.
+MRK4 MAP does not validate shared-value String-v0 envelopes at EOF; Advanced
+checks its structural metadata, not eager inner BinaryValue semantics.
+The earlier ordinary String-v1 extent guard and its cardinality limits remain.
 
-The final authenticated 48-cell diagnostic has 48 physical-layout/native-row
-successes, 28 passing root cells and 20 explicit UnsupportedFormatError cells
-(12 MRK3 non-MAP, 8 MRK4 MAP_WITH_BUCKETS/ADVANCED). Its exit 1 is expected,
-not a full-matrix GREEN. Copy-only profile and guard-call reversals restore
-exactly 14 profile failures and 4 native EOF no-raise failures respectively;
-their controls pass. The initial logical/physical-name pairing regression was
-caught and corrected before qualification. Original capture files, sibling
+The final authenticated diagnostic has 48 physical-layout/native-row
+successes, 36 passing readers and twelve explicit MRK3 non-MAP
+UnsupportedFormatError cells. Exit 1 is expected, not full-matrix GREEN.
+A final copy-only gate reversal restores exactly eight capability errors
+while all 41 old controls pass. Original capture inventories, sibling
 manifests and three protected specs remain unchanged. See the
-[String-profile evidence](../.landmark/evidence/compact-static-json-string-profile-w263.json)
+[shared-layout evidence](../.landmark/evidence/compact-static-json-mrk4-shared-layouts-w263.json)
 and [W263 frontier](COMPACT_JSON_READER_FRONTIER.md).
 
-Remaining frontier: other JSON shared layouts/profiles, compressed marks and
-the full recursive/public/offline gate. Existing Static/Dynamic Compact public
-readers keep their separately qualified finite profiles, not general JSON
-admission. Compact writing still needs a physical coordinator and publication
+Remaining frontier: twelve MRK3 non-MAP cells, mixed-version/arbitrary-bucket
+qualification, compressed marks and recursive/public/offline JSON admission.
+Existing Static/Dynamic Compact public readers retain their separate finite
+profiles. Compact writing needs a physical coordinator and publication
 backend; recursive value codecs are reusable, Wide `.bin`/`.mrk2` envelopes
-are not. Remaining types/layouts, MV/projection composition and later
+are not. Full types/layouts, MV/projection composition and subsequent
 performance remain required. Full goal ACTIVE; no speed/full-suite claim,
-local atomic commit only, no push.
+local atomic commit only, no push. Refresh after source/test/profile/capture/
+compiler/consumer drift or scope widening.
 
 ## Earlier revision-scoped checkpoints
 

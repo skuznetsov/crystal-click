@@ -358,8 +358,10 @@ module CrystalClick
         prefix.bind_physical_plan!(physical_plan)
 
         reject_nested_static_json_sites!(prefix, budget)
-        if @context.mode.mrk3? && prefix.plan.structures.object.shared_data_version >= 2_u64
-          raise UnsupportedFormatError.new("Compact mrk3 static JSON Advanced shared-data layouts are not admitted")
+        # The MRK3 body tape framer recognizes only the single-MAP lane set;
+        # bucketed MAP and later shared layouts need distinct role framing.
+        if @context.mode.mrk3? && prefix.plan.structures.object.shared_data_version >= 1_u64
+          raise UnsupportedFormatError.new("Compact mrk3 static JSON non-MAP shared-data layouts are not admitted")
         end
         schedule = CompactJsonObjectRoleSchedule.build(prefix, physical_plan, @ordinary_profile, budget)
         if advanced_layout.nil?

@@ -3,8 +3,8 @@
 Document status: W263 six-layout/multi-chunk native baseline RED qualified; coordinate prerequisite
 VERIFIED within its focused scope; advanced inline preparation prerequisite
 VERIFIED; bounded internal V1 MRK3/MAP, V2 MRK4/MAP and V3 MRK4/ADVANCED_CHUNKED
-roots, bounded MRK3 COMPACT Dynamic frames, and propagated ordinary String-v1
-in 28 existing-layout root cells VERIFIED;
+roots, bounded MRK3 COMPACT Dynamic frames, propagated ordinary String-v1,
+and MRK4 MAP_WITH_BUCKETS/ADVANCED in 36 root cells VERIFIED;
 recursive/public/offline native GREEN pending
 (2026-10-11).
 Baseline: `efb84e8d96a378e4833b8ca63a9f5fa16743d78e` (W262).
@@ -16,6 +16,138 @@ This transition does not redefine completion or establish <=10% speed parity.
 The latest qualification below governs current admission. Older checkpoint
 sections are revision-scoped history; their former refusals and next steps do
 not override a later qualification.
+
+## MRK4 MAP_WITH_BUCKETS / ADVANCED checkpoint — qualified within scope
+
+Qualification over `0e75688f40eea66d6731f2836e8068f68e28e5b5`: the exact
+45-path cohort passes 273 examples in each final serial DEBUG and RELEASE run
+(root tools `034b10`, `f33af2`), zero failures/errors/pending. Production and
+source/test/script seals remain unchanged across both runs and the final
+diagnostic. The authenticated original 48-cell diagnostic (tool `472a1e`,
+exit 1) has 48 physical-layout/native-literal successes, 36 passing root cells
+and exactly twelve explicit MRK3 non-MAP UnsupportedFormatError cells.
+Its exit is the expected remaining-capability signal, not full-matrix GREEN.
+
+The unchanged eight-cell native spec now qualifies plain MRK4 root Object
+wire v4 with SharedData v1 MAP_WITH_BUCKETS or v2 ADVANCED, two buckets,
+String-v0/v1 and Variant-BASIC/COMPACT. All rows and Float64 bits match the
+independent stock/fixture literals for EOF-first, single-mark, cross-mark and
+full reads. Existing recursive codecs and source-authenticated owners are
+reused; production changes are only the bounded role gate and an early MRK3
+non-MAP refusal. No new serde implementation or public dispatch is introduced.
+
+Four native MRK3 bucketed cells exposed a schedule-only regression: the
+single-MAP grammar walker reported duplicated sizes as corruption. The
+unchanged native guard spec observes four failures (tool `15b31c`) before
+containment; the final cohort and diagnostic restore all twelve explicit
+Unsupported refusals without prepared publication. The hypothesis that
+Tuple field names would cause an earlier Unsupported role error is refuted.
+
+Fourteen new adversaries cover all eight syntactically valid callback-roster
+reorders, plus per-layout late structural corruption, deferred inner shared
+String-tag poison, and bucket-count 2-to-1 refusal. Mutation copies preserve
+authenticated outer slot extents and compressed-frame geometry; Advanced
+saved pairs are remapped before same-length poison. Six semantic/structural
+cases passed initially; eight reorder errors were in the fixture's premature
+prefix inspection, not reader behavior, and were corrected separately.
+MRK4 MAP preparation does not validate shared-value String-v0 envelopes at
+EOF. Advanced preparation checks its structural metadata; both defer inner
+BinaryValue semantics until selected decoding. Do not infer eager semantic
+validation or occurrence-cardinality proof from successful EOF preparation.
+
+A final isolated copy differs from production only in the two admission
+predicates (root source diff tools `ed2e18`, `cf738d`). Reverting them restores
+exactly eight Unsupported errors with all 41 old controls passing (tool
+`596740`); the final MRK3 containment guard remains present in that copy.
+Root adversary ROBUST within this finite scope; Luna review is correlated,
+not an independent replication. All original capture inventories, sibling
+manifest hashes and protected specs are unchanged.
+
+See [shared-layout evidence](../.landmark/evidence/compact-static-json-mrk4-shared-layouts-w263.json).
+Refresh after source/test/profile/capture/compiler/consumer drift or widening.
+Next: the twelve MRK3 non-MAP cells and recursive/public/offline admission.
+Mixed-version marks, arbitrary buckets, compressed marks, Compact physical
+writing, full types/MV/projection composition and performance remain open.
+Goal ACTIVE; local atomic commit only, no push or speed-parity claim.
+
+### Transition anchor and measured RED
+
+Anchor: `0e75688f40eea66d6731f2836e8068f68e28e5b5`. The next transition moves
+the eight existing native plain-MRK4 root cells for Object wire v4, SharedData
+v1 MAP_WITH_BUCKETS or v2 ADVANCED, two buckets, String-v0/v1 and
+Variant-BASIC/COMPACT. The unchanged native spec has eight errors, all the
+explicit role-schedule UnsupportedFormatError (root tool `74e1ad`). The
+first sandboxed attempt aborted before tests because `ps` was unavailable;
+that exit 75 is instrumentation, not reader RED.
+
+Use only the authenticated original capture
+`/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS`, not another
+similarly named temporary capture. Its summary and native manifest hashes
+and all three protected specs still match the previous checkpoint. Per-cell
+persisted layout records identify v1/v2 and two buckets on every mark;
+first/full and later/empty statistics and ordinary String metadata are
+separate from the shared-data profile. Root checked these records before
+authorizing production edits.
+
+The causal hypothesis is the finite role-schedule gate, not a missing codec.
+Existing callback bindings, bucketed MAP codecs and Advanced v2/v3 prepared
+owners already represent these layouts. Risk is CAUTION; rollback is the
+anchor above. Initially authorize only
+`src/crystal_click/compact_json_object_role_schedule.cr`: admit v1/v2 with
+the two-bucket boundary without changing existing v0 MAP/v3 CHUNKED cells.
+Do not change framer/materializer/decoder behavior without a further
+discriminating RED and an updated boundary. MRK3 bucket/advanced framing,
+recursive/public/offline JSON, compressed marks and Compact writing remain
+outside this transition, not outside the full active goal.
+
+Execution order and DoD:
+
+1. Preserve the eight-cell native spec unchanged. Root has observed its RED;
+   Luna engine owner makes the bounded schedule change, then root reruns it.
+2. Luna test owner adds only a separate native/adversary fixture and spec:
+   assert actual prefix versions, callback rosters and empty buckets; poison
+   late structural metadata with valid transport and verify EOF refuses
+   before publication; keep well-framed inner shared semantics deferred until
+   the affected mark is selected. Add exact existing-profile/MRK3 refusal
+   controls and explicit budget/owner checks where the reused boundary needs
+   them. Tests must not infer saved-pair coordinates from column-local offsets.
+3. DoD commands are guarded serial DEBUG and RELEASE `crystal spec` runs of
+   the previous exact 43-path/251-example cohort, the unchanged eight-cell
+   spec and the new adversaries. Expected: zero failures/errors/pending and
+   stock literal rows/Float64 bits for EOF-first, single, cross-mark and full
+   reads. Run the authenticated 48-cell root diagnostic: expected 36 passes
+   and 12 explicit MRK3 non-MAP refusals, not full-matrix GREEN.
+4. Root hostile review independently inspects production and source grammar,
+   runs the commands, and reverses only the schedule change in an isolated
+   copy to require the same eight-cell capability RED with existing controls
+   passing. Any genuine new EOF acceptance or codec failure is investigated
+   before closure. Keep protected specs/capture files unchanged; format/diff
+   checks and an exact-path atomic local commit follow the observed DoD.
+   No push or performance/full-goal completion claim.
+
+### Measured MRK3 refusal regression and narrow containment
+
+The live schedule-only diagnostic (root tool `da622c`) has 36 passing cells,
+but the four MRK3 MAP_WITH_BUCKETS cells now report CorruptPartError for a
+duplicated sizes callback. The other eight MRK3 non-MAP cells still report
+UnsupportedFormatError. Both shared buckets emit the same logical MAP roles;
+the single-MAP tape walker accepts bucket zero before rejecting bucket one.
+The earlier hypothesis that named Tuple fields would cause an earlier
+Unsupported role refusal is refuted by the actual bindings and native run.
+No prepared context or value escape was observed, but the declared refusal
+boundary is not preserved by the schedule change alone.
+
+Expand production ownership only to the existing MRK3 guard in
+`src/crystal_click/compact_static_json_bulk_column_reader.cr`: refuse all
+non-MAP SharedData versions before body capture, rather than just Advanced
+versions. Risk remains CAUTION, rollback remains the anchor above, and the
+unchanged native matrix guard spec is the discriminating RED/GREEN check.
+Do not add bucket framing or change codecs/materializers. Final DoD still
+requires all twelve MRK3 cells to fail explicitly as UnsupportedFormatError
+without prepared publication, while all 36 admitted cells and the exact
+Debug/Release cohort pass. The first new adversary run's eight roster errors
+occurred in fixture inspection before the reader expectation; correct that
+instrumentation separately rather than changing reader behavior.
 
 ## Root String-v1 profile and EOF extent checkpoint — qualified within scope
 
