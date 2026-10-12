@@ -1,34 +1,36 @@
 # CrystalClick project status
 
-Current bounded Compact physical writer (W264, 2026-10-12): VERIFIED / root
-adversary ROBUST within the static/plain-MRK3 witness and exact affected cohort.
-`CompactPartWriter.write_uint64_columns` writes a nonempty sorted-UInt64-key
-part using shared recursive logical codecs, ordered granule/column/callback
-assembly, one LZ4 stream, complete marks/checksums, staged readback and exclusive
-publication. Neutral infrastructure preserves the existing Wide byte formats
-and refusal behavior. The exact Map(String, UInt64) Compact batch bridge is
-added without bypassing typed admission or widening other Map carriers.
+Current bounded Compact physical writer (W265, 2026-10-12): VERIFIED / root
+adversary ROBUST within the finite static/plain-MRK3/MRK4 witness and exact
+affected cohort. `CompactPartWriter.write_uint64_columns` keeps plain
+MRK3 as its default and admits explicit `mark_format: CompactMarkFormat::Mrk4`.
+One format-neutral static backend reuses recursive logical codecs and owns
+granule/column/callback assembly, LZ4 tape, marks/fold, staged readback and
+exclusive publication. MRK4 persists the exact ordered callback sidecar and
+uses the actual substream count, including zero-byte callbacks and every EOF
+pair. The sidecar is validated exactly but omitted from native checksums.
 
-Final DEBUG: 620 examples / exact 92 paths. Actual RELEASE: the same disjoint
-union in two executables, 194 + 426 examples, plus a separately counted 37-case
-overlapping W264/W260 boundary; all zero failures/errors/pending. The combined
-RELEASE compiler hit the unchanged 12 GiB process-tree guard before tests, so
-there is no combined-RELEASE or full-suite GREEN claim. The final fresh native
-probe records a separately INSERTed stock Compact reference with identical
-decoded tape/checksum-fold, then native ATTACH, CHECK=1 and literal full/
-middle/last/empty reads of the generated eight-column, eight-row, four-mark+
-EOF part. Stale checksum, fold-only checker sensitivity and resealed malformed
-mark controls retain distinct ATTACH/CHECK/SELECT outcomes. See the
-[writer frontier](COMPACT_PART_WRITER_FRONTIER.md) and
-[W264 evidence](../.landmark/evidence/compact-part-writer-w264.json).
+Final exact 95-path DEBUG: 628 examples. Actual RELEASE passes the same disjoint
+union in two executables: 32 writer/consumer paths / 202 examples and 63 reader
+paths / 426, all zero failures/errors/pending. Held production/source-test-script
+seals match across final runs. No combined-RELEASE or full-suite GREEN claim.
+Fresh native default-MRK3 and explicit-MRK4 ATTACH,
+CHECK=1 and literal full/middle/last/empty reads pass; independently INSERTed
+stock MRK4 matches all 85 logical positions, the 8970-byte decoded tape and
+saved/computed fold. Default MRK3 also matches all nine frozen W264 files.
+Resealed child-slot and unchecked-roster mutants refuse locally but retain
+native CHECK and exact values; do not report them as native rejection evidence.
+See the [writer frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+[W265 evidence](../.landmark/evidence/compact-part-writer-w265.json).
 
-Compact writer continuation: MRK4/per-substream marks, then stateful serializers
-and context-owned Dynamic/JSON. The current native default is MRK4; this finite
-writer witness explicitly requests plain MRK3, String-v0 and BASIC Map. Local
-static admission is not native qualification of every admitted type. Compressed
-marks, arbitrary profiles/codecs, incremental append and Compact MV/projection
-composition remain open. Full types/MV/projections precede performance per the
-user's priority; the full goal remains ACTIVE, with no speed-parity claim.
+Remaining Compact writer work: per-granule stateful lifecycle, then
+LowCardinality/Variant/Dynamic/JSON and remaining recursive/profile combinations.
+Local static admission is not native qualification of every admitted type.
+Compressed marks, arbitrary profiles/codecs, incremental append and Compact
+MV/projection composition remain open. Prior bounded Wide/metadata MV/projection
+support remains separately qualified. Full types/MV/projections precede
+performance per the user's priority; the full goal remains ACTIVE, with no
+speed-parity claim.
 
 Current bounded recursive/public/offline Compact JSON qualification (W263,
 2026-10-12): VERIFIED / root adversary ROBUST within the unchanged 48-part
@@ -59,10 +61,10 @@ large-part scale or RSS claim. Outer topology admission does not establish all
 Object inner roles. Other schemas/owners and mixed Wide/Compact JSON `.values`
 remain unqualified. Performance work remains deferred per user priority.
 
-W264 supplies the first static MRK3 physical writer above. Logical serde, role
+W265 extends the static MRK3 physical writer to plain MRK4 above. Logical serde, role
 plans and value codecs are reused; Wide `.bin`/`.mrk2` envelopes are not
-concatenated. MRK4 and stateful/context-owned Dynamic/JSON writer integration
-are the next separate native-qualified boundaries.
+concatenated. Stateful/context-owned Dynamic/JSON writer integration is the
+next separate native-qualified boundary.
 
 Mixed-version/arbitrary-bucket/profile qualification, compressed marks, remaining
 types/layouts, MV/projections and subsequent performance remain open. Full goal
@@ -73,6 +75,18 @@ Refresh after source/test/profile/capture/compiler/consumer drift or widening.
 
 The following records describe the state at their own qualification revision.
 Their former refusals and next steps do not override the current frontier above.
+
+Previous bounded Compact writer checkpoint (W264, 2026-10-12): VERIFIED / root
+adversary ROBUST within its static/plain-MRK3 witness. Exact 92-path DEBUG:
+620 examples. Same disjoint union in actual RELEASE: 194 + 426, plus a
+separately counted overlapping W264/W260 boundary of 37, all zero failures/
+errors/pending. The combined RELEASE compiler hit the unchanged 12 GiB guard
+before tests, not test GREEN or reader/writer runtime memory evidence.
+Separately INSERTed stock Compact matches the decoded tape/fold; generated
+ATTACH, CHECK=1 and literal full/middle/last/empty reads pass. Stale checksum,
+fold-only sensitivity and resealed malformed-mark controls keep distinct
+ATTACH/CHECK/SELECT outcomes. The then-open MRK4 writer is superseded only
+within W265's finite scope above. See [W264 evidence](../.landmark/evidence/compact-part-writer-w264.json).
 
 Previous bounded internal-reader qualification (W263, 2026-10-11): VERIFIED /
 root adversary ROBUST for 36 root JSON cells. Existing Object/Dynamic v1/v2/v3

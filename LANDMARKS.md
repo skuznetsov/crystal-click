@@ -1,5 +1,54 @@
 # Crystal Click landmarks
 
+## Bounded static Compact plain-MRK4 writer extension — W265
+
+- VERIFIED / root adversary ROBUST over baseline
+  `ba6fbf46b5344e48d7cb5896a9cb4e3d893d35dd` within the finite static/plain
+  MRK3/MRK4 witness and declared guards (2026-10-12). Exact 95-path DEBUG:
+  628 examples (`061657`). Same disjoint union in actual RELEASE: 32 paths /
+  202 (`4aca62`) and 63 paths / 426 (`1f1a18`), all zero failures/errors/pending.
+  No combined-RELEASE/full-suite claim; held production/source-test-script
+  seals match across final runs. Two executables do not certify every
+  cross-subset optimized/order interaction.
+- One immutable write plan binds declaration order and physical callback slots.
+  Static recursive serde stays shared; the neutral assembler owns granule ->
+  column -> callback, compressed positions/fold and every zero-byte/EOF slot.
+  Plain MRK4 is headerless, record width `16*S+8`, actual callback count `S`.
+  `columns_substreams.txt` is exact staged metadata but intentionally absent
+  from native checksums. Including it caused native CHECK code 226; source and
+  separately INSERTed stock output refute that earlier checksum design.
+- Fresh native root `/private/tmp/crystal-click-w265-native.BXzRsT`, result
+  `cd5ab2`: 68 bounded invocations / 272 authenticated raw files. Default MRK3
+  and explicit MRK4 ATTACH, active Compact eight rows/five marks, CHECK=1 and
+  literal 8/4/1/0 reads pass. Independent stock MRK4 matches 8970 decoded bytes,
+  saved/computed fold, all 85 logical positions and sidecar. Compression frame
+  counts differ (282 vs 32), not a physical-byte or performance claim. Nine
+  frozen W264 default-MRK3 files also match exactly (17902 bytes).
+- Stale checksum: selected corrupted `pk` refuses, unselected `gap` accepts;
+  native ATTACH succeeds, CHECK returns 0/code 40, full/middle SELECT raise.
+  Fold-only poison accepts locally/natively. Resealed child coordinates and
+  unchecked roster poison refuse locally but native ATTACH/CHECK and exact
+  values pass. CHECK alone is not fold/association/sidecar proof.
+- Publication cap RED is test-path calibration, not a Release-only production
+  failure: one additional staging-path byte adds exactly `2+3*8=26` retained
+  bytes (`43122c`, repeat 9). Source-derived maximum suffix slack changes only
+  the test; the direct eight-slot-pass/17-slot-fail discriminator and production
+  limits stay unchanged. Corrected RELEASE publication binary passes 32 repeats
+  of two examples, not 64 independent cases. Refusal captures cumulative
+  progress, real opened-reader prefix/17-slot grid and owned-stage cleanup.
+- Source/runtime revisions remain distinct pins; root independently checks
+  actual native records, byte/coordinate oracles, source, corrupt controls and
+  held seals. Same-lineage Luna review is correlated. Three user-owned specs
+  remain untouched/outside staging; two are exact-cohort local prerequisites.
+- Return pointers: [writer frontier](docs/COMPACT_PART_WRITER_FRONTIER.md) and
+  [W265 evidence](.landmark/evidence/compact-part-writer-w265.json).
+  Next: per-granule stateful lifecycle/context-owned Dynamic/JSON and remaining
+  types/profiles, then Compact MV/projection composition and measured optimization.
+  Prior Wide/metadata MV/projection qualification is not replaced. Full goal
+  ACTIVE; no full writer parity, RSS or <=10% speed claim; local atomic commit
+  only, no push. Refresh after source/test/profile/capture/compiler/consumer
+  drift, temporary-evidence loss or scope widening. Older records are historical.
+
 ## Bounded static Compact MRK3 physical writer — W264
 
 - VERIFIED / root adversary ROBUST over baseline

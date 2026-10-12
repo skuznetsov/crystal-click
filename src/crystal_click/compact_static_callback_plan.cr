@@ -7,6 +7,7 @@ module CrystalClick
     getter profile : BinaryBulkProfile
     getter column_name : String
 
+    @callback_names : Array(String)
     @callback_roles : Array(String)
 
     def initialize(input : CompactStaticColumnInput, limits : BinaryCodecLimits)
@@ -56,6 +57,7 @@ module CrystalClick
         reverse_names[name] = role
       end
 
+      @callback_names = Array(String).new(callback_names.size)
       @callback_roles = Array(String).new(callback_names.size)
       seen_roles = Set(String).new
       callback_names.each do |callback_name|
@@ -64,6 +66,7 @@ module CrystalClick
         unless seen_roles.add?(role)
           raise UnsupportedFormatError.new("Compact static callback schedule repeats a physical role")
         end
+        @callback_names << String.new(callback_name.to_slice)
         @callback_roles << String.new(role.to_slice)
       end
       unless @callback_roles.size == role_names.size && seen_roles.size == role_names.size
@@ -76,6 +79,12 @@ module CrystalClick
     # order while BinaryBulkStreams.roles is a lexical lookup roster.
     def callback_roles : Array(String)
       @callback_roles.map { |role| String.new(role.to_slice) }
+    end
+
+    # Ordered physical stream names matching callback_roles. This is the
+    # persisted MRK4 substream identity roster, not a lexical role lookup list.
+    def callback_names : Array(String)
+      @callback_names.map { |name| String.new(name.to_slice) }
     end
   end
 end

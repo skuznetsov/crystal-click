@@ -12,6 +12,7 @@ module CrystalClick
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       reader_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      mark_format : CompactMarkFormat = CompactMarkFormat::Mrk3,
     ) : String
       CompactPartOperation.write_uint64_columns(
         destination,
@@ -23,6 +24,7 @@ module CrystalClick
         limits,
         transport_limits,
         reader_limits,
+        mark_format,
       )
     end
   end

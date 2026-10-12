@@ -1,6 +1,6 @@
 module CrystalClick
   # Owns the bounded whole-part write, staged validation, and exclusive
-  # publication for the first static MRK3 Compact slice.
+  # publication for the admitted static Compact mark formats.
   class CompactPartOperation
     private alias ChecksumRecord = PartWriterInfrastructure::ChecksumRecord
 
@@ -14,7 +14,9 @@ module CrystalClick
       limits : BinaryCodecLimits,
       transport_limits : CompressedStreamLimits,
       reader_limits : CompressedStreamLimits,
+      mark_format : CompactMarkFormat,
     ) : String
+      validate_mark_format!(mark_format)
       validate_dimensions!(keys, columns, rows_per_mark)
       validate_column_name!(key_name)
       validate_column_set!(key_name, columns)
@@ -40,6 +42,7 @@ module CrystalClick
       backend_columns = Array(CompactStaticColumnInput).new(columns.size + 1)
       backend_columns << key_input
       value_inputs.each { |input| backend_columns << input }
+      write_plan = CompactStaticWritePlan.new(backend_columns, limits, mark_format)
 
       metadata = CompactPartMetadata.new(
         key_name,
@@ -48,16 +51,18 @@ module CrystalClick
         limits,
         write_codec_budget,
         write_transport_budget,
+        write_plan,
       )
-      files = CompactStaticMRK3Writer.encode(
+      files = CompactStaticWriter.encode(
         backend_columns,
         rows_per_mark_grid,
         limits,
         frame_bytes,
         write_transport_budget,
         write_codec_budget,
+        write_plan,
       )
-      validate_output_sizes!(files, rows_per_mark_grid.size, backend_columns.size)
+      validate_output_sizes!(files, rows_per_mark_grid.size, write_plan.slot_count, write_plan.mark_format)
 
       data_size = files.data_size
       marks_size = files.marks_size
@@ -78,7 +83,8 @@ module CrystalClick
         files.raw_size,
         files.raw_hash_fold,
       )
-      records << ChecksumRecord.new("data.mrk3", marks_size.to_u64, files.marks_hash, false)
+      marks_name = mark_file_name(write_plan.mark_format)
+      records << ChecksumRecord.new(marks_name, marks_size.to_u64, files.marks_hash, false)
       records << index_record
       records << ChecksumRecord.new("count.txt", count_bytes.size.to_u64, CityHashV1.file_hash(count_bytes), false)
       records << ChecksumRecord.new(
@@ -100,7 +106,7 @@ module CrystalClick
       stage = PartWriterInfrastructure::PartDirectoryPublisher.create_stage(parent)
       begin
         File.write(File.join(stage, "data.bin"), data)
-        File.write(File.join(stage, "data.mrk3"), marks)
+        File.write(File.join(stage, marks_name), marks)
         written_index = PartWriterInfrastructure::PrimaryIndexWriter.write(
           stage,
           key_snapshot.to_unsafe.to_slice(key_snapshot.size),
@@ -111,6 +117,9 @@ module CrystalClick
         end
 
         File.write(File.join(stage, "columns.txt"), metadata.columns_text)
+        if write_plan.mark_format.mrk4?
+          File.write(File.join(stage, "columns_substreams.txt"), metadata.columns_substreams_text)
+        end
         File.write(File.join(stage, "count.txt"), metadata.count_text)
         File.write(File.join(stage, "serialization.json"), metadata.serialization_text)
         File.write(File.join(stage, "default_compression_codec.txt"), metadata.codec_text)
@@ -125,6 +134,7 @@ module CrystalClick
           rows_per_mark_grid,
           records,
           checksums_bytes,
+          write_plan,
           limits,
           reader_limits,
           read_codec_budget,
@@ -175,6 +185,13 @@ module CrystalClick
       unless name.bytesize > 0 && name.bytesize <= WidePartTable::MAX_COLUMN_NAME_BYTES &&
              /\A[A-Za-z_][A-Za-z0-9_]*\z/.matches?(name)
         raise ArgumentError.new("Compact column name is invalid or exceeds its reader bound")
+      end
+      nil
+    end
+
+    private def self.validate_mark_format!(mark_format : CompactMarkFormat) : Nil
+      unless mark_format.mrk3? || mark_format.mrk4?
+        raise UnsupportedFormatError.new("unsupported Compact mark format")
       end
       nil
     end
@@ -285,7 +302,8 @@ module CrystalClick
     private def self.validate_output_sizes!(
       files : CompactStaticPartFiles,
       mark_count : Int,
-      column_count : Int,
+      slot_count : Int,
+      mark_format : CompactMarkFormat,
     ) : Nil
       data_size = files.data_size.to_i64
       marks_size = files.marks_size.to_i64
@@ -293,17 +311,28 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact data.bin exceeds the typed reader bound")
       end
       if marks_size <= 0 || marks_size > WidePart::MAX_MARK_FILE_BYTES || marks_size > Int32::MAX
-        raise UnsupportedFormatError.new("Compact data.mrk3 exceeds the typed reader bound")
+        raise UnsupportedFormatError.new("Compact #{mark_file_name(mark_format)} exceeds the typed reader bound")
       end
-      record_width = column_count.to_i64 * 16_i64 + 8_i64
-      if mark_count <= 0 || mark_count > WidePartTable::MAX_MARKS_PER_READER
+      if mark_count <= 0 || mark_count > WidePartTable::MAX_MARKS_PER_READER || slot_count <= 0
         raise UnsupportedFormatError.new("Compact mark count cannot represent the terminal record")
       end
-      expected = (mark_count.to_i64 + 1_i64) * record_width
-      unless marks_size == expected
-        raise UnsupportedFormatError.new("Compact MRK3 output differs from its complete grid")
+      record_width = checked_add_u64(checked_multiply_u64(slot_count.to_u64, 16_u64), 8_u64)
+      expected = checked_multiply_u64(checked_add_u64(mark_count.to_u64, 1_u64), record_width)
+      unless marks_size.to_u64 == expected
+        raise UnsupportedFormatError.new("Compact #{mark_file_name(mark_format)} output differs from its complete grid")
       end
       nil
+    end
+
+    private def self.mark_file_name(mark_format : CompactMarkFormat) : String
+      case mark_format
+      when CompactMarkFormat::Mrk3
+        "data.mrk3"
+      when CompactMarkFormat::Mrk4
+        "data.mrk4"
+      else
+        raise UnsupportedFormatError.new("unsupported Compact mark format")
+      end
     end
 
     private def self.reserve_pair_snapshot!(budget : CompressedStreamBudget, data_size : Int32, marks_size : Int32) : Nil
@@ -365,6 +394,7 @@ module CrystalClick
       rows : Array(UInt64),
       records : Array(ChecksumRecord),
       expected_checksums : Bytes,
+      write_plan : CompactStaticWritePlan,
       limits : BinaryCodecLimits,
       reader_limits : CompressedStreamLimits,
       codec_budget : BinaryCodecBudget,
@@ -382,6 +412,13 @@ module CrystalClick
         {"default_compression_codec.txt", metadata.codec_text, WidePart::MAX_CODEC_FILE_BYTES.to_i64},
         {"metadata_version.txt", metadata.metadata_version_text, 32_i64},
       ] of Tuple(String, String, Int64)
+      if write_plan.mark_format.mrk4?
+        expected_metadata << {
+          "columns_substreams.txt",
+          metadata.columns_substreams_text,
+          WidePart::MAX_METADATA_FILE_BYTES.to_i64,
+        }
+      end
       expected_metadata.each do |name, expected, maximum|
         transport_budget.reserve_result_bytes(expected.bytesize.to_i64)
         actual = metadata_reader.read(name, maximum)
@@ -412,17 +449,20 @@ module CrystalClick
       data_record = records.find { |record| record.name == "data.bin" } ||
                     raise(CorruptPartError.new("staged Compact data.bin checksum record is missing"))
       planned_data_size = data_record.physical_size
-      slot_count = metadata.schema_columns.size
-      CompactMRK3ReadbackGrid.preflight!(transport_budget, rows.size, slot_count, planned_data_size)
+      slot_count = write_plan.slot_count
+      CompactReadbackGrid.preflight!(transport_budget, rows.size, slot_count, planned_data_size)
 
       context = CompactPartPhysicalContext.open(stage, transport_budget)
       context_workspace = checked_add_u64(context.retained_workspace_bytes, context.retained_grid_workspace_bytes)
       transport_budget.reserve_result_bytes(to_i64(context_workspace))
-      unless context.mode.mrk3? && context.row_count == keys.size.to_u64 &&
+      unless context.mode == write_plan.mark_format && context.row_count == keys.size.to_u64 &&
              context.granule_count == rows.size && context.columns == metadata.schema_columns
         raise CorruptPartError.new("staged Compact physical metadata differs from preflight")
       end
-      unless context.physical_roster.map(&.column_name) == metadata.schema_columns.map(&.[0]) &&
+      if write_plan.mark_format.mrk4?
+        transport_budget.reserve_result_bytes(to_i64(metadata.physical_roster_snapshot_workspace_bytes))
+      end
+      unless metadata.physical_roster_matches?(context.physical_roster) &&
              context.mark_row_counts == rows
         raise CorruptPartError.new("staged Compact physical grid differs from preflight")
       end
@@ -496,7 +536,7 @@ module CrystalClick
       unless BinaryValueTypedBatchAdapter.admitted?(type)
         raise UnsupportedFormatError.new("Compact selected type has no established typed batch carrier")
       end
-      CompactMRK3ReadbackGrid.preflight!(transport_budget, rows.size, slot_count, planned_data_size)
+      CompactReadbackGrid.preflight!(transport_budget, rows.size, slot_count, planned_data_size)
       reader = CompactBinaryBulkColumnReader.open(
         stage,
         name,

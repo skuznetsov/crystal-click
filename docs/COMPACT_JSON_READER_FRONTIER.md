@@ -79,12 +79,13 @@ Compact compatibility. Two source-observed limitations remain explicit:
   can still fail Unsupported. All-zero child marks and arbitrary owners,
   buckets, mixed versions/profiles and untested chunks remain unqualified.
 
-The separately qualified [W264 writer](COMPACT_PART_WRITER_FRONTIER.md) now
-supplies a bounded static/plain-MRK3 physical coordinator, reusing logical
+The separate [W265 writer frontier](COMPACT_PART_WRITER_FRONTIER.md) extends
+the bounded static/plain-MRK3 coordinator to plain MRK4, reusing logical
 traversal, codecs, role plans and neutral publication machinery, not compressed
 Wide `.bin`/`.mrk2` lane envelopes. Its finite stock-reference/native cross-read
 does not write JSON or qualify every locally admitted static declaration.
-Next writer boundaries are MRK4 and stateful/context-owned Dynamic/JSON:
+The exact affected-reader DEBUG and partitioned actual-RELEASE checks pass.
+Next writer boundaries are stateful/context-owned Dynamic/JSON:
 per-granule prefix/body/suffix state, propagated profiles and source-owned
 statistics require their own native falsifiers rather than relabeling the
 stateless tape-slicing shortcut. The reader qualification above is unchanged.
