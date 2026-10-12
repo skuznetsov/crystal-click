@@ -1,6 +1,6 @@
 module CrystalClick
   # Owns the bounded whole-part write, staged validation, and exclusive
-  # publication for the admitted static Compact mark formats.
+  # publication for the admitted Compact BinaryBulk mark formats.
   class CompactPartOperation
     private alias ChecksumRecord = PartWriterInfrastructure::ChecksumRecord
 
@@ -15,8 +15,10 @@ module CrystalClick
       transport_limits : CompressedStreamLimits,
       reader_limits : CompressedStreamLimits,
       mark_format : CompactMarkFormat,
+      variant_discriminator_mode : CompactVariantDiscriminatorMode,
     ) : String
       validate_mark_format!(mark_format)
+      variant_discriminator_mode.wire_value
       validate_dimensions!(keys, columns, rows_per_mark)
       validate_column_name!(key_name)
       validate_column_set!(key_name, columns)
@@ -42,7 +44,7 @@ module CrystalClick
       backend_columns = Array(CompactStaticColumnInput).new(columns.size + 1)
       backend_columns << key_input
       value_inputs.each { |input| backend_columns << input }
-      write_plan = CompactStaticWritePlan.new(backend_columns, limits, mark_format)
+      write_plan = CompactStaticWritePlan.new(backend_columns, limits, mark_format, variant_discriminator_mode)
 
       metadata = CompactPartMetadata.new(
         key_name,

@@ -476,32 +476,18 @@ describe CrystalClick::CompactPartWriter do
       File.exists?(too_long_path).should be_false
 
       string = CrystalClick::BinaryDataType.primitive("String")
-      variant = CrystalClick::BinaryDataType.variant([u64, string] of CrystalClick::BinaryDataType)
-      variant_child = if variant.child_at(0).tag == CrystalClick::BinaryDataType::TAG_STRING
-                        CrystalClick::BinaryValue.string("variant")
-                      else
-                        CrystalClick::BinaryValue.uint64(7_u64)
-                      end
-      variant_values = Array(CrystalClick::BinaryValue).new(2) do
-        CrystalClick::BinaryValue.variant(variant, 0, variant_child)
-      end
       dynamic = CrystalClick::BinaryDataType.dynamic(1)
       dynamic_values = [
         CrystalClick::BinaryValue.dynamic(dynamic, CrystalClick::BinaryValue.uint64(1_u64)),
         CrystalClick::BinaryValue.dynamic(dynamic, CrystalClick::BinaryValue.uint64(2_u64)),
       ]
 
-      [
-        {"variant", variant, variant_values},
-        {"dynamic", dynamic, dynamic_values},
-      ].each do |name, type, values|
-        target = File.join(parent, name)
-        column = CrystalClick::CompactPartColumn.binary_bulk(name, type, [values])
-        expect_raises(CrystalClick::UnsupportedFormatError) do
-          CompactPartWriterW264GuardFixture.write(target, "pk", keys, [column])
-        end
-        File.exists?(target).should be_false
+      dynamic_target = File.join(parent, "dynamic")
+      dynamic_column = CrystalClick::CompactPartColumn.binary_bulk("dynamic", dynamic, [dynamic_values])
+      expect_raises(CrystalClick::UnsupportedFormatError) do
+        CompactPartWriterW264GuardFixture.write(dynamic_target, "pk", keys, [dynamic_column])
       end
+      File.exists?(dynamic_target).should be_false
     ensure
       FileUtils.rm_rf(parent)
     end

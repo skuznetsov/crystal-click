@@ -1,5 +1,46 @@
 # Crystal Click landmarks
 
+## Bounded recursive Compact Variant writer lifecycle — W267
+
+- VERIFIED / root adversary ROBUST over baseline
+  `260599cd2ad058a602824f65f6ddcbbccd8a1677` within the finite BASIC/COMPACT,
+  plain-MRK3/MRK4 witness and exact affected cohorts (2026-10-12). Serial DEBUG
+  and actual RELEASE each pass 32 paths / 202 + 11 / 108 + nine / 59, zero
+  failures/errors/pending. Held seals; no combined/full-suite/fresh-clone claim.
+  One worker/thread, 12 GiB process-tree and 50%-free guards stay unchanged.
+- Own-file discriminator-mode enum is bound through the public operation,
+  immutable plans and encoded column. Default mode COMPACT, default marks
+  MRK3. Reuse recursive one-granule logical encoding and existing framing
+  adapter; aggregate all lanes/marks on both budget axes before adaptation.
+  LC and Variant prefix roles remain distinct. One physical assembler owns
+  all callbacks/marks/EOFs. No shared-codec/reader/Wide-policy change.
+- Native root `/private/tmp/crystal-click-w267-native.HpgrTG` (`3c8695`):
+  69 bounded invocations / 276 authenticated raw files. Two independently
+  INSERTed stock MRK4 modes read in Crystal; four generated mode/mark cells
+  ATTACH/CHECK=1 and literal 8/4/2/0-row windows pass. Independent root audit
+  (`efa219`) finds identical decoded BASIC 673 / COMPACT 689 bytes, every
+  140-position MRK4 grid and 15-position MRK3 projection. The 28-slot roster
+  includes prefix-first ordering, inactive arms and zero-body nested marks;
+  no virtual read-only null-map slot. Compressed frames differ, not speed parity.
+- Resealed copy-only middle mode 1 -> 2 changes decoded byte 209. Native
+  ATTACH/CHECK=1 pass; selected full/middle SELECT fail code 117, last/empty
+  remain exact. Local unselected pk accepts, but local late payload rejects
+  because LC preparation visits the whole grid. CHECK is not semantic proof;
+  neither this guard nor recursive admission proves granule-only I/O.
+- Fresh LC regression (`79b5f6`, root audit `f2fc01`): 33 / 132 raw files,
+  same 601-byte tape, 55 MRK4 / 20 MRK3 positions. Static regression (`808eb3`,
+  root audit `9a16b8`): 68 / 272, all nine frozen W264 files equal (17902 bytes).
+  Protected three specs and original 52 parts / 544 files / 756378 bytes stay
+  unchanged. Oracle/tooling corrections are not behavioral format REDs.
+- Return pointers: [writer frontier](docs/COMPACT_PART_WRITER_FRONTIER.md) and
+  [W267 evidence](.landmark/evidence/compact-part-writer-w267.json). Next:
+  context-owned Dynamic/JSON writes, remaining layouts/profiles, Compact
+  MV/projections, then measured optimization. Prior Wide/metadata support
+  stays separate; full goal ACTIVE, no all-types/RSS/<=10% speed claim.
+  Local commit only/no push. Refresh dependent evidence after relevant
+  source/test/profile/compiler/runtime/capture drift, evidence loss or widening.
+  Rollback: revert W267 only, preserve user-owned specs and captures.
+
 ## Bounded Compact LowCardinality writer lifecycle — W266
 
 - VERIFIED / root adversary ROBUST over baseline

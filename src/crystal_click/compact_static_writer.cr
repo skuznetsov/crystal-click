@@ -1,8 +1,9 @@
 module CrystalClick
   # Writes admitted static BinaryBulk columns into one granule-major Compact
-  # tape and the selected plain MRK3/MRK4 coordinate grid. Ordinary lanes keep
-  # their whole-grid encoding; LowCardinality state is reset independently per
-  # granule. Metadata and publication remain owned by the table writer.
+  # tape and the selected plain MRK3/MRK4 coordinate grid. Stateless columns
+  # keep whole-grid encoding; LowCardinality- or Variant-containing columns
+  # get one independent BinaryBulk stream set per granule. Metadata and
+  # publication remain owned by the table writer.
   class CompactStaticWriter
     private struct GranuleLayout
       getter raw_size : UInt64
@@ -235,7 +236,9 @@ module CrystalClick
       columns.each_with_index do |column, index|
         callback_plan = callback_plans[index]
         unless callback_plan.column_name == column.name && callback_plan.type == column.type &&
-               callback_plan.profile == column.profile && column.map_basic?
+               callback_plan.profile == column.profile &&
+               callback_plan.variant_discriminator_mode == plan.variant_discriminator_mode &&
+               column.map_basic?
           raise ArgumentError.new("Compact static write plan is bound to different column inputs")
         end
       end

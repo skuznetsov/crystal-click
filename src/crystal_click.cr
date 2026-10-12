@@ -533,6 +533,7 @@ require "./crystal_click/wide_part_writer/staged_simple_aggregate_temporal_part_
 require "./crystal_click/wide_part_writer/staged_aggregate_count_part_validator"
 require "./crystal_click/wide_part_writer"
 require "./crystal_click/compact_static_column_input"
+require "./crystal_click/compact_variant_discriminator_mode"
 require "./crystal_click/compact_binary_bulk_callback"
 require "./crystal_click/compact_static_callback_plan"
 require "./crystal_click/compact_static_write_plan"

@@ -3,6 +3,7 @@ module CrystalClick
   # callback identities, and the selected Compact mark-slot grid.
   class CompactStaticWritePlan
     getter mark_format : CompactMarkFormat
+    getter variant_discriminator_mode : CompactVariantDiscriminatorMode
     getter column_count : Int32
     getter slot_count : Int32
 
@@ -14,8 +15,10 @@ module CrystalClick
       columns : Array(CompactStaticColumnInput),
       limits : BinaryCodecLimits,
       @mark_format : CompactMarkFormat = CompactMarkFormat::Mrk3,
+      @variant_discriminator_mode : CompactVariantDiscriminatorMode = CompactVariantDiscriminatorMode::Compact,
     )
       @limits = limits
+      @variant_discriminator_mode.wire_value
       if columns.empty? || columns.size > WidePart::MAX_METADATA_COLUMNS || columns.size > Int32::MAX
         raise UnsupportedFormatError.new("Compact static column roster is empty or exceeds its limit")
       end
@@ -35,7 +38,7 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact static column names are invalid or duplicated")
         end
 
-        plan = CompactStaticCallbackPlan.new(column, limits)
+        plan = CompactStaticCallbackPlan.new(column, limits, @variant_discriminator_mode)
         names = plan.callback_names
         if names.empty?
           raise UnsupportedFormatError.new("Compact static column has no physical callbacks")

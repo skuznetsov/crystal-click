@@ -13,6 +13,7 @@ module CrystalClick
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       reader_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       mark_format : CompactMarkFormat = CompactMarkFormat::Mrk3,
+      variant_discriminator_mode : CompactVariantDiscriminatorMode = CompactVariantDiscriminatorMode::Compact,
     ) : String
       CompactPartOperation.write_uint64_columns(
         destination,
@@ -25,6 +26,7 @@ module CrystalClick
         transport_limits,
         reader_limits,
         mark_format,
+        variant_discriminator_mode,
       )
     end
   end

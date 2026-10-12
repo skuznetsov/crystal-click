@@ -6,14 +6,22 @@ module CrystalClick
     getter type : BinaryDataType
     getter profile : BinaryBulkProfile
     getter column_name : String
+    getter variant_discriminator_mode : CompactVariantDiscriminatorMode
 
     @callback_events : Array(CompactBinaryBulkCallback)
     @callback_roles : Array(String)
+    @dictionary_prefix_roles : Array(String)
+    @variant_discriminator_roles : Array(String)
 
-    def initialize(input : CompactStaticColumnInput, limits : BinaryCodecLimits)
+    def initialize(
+      input : CompactStaticColumnInput,
+      limits : BinaryCodecLimits,
+      @variant_discriminator_mode : CompactVariantDiscriminatorMode = CompactVariantDiscriminatorMode::Compact,
+    )
       @type = input.type
       @profile = input.profile
       @column_name = String.new(input.name.to_slice)
+      @variant_discriminator_mode.wire_value
 
       raise ArgumentError.new("Compact static column name must be nonempty") if @column_name.empty?
       unless @profile.single_stream?
@@ -21,9 +29,6 @@ module CrystalClick
       end
       unless input.map_basic?
         raise UnsupportedFormatError.new("Compact static writer requires BASIC Map serialization")
-      end
-      if @type.contains_variant?
-        raise UnsupportedFormatError.new("Compact static writer does not admit Variant state")
       end
       if @type.contains_dynamic?
         raise UnsupportedFormatError.new("Compact static writer does not admit Dynamic state")
@@ -73,6 +78,8 @@ module CrystalClick
 
       @callback_events = Array(CompactBinaryBulkCallback).new(callback_names.size)
       @callback_roles = [] of String
+      @dictionary_prefix_roles = [] of String
+      @variant_discriminator_roles = [] of String
       seen_body_roles = Set(String).new
       seen_prefix_roles = Set(String).new
       seen_names = Set(String).new
@@ -89,6 +96,19 @@ module CrystalClick
           @callback_roles << String.new(role.to_slice)
         elsif prefix = prefix_roles_by_name[callback_name]?
           role, prefix_size = prefix
+          if role.ends_with?(".dictionary")
+            unless callback_name.ends_with?(".dict_prefix")
+              raise UnsupportedFormatError.new("Compact LowCardinality prefix is not bound to a dictionary role")
+            end
+            @dictionary_prefix_roles << String.new(role.to_slice)
+          elsif role.ends_with?(".discriminators")
+            unless callback_name.ends_with?(".variant_discr_prefix")
+              raise UnsupportedFormatError.new("Compact Variant prefix is not bound to a discriminator role")
+            end
+            @variant_discriminator_roles << String.new(role.to_slice)
+          else
+            raise UnsupportedFormatError.new("Compact static writer does not admit this state-prefix role")
+          end
           unless seen_prefix_roles.add?(role)
             raise UnsupportedFormatError.new("Compact static callback schedule repeats a state prefix")
           end
@@ -108,6 +128,12 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact state prefix has no matching body callback")
         end
       end
+      if @type.contains_low_cardinality? != !@dictionary_prefix_roles.empty?
+        raise UnsupportedFormatError.new("Compact LowCardinality type and dictionary prefix roster differ")
+      end
+      if @type.contains_variant? != !@variant_discriminator_roles.empty?
+        raise UnsupportedFormatError.new("Compact Variant type and discriminator prefix roster differ")
+      end
     end
 
     # Ordered logical roles corresponding only to body callbacks. Prefix events
@@ -124,6 +150,31 @@ module CrystalClick
 
     def callback_events : Array(CompactBinaryBulkCallback)
       @callback_events.dup
+    end
+
+    def dictionary_prefix_roles : Array(String)
+      @dictionary_prefix_roles.map { |role| String.new(role.to_slice) }
+    end
+
+    def variant_discriminator_roles : Array(String)
+      @variant_discriminator_roles.map { |role| String.new(role.to_slice) }
+    end
+
+    def dictionary_prefix_role?(role : String) : Bool
+      @dictionary_prefix_roles.includes?(role)
+    end
+
+    def variant_discriminator_role?(role : String) : Bool
+      @variant_discriminator_roles.includes?(role)
+    end
+
+    def includes_callback_event?(candidate : CompactBinaryBulkCallback) : Bool
+      candidate_name = candidate.name
+      candidate_role = candidate.role
+      @callback_events.any? do |event|
+        event.name == candidate_name && event.role == candidate_role &&
+          event.prefix_size == candidate.prefix_size
+      end
     end
 
     def each_callback_event(&block : CompactBinaryBulkCallback -> Nil) : Nil

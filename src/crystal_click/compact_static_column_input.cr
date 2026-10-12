@@ -1,7 +1,7 @@
 module CrystalClick
-  # Low-level fixed-layout view consumed by CompactStaticMRK3Writer. Public
+  # Low-level recursive input view consumed by CompactStaticWriter. Public
   # callers enter through CompactPartColumn.binary_bulk; this carrier only
-  # binds the one admitted stateless profile and BASIC Map interpretation.
+  # binds the admitted single-stream profile and BASIC Map interpretation.
   class CompactStaticColumnInput
     getter name : String
     getter type : BinaryDataType

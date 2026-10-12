@@ -1,6 +1,175 @@
 # Compact part writer frontier
 
-## Current extension: Compact LowCardinality lifecycle — W266
+## Current extension: recursive Compact Variant lifecycle — W267
+
+Status: W267 VERIFIED / root adversary ROBUST within the finite recursive
+BASIC/COMPACT Variant, plain-MRK3/MRK4 witness and exact affected cohorts
+(2026-10-12). Baseline behavioral RED: one example, one
+`UnsupportedFormatError` at the existing Variant-state refusal.
+Baseline: `260599cd2ad058a602824f65f6ddcbbccd8a1677`.
+Risk: CAUTION (persistent recursive serialization, physical framing and public
+input binding). Rollback: revert only W267-owned changes; preserve the three
+user-owned W263 specs, all original captures and W264-W266 byte oracles.
+The full types/MV/projection/performance goal remains ACTIVE.
+
+Target: author BASIC and COMPACT Variant discriminator layouts through the
+existing recursive static declaration/value/codec owners, under the current
+LZ4, String-v0, BASIC Map, sorted UInt64 key and plain MRK3/MRK4 part contract.
+An explicit part-level discriminator mode selects every recursive Variant site;
+COMPACT is the default, matching the pinned native Compact setting. Do not
+introduce another logical Variant serializer or duplicate the physical writer.
+Root Variant, eligible recursive containers, multiple independent sites,
+unused arms, NULL-only/uniform marks, empty nested marks and LC-containing
+alternatives are part of the test target, subject to the existing declaration
+and typed-carrier gates. Native qualification is limited to measured cells,
+not inferred for every descriptor admitted by those shared owners.
+
+Source anchor: pinned upstream `ed30948f095ecb70679986d7d60e27ad770ae27a`,
+`MergeTreeDataPartWriterCompact.cpp:174-228`,
+`MergeTreeSettings.cpp:298-303` and
+`SerializationVariant.cpp:199-246,326-415,454-523`. Each column/granule gets
+fresh prefix/body/suffix state. Every Variant emits an eight-byte LE mode
+prefix before all recursive child prefixes. BASIC emits one tag per
+occurrence; COMPACT emits a VarUInt occurrence count, format byte and uniform
+tag or plain tag vector. A zero-occurrence arm still participates in the
+callback schedule, but an empty Variant body emits no frame.
+
+Design laws and execution order (retained qualification contract):
+
+1. First run `spec/compact_part_writer_w267_spec.cr` against the baseline and
+   retain an actual failure on the current Variant rejection. Compiler or
+   fixture defects are not format REDs. Only then widen production admission.
+2. Reuse `BinaryBulkEncoder` for logical per-granule tags/arms and the existing
+   `BinaryBulkDiscriminatorFramingAdapter` for BASIC/COMPACT physical framing.
+   Prefix and body remain distinct callbacks/mark slots over the same role;
+   preserve every empty arm, nested prefix, EOF pair and declared phase order.
+3. Bind the part-level mode immutably through public input, callback plan and encoded
+   column. Reject mismatched plans, unknown modes, malformed role/prefix grids
+   and exhausted cumulative budgets before publication. LC validation remains
+   dictionary-specific rather than treating every state prefix as LC.
+4. Native INSERT-to-Crystal and Crystal-to-native ATTACH/CHECK/literal SELECT
+   must cover both discriminator modes and MRK3/MRK4, including full/middle/
+   last/empty windows. A copy-only, checksum-resealed framing defect must be
+   detected by selected value reading; CHECK alone is not a semantic oracle.
+5. Root runs focused and exact affected DEBUG/actual-RELEASE cohorts, followed
+   by the old static and LC native/byte-oracle guards. All compiler/probe/native
+   commands remain serial with one worker/thread, 12 GiB process-tree and
+   50%-free limits. No full-suite, all-version, large-part or performance claim.
+
+Rejected / guard-only: Dynamic/JSON writer state, compressed marks, other
+String/Map profiles, arbitrary source-valid declaration/carrier combinations,
+general key/partition metadata and Compact MV/projection composition. Do not
+widen these gates to make a fixture pass. The current LC reader still requires
+whole-grid preparation; no granule-only-I/O or single-prepare optimization.
+
+Strongest likely failure: correct logical tags paired with the wrong physical
+prefix/body boundary or Q_i child count, particularly an unused LC arm inside
+an empty nested Variant mark. The discriminators' exact raw framing, all MRK4
+slots, independently literal values and cumulative budget refusal are the
+guard checks. Reopen the candidate on a contradictory stock witness.
+
+Accepted bounded implementation plan (2026-10-12):
+
+- Add `src/crystal_click/compact_variant_discriminator_mode.cr`, one enum
+  owner with `Basic`/`Compact`; append `variant_discriminator_mode` to the
+  public writer and propagate it through the operation and immutable write/
+  callback plans. Preserve existing positional arguments and default MRK3.
+- Extend only `CompactEncodedColumn`'s per-mark state path to Variant:
+  shared-budget logical encoding, aggregate discriminator adaptation preflight,
+  existing framing adapter, role-specific prefix validation. Keep the one
+  `CompactStaticWriter` physical assembler and all non-Variant byte behavior.
+- Local worker owns the minimal production paths, W267 fixture/focused/
+  adversary specs and only W264's obsolete Variant-refusal assertion. Oracle
+  worker owns `scripts/compact_part_writer_w267_helper.cr` and
+  `scripts/probe_compact_part_writer_w267.rb`. Root owns docs/evidence and
+  serial checks; source worker stays read-only. Production authorization
+  was withheld until the existing-API focused spec produced behavioral RED.
+- Native witness: `pk UInt64`,
+  `payload Variant(Array(LowCardinality(String)), String, Tuple(LowCardinality(String), UInt64))`,
+  `ctx Tuple(label LowCardinality(String), direct Variant(Array(UInt8), String, UInt64), lists Array(Variant(Array(UInt8), String, UInt64)))`.
+  Eight rows in four two-row marks exercise mixed/uniform/NULL-only tags,
+  binary Strings, changing LC keys, a wholly empty middle `ctx.lists` mark,
+  three independent Variant sites and all inactive-arm callbacks. Mode
+  prefixes are per site per real mark, not one whole-column prefix.
+- DoD commands: focused `crystal spec spec/compact_part_writer_w267_spec.cr
+  spec/compact_part_writer_w267_adversary_spec.cr`, exact disjoint affected
+  writer/LC/Variant cohorts in DEBUG and actual `--release`, a `--release`
+  build of the W267 helper, then `ruby scripts/probe_compact_part_writer_w267.rb
+  --clickhouse PINNED_BINARY --crystal-helper PREBUILT_HELPER --evidence-root FRESH_ROOT`.
+  Root records exact expanded paths/flags and wraps every heavy command with
+  `run_safe.sh`, one worker/thread, 12 GiB tree limit and 50%-free guard.
+  Expected signals: zero scoped spec failures, stock/candidate literal
+  agreement for every admitted mode/mark cell, exact framing/slot/EOF audits,
+  and selected rejection of the resealed copy-only middle-prefix mutant.
+- Regression guards: fresh W265 static and W266 LC native probes, exact
+  frozen W264 default-MRK3 file oracle, protected W263 SHA checks and preserved
+  capture inventories. No broad staging, no push, no combined-suite claim.
+
+### Observed W267 scope and qualification
+
+`CompactVariantDiscriminatorMode` is the own-file mode owner. The appended
+public argument defaults to COMPACT and is bound through the operation, write
+plan, callback plan and encoded column; default mark format remains MRK3.
+LC-only and Variant-only maps remain distinct. Stateful columns use existing
+one-granule logical encoding, then the existing discriminator framing adapter;
+all sites and marks are preflighted cumulatively on both byte and element axes
+before adaptation charges. Stateless encoding, shared logical codecs, reader
+grammar, Wide policy and the single physical assembler remain unchanged.
+
+Final disjoint affected union: 32 writer/consumer paths / 202 examples,
+11 LC paths / 108 and nine Variant paths / 59 in each serial DEBUG and actual
+RELEASE run, zero failures/errors/pending. This is 52 paths / 369 examples per
+mode, not combined-executable, full-suite or fresh-clone qualification. The
+seven focused examples overlap that union. Production seal:
+`67d46371841ac699a13ab8a46f591bc10b814bbfde9b3e8fb0fa0efc2d7608cd`
+(594 files); source/test/script seal:
+`1fabd0a3da3127cb0575b52021addbc2c211fbfe65908e988617a75425ba1eaa`
+(1974 files), held across final tests and native regression checks.
+
+Native evidence: `/private/tmp/crystal-click-w267-native.HpgrTG`, 69 bounded
+invocations / 276 authenticated raw files. Separately INSERTed stock MRK4 in
+both modes reads in Crystal; four generated mode/mark cells ATTACH, CHECK=1
+and return independently literal full/middle/last/empty 8/4/2/0-row windows.
+No stock-MRK3 capture is claimed. Independent root LZ4/mark/value audit finds
+the same stock/generated decoded tape per mode: BASIC 673 bytes, COMPACT
+689. All 140 MRK4 coordinates per part, including EOF, match stock output;
+the 15 generated MRK3 coordinates select the three whole-column positions.
+There are 28 callback slots: all column prefixes precede bodies, all inactive
+arms participate, and an empty nested Variant mark retains its prefix but
+emits no discriminator body. Stock/generated compressed frame counts differ;
+neither compressed-byte parity nor performance follows from decoded equality.
+
+Copy-only, checksum-resealed COMPACT middle-prefix mutation 1 -> 2 changes
+only decoded byte 209. Native ATTACH/CHECK=1 still pass, but full/middle SELECT
+raise code 117 / invalid SerializationVariant discriminator version. Native
+last/empty values remain exact; the local unselected `pk` window stays 103/104.
+Local full/middle and late payload reads reject: LC whole-grid preparation
+also visits the poisoned prefix. Do not claim selected-only preparation or
+granule-only I/O. Local adversaries additionally cover independent LC/Variant
+roles, detached mode-bound plans, counterfeit callbacks, unknown modes,
+empty/NULL/uniform marks and pre-adaptation cumulative budget refusal.
+
+Fresh previous-layout regression roots:
+`/private/tmp/crystal-click-w267-lc-native.jGITcE` (33 invocations / 132 raw
+files; same 601-byte decoded tape, 55 MRK4 and 20 MRK3 coordinates) and
+`/private/tmp/crystal-click-w267-static-native.BaaLJ4` (68 / 272; all nine
+frozen W264 default-MRK3 files equal, 17902 bytes). Original 52 captures /
+544 files / 756378 bytes and three user-owned W263 specs remain unchanged.
+The protected specs are outside this commit; two remain local prerequisites
+of the exact consumer cohort.
+
+Source checkout and native build remain distinct pinned revisions. Root
+executes serial checks and independently dereferences raw evidence; Luna's
+source/candidate review is correlated, not independent verification. Tooling
+and test-oracle defects were corrected before final qualification, without
+weakening production/profile/resource guards. Exact commands, pins, results
+and corrections: [W267 evidence](../.landmark/evidence/compact-part-writer-w267.json).
+Next: context-owned Dynamic/JSON writer lifecycle, remaining combinations/
+profiles and Compact MV/projections; optimization remains deferred. Refresh
+dependent claims after relevant source/test/profile/compiler/runtime/capture
+drift, evidence loss or scope widening. Rollback: revert W267 only; no push.
+
+## Previous extension: Compact LowCardinality lifecycle — W266
 
 Status: W266 VERIFIED / root adversary ROBUST within the finite LC/plain
 MRK3/MRK4 witness and exact affected cohorts (2026-10-12).
