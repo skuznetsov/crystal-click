@@ -1,5 +1,46 @@
 # Crystal Click landmarks
 
+## Context-owned Compact Dynamic writer — W268
+
+- VERIFIED / root adversary ROBUST over baseline
+  `8007cf0d1f2f5c610e0552ee2968224879e0a799` within the finite context-bound
+  Dynamic, plain-MRK3/MRK4 witness and exact cohorts (2026-10-12). Serial DEBUG
+  and actual RELEASE each pass 66 paths / 478 examples: 202 writer, 108 LC,
+  59 Variant, 109 Dynamic; zero failures/errors/pending. Held seals, one worker/
+  thread, unchanged 12 GiB process-tree / 50%-free guards. No full-suite claim.
+- Immutable own-file `CompactDynamicWriteContext` freezes exact site structures
+  and full first-block statistics, not recomputed final-part statistics.
+  Explicit `CompactPartColumn.dynamic_bulk` joins static inputs through a mixed
+  own-file plan and the existing sole physical assembler. Reuse Dynamic serde,
+  recursive prefix traversal and Variant framing; validate ordinary actual arms at the
+  real site depth. No shared scalar codec, reader grammar or Wide-policy change.
+- The ordinary-arm callback guard is not a blanket SharedVariant envelope
+  refusal. Existing common envelope gates remain; only String/UInt64 shared
+  payloads are native-qualified in W268. The mixed witness has an inserted
+  UInt64 key plus Dynamic value columns, not arbitrary static-value interleavings.
+- Native root `/private/tmp/crystal-click-w268-native.dfVKhU` (`b2623b`):
+  79 invocations / 316 authenticated raw files. Two stock MRK4 modes read in
+  Crystal; four generated cells ATTACH/CHECK=1 and literal 12/4/2/0 windows pass.
+  Root raw audit (`bfcb65`) independently checks BASIC 629 / COMPACT 645 bytes,
+  all 406 coordinates, two independent sites, late shared values and empty/
+  NULL-only marks. Compression frames differ; no speed or physical-byte parity.
+- Copy-only nested middle wire-version 4 -> 3 changes decoded byte 291.
+  Unsealed ATTACH succeeds, CHECK fails data.bin checksum (code 40); resealed
+  CHECK=1 does not prevent native code 117 / local CorruptPartError on selected
+  middle reads. Native key/root middle and ctx last/empty, local key/root
+  middle controls stay exact. Local outside-window/EOF traversal is not claimed.
+- Fresh Variant (`0f367b` / `8ef175`), LC (`aab86e` / `c79cf8`) and static
+  (`e777ef` / `5fba60`) native/root guards pass. Nine frozen W264 files remain
+  equal (17902 bytes); three user-owned W263 specs and original 52 parts /
+  544 files / 756378 bytes are unchanged and excluded from staging.
+- Return pointers: [writer frontier](docs/COMPACT_PART_WRITER_FRONTIER.md) and
+  [W268 evidence](.landmark/evidence/compact-part-writer-w268.json). Next:
+  context-owned JSON writing, remaining layouts/profiles/combinations, Compact
+  MV/projections, then measured optimization. Full goal ACTIVE; no full type
+  parity, RSS or <=10% speed claim. Local commit only/no push. Refresh after
+  relevant source/test/profile/compiler/runtime/capture drift, evidence loss or
+  widening. Rollback: revert W268 only, preserve user-owned specs and captures.
+
 ## Bounded recursive Compact Variant writer lifecycle — W267
 
 - VERIFIED / root adversary ROBUST over baseline

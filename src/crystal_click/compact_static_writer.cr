@@ -1,9 +1,7 @@
 module CrystalClick
-  # Writes admitted static BinaryBulk columns into one granule-major Compact
-  # tape and the selected plain MRK3/MRK4 coordinate grid. Stateless columns
-  # keep whole-grid encoding; LowCardinality- or Variant-containing columns
-  # get one independent BinaryBulk stream set per granule. Metadata and
-  # publication remain owned by the table writer.
+  # Writes admitted static and explicitly bound Dynamic BinaryBulk columns
+  # into one granule-major Compact tape and selected MRK3/MRK4 coordinate
+  # grid. Metadata and publication remain owned by the table writer.
   class CompactStaticWriter
     private struct GranuleLayout
       getter raw_size : UInt64
@@ -34,13 +32,78 @@ module CrystalClick
       validate_write_plan!(columns, plan, limits, column_count)
 
       plans = plan.column_plans
-      encoded = Array(CompactEncodedColumn).new(column_count)
+      encoded = Array(CompactPartEncodedColumn).new(column_count)
       columns.each_with_index do |column, index|
         callback_plan = plans[index]
         encoded << CompactEncodedColumn.encode(callback_plan, column.granules, codec_budget)
       end
 
-      slot_count = plan.slot_count
+      encode_prepared(
+        encoded,
+        rows_per_mark,
+        mark_count,
+        frame_bytes,
+        transport_budget,
+        plan.mark_format,
+        plan.slot_count,
+      )
+    end
+
+    # Mixed entry point. The existing static entry point and its strict static
+    # callback-plan contract remain unchanged.
+    def self.encode_mixed(
+      columns : Array(CompactPartWriteInput),
+      rows_per_mark : Array(UInt64),
+      limits : BinaryCodecLimits,
+      frame_bytes : Int,
+      transport_budget : CompressedStreamBudget,
+      codec_budget : BinaryCodecBudget,
+      plan : CompactPartWritePlan,
+    ) : CompactStaticPartFiles
+      validate_codec_budget!(codec_budget, limits)
+      validate_transport_budget!(transport_budget)
+      validate_frame_bytes!(frame_bytes)
+      mark_count, column_count, _row_count = validate_input_grid!(columns, rows_per_mark)
+      validate_mixed_write_plan!(columns, plan, limits, column_count)
+
+      callback_plans = plan.column_plans
+      encoded = Array(CompactPartEncodedColumn).new(column_count)
+      columns.each_with_index do |column, index|
+        callback_plan = callback_plans[index]
+        case column
+        when CompactStaticColumnInput
+          static_plan = callback_plan.as?(CompactStaticCallbackPlan) ||
+                        raise(ArgumentError.new("Compact mixed static callback plan differs from its input"))
+          encoded << CompactEncodedColumn.encode(static_plan, column.granules, codec_budget)
+        when CompactDynamicColumnInput
+          dynamic_plan = callback_plan.as?(CompactDynamicCallbackPlan) ||
+                         raise(ArgumentError.new("Compact mixed Dynamic callback plan differs from its input"))
+          encoded << CompactDynamicEncodedColumn.encode(dynamic_plan, column.granules, codec_budget)
+        else
+          raise UnsupportedFormatError.new("unsupported Compact mixed writer input")
+        end
+      end
+
+      encode_prepared(
+        encoded,
+        rows_per_mark,
+        mark_count,
+        frame_bytes,
+        transport_budget,
+        plan.mark_format,
+        plan.slot_count,
+      )
+    end
+
+    private def self.encode_prepared(
+      encoded : Array(CompactPartEncodedColumn),
+      rows_per_mark : Array(UInt64),
+      mark_count : Int32,
+      frame_bytes : Int,
+      transport_budget : CompressedStreamBudget,
+      mark_format : CompactMarkFormat,
+      slot_count : Int32,
+    ) : CompactStaticPartFiles
       mark_size, mark_record_entries, position_query_count, position_result_bytes =
         preflight_mark_grid!(slot_count, mark_count, transport_budget)
 
@@ -53,13 +116,13 @@ module CrystalClick
         position_queries = Array(UInt64).new(slot_count + 1)
         segment_raw_size = 0_u64
         encoded.each do |column|
-          unless plan.mark_format.mrk4?
+          unless mark_format.mrk4?
             # MRK3 retains one whole-column coordinate before its first
             # callback, even when every callback for that column is empty.
             position_queries << segment_raw_size
           end
-          column.plan.each_callback_event do |callback|
-            if plan.mark_format.mrk4?
+          column.each_callback_event do |callback|
+            if mark_format.mrk4?
               # MRK4 has one ordered slot per actual callback. Equal offsets
               # are significant when this callback emits no bytes.
               position_queries << segment_raw_size
@@ -256,10 +319,39 @@ module CrystalClick
       nil
     end
 
+    private def self.validate_mixed_write_plan!(
+      columns : Array(CompactPartWriteInput),
+      plan : CompactPartWritePlan,
+      limits : BinaryCodecLimits,
+      column_count : Int32,
+    ) : Nil
+      unless plan.same_limits?(limits) && plan.column_count == column_count &&
+             plan.column_plans.size == column_count
+        raise ArgumentError.new("Compact mixed write plan differs from the supplied column roster")
+      end
+      columns.each_with_index do |column, index|
+        unless plan.same_input?(column, index)
+          raise ArgumentError.new("Compact mixed write plan is bound to different column inputs")
+        end
+      end
+      expected_slots = case plan.mark_format
+                       when CompactMarkFormat::Mrk3
+                         column_count
+                       when CompactMarkFormat::Mrk4
+                         plan.column_plans.sum(&.callback_names.size)
+                       else
+                         raise UnsupportedFormatError.new("Compact mixed writer does not admit this mark format")
+                       end
+      unless plan.slot_count == expected_slots
+        raise ArgumentError.new("Compact mixed write plan has an inconsistent mark-slot count")
+      end
+      nil
+    end
+
     private def self.validate_input_grid!(
-      columns : Array(CompactStaticColumnInput),
+      columns : Array(T),
       rows_per_mark : Array(UInt64),
-    ) : Tuple(Int32, Int32, UInt64)
+    ) : Tuple(Int32, Int32, UInt64) forall T
       if columns.empty?
         raise ArgumentError.new("Compact static writer requires at least one column")
       end
@@ -323,7 +415,7 @@ module CrystalClick
     end
 
     private def self.assemble_granule(
-      columns : Array(CompactEncodedColumn),
+      columns : Array(CompactPartEncodedColumn),
       mark_index : Int32,
       expected_size : UInt64,
     ) : Bytes
@@ -333,7 +425,7 @@ module CrystalClick
       raw = Bytes.new(expected_size.to_i)
       cursor = 0
       columns.each do |column|
-        column.plan.each_callback_event do |callback|
+        column.each_callback_event do |callback|
           bytes = column.callback_bytes(callback, mark_index)
           if bytes.size > raw.size - cursor
             raise UnsupportedFormatError.new("Compact callback exceeds its planned raw granule")

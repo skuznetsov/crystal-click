@@ -1,6 +1,210 @@
 # Compact part writer frontier
 
-## Current extension: recursive Compact Variant lifecycle — W267
+## Current transition: context-owned Compact Dynamic writer — W268
+
+Status: W268 VERIFIED / root adversary ROBUST within the finite context-owned
+Dynamic witness, plain-MRK3/MRK4 modes and exact affected cohorts (2026-10-12).
+Baseline: `8007cf0d1f2f5c610e0552ee2968224879e0a799` (W267).
+Explicitly context-bound Dynamic columns now join the existing static/LC/
+Variant columns in the same physical assembler. Unbound Dynamic and declared
+JSON/Object column/path layouts remain executable refusals. Native qualification
+is the measured witness below, not every recursively admitted descriptor. The
+full objective stays ACTIVE.
+
+Risk: CAUTION (persistent recursive serialization and public context binding).
+Rollback: revert only W268-owned changes; preserve the three user-owned W263
+specs, original native captures and W264-W267 byte/native regression oracles.
+Do not change the existing Wide policy, common scalar codecs or static output
+bytes to make the new witness pass.
+
+Target: bind each declared Dynamic site's immutable part-wide actual roster
+and serialization version before encoding Compact granules. Reuse the existing
+`BinaryDynamicBulkPlan`, `DynamicStructureCodec`, recursive `BinaryBulkEncoder`
+and Variant framing adapter; retain one physical Compact assembler. Public
+input must explicitly carry the structure context rather than infer a new
+ordinary roster from every mark. Multiple recursive sites remain independent.
+Keep the current LZ4, single-stream String, BASIC Map, sorted UInt64 key and
+plain MRK3/MRK4 contract. Existing source-valid shared-owner admission gates
+remain authoritative; qualification is no wider than actual falsifiers.
+
+Primary source: upstream `ed30948f095ecb70679986d7d60e27ad770ae27a`,
+`MergeTreeDataPartWriterOnDisk.cpp:634-687`,
+`MergeTreeDataPartWriterCompact.cpp:174-205`,
+`SerializationDynamic.cpp:182-328,529-558,600-615` and
+`SerializationVariant.cpp:199-228,326-340`. The source and native executable
+are distinct pinned revisions. No latest-version or all-version claim follows.
+
+Design laws:
+
+1. Part/column structure and ordered callback roster stay bound across marks.
+   Each granule gets fresh prefix/body/suffix state; prefixes use the bound
+   sample structure, bodies use the actual slice. Unseen types use the implicit
+   SharedVariant lane under the existing Dynamic selector, not a new stream.
+2. Dynamic statistics are full in the first prefix and empty in later prefixes.
+   Version-specific framing remains owned by `DynamicStructureCodec`; Dynamic
+   V3 wire value 4 is not the Native-only FLATTENED wire value 3. Preserve nested
+   Variant and LC prefix/body phases and callbacks for zero-occurrence arms.
+3. Logical roles, physical callback names and MRK4 slots are different owners.
+   Validate their exact ordered mapping before assembly. MRK3 records the first
+   callback for a whole column; MRK4 records every source-requested callback.
+   Retain EOF coordinates, all parent/child counts, one operation budget and
+   detached immutable caller inputs before staged publication.
+4. Run an existing-public-API positive against the baseline and observe the
+   current Dynamic refusal before production changes. Compiler, fixture and
+   resource-guard failures do not qualify as behavioral RED.
+5. Qualify stock INSERT-to-Crystal and Crystal-to-stock ATTACH/CHECK/literal
+   SELECT, including late roster changes, NULL-only and empty nested marks,
+   independent sites and full/middle/last/empty windows. A copy-only resealed
+   structure-version defect must fail selected semantic reads; CHECK alone is
+   not a value oracle. Literal values and callback/mark audits must not derive
+   their expected truth from the candidate encoder.
+
+Rejected / guard-only: declared JSON/Object columns and ordinary actual-arm
+Object/path callback layouts, Native-only FLATTENED Dynamic, unknown versions
+or mismatched/missing site contexts, compressed marks, other String/Map
+profiles, arbitrary metadata/keys/partition lifecycles and Compact MV/projection
+composition. JSON retains its own path/layout/statistics context and is the
+next writer transition, not a relaxed Dynamic guard. No speed, granule-only-I/O,
+all-types or full-suite completion claim.
+
+The Compact callback-profile validator applies to declared descriptors and
+ordinary actual arms, not to every SharedVariant payload. Unrostered values
+retain the common single-String scalar-envelope codec and its existing
+JSON/AggregateFunction/recursive-QBit admission gates; these values do not add
+Object path callbacks. W268 native qualification covers only String/UInt64
+shared payloads, not JSON/AggregateFunction/QBit envelopes. Its mixed assembly
+witness combines an inserted static UInt64 key with Dynamic value columns;
+arbitrary user-declared static-value/Dynamic interleavings remain unqualified.
+
+Falsifiers and DoD: baseline focused Dynamic writer RED; focused positive and
+hostile tests; exact affected writer/Dynamic/LC/Variant consumer cohorts in
+DEBUG and actual RELEASE; stock-first Dynamic witness and raw callback/mark/
+version audit; selected checksum-resealed mutant with clean/locality controls;
+fresh W267 Variant, W266 LC and W265 static native/byte guards. Root records
+expanded commands, exact pins/counts/seals and residual coverage. All compilers,
+tests and native probes are root-only and serial with one worker/thread, the
+unchanged 12 GiB process-tree and 50%-free guard. No original capture mutations.
+
+Strongest likely failure: a later or empty granule silently rebuilding a site's
+ordinary roster, statistics or callbacks; another is confusing a structure
+prefix with an eight-byte Variant/LC prefix. Freeze two independent sites whose
+active values change between marks, inspect literal prefix and MRK4 order, and
+use an invalid persisted-version mutant. Stop and revisit context ownership if
+stock output contradicts this contract; do not narrow the full objective or
+weaken existing profile/carrier/resource gates.
+
+### Executed W268 qualification
+
+- Final serial DEBUG and actual RELEASE each pass the same disjoint 66 paths /
+  478 examples: writer 32 / 202, LC 11 / 108, Variant nine / 59 and Dynamic
+  14 / 109. All have zero failures/errors/pending. Production and source/spec/
+  script seals remain held; no combined-executable or full-suite claim.
+- Fresh native root `/private/tmp/crystal-click-w268-native.dfVKhU` (`b2623b`):
+  79 bounded invocations / 316 authenticated raw files. Two independently
+  INSERTed stock MRK4 modes read in Crystal; all four generated MRK3/MRK4 x
+  BASIC/COMPACT cells ATTACH/CHECK=1 and literal 12/4/2/0-row windows pass.
+  Source and runtime are distinct pins; native build is
+  `d9bcb5ab007f0f6299f7f973f2642245bab3d028` (26.10.1.1201).
+- Root independent LZ4/callback/mark/literal audit (`bfcb65`) checks identical
+  decoded BASIC 629 / COMPACT 645 bytes and all 406 coordinates across the six
+  parts. The 13-slot MRK4 roster retains separate structure and Variant
+  prefixes, late shared values, NULL-only root and empty nested marks. Stock
+  and generated compression frames differ (18 vs six); no physical/speed parity.
+- A copy-only nested mark-two wire-version 4 -> 3 defect changes only decoded
+  byte 291. Unsealed ATTACH succeeds, but CHECK reports exactly one data.bin
+  checksum failure (code 40). Resealed ATTACH/CHECK=1 succeed; selected middle
+  reads fail semantically: native code 117, local `CorruptPartError`. Native
+  key/root middle and nested last/empty controls remain literal-exact, as do
+  local key/root middle controls. Empty native selection is not EOF traversal;
+  whole-grid local preparation prevents an outside-window locality claim.
+- A separately observed actual-arm guard RED exposed admission of a Compact-
+  unsupported AggregateFunction(count) actual type. The fix reuses the existing
+  recursive Compact validator at each ordinary actual arm's site depth. Both count and
+  SimpleAggregateFunction negatives pass now; there is no separate measured
+  SimpleAggregateFunction RED. Nominal max_types does not replace the existing
+  Dynamic physical roster limit.
+- Fresh previous native guards and independent root audits pass: Variant
+  69 / 276 raw files (`0f367b` / `8ef175`), LC 33 / 132 (`aab86e` / `c79cf8`),
+  static 68 / 272 (`e777ef` / `5fba60`). All nine frozen W264 files are identical
+  (17902 bytes). Three protected W263 specs and original 52 parts / 544 files /
+  756378 bytes are unchanged and outside staging. Tooling/fixture corrections
+  are not behavioral format REDs.
+- Return pointer: [W268 evidence](../.landmark/evidence/compact-part-writer-w268.json).
+  Refresh after relevant source/test/profile/compiler/runtime/capture drift,
+  temporary-evidence loss or widening. Next: context-owned JSON writing,
+  remaining layouts/combinations and Compact MV/projections, then optimization.
+  Full goal ACTIVE; local atomic commit only, no push.
+
+### W268 accepted implementation plan and baseline RED
+
+Root revalidated the unchanged baseline with
+`crystal spec spec/compact_part_writer_w268_spec.cr --single-module --threads 1
+--link-flags=-fuse-ld=ld --error-trace --no-color`, wrapped in the unchanged
+12 GiB / 50%-free guard. Tool `69eaac`, exit 1: one example, zero assertion
+failures, one `UnsupportedFormatError` at
+`compact_static_callback_plan.cr:34` ("Compact static writer does not admit
+Dynamic state"). Compilation completed and the intended format guard ran.
+This positive used the existing unbound `binary_bulk` API: it demonstrates
+missing Dynamic writing, not the correctness of a not-yet-existent explicit
+context API. After introducing that API, keep unbound Dynamic refusal as a
+negative and move positive fixtures to explicit context binding.
+
+- Public API: `CompactDynamicWriteContext.new(site_structures : Hash(String,
+  DynamicStructure))` snapshots exact canonical site paths and immutable
+  structures; `CompactPartColumn.dynamic_bulk(name, type, granules,
+  dynamic_context)` creates a distinct Dynamic input. Existing `binary_bulk`
+  and static input/plan gates remain strict. Every site must supply full first
+  prefix statistics, including V3; these are the frozen first-block sample's
+  statistics, not a recomputation over final-part values. V1/V2 later prefixes
+  carry canonical zero counts and empty shared statistics; V3 later prefixes
+  carry the absent-statistics flag. Reject missing/extra/mismatched context.
+- Production worker owns new own-file context, Dynamic input/callback/encoded
+  column and mixed `CompactPartWritePlan` owners under `src/crystal_click/`;
+  existing owned seams are `src/crystal_click.cr`, `compact_part_column.cr`,
+  `compact_static_writer.cr`, `compact_part_writer/compact_part_operation.cr`
+  and `compact_part_writer/compact_part_metadata.cr`. A minimal context-neutral
+  `compact_dynamic_bulk_prefix_traversal.cr` roster overload is also approved:
+  accept the common Dynamic physical/logical plans and keep the current reader
+  prepared-context overload delegating unchanged. The only extra static-owner
+  seam is `compact_encoded_column.cr#each_callback_event`, forwarding its
+  existing plan traversal unchanged so static and Dynamic encoded columns feed
+  the same assembler without a second callback grammar. Request root approval
+  before changing additional production owners. Static callers retain their
+  current strict plans and bytes; the mixed plan feeds the existing single
+  physical assembler and metadata roster. Staged validation dispatches Dynamic
+  to the existing selected Dynamic reader, with operation-scoped budgets.
+- Consumer inventory: root `rg` over these owners and W264-W267 specs/support
+  found public `.static_input` snapshot callers in W264, direct static plan/
+  encoder consumers in W265-W267 and the MRK3 convenience wrapper, metadata
+  bound to `CompactStaticWritePlan`, and operation workspace/selected-readback
+  seams. Preserve these signatures or introduce explicit compatible overloads.
+  The separate Dynamic reader and shared Dynamic codec consumers form an
+  additional regression cohort; do not reuse read-direction prepared context
+  as writer authority or create another logical recursive serializer.
+- Test worker owns only `spec/compact_part_writer_w268_spec.cr`,
+  `spec/compact_part_writer_w268_adversary_spec.cr` and
+  `spec/support/compact_part_writer_w268_fixture.cr`. Oracle worker owns only
+  `scripts/compact_part_writer_w268_helper.cr` and
+  `scripts/probe_compact_part_writer_w268.rb`. Root owns docs/evidence and all
+  serial runtime checks. No worker may run a compiler, test, native probe,
+  formatter or network command; preserve other workers' and user edits.
+- Native fixture: 12 rows, six two-row marks plus EOF; `pk UInt64`,
+  `root Dynamic(max_types=1)`,
+  `ctx Tuple(label String, items Array(Dynamic(max_types=1)))`. Independently
+  supplied root/nested UInt8/UInt16 rosters exercise late String/UInt64 shared
+  values, NULL-only/empty marks and independent site state. Parse the native
+  callback inventory rather than deriving expected truth from the helper.
+- DoD: focused positive/hostile specs; exact disjoint affected writer, LC,
+  Variant and Dynamic cohorts in DEBUG and actual RELEASE; fresh helper build,
+  `ruby scripts/probe_compact_part_writer_w268.rb --clickhouse PINNED_BINARY
+  --crystal-helper PREBUILT_HELPER --evidence-root FRESH_ROOT`; fresh previous
+  Variant/LC/static native and default-byte guards. Expected: zero scoped
+  failures, stock/candidate literal and callback/mark agreement in both
+  discriminator modes and plain mark formats, and selected semantic rejection
+  of a checksum-resealed copy-only middle structure-version mutant while clean
+  locality controls pass. Record exact expanded commands, pins and seals.
+
+## Previous extension: recursive Compact Variant lifecycle — W267
 
 Status: W267 VERIFIED / root adversary ROBUST within the finite recursive
 BASIC/COMPACT Variant, plain-MRK3/MRK4 witness and exact affected cohorts

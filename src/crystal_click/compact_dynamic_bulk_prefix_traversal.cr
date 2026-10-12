@@ -84,8 +84,20 @@ module CrystalClick
     # Compact mrk4 exposes prefix and body callbacks as an ordered roster.
     # Compose it from the same actual-arm traversal that reads prefixes.
     def expected_callback_roster(prepared : CompactDynamicBulkPreparedContext) : Array(String)
-      physical = prepared.physical
-      plan = prepared.plan
+      expected_callback_roster(prepared.physical, prepared.plan)
+    end
+
+    # Context-neutral writer/reader seam over the shared physical callback
+    # grammar. The prepared-context overload above remains the read owner's
+    # public entry point; writers already own a write-direction plan and must
+    # not manufacture a read context or duplicate recursive traversal.
+    def expected_callback_roster(
+      physical : BinaryDynamicBulkPhysicalPlan,
+      plan : BinaryDynamicBulkPlan,
+    ) : Array(String)
+      unless @type == plan.type && @profile == plan.profile && physical.same_prepared_plan?(plan)
+        raise ArgumentError.new("Compact Dynamic callback traversal differs from its prepared physical plan")
+      end
       expected = [] of String
       append_prefix_roster(@type, "root", physical, plan, expected)
       append_body_roster(@type, "root", physical, plan, expected)

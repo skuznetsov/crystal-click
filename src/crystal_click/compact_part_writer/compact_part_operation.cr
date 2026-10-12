@@ -34,17 +34,39 @@ module CrystalClick
       rows_per_mark_grid = mark_rows(keys.size, rows_per_mark)
       key_snapshot, key_granules = snapshot_key_inputs(keys, rows_per_mark_grid, write_transport_budget)
       reserve_input_descriptors!(write_transport_budget, key_name, columns)
-      value_inputs = Array(CompactStaticColumnInput).new(columns.size)
-      columns.each { |column| value_inputs << column.static_input }
+      value_inputs = Array(CompactPartWriteInput).new(columns.size)
+      columns.each do |column|
+        if column.dynamic_context?
+          value_inputs << column.dynamic_input
+        else
+          value_inputs << column.static_input
+        end
+      end
       key_input = CompactStaticColumnInput.new(
         key_name,
         BinaryDataType.primitive("UInt64"),
         key_granules,
       )
-      backend_columns = Array(CompactStaticColumnInput).new(columns.size + 1)
+      backend_columns = Array(CompactPartWriteInput).new(columns.size + 1)
       backend_columns << key_input
       value_inputs.each { |input| backend_columns << input }
-      write_plan = CompactStaticWritePlan.new(backend_columns, limits, mark_format, variant_discriminator_mode)
+      has_dynamic_columns = value_inputs.any? { |input| input.is_a?(CompactDynamicColumnInput) }
+      write_plan : CompactStaticWritePlan | CompactPartWritePlan = if has_dynamic_columns
+        CompactPartWritePlan.new(
+          backend_columns,
+          limits,
+          write_codec_budget,
+          mark_format,
+          variant_discriminator_mode,
+        )
+      else
+        CompactStaticWritePlan.new(
+          static_columns(backend_columns),
+          limits,
+          mark_format,
+          variant_discriminator_mode,
+        )
+      end
 
       metadata = CompactPartMetadata.new(
         key_name,
@@ -55,15 +77,31 @@ module CrystalClick
         write_transport_budget,
         write_plan,
       )
-      files = CompactStaticWriter.encode(
-        backend_columns,
-        rows_per_mark_grid,
-        limits,
-        frame_bytes,
-        write_transport_budget,
-        write_codec_budget,
-        write_plan,
-      )
+      files = case write_plan
+              when CompactStaticWritePlan
+                static_backend_columns = static_columns(backend_columns)
+                CompactStaticWriter.encode(
+                  static_backend_columns,
+                  rows_per_mark_grid,
+                  limits,
+                  frame_bytes,
+                  write_transport_budget,
+                  write_codec_budget,
+                  write_plan,
+                )
+              when CompactPartWritePlan
+                CompactStaticWriter.encode_mixed(
+                  backend_columns,
+                  rows_per_mark_grid,
+                  limits,
+                  frame_bytes,
+                  write_transport_budget,
+                  write_codec_budget,
+                  write_plan,
+                )
+              else
+                raise UnsupportedFormatError.new("unsupported Compact writer plan")
+              end
       validate_output_sizes!(files, rows_per_mark_grid.size, write_plan.slot_count, write_plan.mark_format)
 
       data_size = files.data_size
@@ -183,6 +221,16 @@ module CrystalClick
       nil
     end
 
+    private def self.static_columns(columns : Array(CompactPartWriteInput)) : Array(CompactStaticColumnInput)
+      static = Array(CompactStaticColumnInput).new(columns.size)
+      columns.each do |column|
+        input = column.as?(CompactStaticColumnInput) ||
+                raise(UnsupportedFormatError.new("Compact static writer received an explicitly bound Dynamic input"))
+        static << input
+      end
+      static
+    end
+
     private def self.validate_column_name!(name : String) : Nil
       unless name.bytesize > 0 && name.bytesize <= WidePartTable::MAX_COLUMN_NAME_BYTES &&
              /\A[A-Za-z_][A-Za-z0-9_]*\z/.matches?(name)
@@ -252,14 +300,18 @@ module CrystalClick
       value_count = columns.size.to_u64
       input_count = value_count + 1_u64
       slot_count = value_count * 2_u64 + 1_u64
-      bytes = checked_multiply_u64(instance_sizeof(Array(CompactStaticColumnInput)).to_u64, 2_u64)
-      bytes = checked_add_u64(bytes, checked_multiply_u64(slot_count, sizeof(Pointer(CompactStaticColumnInput)).to_u64))
-      bytes = checked_add_u64(bytes, checked_multiply_u64(input_count, instance_sizeof(CompactStaticColumnInput).to_u64))
+      bytes = checked_multiply_u64(instance_sizeof(Array(CompactPartWriteInput)).to_u64, 2_u64)
+      bytes = checked_add_u64(bytes, checked_multiply_u64(slot_count, sizeof(Pointer(Void)).to_u64))
+      input_owner_bytes = {
+        instance_sizeof(CompactStaticColumnInput).to_u64,
+        instance_sizeof(CompactDynamicColumnInput).to_u64,
+      }.max
+      bytes = checked_add_u64(bytes, checked_multiply_u64(input_count, input_owner_bytes))
       bytes = checked_add_u64(bytes, checked_multiply_u64(input_count, instance_sizeof(BinaryBulkProfile).to_u64))
       bytes = checked_add_u64(bytes, string_owner_bytes(key_name))
       columns.each do |column|
         bytes = checked_add_u64(bytes, string_owner_bytes(column.name))
-        bytes = checked_add_u64(bytes, column.static_input_workspace_bytes)
+        bytes = checked_add_u64(bytes, column.input_workspace_bytes)
       end
       budget.reserve_result_bytes(to_i64(bytes))
       nil
@@ -392,11 +444,11 @@ module CrystalClick
       stage : String,
       metadata : CompactPartMetadata,
       keys : Array(UInt64),
-      value_inputs : Array(CompactStaticColumnInput),
+      value_inputs : Array(CompactPartWriteInput),
       rows : Array(UInt64),
       records : Array(ChecksumRecord),
       expected_checksums : Bytes,
-      write_plan : CompactStaticWritePlan,
+      write_plan : CompactStaticWritePlan | CompactPartWritePlan,
       limits : BinaryCodecLimits,
       reader_limits : CompressedStreamLimits,
       codec_budget : BinaryCodecBudget,
@@ -509,7 +561,7 @@ module CrystalClick
           input.name,
           input.type,
           keys,
-          input.granules,
+          input,
           rows,
           planned_data_size,
           slot_count,
@@ -526,7 +578,7 @@ module CrystalClick
       name : String,
       type : BinaryDataType,
       keys : Array(UInt64),
-      input : Array(Array(BinaryValue))?,
+      input : CompactPartWriteInput?,
       rows : Array(UInt64),
       planned_data_size : UInt64,
       slot_count : Int,
@@ -535,19 +587,31 @@ module CrystalClick
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
     ) : Nil
-      unless BinaryValueTypedBatchAdapter.admitted?(type)
-        raise UnsupportedFormatError.new("Compact selected type has no established typed batch carrier")
-      end
       CompactReadbackGrid.preflight!(transport_budget, rows.size, slot_count, planned_data_size)
-      reader = CompactBinaryBulkColumnReader.open(
-        stage,
-        name,
-        type,
-        limits,
-        reader_limits,
-        codec_budget,
-        transport_budget,
-      )
+      reader = if dynamic_input = input.as?(CompactDynamicColumnInput)
+                 CompactDynamicBulkColumnReader.open(
+                   stage,
+                   name,
+                   type,
+                   limits,
+                   reader_limits,
+                   codec_budget,
+                   transport_budget,
+                 )
+               else
+                 unless BinaryValueTypedBatchAdapter.admitted?(type)
+                   raise UnsupportedFormatError.new("Compact selected type has no established typed batch carrier")
+                 end
+                 CompactBinaryBulkColumnReader.open(
+                   stage,
+                   name,
+                   type,
+                   limits,
+                   reader_limits,
+                   codec_budget,
+                   transport_budget,
+                 )
+               end
       unless reader.row_count == keys.size.to_u64 && reader.mark_row_counts == rows
         raise CorruptPartError.new("staged Compact typed reader differs from the parent grid")
       end
@@ -573,8 +637,8 @@ module CrystalClick
         values = actual_marks[0]
         mark_rows.to_i.times do |row|
           value = values[row]
-          if input_granules = input
-            expected = input_granules[mark_index][row]
+          if input_column = input
+            expected = input_column.granules[mark_index][row]
             unless binary_values_equal?(value, expected)
               raise CorruptPartError.new("staged Compact values differ from the immutable input")
             end
@@ -609,7 +673,7 @@ module CrystalClick
     end
 
     private def self.column_result_workspace(
-      input : Array(Array(BinaryValue))?,
+      input : CompactPartWriteInput?,
       mark_index : Int,
       rows : UInt64,
     ) : UInt64
@@ -621,8 +685,8 @@ module CrystalClick
           checked_multiply_u64(row_count, sizeof(Pointer(BinaryValue)).to_u64),
         ),
       )
-      if granules = input
-        granule = granules[mark_index]
+      if input_column = input
+        granule = input_column.granules[mark_index]
         row_count.times do |row|
           bytes = checked_add_u64(bytes, binary_value_workspace(granule[row.to_i]))
         end

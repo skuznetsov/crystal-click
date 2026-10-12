@@ -23,13 +23,13 @@ module CrystalClick
 
     def initialize(
       key_name : String,
-      columns : Array(CompactStaticColumnInput),
+      columns : Array(T),
       @row_count : UInt64,
       limits : BinaryCodecLimits,
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
-      write_plan : CompactStaticWritePlan,
-    )
+      write_plan : W,
+    ) forall T, W
       unless codec_budget.writing? && same_limits?(codec_budget.limits, limits)
         raise ArgumentError.new("Compact metadata codec budget differs from its write limits")
       end

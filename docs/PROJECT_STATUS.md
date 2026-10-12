@@ -1,6 +1,41 @@
 # CrystalClick project status
 
-Current bounded recursive Compact Variant writer (W267, 2026-10-12): VERIFIED /
+Current context-owned Compact Dynamic writer (W268, 2026-10-12): VERIFIED /
+root adversary ROBUST within the finite plain-MRK3/MRK4, BASIC/COMPACT witness
+and exact affected cohorts. `CompactDynamicWriteContext` snapshots each site's
+actual roster, version and full first-block statistics;
+`CompactPartColumn.dynamic_bulk` binds it explicitly. Existing recursive Dynamic
+codecs and Variant framing are reused per granule, with separate own-file input,
+callback/encoded-column and mixed-plan owners. One physical assembler handles
+static/LC/Variant/Dynamic; Wide policy and unbound Dynamic refusal are unchanged.
+
+The Compact descriptor/ordinary-arm callback guard is distinct from the common
+SharedVariant scalar-envelope policy. Only String/UInt64 shared payloads and
+an inserted static UInt64 key alongside Dynamic value columns are native-
+qualified here. JSON/AggregateFunction/QBit shared envelopes and arbitrary
+user-declared static-value/Dynamic interleavings are not newly qualified.
+
+Final serial DEBUG and actual RELEASE each pass 66 disjoint paths / 478 examples
+(202 writer + 108 LC + 59 Variant + 109 Dynamic), zero failures/errors/pending
+with held seals and unchanged resource guards. Two stock MRK4 modes read in
+Crystal; four generated mode/mark cells ATTACH/CHECK=1 and literal 12/4/2/0-row
+windows pass. Root authenticates 316 raw files and independently checks the
+629/645-byte decoded tapes and all 406 mark coordinates. An unsealed copy-only
+version defect passes ATTACH but fails checksum CHECK; after resealing, CHECK=1
+but selected Dynamic reads reject semantically. Independent clean controls pass.
+Fresh Variant/LC/static native regressions and all nine frozen static files pass.
+See [W268 evidence](../.landmark/evidence/compact-part-writer-w268.json) and the
+[writer frontier](COMPACT_PART_WRITER_FRONTIER.md).
+
+Next: context-owned JSON writing, remaining layouts/profiles/combinations and
+Compact MV/projection composition. Prior bounded Wide/metadata MV/projections
+remain separately qualified. No all-types, full-suite, granule-only-I/O, RSS or
+speed-parity claim. Full types/MV/projections precede memory/performance; full
+goal ACTIVE. Protected three W263 specs and original captures stay unchanged.
+Local atomic commit only, no push. Refresh on relevant source/test/profile/
+compiler/runtime/capture drift, temporary-evidence loss or widening.
+
+Previous bounded recursive Compact Variant writer (W267, 2026-10-12): VERIFIED /
 root adversary ROBUST within the finite BASIC/COMPACT, plain-MRK3/MRK4 witness
 and exact affected cohorts. The public writer retains default MRK3 and adds
 `variant_discriminator_mode`, default COMPACT. Recursive logical codecs and

@@ -179,6 +179,11 @@ module CrystalClick
       stream.borrowed_slice(start, finish - start)
     end
 
+    def each_callback_event(&block : CompactBinaryBulkCallback -> Nil) : Nil
+      @plan.each_callback_event { |callback| yield callback }
+      nil
+    end
+
     private def variant_callback_bytes(
       callback : CompactBinaryBulkCallback,
       role : String,
