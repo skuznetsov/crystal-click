@@ -7,11 +7,13 @@ module CrystalClick
       getter raw_size : UInt64
       getter compressed_size : UInt64
       getter positions : Array(Tuple(UInt64, UInt64))
+      getter relocation_plan : CompactGranuleRelocationPlan?
 
       def initialize(
         @raw_size : UInt64,
         @compressed_size : UInt64,
         @positions : Array(Tuple(UInt64, UInt64)),
+        @relocation_plan : CompactGranuleRelocationPlan?,
       )
       end
     end
@@ -44,6 +46,7 @@ module CrystalClick
         mark_count,
         frame_bytes,
         transport_budget,
+        codec_budget,
         plan.mark_format,
         plan.slot_count,
       )
@@ -94,6 +97,7 @@ module CrystalClick
         mark_count,
         frame_bytes,
         transport_budget,
+        codec_budget,
         plan.mark_format,
         plan.slot_count,
       )
@@ -105,11 +109,13 @@ module CrystalClick
       mark_count : Int32,
       frame_bytes : Int,
       transport_budget : CompressedStreamBudget,
+      codec_budget : BinaryCodecBudget,
       mark_format : CompactMarkFormat,
       slot_count : Int32,
     ) : CompactStaticPartFiles
+      auxiliary_query_count = total_relocation_count(encoded, mark_count)
       mark_size, mark_record_entries, position_query_count, position_result_bytes =
-        preflight_mark_grid!(slot_count, mark_count, transport_budget)
+        preflight_mark_grid!(slot_count, mark_count, auxiliary_query_count, transport_budget)
 
       layouts = Array(GranuleLayout).new(mark_count)
       total_raw_size = 0_u64
@@ -117,9 +123,25 @@ module CrystalClick
       total_frame_count = 0_i64
 
       mark_count.times do |mark_index|
-        position_queries = Array(UInt64).new(slot_count + 1)
+        mark_auxiliary_query_count = relocation_count_at(encoded, mark_index)
+        query_capacity = checked_add_i64(slot_count.to_i64 + 1_i64, mark_auxiliary_query_count.to_i64)
+        if query_capacity > Int32::MAX.to_i64
+          raise UnsupportedFormatError.new("Compact granule position-query roster exceeds the in-memory domain")
+        end
+
+        column_raw_starts = nil.as(Array(UInt64)?)
+        if mark_auxiliary_query_count > 0
+          memory_elements = checked_add_i64(encoded.size.to_i64, query_capacity)
+          codec_budget.ensure_future_nodes(2_u64)
+          codec_budget.ensure_future_elements(memory_elements.to_u64)
+          2.times { codec_budget.charge_node }
+          codec_budget.charge_elements(memory_elements.to_u64) if memory_elements > 0
+          column_raw_starts = Array(UInt64).new(encoded.size)
+        end
+        position_queries = Array(UInt64).new(query_capacity.to_i)
         segment_raw_size = 0_u64
         encoded.each do |column|
+          column_raw_starts.try { |starts| starts << segment_raw_size }
           unless mark_format.mrk4?
             # MRK3 retains one whole-column coordinate before its first
             # callback, even when every callback for that column is empty.
@@ -143,13 +165,33 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact granule query grid differs from its physical slot roster")
         end
 
+        relocation_plan = nil.as(CompactGranuleRelocationPlan?)
+        if mark_auxiliary_query_count > 0
+          starts = column_raw_starts || raise(UnsupportedFormatError.new("Compact relocation column starts were not retained"))
+          relocation_plan = CompactGranuleRelocationPlan.new(
+            encoded,
+            mark_index,
+            position_queries.size.to_i32,
+            segment_raw_size,
+            starts,
+            codec_budget,
+          )
+          unless relocation_plan.target_query_count == mark_auxiliary_query_count
+            raise UnsupportedFormatError.new("Compact relocation count differs from its preflighted query roster")
+          end
+          relocation_plan.append_target_queries!(position_queries)
+        end
+        unless position_queries.size == query_capacity
+          raise UnsupportedFormatError.new("Compact position-query grid differs from its preflighted roster")
+        end
+
         positions = CompressedMarkWriter.plan_literal_positions(
           segment_raw_size.to_i64,
           position_queries,
           frame_bytes,
           transport_budget,
         )
-        unless positions.size == slot_count + 1
+        unless positions.size == query_capacity
           raise UnsupportedFormatError.new("Compact granule position plan is incomplete")
         end
         compressed_size = positions[slot_count][0]
@@ -165,7 +207,7 @@ module CrystalClick
         total_raw_size = checked_add_u64(total_raw_size, segment_raw_size)
         total_compressed_size = checked_add_u64(total_compressed_size, compressed_size)
         total_frame_count = checked_add_i64(total_frame_count, frame_count(segment_raw_size, frame_bytes))
-        layouts << GranuleLayout.new(segment_raw_size, compressed_size, positions)
+        layouts << GranuleLayout.new(segment_raw_size, compressed_size, positions, relocation_plan)
       end
 
       unless total_raw_size > 0_u64 && total_compressed_size > 0_u64
@@ -212,6 +254,9 @@ module CrystalClick
 
       layouts.each_with_index do |layout, mark_index|
         raw_segment = assemble_granule(encoded, mark_index, layout.raw_size)
+        if relocation_plan = layout.relocation_plan
+          relocation_plan.patch!(raw_segment, layout.positions, compressed_base, total_compressed_size, frame_bytes)
+        end
         raw_hasher.update(raw_segment)
 
         if raw_segment.empty?
@@ -234,8 +279,8 @@ module CrystalClick
           data_cursor += compressed_segment.size
         end
 
-        layout.positions.each_with_index do |position, slot_index|
-          next if slot_index == slot_count
+        slot_count.times do |slot_index|
+          position = layout.positions[slot_index]
           global_compressed_offset = checked_add_u64(compressed_base, position[0])
           if global_compressed_offset > total_compressed_size
             raise UnsupportedFormatError.new("Compact mark coordinate exceeds data.bin")
@@ -392,6 +437,7 @@ module CrystalClick
     private def self.preflight_mark_grid!(
       slot_count : Int32,
       mark_count : Int32,
+      auxiliary_query_count : Int64,
       budget : CompressedStreamBudget,
     ) : Tuple(Int64, Int64, Int64, Int64)
       record_count = mark_count.to_i64 + 1_i64
@@ -407,7 +453,10 @@ module CrystalClick
       end
 
       position_queries_per_mark = slot_count.to_i64 + 1_i64
-      position_query_count = checked_multiply_i64(mark_count.to_i64, position_queries_per_mark)
+      position_query_count = checked_add_i64(
+        checked_multiply_i64(mark_count.to_i64, position_queries_per_mark),
+        auxiliary_query_count,
+      )
       position_result_bytes = checked_multiply_i64(position_query_count, 16_i64)
       initial_record_count = checked_add_i64(mark_record_entries, position_query_count)
       initial_result_bytes = checked_add_i64(mark_size, position_result_bytes)
@@ -416,6 +465,33 @@ module CrystalClick
       budget.preflight_result_bytes(initial_result_bytes)
       budget.preflight_file_bytes(mark_size)
       {mark_size, mark_record_entries, position_query_count, position_result_bytes}
+    end
+
+    private def self.total_relocation_count(
+      columns : Array(CompactPartEncodedColumn),
+      mark_count : Int32,
+    ) : Int64
+      total = 0_i64
+      mark_count.times do |mark_index|
+        total = checked_add_i64(total, relocation_count_at(columns, mark_index).to_i64)
+      end
+      total
+    end
+
+    private def self.relocation_count_at(
+      columns : Array(CompactPartEncodedColumn),
+      mark_index : Int32,
+    ) : Int32
+      count = 0_i64
+      columns.each do |column|
+        if json_column = column.as?(CompactJsonEncodedColumn)
+          count = checked_add_i64(count, json_column.callback_relocation_count_at(mark_index).to_i64)
+        end
+      end
+      if count > Int32::MAX.to_i64
+        raise UnsupportedFormatError.new("Compact granule relocation roster exceeds the in-memory domain")
+      end
+      count.to_i32
     end
 
     private def self.assemble_granule(

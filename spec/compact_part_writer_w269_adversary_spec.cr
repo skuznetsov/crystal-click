@@ -659,7 +659,7 @@ describe "W269 Compact JSON writer adversaries" do
     end
   end
 
-  it "requires complete first-prefix statistics and the admitted Object V3 MAP layouts" do
+  it "requires complete first-prefix statistics and the admitted Object V3 layouts" do
     fixture = CompactPartWriterW269Fixture
 
     missing_object_stats = fixture.object_plan(
@@ -703,19 +703,35 @@ describe "W269 Compact JSON writer adversaries" do
       end
     end
 
-    [object_v2, advanced].each do |plan|
-      w269a_refuse_during_write_without_publish do |part_path|
-        context = CrystalClick::CompactJsonWriteContext.new(
-          {CompactPartWriterW269Fixture::ROOT_SITE => plan} of String => CrystalClick::ObjectDocumentPlan,
-        )
-        column = CrystalClick::CompactPartColumn.json(
-          CompactPartWriterW269Fixture::ROOT_COLUMN,
-          fixture.json_schema,
-          fixture.granules(fixture.root_rows),
-          context,
-        )
-        w269a_write(part_path, [column] of CrystalClick::CompactPartColumn)
-      end
+    w269a_refuse_during_write_without_publish do |part_path|
+      context = CrystalClick::CompactJsonWriteContext.new(
+        {CompactPartWriterW269Fixture::ROOT_SITE => object_v2} of String => CrystalClick::ObjectDocumentPlan,
+      )
+      column = CrystalClick::CompactPartColumn.json(
+        CompactPartWriterW269Fixture::ROOT_COLUMN,
+        fixture.json_schema,
+        fixture.granules(fixture.root_rows),
+        context,
+      )
+      w269a_write(part_path, [column] of CrystalClick::CompactPartColumn)
+    end
+
+    # W278 admits ADVANCED through the existing recursive callback owner.
+    advanced_context = CrystalClick::CompactJsonWriteContext.new(
+      {CompactPartWriterW269Fixture::ROOT_SITE => advanced} of String => CrystalClick::ObjectDocumentPlan,
+    )
+    advanced_column = CrystalClick::CompactPartColumn.json(
+      CompactPartWriterW269Fixture::ROOT_COLUMN,
+      fixture.json_schema,
+      fixture.granules(fixture.root_rows),
+      advanced_context,
+    )
+    limits = CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS
+    budget = CrystalClick::BinaryCodecBudget.new(limits, true)
+    callback_plan = CrystalClick::CompactJsonCallbackPlan.new(advanced_column.json_input, limits, budget)
+    encoded = CrystalClick::CompactJsonEncodedColumn.encode(callback_plan, budget)
+    CompactPartWriterW269Fixture::MARK_COUNT.times do |mark_index|
+      encoded.callback_relocation_count_at(mark_index).should be > 0
     end
 
     w269a_refuse_during_write_without_publish do |part_path|

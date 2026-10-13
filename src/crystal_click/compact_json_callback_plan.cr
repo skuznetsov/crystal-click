@@ -231,7 +231,7 @@ module CrystalClick
           object_plan,
           site.callback_prefix,
           budget,
-          false,
+          true,
           descendants,
         )
         body_events = ObjectDocumentInlineCallbackOrder.body_callback_events(
@@ -240,7 +240,7 @@ module CrystalClick
           @profile,
           site.callback_prefix,
           budget,
-          false,
+          true,
           true,
           descendants,
         )
@@ -460,8 +460,10 @@ module CrystalClick
       object = plan.structures.object
       unless object.version == 4_u64 &&
              ((object.shared_data_version == 0_u64 && object.bucket_count == 1_u64) ||
-             (object.shared_data_version == 1_u64 && object.bucket_count == 2_u64))
-        raise UnsupportedFormatError.new("Compact JSON writer admits Object V3 MAP or MAP_WITH_BUCKETS only")
+             (object.shared_data_version == 1_u64 && object.bucket_count == 2_u64) ||
+             ((object.shared_data_version == 2_u64 || object.shared_data_version == 3_u64) &&
+             object.bucket_count == 2_u64))
+        raise UnsupportedFormatError.new("Compact JSON writer admits Object V3 MAP, MAP_WITH_BUCKETS, ADVANCED, or ADVANCED_CHUNKED with sealed bucket counts only")
       end
 
       plan.typed_path_count.times do |index|

@@ -1,5 +1,74 @@
 # Compact part writer frontier
 
+## Advanced shared-data JSON Compact writer — W278
+
+Status: VERIFIED / root adversary ROBUST within finite serialization and
+native-interoperability scope (2026-10-13), over W277
+`865ff29c428e0cda2b8917fda420b24d4b5344b6`. The admitted schema-bound owners
+are root `JSON`, `Array(JSON)`, `Array(Tuple(JSON, UInt8))`, and
+`Tuple(JSON, JSON)`. They support Object V3 SharedData ADVANCED (2) and
+ADVANCED_CHUNKED (3), two buckets, String0/String1, MRK3/MRK4, plain/compressed
+marks, and BASIC/COMPACT, using the existing recursive Object codecs. W277's
+advanced-layout refusal is superseded only for these owners.
+
+Observed baseline RED (`7f242d`): the five-example entry had zero assertion
+failures and four expected-success errors at the advanced-layout guard. Final
+local DEBUG (`1fb9c8`) and actual RELEASE (`552f3b`) each pass 302 examples on
+59 disjoint affected paths. Final native runs pass 32 stock plus 32 generated
+cells in DEBUG (`68c4a3`) and actual RELEASE (`f17865`), with 576 invocation
+records / 2,880 sidecars in each full matrix. The stock-first probe is
+`98280a3e42e3300a8121e72926c3861fa4286c7be925805dbd9cee42181843f0`.
+
+The independent frozen raw auditor passes stock (`5cde73`, 192 records / 960
+sidecars), DEBUG (`0c5800`) and RELEASE (`12da80`, 576 records / 2,880
+sidecars each), including exact finite SQL subjects/windows/literals, RowBinary
+input, metadata, pins and active-byte inventories; all four negative controls
+reject. The read-only header check passes in both modes: 96 observed
+headers each (80 named MRK4 Object sites and 16 MRK3 root-first-mark sites),
+confirming Object wire version 4, actual shared-data version 2 or 3 as required
+by each cell, and two buckets. It uses the library physical-window/Object
+parser, not an independent full frame decoder; nested MRK3 headers are not
+separately checked. The frozen W264 default String0 witness remains
+byte-identical: nine files / 17,902 bytes in both modes. Exact hashes,
+commands, source/runtime pins and raw evidence are indexed in
+[W278 evidence](../.landmark/evidence/compact-advanced-json-writer-w278.json).
+
+CAUTION: persistent callback relocations and mark ownership. Relocations are
+resolved per column and mark into the final literal-LZ4 tape before hashing and
+compression. The tests exercise small frames, populated shared values and
+full/middle/EOF reads. Source and runtime pins remain distinct. Preserve the
+three user-owned untracked W263 specs; no push. Quiescent whole-part
+publication, sorted UInt64 keys, budgets, checksums, typed-carrier and unrelated
+recursive admission guards remain.
+
+Design laws:
+
+- Ordinary typed/Dynamic lanes inherit the operation's String0/String1 profile.
+  Shared Map/Copy envelopes retain the default String0 serializer. No alternate
+  logical JSON or String serializer is introduced.
+- Retain raw advanced callbacks and their relocation records per mark. A
+  callback-local target is resolved only within its exact column and mark,
+  then projected into the common granule tape and its final literal-LZ4 frame
+  plan. Add the preceding granules' compressed base before writing the 16-byte
+  MarkInCompressedFile field. Patch before hashing/compression, never after.
+- Validate source-field bounds/non-overlap, exact callback ownership, target
+  endpoints and checked arithmetic before patching. Never mutate caller inputs
+  or the retained callback fragments to install part-global coordinates.
+- Preserve seven bucket roles and three Copy roles in source-native Compact
+  callback order. CHUNKED is stream-then-chunks, not Wide chunk-then-streams.
+  Zero child occurrences and empty callbacks remain scheduled; MRK3/MRK4 and
+  physical mark compression remain independent.
+- Advanced relocation/query/workspace capacity is preflighted and charged
+  before its corresponding allocations. A format refusal or budget exhaustion
+  must leave the destination absent and unrelated files untouched.
+
+Residual frontier: typed-Dynamic JSON children remain MAP0/bucket-one/shared-S0;
+other carriers, Object layouts and arbitrary recursive products are not admitted.
+This is not all-types/layouts, full-suite, MV/projection, RSS or performance
+qualification; the <=10% slowdown target is unmeasured and the full goal remains
+ACTIVE. Refresh on source/test/compiler/runtime/probe drift, evidence loss or
+any owner/layout widening. Rollback is W278 only.
+
 ## Active context String1 binding — W277
 
 Status: VERIFIED / root adversary ROBUST within finite serialization/native
@@ -53,8 +122,9 @@ Design laws, independently checked against source pin
   `DataTypeObject.cpp:180-188`, `SerializationObjectSharedData.cpp:43-49,355-420`;
   local `ObjectDocumentColumnWriter.inline_raw_layout_at_child_site` consumes
   `nested_context.profile` for ordinary body events/fragments as well as its
-  advanced physical owner. The current Compact callback-plan gate separately
-  rejects shared-data versions 2/3; W277 does not remove that gate.
+  advanced physical owner. At W277, the Compact callback-plan gate rejected
+  shared-data versions 2/3; W278 supersedes that refusal only for the four
+  schema-bound owners listed above.
 - Dynamic SharedVariant's outer custom String lane inherits the profile, but
   its embedded type-and-value payload uses the type's default serialization.
   LowCardinality dictionaries likewise retain the default serializer.

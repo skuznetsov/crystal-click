@@ -1,5 +1,34 @@
 # Crystal Click landmarks
 
+## Advanced shared-data JSON Compact writer — W278
+
+- VERIFIED / root adversary ROBUST within finite serialization/native
+  interoperability scope (2026-10-13), over W277
+  `865ff29c428e0cda2b8917fda420b24d4b5344b6`. Existing recursive codecs now
+  admit root `JSON`, `Array(JSON)`, `Array(Tuple(JSON, UInt8))`, and
+  `Tuple(JSON, JSON)` for Object V3 SharedData ADVANCED/ADVANCED_CHUNKED,
+  two buckets, String0/String1, MRK3/MRK4, plain/compressed marks, and
+  BASIC/COMPACT. W277's refusal is superseded only for these owners.
+- Final DEBUG (`1fb9c8`) and actual RELEASE (`552f3b`) each pass 302 examples /
+  59 affected paths. Native stock+generated matrices each pass 32+32 cells in
+  DEBUG (`68c4a3`) and actual RELEASE (`f17865`); raw audits each bind 576
+  records / 2,880 sidecars; stock-only audit passes 192 / 960. Four negative
+  controls reject. The header check sees 96 observations per mode: 80 named
+  MRK4 sites and 16 MRK3 root
+  first-mark sites, confirming Object v4, the cell's actual shared-data
+  version 2/3 and bucket count 2.
+  It reuses the library physical/Object parser; nested MRK3 headers are not
+  independently checked. The frozen W264 default-byte witness remains nine
+  files / 17,902 bytes in both modes.
+- Typed-Dynamic JSON children remain MAP0/bucket-one/shared-S0. Other carriers,
+  Object layouts/products, full-suite, MV/projections, RSS and performance are
+  outside the claim; the <=10% target is unmeasured and the full goal ACTIVE.
+  Source/runtime pins are distinct. Refresh on source/test/compiler/runtime/
+  probe drift, evidence loss or owner/layout widening; rollback W278 only and
+  preserve protected W263 specs. See the
+  [W278 evidence](.landmark/evidence/compact-advanced-json-writer-w278.json)
+  and [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md).
+
 ## Propagated context String1 Compact writer — W277
 
 - VERIFIED / root adversary ROBUST within finite serialization/native readback
@@ -28,9 +57,11 @@
   false-greens are recorded separately from production RED and DoD.
   The oracle is finite, not a general SQL/parser security proof. Same-lineage
   review is correlated; captured pre-ATTACH inventory is not late attestation.
-- ADVANCED/CHUNKED Compact writer layouts, unsupported nominal/public carriers,
-  arbitrary recursive products and mixed profiles remain rejected. Whole-part
-  sorted UInt64-key and quiescent parts/stage only; no arbitrary-key/append,
+- At W277, ADVANCED/CHUNKED Compact writer layouts were rejected. W278
+  supersedes that refusal only for its four schema-bound owners above.
+  Unsupported nominal/public carriers, arbitrary recursive products and
+  mixed profiles remain rejected. Whole-part sorted UInt64-key and quiescent
+  parts/stage only; no arbitrary-key/append,
   all-layout/full-suite, granule-only-I/O, RSS/speed or global closure claim.
   Next: remaining stateful/ownership layouts and public typed carriers, then
   Compact MV/projections; those precede optimization. <=10% slowdown remains

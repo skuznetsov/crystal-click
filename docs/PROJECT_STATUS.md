@@ -1,7 +1,29 @@
 # CrystalClick project status
 
-Active frontier: W277 context String1 binding is VERIFIED / root adversary
-ROBUST within finite serialization/native readback scope (2026-10-13).
+Active frontier: W278 advanced shared-data JSON Compact writer is VERIFIED /
+root adversary ROBUST within finite serialization/native scope (2026-10-13),
+over W277 `865ff29c428e0cda2b8917fda420b24d4b5344b6`. Root JSON,
+`Array(JSON)`, `Array(Tuple(JSON, UInt8))`, and `Tuple(JSON, JSON)` reuse the
+existing recursive codecs for Object V3 SharedData ADVANCED/ADVANCED_CHUNKED,
+two buckets, String0/String1, MRK3/MRK4, plain/compressed marks, and
+BASIC/COMPACT. DEBUG and actual RELEASE each pass 302 examples / 59 affected
+paths (`1fb9c8`, `552f3b`). Native stock+generated matrices each pass 32+32
+cells in DEBUG and actual RELEASE (`68c4a3`, `f17865`); each full raw audit
+passes 576 records / 2,880 sidecars; the stock-only audit passes 192 / 960.
+Four negative controls reject. The read-only header check confirms Object v4,
+the cell's actual shared-data version 2/3 and two buckets in 96 header
+observations per mode
+(80 MRK4 sites; MRK3 checks only root JSON at offset zero). The frozen W264
+default-byte witness remains nine files / 17,902 bytes in both modes
+(`6e8d11`).
+Typed-Dynamic JSON children remain MAP0/bucket1/shared-S0; this does not qualify
+other carriers or layouts, MV/projection, full-suite, RSS or performance. The W277
+advanced refusal is superseded only for these W278 owners. See the
+[frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+[W278 evidence packet](../.landmark/evidence/compact-advanced-json-writer-w278.json).
+
+Previously qualified frontier: W277 context String1 binding is VERIFIED / root
+adversary ROBUST within finite serialization/native readback scope (2026-10-13).
 DEBUG and actual RELEASE each pass
 407 examples / 75 disjoint paths in two executables. Fresh matrices each pass
 16 stock and 16 generated cells; String1 now reaches existing Dynamic/JSON

@@ -213,7 +213,7 @@ describe "W277 propagated String1 Compact context adversaries" do
     end
   end
 
-  it "retains both advanced Object shared-version gates under String0 and String1" do
+  it "binds both advanced Object shared versions under String0 and String1 after W278" do
     fixture = CompactPartWriterW269Fixture
     profiles = [
       CrystalClick::BinaryBulkProfile.single_stream,
@@ -238,7 +238,16 @@ describe "W277 propagated String1 Compact context adversaries" do
         advanced_context,
       )
       profiles.each do |profile|
-        w277_expect_public_refusal([advanced_column] of CrystalClick::CompactPartColumn, profile)
+        limits = CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS
+        budget = CrystalClick::BinaryCodecBudget.new(limits, true)
+        callback_plan = CrystalClick::CompactJsonCallbackPlan.new(
+          advanced_column.json_input(profile), limits, budget,
+        )
+        encoded = CrystalClick::CompactJsonEncodedColumn.encode(callback_plan, budget)
+        callback_plan.profile.should eq(profile)
+        CompactPartWriterW269Fixture::MARK_COUNT.times do |mark_index|
+          encoded.callback_relocation_count_at(mark_index).should be > 0
+        end
       end
     end
   end

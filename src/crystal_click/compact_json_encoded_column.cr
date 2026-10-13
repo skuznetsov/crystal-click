@@ -21,6 +21,7 @@ module CrystalClick
     @plan : CompactJsonCallbackPlan
     @callback_names : Array(String)
     @callback_fragments : Array(Array(Bytes))
+    @callback_relocations : Array(Array(ObjectSharedInlineCallbackRelocation))?
     @structure_prefixes : Array(Tuple(Bytes, Bytes)?)
     @mark_count : Int32
 
@@ -31,6 +32,7 @@ module CrystalClick
       plan.validate_bound_input!
       @plan = plan
       @mark_count = plan.bound_mark_count
+      @callback_relocations = nil
       if @mark_count <= 0
         raise UnsupportedFormatError.new("Compact JSON writer requires at least one physical mark")
       end
@@ -165,6 +167,40 @@ module CrystalClick
       @callback_fragments[callback_index][mark_index]
     end
 
+    def callback_relocation_count_at(mark_index : Int) : Int32
+      unless mark_index >= 0 && mark_index < @mark_count
+        raise UnsupportedFormatError.new("Compact JSON relocation mark is outside its encoded grid")
+      end
+      @callback_relocations.try { |marks| marks[mark_index].size } || 0
+    end
+
+    def callback_event_count : Int32
+      @callback_names.size
+    end
+
+    def each_callback_relocation_at(mark_index : Int, &block : ObjectSharedInlineCallbackRelocation -> Nil) : Nil
+      unless mark_index >= 0 && mark_index < @mark_count
+        raise UnsupportedFormatError.new("Compact JSON relocation mark is outside its encoded grid")
+      end
+      if marks = @callback_relocations
+        marks[mark_index].each { |relocation| yield relocation }
+      end
+      nil
+    end
+
+    # Borrow final physical callback names and fragments for the Compact
+    # granule relocation owner. These names already include the exact escaped
+    # site binding and the bytes include every callback-local splice.
+    def each_callback_fragment_at(mark_index : Int, &block : String, Bytes -> Nil) : Nil
+      unless mark_index >= 0 && mark_index < @mark_count
+        raise UnsupportedFormatError.new("Compact JSON callback mark is outside its encoded grid")
+      end
+      @callback_names.each_with_index do |name, callback_index|
+        yield name, @callback_fragments[callback_index][mark_index]
+      end
+      nil
+    end
+
     def retained_workspace_bytes : UInt64
       bytes = instance_sizeof(CompactJsonEncodedColumn).to_u64
       bytes = checked_add(bytes, instance_sizeof(Array(String)).to_u64)
@@ -189,6 +225,33 @@ module CrystalClick
         next unless value = prefixes
         bytes = checked_add(bytes, value[0].size.to_u64)
         bytes = checked_add(bytes, value[1].size.to_u64)
+      end
+
+      if marks = @callback_relocations
+        bytes = checked_add(bytes, instance_sizeof(Array(Array(ObjectSharedInlineCallbackRelocation))).to_u64)
+        bytes = checked_add(
+          bytes,
+          checked_multiply(marks.size.to_u64, sizeof(Array(ObjectSharedInlineCallbackRelocation)).to_u64),
+        )
+        marks.each do |relocations|
+          bytes = checked_add(bytes, instance_sizeof(Array(ObjectSharedInlineCallbackRelocation)).to_u64)
+          bytes = checked_add(
+            bytes,
+            checked_multiply(relocations.size.to_u64, sizeof(Pointer(ObjectSharedInlineCallbackRelocation)).to_u64),
+          )
+          relocations.each do |relocation|
+            bytes = checked_add(bytes, instance_sizeof(ObjectSharedInlineCallbackRelocation).to_u64)
+            bytes = checked_add(bytes, checked_multiply(2_u64, instance_sizeof(String).to_u64))
+            bytes = checked_add(
+              bytes,
+              checked_add(relocation.source_callback_byte_size.to_u64, 1_u64),
+            )
+            bytes = checked_add(
+              bytes,
+              checked_add(relocation.target_callback_byte_size.to_u64, 1_u64),
+            )
+          end
+        end
       end
       bytes
     end
@@ -407,14 +470,11 @@ module CrystalClick
         nested,
         callback_root_prefix: site.callback_prefix,
       )
-      unless layout.relocation_count == 0
-        raise UnsupportedFormatError.new("Compact JSON inline callbacks require a relocation-free Object layout")
-      end
-
       unless layout.prefix_callback_count == binding.prefix_callback_count &&
              layout.body_callback_count == binding.body_callback_count
         raise UnsupportedFormatError.new("Compact JSON raw Object callback roster differs from its sealed plan")
       end
+      retain_relocations!(layout, binding, mark_index, budget)
       layout.prefix_callback_count.times do |index|
         callback = layout.prefix_callback_at(index, budget)
         callback_name = callback[0]
@@ -436,6 +496,63 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact JSON Object body callback is outside its sealed plan")
         end
         append_fragment!(callback_name, callback[1], mark_index, filled)
+      end
+      nil
+    end
+
+    private def retain_relocations!(
+      layout : ObjectSharedAdvancedInlineRawLayout,
+      binding : CompactJsonCallbackPlan::SiteBinding,
+      mark_index : Int32,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      count = layout.relocation_count
+      return nil if count == 0
+      unless count > 0 && mark_index >= 0 && mark_index < @mark_count
+        raise UnsupportedFormatError.new("Compact JSON relocation roster has an invalid mark or count")
+      end
+
+      marks = @callback_relocations
+      unless marks
+        mark_slots = @mark_count.to_u64
+        owner_nodes = checked_add(mark_slots, 1_u64)
+        budget.ensure_future_nodes(owner_nodes)
+        budget.ensure_future_elements(mark_slots)
+        owner_nodes.times { budget.charge_node }
+        budget.charge_elements(mark_slots) if mark_slots > 0_u64
+        marks = Array(Array(ObjectSharedInlineCallbackRelocation)).new(@mark_count) do
+          [] of ObjectSharedInlineCallbackRelocation
+        end
+        @callback_relocations = marks
+      end
+
+      relocation_count = count.to_u64
+      name_bytes = 0_u64
+      count.times do |index|
+        relocation = layout.relocation_at(index)
+        name_bytes = checked_add(name_bytes, relocation.source_callback_byte_size.to_u64)
+        name_bytes = checked_add(name_bytes, relocation.target_callback_byte_size.to_u64)
+      end
+      budget.ensure_future_nodes(relocation_count * 2_u64)
+      budget.ensure_future_elements(relocation_count * 2_u64)
+      budget.ensure_wire_bytes(name_bytes)
+      (relocation_count * 2_u64).times { budget.charge_node }
+      budget.charge_elements(relocation_count * 2_u64)
+      budget.charge_wire_bytes(name_bytes) if name_bytes > 0_u64
+
+      retained = marks[mark_index]
+      budget.ensure_future_elements(relocation_count)
+      count.times do |index|
+        relocation = layout.relocation_at(index)
+        source_name = relocation.source_callback
+        target_name = relocation.target_callback
+        source_bound = binding.has_prefix_callback?(source_name) || binding.has_body_callback?(source_name)
+        target_bound = binding.has_prefix_callback?(target_name) || binding.has_body_callback?(target_name)
+        unless source_bound && target_bound && index_for_callback?(source_name) && index_for_callback?(target_name)
+          raise UnsupportedFormatError.new("Compact JSON relocation callback is outside its exact escaped site binding")
+        end
+        retained << relocation
+        budget.charge_elements(1_u64)
       end
       nil
     end
