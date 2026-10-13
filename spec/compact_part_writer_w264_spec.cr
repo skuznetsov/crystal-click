@@ -13,6 +13,7 @@ class CrystalClick::CompactMarkIndex
     roster : CompactColumnsSubstreams,
     expected_row_count : UInt64,
     budget : CompressedStreamBudget,
+    canonical_marks : Bytes? = nil,
   ) : CompactMarkIndex
     stage = File.dirname(input.data_path)
     if w264_grid_guard_probe_enabled &&

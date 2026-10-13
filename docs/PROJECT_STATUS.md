@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Current compressed Compact marks reader (W274, 2026-10-13):
+Current compressed Compact marks writer (W275, 2026-10-13):
+VERIFIED / root adversary ROBUST within finite serialization/native readback
+scope. `compress_marks : Bool = false` selects plain or LZ4-framed physical
+marks independently of MRK3/MRK4. A separate owned-byte physical assembler
+supplies actual filenames and physical/raw checksums; canonical grids and
+recursive value codecs are reused. Bounds precede mark snapshots/encoding,
+and metadata plus staged public readback agree before atomic publication.
+
+DEBUG and actual RELEASE each pass 217 examples / 44 disjoint paths in two
+executables. Fresh native matrices each pass four stock and twelve generated
+cells: finite static and depth-2 JSON-in-Dynamic, MRK3/MRK4, plain/compressed,
+JSON BASIC/COMPACT, CHECK plus literal full/middle/EOF. Root raw/record audits
+and missing/extra invocation/wrong-table controls pass. The frozen plain MRK3
+witness is unchanged in both modes: nine files / 17,902 bytes. Current source,
+active-part and capture hashes agree; detached inventory is a captured
+pre-ATTACH observation, not late physical attestation.
+
+Exact rosters, commands, pins and residuals are in the
+[frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+[W275 evidence packet](../.landmark/evidence/compact-marks-writer-w275.json).
+This is not all-types/layouts, full-suite, independent decompression, concurrent
+part, granule-only-I/O, RSS or speed qualification. LZ4 output uses literal
+frames; no compression-ratio improvement is claimed. The writer remains
+whole-part sorted UInt64-key, not arbitrary-key/append. Distinct source/runtime
+pins are not a latest-version claim; protected W263 specs remain unchanged.
+
+Next: remaining String/stateful/profile/ownership layouts and public typed
+carriers, then Compact MV/projection composition, then memory/performance.
+The <=10% slowdown objective is unmeasured; full goal ACTIVE. Local commit/no push.
+
+Previously qualified compressed Compact marks reader (W274, 2026-10-13):
 VERIFIED / root adversary ROBUST within finite transport/public integration
 scope. The reader accepts checksum-declared `data.cmrk3`/`data.cmrk4` through
 one schema-neutral adapter, reusing the canonical grid and recursive codecs.
@@ -27,7 +57,7 @@ This is not full-suite/all-types/layouts, concurrent-part, granule-only-I/O,
 RSS or speed qualification. Historic W273 seals/counts below apply only to
 that source state, not W274. The full goal remains ACTIVE.
 
-Next: compressed Compact marks writer (W275), then remaining stateful/profile
+At W274, next was compressed Compact marks writer (W275), then stateful/profile
 layouts and Compact MV/projection composition, then memory/performance.
 The writer remains whole-part sorted UInt64-key, not arbitrary-key/append.
 The <=10% slowdown objective is unmeasured. Local atomic commit only/no push.

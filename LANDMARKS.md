@@ -1,5 +1,40 @@
 # Crystal Click landmarks
 
+## Compressed Compact marks writer — W275
+
+- VERIFIED / root adversary ROBUST within finite serialization/native readback
+  scope (2026-10-13), over W274 `717068035289565a4a74db61e385e9095766c921`.
+  Public `compress_marks : Bool = false` is orthogonal to MRK3/MRK4.
+  `CompactPhysicalMarkOutput` owns detached bytes, actual sidecar names and
+  physical/raw checksum records; grids and recursive value codecs are reused.
+  Shared frame preflight and aggregate retained-output bounds precede mark
+  allocations; staged readback agrees before atomic publication. The factory
+  retains the production caller's canonical-file-precharge precondition.
+- DEBUG/actual RELEASE each pass 217 examples / 44 disjoint paths in two
+  executables. Four stock plus twelve generated native cells per mode pass
+  CHECK and independent full/middle/EOF literals: finite static and depth-2
+  JSON-in-Dynamic, MRK3/MRK4, plain/compressed, JSON BASIC/COMPACT. Root audits
+  (`4a3cb4`, `d12f1c`, `a452e7`) check record/raw bijections, SQL subjects,
+  pins and physical/current source/active inventories; three negative controls
+  reject. Captured pre-ATTACH detached inventories are not late OS attestation.
+  Six candidate data/canonical-mark pairs and the nine-file / 17,902-byte plain
+  MRK3 frozen witness pass; no independent decompression/CityHash proof follows.
+- Baseline API RED established the gap. Test-seam, probe/helper and scratch
+  audit repairs were instrument defects, not reasons to widen production
+  admission. One disclosed unguarded read-only agent Ruby inspection is
+  excluded from DoD; no global guard/serial-compliance claim. Reviews remain
+  correlated. Exact commands, hashes, rosters and failure lineage are indexed in
+  [W275 evidence](.landmark/evidence/compact-marks-writer-w275.json) and the
+  [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md).
+- Whole-part sorted UInt64 key only; no append/new logical type/site/profile.
+  Literal LZ4 frames qualify validity, not size reduction. Quiescent stage/part
+  assumed; no universal layout/full-suite/granule-only-I/O/RSS/speed claim.
+  Next: String/stateful/profile/ownership and public carriers, then Compact
+  MV/projection composition. Types/layouts and MV/projections precede
+  optimization; <=10% slowdown unmeasured, full goal ACTIVE. No push.
+  Refresh on source/test/compiler/runtime/profile drift, temporary evidence
+  loss or widening; rollback only W275 and preserve protected W263 specs.
+
 ## Compressed Compact marks reader — W274
 
 - VERIFIED / root adversary ROBUST within finite transport/public integration

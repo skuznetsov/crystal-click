@@ -29,6 +29,7 @@ module CrystalClick
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
       write_plan : W,
+      compress_marks : Bool,
     ) forall T, W
       unless codec_budget.writing? && same_limits?(codec_budget.limits, limits)
         raise ArgumentError.new("Compact metadata codec budget differs from its write limits")
@@ -153,7 +154,7 @@ module CrystalClick
         "columns.txt",
         "count.txt",
         "data.bin",
-        mark_file_name,
+        CompactPhysicalMarkOutput.file_name(@mark_format, compress_marks),
         "default_compression_codec.txt",
         "metadata_version.txt",
         "primary.idx",
@@ -272,17 +273,6 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact physical roster workspace overflows")
       end
       left * right
-    end
-
-    private def mark_file_name : String
-      case @mark_format
-      when CompactMarkFormat::Mrk3
-        "data.mrk3"
-      when CompactMarkFormat::Mrk4
-        "data.mrk4"
-      else
-        raise UnsupportedFormatError.new("unsupported Compact mark format")
-      end
     end
 
     private def checked_add(left : UInt64, right : UInt64) : UInt64

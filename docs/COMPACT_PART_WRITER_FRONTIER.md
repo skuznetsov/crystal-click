@@ -1,6 +1,80 @@
 # Compact part writer frontier
 
-## Qualified compressed Compact marks reader — W274
+## Qualified compressed Compact marks writer — W275
+
+Status: VERIFIED / root adversary ROBUST within finite serialization/native
+readback scope (2026-10-13), over W274
+`717068035289565a4a74db61e385e9095766c921`. The public writer appends
+`compress_marks : Bool = false`, independent of MRK3/MRK4. A separate
+`CompactPhysicalMarkOutput` owns detached payload bytes, the actual sidecar
+name and physical/raw checksum declaration. Canonical grids and recursive
+value codecs are unchanged; no second logical serializer is introduced.
+
+Guard laws: canonical and measured physical marks must fit configured/reader
+limits before snapshot or compressed output allocation. Shared frame preflight
+checks remaining record/decoded/file/result capacity without charging it twice;
+the owner checks the retained raw snapshot plus compressed output together.
+Canonical checksum disagreement rejects. Metadata, staged inventories, checksum
+declarations and selected readback must agree with the actual physical owner
+before atomic publication. The factory requires the production caller's existing
+canonical-file precharge; `write_to` assumes a publisher-owned quiescent stage.
+
+Observed DoD:
+
+- Focused three paths: DEBUG 15 examples (`e135a2`), actual RELEASE 15
+  (`e3b9af`). Affected 41 paths: DEBUG 202 (`d1b6a5`), actual RELEASE 202
+  (`3293a3`). Per mode: 217 examples / 44 disjoint paths in two executables,
+  zero failures/errors/pending; not a full-suite run.
+- Fresh stock-only native LZ4 controls pass (`094df8`), four cells. Fresh
+  DEBUG (`348360`) and actual RELEASE (`7d9dc9`) matrices each pass four stock
+  and twelve generated cells: finite W264 static plus W273 depth-2 JSON-in-
+  Dynamic, MRK3/MRK4, plain/compressed, JSON BASIC/COMPACT. Native CHECK and
+  independent literal SELECT full/middle/EOF pass, including UInt64 MAX,
+  non-UTF8/long String and NULL/`[]`/`[[]]` distinctions.
+- Each full capture has 28 native plus 48 helper invocation records, exact
+  argv/stdin/stdout/stderr bijections and executable/source pins. Root raw
+  audits pass: stock `4a3cb4`, DEBUG `d12f1c`, RELEASE `a452e7`; missing/extra
+  invocation and wrong-table negative controls reject. Current source and
+  active inventories/raw hashes match. Pre-ATTACH detached inventories are
+  captured observations: ATTACH consumes those directories, so the late audit
+  does not independently attest their former physical state.
+- Six same-profile plain/compressed pairs preserve exact `data.bin` bytes and
+  helper-reported decoded canonical marks. The frozen W264 plain MRK3 witness
+  remains byte-identical in both modes: nine files / 17,902 bytes (`c31a22`).
+  This is not independent decompression or all-default-layout qualification.
+- Root source/protected-file recheck passes (`b00206`); twelve changed Crystal
+  files pass formatter (`3fdc6c`) and the Ruby probe passes syntax (`cc6470`).
+
+Source pin `ed30948f095ecb70679986d7d60e27ad770ae27a` and runtime
+26.10.1.1201/build `d9bcb5ab007f0f6299f7f973f2642245bab3d028` are distinct,
+not latest-source or build-provenance claims. Captures:
+`/private/tmp/crystal-click-w275-stock-final.ztNLBK`,
+`/private/tmp/crystal-click-w275-native-debug.cbLPtv`, and
+`/private/tmp/crystal-click-w275-native-release.bcGXXv`. Exact command tails,
+cohort rosters, hashes, instrument repairs and narrow residuals are indexed in
+the [W275 evidence packet](../.landmark/evidence/compact-marks-writer-w275.json).
+Temporary capture/auditor loss requires regeneration; packet shape is not proof.
+
+Falsifier lineage: baseline public entry rejects `compress_marks` (`b9eb87`).
+The stale W264 test seam needed W274's optional canonical-marks argument;
+probe filename/CLI and helper parse repairs affect instrumentation only.
+Auditor argv metadata, hexadecimal case and consumed-detached assumptions were
+corrected against raw evidence, without changing frozen production or captures.
+One agent-reported unguarded read-only Ruby inspection is excluded from DoD;
+the packet does not claim global serial/guard compliance. Reviews are correlated.
+
+Remaining: modern String/profiles, advanced/chunked JSON/Dynamic ownership,
+unqualified wrappers/sites and public typed carriers, then Compact MV/projection
+composition. Writing remains whole-part sorted UInt64-key, not arbitrary-key
+or append. The LZ4 backend emits literal frames: validity is qualified, size
+reduction is not. No all-types/layouts, concurrent-stage, same-size plain-stage
+mutation, granule-only-I/O, RSS or speed claim. All types/layouts and MV/projections
+precede optimization; <=10% slowdown is unmeasured and the full goal is ACTIVE.
+Rollback only the atomic W275 change against W274, preserving protected specs.
+Refresh on source/test/compiler/runtime/profile/capture drift or scope widening.
+Local atomic commit only; no push.
+
+## Previously qualified compressed Compact marks reader — W274
 
 Status: VERIFIED / root adversary ROBUST within the finite transport and public
 integration scope (2026-10-13). Baseline:
@@ -77,25 +151,6 @@ dispatch/name reconstruction. The unsupported UInt8 negative fixture
 lost validated table identity (`a5b7f6`) are repaired instrument defects,
 not format failures or reasons to broaden admission. Earlier pre-integration
 18/111-example cohorts and captures are historical, not the final W274 DoD.
-
-## Next transition: compressed Compact marks writer — W275
-
-PROPOSED: reuse the existing canonical grid and compression backend; add explicit
-physical mark compression, actual output names, compressed/raw checksum metadata,
-budgeted output ownership and staged readback. First discriminator: generate
-plain/compressed MRK3/MRK4 parts, have pinned native CHECK/SELECT and the current
-public reader agree, and reject inconsistent metadata without publication.
-No writer change is admitted by W274. Current writing remains whole-part sorted
-UInt64-key writing, not arbitrary-key or incremental append.
-
-Remaining: modern String/profiles and advanced/chunked JSON/Dynamic ownership,
-unqualified wrapper/site combinations, broader public typed carriers, then
-Compact MV/projection composition. All types/layouts and MV/projections precede
-memory/performance optimization; <=10% slowdown is unmeasured and the full goal
-remains ACTIVE. No universal-layout, granule-only-I/O, RSS or speed claim.
-Rollback only the atomic W274 change against W273; preserve the protected specs.
-Refresh on source/test/compiler/runtime/profile/capture drift or scope widening.
-Local atomic commit only; no push.
 
 ## Previously qualified recursive Array-chain JSON ownership — W273
 
