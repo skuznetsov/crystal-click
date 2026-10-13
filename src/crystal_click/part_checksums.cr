@@ -18,12 +18,14 @@ module CrystalClick
       getter file_hash : {UInt64, UInt64}
       getter compressed : Bool
       getter uncompressed_size : UInt64?
+      getter uncompressed_hash : {UInt64, UInt64}?
 
       def initialize(
         @physical_size : UInt64,
         @compressed : Bool,
         @uncompressed_size : UInt64?,
         @file_hash : {UInt64, UInt64} = {0_u64, 0_u64},
+        @uncompressed_hash : {UInt64, UInt64}? = nil,
       )
       end
     end
@@ -122,20 +124,27 @@ module CrystalClick
         cursor += 1
         compressed : Bool
         uncompressed_size : UInt64?
+        uncompressed_hash : {UInt64, UInt64}?
         case compressed_flag
         when 0_u8
           compressed = false
           uncompressed_size = nil
+          uncompressed_hash = nil
         when 1_u8
           value, next_cursor = read_var_uint(bytes, cursor)
           cursor = next_cursor
           compressed = true
           uncompressed_size = value
+          hash_end = checked_end(cursor, 16, bytes.size)
+          uncompressed_hash = {
+            read_uint64_le(bytes, cursor),
+            read_uint64_le(bytes, cursor + 8),
+          }
+          cursor = hash_end
         else
           raise CorruptPartError.new("invalid checksums compression flag")
         end
-        cursor = checked_end(cursor, compressed ? 16 : 0, bytes.size)
-        entries[name] = Entry.new(physical_size, compressed, uncompressed_size, file_hash)
+        entries[name] = Entry.new(physical_size, compressed, uncompressed_size, file_hash, uncompressed_hash)
       end
 
       raise CorruptPartError.new("trailing checksums payload") unless cursor == bytes.size

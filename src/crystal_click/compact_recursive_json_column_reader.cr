@@ -432,7 +432,7 @@ module CrystalClick
         String.new(source_type.not_nil!.to_slice),
         serialization_profile.ordinary_profile,
         stream_names,
-        context.mode.mrk4? ? ["data.bin", "data.mrk4"] : ["data.bin", "data.mrk3"],
+        ["data.bin", context.marks_name],
         context.logical_bytes_for(@column_name),
       )
     end

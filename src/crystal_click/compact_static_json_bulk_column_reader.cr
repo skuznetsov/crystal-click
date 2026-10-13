@@ -144,7 +144,7 @@ module CrystalClick
 
       @row_count = @context.row_count
       @mark_count = @mark_row_counts.size.to_i32
-      @selected_checksum_names = @context.mode.mrk4? ? ["data.bin", "data.mrk4"] : ["data.bin", "data.mrk3"]
+      @selected_checksum_names = ["data.bin", @context.marks_name]
       @logical_read_bytes = @context.logical_bytes_for(@column_name)
       @prepared_context = nil
       @frozen_event_names = nil

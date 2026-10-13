@@ -1,6 +1,38 @@
 # CrystalClick project status
 
-Current recursive Array-chain JSON ownership (W273, 2026-10-13):
+Current compressed Compact marks reader (W274, 2026-10-13):
+VERIFIED / root adversary ROBUST within finite transport/public integration
+scope. The reader accepts checksum-declared `data.cmrk3`/`data.cmrk4` through
+one schema-neutral adapter, reusing the canonical grid and recursive codecs.
+Physical and canonical bounds, physical/raw checksum integrity, frame checks
+and strict sidecar inventories precede exposure. Public typed/offline dispatch
+recognizes declared and physical Compact-family hints without redirecting the
+four valid Wide mark names. Selected checksums retain the actual mark filename.
+No new logical type/profile/site or writer compression is admitted.
+
+DEBUG and actual RELEASE each pass 275 examples / 29 disjoint paths in two
+serial executables. Both fresh four-cell native matrices and root raw/record
+audits pass: MRK3/MRK4 x plain/compressed, native CHECK/literal SELECT, canonical
+byte equality, UInt64/MAX and typed-table full/middle/EOF coordinates. Each has
+nine invocation records / 36 raw sidecars, with source/runtime/helper identity
+and inventories rechecked. Native typed semantics cover UInt64 pk/value only;
+String1/Array(Int32) are raw physical observations. Existing local Dynamic/
+JSON compressed-mark integration controls are not a native JSON cross-product
+proof. Source and runtime pins remain distinct, not a latest-version claim.
+
+Exact rosters, final file hashes, commands, captures, instrument repairs and
+audit digests are in the [frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+[W274 evidence packet](../.landmark/evidence/compact-marks-reader-w274.json).
+This is not full-suite/all-types/layouts, concurrent-part, granule-only-I/O,
+RSS or speed qualification. Historic W273 seals/counts below apply only to
+that source state, not W274. The full goal remains ACTIVE.
+
+Next: compressed Compact marks writer (W275), then remaining stateful/profile
+layouts and Compact MV/projection composition, then memory/performance.
+The writer remains whole-part sorted UInt64-key, not arbitrary-key/append.
+The <=10% slowdown objective is unmeasured. Local atomic commit only/no push.
+
+Previously qualified recursive Array-chain JSON ownership (W273, 2026-10-13):
 VERIFIED / root adversary ROBUST for finite serialization behavior only. The
 baseline is `c39487774c0aefdba95f966ac25f236116567b52`; final guarded source
 recheck confirmed the held 609-file production seal
@@ -38,7 +70,7 @@ The full goal remains ACTIVE: all types/layouts and MV/projections precede
 optimization; the <=10% slowdown objective is unmeasured. Next: compressed
 Compact marks, then advanced/chunked ownership. No push.
 
-Current typed-Dynamic Array(JSON) Compact ownership (W272, 2026-10-13):
+Previously qualified typed-Dynamic Array(JSON) Compact ownership (W272, 2026-10-13):
 VERIFIED / root adversary ROBUST within the finite Object V3/wire 4,
 String0/MAP0/one-bucket, plain MRK3/MRK4, BASIC/COMPACT witness. The recursive
 Array/JSON codecs are reused; the physical coordinator now admits exactly one

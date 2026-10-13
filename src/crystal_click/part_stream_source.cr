@@ -41,7 +41,8 @@ module CrystalClick
           entry.physical_size,
           entry.compressed,
           entry.uncompressed_size,
-          entry.file_hash
+          entry.file_hash,
+          entry.uncompressed_hash,
         )
       end
       entries
@@ -58,6 +59,12 @@ module CrystalClick
     def checksum_size_declaration(name : String) : UInt64?
       validate_basename(name)
       @entries[name]?.try(&.physical_size)
+    end
+
+    # Return one checksum entry by value, never the retained declaration table.
+    def checksum_entry(name : String) : PartChecksums::Entry?
+      validate_basename(name)
+      @entries[name]?
     end
 
     def inspect_grid(

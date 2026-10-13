@@ -399,7 +399,7 @@ module CrystalClick
         checksums = PartChecksums.parse(
           metadata.read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice
         )
-        !!(checksums.entry("data.mrk3") || checksums.entry("data.mrk4"))
+        CompactMarkFileAdapter.routing_candidate?(path, checksums)
       rescue ex : IO::Error
         raise CorruptPartError.new(ex.message || "cannot inspect JSON part mark family")
       end

@@ -1,6 +1,103 @@
 # Compact part writer frontier
 
-## Current transition: recursive Array-chain JSON ownership — W273
+## Qualified compressed Compact marks reader — W274
+
+Status: VERIFIED / root adversary ROBUST within the finite transport and public
+integration scope (2026-10-13). Baseline:
+`73c85f6219000de789f7f0c33438604dc8aa2f1e` (W273). The reader admits one
+checksum-declared `data.cmrk3` or `data.cmrk4` alongside the existing plain
+MRK3/MRK4 alternatives. Compression is independent of the logical mark format.
+The schema-neutral `CompactMarkFileAdapter` reuses authenticated frame
+transport, the existing coordinate/row/terminal grid and recursive value codecs;
+there is no second logical serializer.
+
+Public integration uses one strict routing hint at four dispatch sites.
+Four Compact readers retain the detached actual mark filename in selected
+checksum names; they no longer reconstruct a plain filename from logical mode.
+The hint chooses validation, not admission. Physical-only, mixed and unknown
+Compact-family sidecars enter strict validation; valid Wide `data.mrk`,
+`data.mrk2`, `data.cmrk`, and `data.cmrk2` are excluded exactly.
+
+Guard laws:
+
+- Exactly one recognized sidecar agrees across directory/checksum inventories;
+  reject unknown/mixed/missing/undeclared sidecars, symlinks, FIFO and
+  extension/compression-flag disagreement.
+- Bound physical and canonical marks before payload allocation; preserve
+  consumptive input/decoded/result/grid budgets without double input charging.
+- Retain uncompressed size/hash in checksum entries and detached source copies.
+  Check physical CityHash on the same mmap before frame indexing, authenticate
+  every compressed frame, then check exact canonical size/CityHash before grid
+  exposure. This is integrity relative to declared checksums, not cryptographic
+  authenticity or whole-part validation.
+- The direct canonical `CompactMarkIndex.read` API is not the authenticated
+  transport entry. The public physical context/adapter supplies those guards.
+- Preserve adaptive per-granule rows, empty callbacks, exact slot order,
+  middle-row coordinates and terminal EOF. Assume a quiescent part; there is
+  no concurrent-mutation/OS-attestation guarantee.
+
+Observed DoD, guarded and serial:
+
+- Focused four paths: DEBUG 39 examples (`f395ff`), actual RELEASE 39
+  (`84618c`). Affected 25 paths: DEBUG 236 (`9539dd`), actual RELEASE 236
+  (`4cc173`). Per mode: 275 examples / 29 disjoint paths in two executables,
+  zero failures/errors/pending; not a full-suite run.
+- Fresh native/helper matrices: four cells each, plain/compressed x MRK3/MRK4,
+  native CHECK and literal SELECT before candidate helpers. DEBUG `ed2729`
+  and RELEASE `342b08` exit 0. Each capture contains one native and eight
+  helper records with 36 raw sidecars. Exact canonical mark bytes, UInt64
+  values including MAX, neutral dispatch, typed table full/middle/EOF windows,
+  actual selected checksum filenames and unchanged inventories pass.
+- Root raw/record audits exit 0: DEBUG `3a4c6a`, RELEASE `796c4d`.
+  Exact SQL/argv subjects, all 45 record/sidecar files, raw rows
+  `[2,2,2,0]`, four MRK3 slots / six MRK4 slots and current 41-file source
+  seals are checked. Nine instrument self-controls pass (`1c5670`).
+  Same-lineage reviews are correlated; canonical peer equality is not an
+  independent ClickHouse decompressor or CityHash implementation.
+- Local integration also checks existing Dynamic/static-JSON/recursive-JSON
+  selected reads and offline values with both compressed mark modes. These
+  generated fixtures do not qualify native JSON x compressed-mark combinations.
+  Native candidate typed semantics here cover only `pk`/`value` UInt64;
+  String1/Array(Int32) observations are raw physical windows, not typed admission.
+
+Source pin `ed30948f095ecb70679986d7d60e27ad770ae27a` and runtime
+26.10.1.1201/build `d9bcb5ab007f0f6299f7f973f2642245bab3d028` are separate
+pins, not a latest-source or runtime-build-provenance claim. Fresh captures:
+`/private/tmp/crystal-click-w274-native-debug-integrated.PWjSS9` and
+`/private/tmp/crystal-click-w274-native-release.I4fvHx`. Exact commands,
+file hashes, summary/audit digests and residual risks are indexed in the
+[W274 evidence packet](../.landmark/evidence/compact-marks-reader-w274.json).
+Temporary raw evidence must be regenerated if lost; packet shape is not proof.
+
+Falsifier lineage: unchanged public entry RED rejects both compressed layouts
+(`c55853`/`eb40e4`); stock-first controls pass before implementation.
+The pre-integration neutral/table entry RED (`12ab31`) exposes plain-only
+dispatch/name reconstruction. The unsupported UInt8 negative fixture
+(`70d9cc`), helper Slice-to-JSON compile failure (`77badf`) and audit's
+lost validated table identity (`a5b7f6`) are repaired instrument defects,
+not format failures or reasons to broaden admission. Earlier pre-integration
+18/111-example cohorts and captures are historical, not the final W274 DoD.
+
+## Next transition: compressed Compact marks writer — W275
+
+PROPOSED: reuse the existing canonical grid and compression backend; add explicit
+physical mark compression, actual output names, compressed/raw checksum metadata,
+budgeted output ownership and staged readback. First discriminator: generate
+plain/compressed MRK3/MRK4 parts, have pinned native CHECK/SELECT and the current
+public reader agree, and reject inconsistent metadata without publication.
+No writer change is admitted by W274. Current writing remains whole-part sorted
+UInt64-key writing, not arbitrary-key or incremental append.
+
+Remaining: modern String/profiles and advanced/chunked JSON/Dynamic ownership,
+unqualified wrapper/site combinations, broader public typed carriers, then
+Compact MV/projection composition. All types/layouts and MV/projections precede
+memory/performance optimization; <=10% slowdown is unmeasured and the full goal
+remains ACTIVE. No universal-layout, granule-only-I/O, RSS or speed claim.
+Rollback only the atomic W274 change against W273; preserve the protected specs.
+Refresh on source/test/compiler/runtime/profile/capture drift or scope widening.
+Local atomic commit only; no push.
+
+## Previously qualified recursive Array-chain JSON ownership — W273
 
 Status: VERIFIED / root adversary ROBUST within the finite W273 serialization
 scope (2026-10-13), under explicit root final-gate authorization. Baseline:

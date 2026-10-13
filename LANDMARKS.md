@@ -1,6 +1,44 @@
 # Crystal Click landmarks
 
-## Recursive Array-chain JSON ownership — W273
+## Compressed Compact marks reader — W274
+
+- VERIFIED / root adversary ROBUST within finite transport/public integration
+  scope (2026-10-13), over W273 `73c85f6219000de789f7f0c33438604dc8aa2f1e`.
+  A schema-neutral mark-file adapter separates compression from MRK3/MRK4;
+  canonical grid and recursive logical codecs are reused. Actual detached mark
+  names propagate to four readers; one strict hint serves four dispatch sites.
+  No new logical type/profile/owner/site or writer compression is admitted.
+- Bounds precede payload allocation. Physical checksum on the same mmap,
+  frame authentication and exact canonical size/hash precede grid exposure.
+  Reject ambiguous/unknown/undeclared/missing sidecars, flag disagreement,
+  symlinks and FIFO. Physical-only hints do not fall through to Wide; exactly
+  `data.mrk`, `data.mrk2`, `data.cmrk`, `data.cmrk2` remain Wide controls.
+- DEBUG and actual RELEASE each pass 275 examples / 29 disjoint paths in two
+  serial executables, not a full suite. Fresh four-cell native/helper matrices
+  and root raw/record audits pass in each mode: nine records / 36 raw files,
+  canonical bytes, raw rows `[2,2,2,0]`, UInt64/MAX and full/middle/EOF typed
+  table coordinates. Root source/hash review and nine audit self-controls pass.
+  Exact sources, captures, digests and command/chunk lineage are in the
+  [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md) and
+  [W274 evidence index](.landmark/evidence/compact-marks-reader-w274.json).
+- Public entry RED and pre-integration neutral/table RED establish the two
+  admission gaps. Unsupported UInt8 test input, helper Slice-to-JSON reporting
+  and auditor dropped-table identity are instrument errors with bounded repairs,
+  not production format failures. Preserve the failed captures, not their
+  discarded conclusions. W273 seals/counts below are historical, not current.
+- Native typed semantics cover UInt64 pk/value; String1/Array(Int32) observations
+  are raw windows only. Local Dynamic/JSON compressed fixtures do not establish
+  native JSON x compressed-mark coverage. Reviews are correlated, not independent
+  model replication; no independent decompression/CityHash or OS-attestation
+  claim. Assume quiescent parts. No all-layout/full-suite/RSS/speed claim.
+- Next: compressed Compact marks writer (W275), preserving one physical
+  assembler, budgeted compression/checksums and staged readback, then remaining
+  stateful layouts and Compact MV/projections. All types/layouts and MV/projections
+  precede optimization; <=10% slowdown unmeasured, full goal ACTIVE. No push.
+  Refresh on source/test/profile/compiler/runtime/capture drift, temporary
+  evidence loss or widening; rollback only W274 and preserve protected specs.
+
+## Previously qualified recursive Array-chain JSON ownership — W273
 
 - VERIFIED / root adversary ROBUST within the finite serialization scope
   (2026-10-13). Root's final hostile source/diff and raw/native/byte/negative
@@ -45,7 +83,7 @@
   all-types/layouts, RSS, granule-isolation, speed, or global-completion claim
   follows. Full goal ACTIVE; no push.
 
-## Typed-Dynamic Array(JSON) Compact ownership — W272
+## Previously qualified typed-Dynamic Array(JSON) Compact ownership — W272
 
 - VERIFIED / root adversary ROBUST within the finite W272 scope over W271
   `10e12bd283df225499dce649cc83df93e4b60352` (2026-10-13). One Array(JSON)
