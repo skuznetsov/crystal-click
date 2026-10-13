@@ -25,9 +25,6 @@ module CrystalClick
       validate_column_name!(key_name)
       validate_column_set!(key_name, columns)
       validate_key_order!(keys)
-      if profile.with_size_stream? && columns.any? { |column| column.dynamic_context? || column.json_context? }
-        raise UnsupportedFormatError.new("Compact String v1 does not admit Dynamic or JSON context inputs")
-      end
       target, parent = validate_destination(destination)
 
       write_codec_budget = BinaryCodecBudget.new(limits, true)
@@ -42,9 +39,9 @@ module CrystalClick
       value_inputs = Array(CompactPartWriteInput).new(columns.size)
       columns.each do |column|
         if column.json_context?
-          value_inputs << column.json_input
+          value_inputs << column.json_input(profile)
         elsif column.dynamic_context?
-          value_inputs << column.dynamic_input
+          value_inputs << column.dynamic_input(profile)
         else
           value_inputs << column.static_input(profile)
         end

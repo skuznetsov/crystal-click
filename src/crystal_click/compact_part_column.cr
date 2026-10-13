@@ -89,21 +89,25 @@ module CrystalClick
       CompactStaticColumnInput.new(@name, @type, detached_granules, profile)
     end
 
-    def dynamic_input : CompactDynamicColumnInput
+    def dynamic_input(
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : CompactDynamicColumnInput
       context = @dynamic_context ||
                 raise UnsupportedFormatError.new("unbound Compact binary_bulk Dynamic input is not admitted")
-      CompactDynamicColumnInput.new(@name, @type, @granules, context)
+      CompactDynamicColumnInput.new(@name, @type, @granules, context, profile)
     end
 
     def dynamic_context? : Bool
       !@dynamic_context.nil?
     end
 
-    def json_input : CompactJsonColumnInput
+    def json_input(
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : CompactJsonColumnInput
       context = @json_context || raise UnsupportedFormatError.new("unbound Compact JSON input is not admitted")
       schema = @json_schema || raise UnsupportedFormatError.new("Compact JSON input has no schema")
       granules = @json_granules || raise UnsupportedFormatError.new("Compact JSON input has no storage values")
-      CompactJsonColumnInput.new(@name, schema, granules, context, @type)
+      CompactJsonColumnInput.new(@name, schema, granules, context, @type, profile)
     end
 
     def json_context? : Bool

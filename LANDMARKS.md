@@ -1,5 +1,45 @@
 # Crystal Click landmarks
 
+## Propagated context String1 Compact writer — W277
+
+- VERIFIED / root adversary ROBUST within finite serialization/native readback
+  scope (2026-10-13), over W276 `1e85f91c467b3fb57172d43ed5ebfec89999b3aa`.
+  The selected String0/String1 profile now binds existing Dynamic/JSON inputs,
+  callback plans, ordinary body owners, metadata and staged readback. Recursive
+  codecs remain shared. Object shared envelopes and SharedVariant embedded
+  type/value payloads retain their default serializer; LC dictionaries do too.
+  The MRK3 typed-Dynamic JSON-child comparison admits matching S0/S1 parents,
+  preserving exact profile equality, budget and child MAP0/bucket-one/S0 guards.
+- DEBUG and actual RELEASE each pass 407 examples / 75 disjoint paths in two
+  executables: 289 Compact/affected plus 118 other shared-plan consumers.
+  Fresh matrices each pass 16 stock and 16 generated cells: MRK3/MRK4 x
+  plain/compressed marks x BASIC/COMPACT discriminator x MAP/MAP_WITH_BUCKETS.
+  Eight rows, four two-row data marks plus EOF, local/native full/middle/EOF
+  and native ATTACH/CHECK are qualified. Outer MAP_WITH_BUCKETS uses two
+  buckets; its three-column witness omits the MAP-only typed-Dynamic Array-chain
+  JSON child. The frozen default String0 witness stays nine-file / 17,902-byte
+  identical in both modes. Code/protected hashes, format and syntax pass.
+- Root raw audits pass stock-only 80 records / 400 sidecars (`28dc5e`) and
+  full matrices 256 / 1,280 each (DEBUG `8ceafe`, actual RELEASE `c4aa39`).
+  Exact post-PIN SQL projections/tables/windows, literals, RowBinary ingress,
+  raw-row/roster mirrors, pins and captured/current active bytes are checked.
+  Eight negative controls reject, including hardcoded SELECT output and an
+  additional SQL statement. Capture-shape repairs and SQL-projection audit
+  false-greens are recorded separately from production RED and DoD.
+  The oracle is finite, not a general SQL/parser security proof. Same-lineage
+  review is correlated; captured pre-ATTACH inventory is not late attestation.
+- ADVANCED/CHUNKED Compact writer layouts, unsupported nominal/public carriers,
+  arbitrary recursive products and mixed profiles remain rejected. Whole-part
+  sorted UInt64-key and quiescent parts/stage only; no arbitrary-key/append,
+  all-layout/full-suite, granule-only-I/O, RSS/speed or global closure claim.
+  Next: remaining stateful/ownership layouts and public typed carriers, then
+  Compact MV/projections; those precede optimization. <=10% slowdown remains
+  unmeasured; full goal ACTIVE. Atomic local commit/no push, preserving protected
+  W263 specs. Refresh on source/test/compiler/runtime/profile drift, temporary
+  evidence loss or widening; rollback only W277. See
+  [W277 evidence](.landmark/evidence/compact-context-string-writer-w277.json) and
+  the [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md).
+
 ## Propagated static String1 Compact writer — W276
 
 - VERIFIED / root adversary ROBUST within finite serialization/native readback
@@ -7,7 +47,8 @@
   Optional part-wide BinaryBulk profile defaults to String0. The public input,
   key, callback roster/body and propagated metadata share the selected profile;
   existing recursive codecs/physical backend are reused. String1 with explicit
-  Dynamic/JSON context owners rejects before staging. Public type/carrier
+  Dynamic/JSON context owners rejected before staging at W276; W277 supersedes
+  that guard for admitted context owners. Public type/carrier
   admission is not widened; bare Array(Nullable(String)) remains rejected.
 - DEBUG and actual RELEASE each pass 274 examples / 52 disjoint paths in two
   executables. Fresh matrices (`c168f9`, `e4f92b`) each pass four stock and four

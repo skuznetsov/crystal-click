@@ -1,5 +1,156 @@
 # Compact part writer frontier
 
+## Active context String1 binding — W277
+
+Status: VERIFIED / root adversary ROBUST within finite serialization/native
+readback scope (2026-10-13), against W276
+`1e85f91c467b3fb57172d43ed5ebfec89999b3aa`.
+The public writer now binds the selected String0/String1 profile through the
+existing Dynamic/JSON recursive owners. No codec per wrapper or second logical
+String serializer is introduced. Independent root raw-capture audits pass the
+declared finite matrices. All types/layouts and MV/projections stay ahead of
+memory/performance work; the full goal remains ACTIVE.
+
+Observed DoD: DEBUG and actual RELEASE each pass 407 examples across
+75 disjoint paths in two executables: 289 Compact/affected examples on 56 paths,
+plus 118 examples on 19 other direct consumers of the shared Dynamic physical
+plan. Fresh native matrices in each mode pass 16 stock and 16 generated cells,
+including local/native full, middle and EOF windows and native ATTACH/CHECK.
+The qualified stock-only control precedes helper adoption. The finite default
+String0 plain MRK3 witness remains byte-identical: nine files / 17,902 bytes in
+both modes. Format, probe syntax and the 19-file owned/protected seal pass.
+This is not a full-suite or all-types/layouts claim.
+
+Root raw audits pass 80 records / 400 invocation sidecars for stock-only
+(`28dc5e`) and 256 records / 1,280 sidecars for each full matrix (DEBUG `8ceafe`,
+actual RELEASE `c4aa39`). They bind exact SQL projections, tables and windows,
+literal values and RowBinary ingress, source/runtime/helper pins, metadata,
+ordered callback rosters, and captured/current active byte inventories. Eight
+negative controls reject missing/extra records, wrong tables, omitted windows,
+hardcoded projections, extra SQL statements, malformed tokens and NULL/empty
+conflation. Summary raw-row and stock-roster mirrors must match raw captures.
+Captured pre-ATTACH detached bytes are not late filesystem attestation.
+The exact-query oracle is finite, not a general SQL parser/security proof.
+Commands, hashes, raw availability, pivots and refresh rules are indexed in
+[W277 evidence](../.landmark/evidence/compact-context-string-writer-w277.json).
+
+CAUTION: persistent serialization and capability widening. Rollback is the
+atomic W277 change only, preserving the three user-owned untracked W263 specs.
+No push. Existing checksum, resource, typed-carrier, sorted UInt64-key,
+whole-part and quiescent-stage guards remain load-bearing.
+
+Design laws, independently checked against source pin
+`ed30948f095ecb70679986d7d60e27ad770ae27a` (not the separate runtime build):
+
+- One operation profile binds each context input, callback plan, ordinary
+  Object/Dynamic body, metadata and authenticated staged readback. String1
+  size callbacks must survive empty values and zero child occurrences.
+- Object's ordinary typed and Dynamic paths inherit propagated String1.
+  MAP/MAP_WITH_BUCKETS and Copy envelopes use their default String0 serializer.
+  ADVANCED/ADVANCED_CHUNKED inner Dynamic Data retains the ordinary profile;
+  the inline nested serialization context must not reset that profile to S0.
+  Keep the separate Object `shared_profile` argument S0. Sources:
+  `DataTypeObject.cpp:180-188`, `SerializationObjectSharedData.cpp:43-49,355-420`;
+  local `ObjectDocumentColumnWriter.inline_raw_layout_at_child_site` consumes
+  `nested_context.profile` for ordinary body events/fragments as well as its
+  advanced physical owner. The current Compact callback-plan gate separately
+  rejects shared-data versions 2/3; W277 does not remove that gate.
+- Dynamic SharedVariant's outer custom String lane inherits the profile, but
+  its embedded type-and-value payload uses the type's default serialization.
+  LowCardinality dictionaries likewise retain the default serializer.
+  Sources: `ColumnDynamic.h:477-488`, `ColumnDynamic.cpp:784-810`,
+  `DataTypeLowCardinality.cpp:156-160`. Do not replace every S0 literal.
+- Input/plan/metadata disagreement must reject before publication. Constructor
+  defaults remain S0 so existing direct input callers retain their behavior.
+  No mixed per-node/propagation=false profile option is introduced.
+
+Consumer inventory: bounded `rg` over `src` and `spec` found production input
+construction only in `CompactPartColumn`; the operation invokes its two context
+factories. Existing W268/W269/W270/W271/W273 specs also construct inputs or
+invoke those factories. The input constructors gain a trailing default profile,
+and the factories accept a default profile; no positional caller is broken.
+Ordinary JSON seams are callback physical planning, body-event planning and
+child-site encoding. The advanced inline owner separately consumes the nested
+context profile. Shared-only guards and the UInt8 outer generic-leaf admission
+are not ordinary-profile gates and must not be relaxed.
+
+Execution order and owned paths:
+
+1. Luna tests first: `spec/compact_part_writer_w277_entry_spec.cr`, focused and
+   adversary siblings, and `spec/support/compact_part_writer_w277_fixture.cr`.
+   A valid String-bearing S0 control must pass; the public S1 expected-success
+   probe must fail at the current context guard before production is changed.
+   Root observed this signal in guarded DEBUG command `crystal spec
+   spec/compact_part_writer_w277_entry_spec.cr --single-module --threads 1
+   --link-flags=-fuse-ld=ld --error-trace --no-color` (final chunk `0f3a8d`,
+   exit 1): two examples, S0 passes and S1 alone raises at
+   `CompactPartOperation:29` before staging. Entry SHA-256 is
+   `2f5165d88c4a6f2f04a4d0a06e8126ad9c4b8723695e909d77ee0d5914a4cb47`;
+   fixture SHA-256 is `5e60f41f4694cbe22f9409fb133213d7b506d12d3e51bc397b6c084012b53dcc`.
+   Earlier nilability, wrapped ordinary-JSON-path and missing-path oracle errors
+   were fixture defects, not behavioral RED. This admits the implementation
+   step, not String1 context compatibility or native qualification.
+2. After that RED, wire the profile in `compact_part_column.cr`,
+   `compact_dynamic_column_input.cr`, `compact_json_column_input.cr`,
+   `compact_dynamic_callback_plan.cr`, `compact_json_callback_plan.cr`,
+   `compact_json_encoded_column.cr`, and `compact_part_writer/compact_part_operation.cr`.
+   Reuse the existing recursive codecs and retain unrelated owner/type guards.
+   The seven-file plumbing made both MRK4 entry examples pass (guarded DEBUG,
+   final chunk `36582a`). The MRK3 matrix then produced a distinct staged-readback
+   RED (`960a38`, four examples / one error): the typed-Dynamic tape grammar
+   delegates to `BinaryDynamicBulkPhysicalPlan.same_prepared_layout?`, whose
+   JSON-child comparison still rejects matching S1 parents. This admits one
+   narrow additional seam in `binary_dynamic_bulk_physical_plan.cr`: matching
+   S0/S1 parent profiles, with exact profile equality, read budget, descriptor,
+   depth, child MAP0/bucket-one and shared-profile S0 checks retained. The tape
+   grammar already has String1 size/data parsing; it is not widened here.
+3. Separate native instruments: `scripts/compact_context_string_writer_w277_helper.cr`
+   and `scripts/probe_compact_context_string_writer_w277.rb`. Run stock-only
+   controls before adopting a helper. Compare independent literal full/middle/EOF
+   values, types, actual profiles/callbacks and native ATTACH/CHECK for generated
+   parts. The native roster has 16 stock and 16 generated cells: MRK3/MRK4 x
+   plain/compressed x BASIC/COMPACT x MAP/MAP_WITH_BUCKETS. MAP has four context
+   columns, including the W273-shaped typed-Dynamic Array-chain JSON child;
+   MAP_WITH_BUCKETS has three and omits that MAP-only child owner. Outer MAP
+   uses one bucket, outer MAP_WITH_BUCKETS uses two; the typed-Dynamic JSON
+   child remains MAP-only with one bucket. Each case
+   has eight rows, four two-row data marks and a separate zero-row EOF; middle
+   windows select keys 3 through 6. Populated shared String lanes retain their
+   S0 envelope. Text JSON ingress rejected non-UTF8 bytes `00ff8041` (Code 117);
+   the qualified stock producer instead uses exact RowBinary with
+   `input_format_binary_read_json_as_string=0`, retaining those byte cases.
+   The insert's executable SHA is checked before/after, with version/build
+   observed by the immediately preceding CREATE. Dynamic type-name whitespace
+   is normalized only in its one native result field; `JSONDynamicPaths` is
+   checked per row, empty for NULL payload, not inferred from part topology.
+   Pinned `JSONPaths.cpp` and raw native results establish that distinction.
+   ADVANCED/CHUNKED public writer refusals stay executable under both
+   profiles; generated advanced qualification belongs to a later layout change.
+4. Root-only guarded serial DoD: focused `crystal spec` on the three W277 paths,
+   then an enumerated affected cohort, in DEBUG and actual `--release`; build
+   the helper in both modes and run the Ruby probe with `--stock-only`, then
+   `--full-matrix --helper PREBUILT --helper-sha256 SHA --evidence-root EMPTY_DIR`.
+   Preserve the frozen S0 W264 byte witness. Record exact commands and final
+   rosters with raw evidence, not an unexecuted all-pass declaration.
+5. Hostile review: stale S0 input/plan metadata, omitted empty size callback,
+   ordinary inline body incorrectly reset to S0, SharedVariant inner payload incorrectly
+   upgraded to S1, resource exhaustion and unchanged unsupported-owner refusal.
+   A source/compile/probe defect is not behavioral RED or native qualification.
+   Root raw auditing exposed capture-shape defects (metadata mirrors, count
+   fields, sorted inventories) and a real audit false-green: checking table
+   subjects/windows without SELECT projections could accept constant output.
+   The repaired auditor requires the entire post-PIN fixed query sequence;
+   replacing `toString(pk)` with a literal and adding an unmarked SQL statement
+   both reject. These are instrument repairs, not production-format widening.
+
+Currently rejected/guard-only: stale input/plan or metadata profile, unsupported
+public carriers/owners, ADVANCED/CHUNKED writer layouts, and tiny read budgets.
+String1 context inputs are no longer blanket-rejected. No arbitrary wrapper/layout
+product, aggregate-family, typed-carrier,
+Compact MV/projection, concurrent-stage,
+granule-only-I/O, allocator/RSS or speed guarantee follows from this slice.
+Refresh on source/test/compiler/runtime/profile drift, capture loss or widening.
+
 ## Qualified propagated static String1 writer — W276
 
 Status: VERIFIED / root adversary ROBUST within finite serialization/native
@@ -25,9 +176,10 @@ Binding laws:
   callbacks. Marks compression remains independent. Staged authenticated
   readback must consume the generated metadata and verify exact logical values
   before exclusive publication.
-- String0 remains the byte-identical default. String1 with explicit Dynamic
-  or JSON inputs is rejected before staging until those owner plans are wired;
-  never advertise String1 while silently serializing an owner as String0.
+- String0 remains the byte-identical default. At W276, String1 with explicit
+  Dynamic/JSON inputs rejected before staging; W277 supersedes that guard for
+  existing admitted context owners. Never advertise String1 while silently
+  serializing an ordinary owner as String0.
 - No mixed per-node profile or propagation=false option is introduced. Existing
   resource, checksum, sorted UInt64-key and quiescent-stage boundaries remain.
 

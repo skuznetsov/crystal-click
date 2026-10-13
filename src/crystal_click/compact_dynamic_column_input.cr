@@ -13,6 +13,7 @@ module CrystalClick
       @type : BinaryDataType,
       granules : Array(Array(BinaryValue)),
       @dynamic_context : CompactDynamicWriteContext,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     )
       if name.empty?
         raise ArgumentError.new("Compact Dynamic column name must be nonempty")
@@ -22,7 +23,7 @@ module CrystalClick
       end
 
       @name = String.new(name.to_slice)
-      @profile = BinaryBulkProfile.single_stream
+      @profile = profile
       @granules = Array(Array(BinaryValue)).new(granules.size)
       granules.each do |rows|
         @granules << rows.dup

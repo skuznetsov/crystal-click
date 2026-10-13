@@ -1,11 +1,29 @@
 # CrystalClick project status
 
-Current propagated static String1 Compact writer (W276, 2026-10-13):
+Active frontier: W277 context String1 binding is VERIFIED / root adversary
+ROBUST within finite serialization/native readback scope (2026-10-13).
+DEBUG and actual RELEASE each pass
+407 examples / 75 disjoint paths in two executables. Fresh matrices each pass
+16 stock and 16 generated cells; String1 now reaches existing Dynamic/JSON
+context owners, including the bounded typed-Dynamic Array-chain JSON child.
+The frozen default String0 witness remains nine-file / 17,902-byte identical.
+Root raw audits pass 80 records / 400 sidecars for stock-only and 256 records /
+1,280 sidecars per full matrix. Exact SELECT expressions, tables, windows,
+literal values, raw-row/roster mirrors, pins and captured/current active bytes
+are checked; eight negative controls reject. Outer MAP_WITH_BUCKETS uses two
+buckets; the typed-Dynamic Array(JSON) child remains MAP-only/bucket-one.
+This is a finite exact-query oracle, not a general SQL/parser proof or full
+type/layout qualification. Whole-part sorted UInt64-key only, no append.
+See the [Compact writer frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+[W277 evidence](../.landmark/evidence/compact-context-string-writer-w277.json).
+
+Previously qualified propagated static String1 Compact writer (W276, 2026-10-13):
 VERIFIED / root adversary ROBUST within finite serialization/native readback
 scope. The public writer accepts an optional trailing BinaryBulk profile,
 String0 by default. String1 binds input, callback/body and propagated metadata
-through the existing recursive codecs. Explicit Dynamic/JSON contexts under
-String1 reject before staging; nominal/public-carrier guards are unchanged.
+through the existing recursive codecs. At W276, explicit Dynamic/JSON contexts
+under String1 rejected before staging; W277 supersedes that blanket guard for
+the existing admitted context owners. Nominal/public-carrier guards are unchanged.
 
 DEBUG and actual RELEASE each pass 274 examples / 52 disjoint paths in two
 executables. Fresh matrices each pass four stock and four generated cells:
@@ -20,8 +38,9 @@ witness stays byte-identical in both modes: nine files / 17,902 bytes.
 Exact commands, pins, rosters and residuals are in the
 [frontier](COMPACT_PART_WRITER_FRONTIER.md) and
 [W276 evidence packet](../.landmark/evidence/compact-string-writer-w276.json).
-This is not all-types/layouts, root Array(Nullable(String)), Dynamic/JSON
-String1, full-suite, concurrent-part, granule-only-I/O, RSS or speed
+This historical W276 slice did not qualify all-types/layouts, root
+Array(Nullable(String)), Dynamic/JSON String1, full-suite, concurrent-part,
+granule-only-I/O, RSS or speed
 qualification. Whole-part sorted UInt64-key only; no arbitrary-key/append.
 Source/runtime pins remain distinct; protected W263 specs remain unchanged.
 

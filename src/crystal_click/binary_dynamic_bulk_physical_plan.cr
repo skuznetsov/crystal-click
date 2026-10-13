@@ -369,9 +369,12 @@ module CrystalClick
 
     private def same_prepared_json_layout?(plan : BinaryDynamicBulkPlan, budget : BinaryCodecBudget) : Bool
       # Admit a direct JSON actual or a bounded Array chain ending at JSON.
-      # Other wrapped leaves, non-root Dynamic sites, and parent profile
-      # variants remain outside this structural read-layout comparison.
-      return false unless @prepared.profile.single_stream? && plan.profile.single_stream?
+      # Other wrapped leaves and non-root Dynamic sites remain outside this
+      # structural read-layout comparison. The parent String profile may be
+      # String0 or String1; equality with the candidate was established by
+      # same_prepared_layout? before reaching this child-grammar comparison.
+      return false unless (@prepared.profile.single_stream? || @prepared.profile.with_size_stream?) &&
+                          (plan.profile.single_stream? || plan.profile.with_size_stream?)
 
       prepared_keys = @prepared.json_object_leaf_keys(budget)
       candidate_keys = plan.json_object_leaf_keys(budget)
@@ -387,11 +390,11 @@ module CrystalClick
         candidate_actual = plan.arm_type("root", key.canonical_arm_index)
         return false unless prepared_actual == candidate_actual
         return false if BinaryArrayJsonLeafShape.wrapper_count?(
-          prepared_actual, key, budget.limits.max_depth
-        ).nil?
+                          prepared_actual, key, budget.limits.max_depth
+                        ).nil?
         return false if BinaryArrayJsonLeafShape.wrapper_count?(
-          candidate_actual, key, budget.limits.max_depth
-        ).nil?
+                          candidate_actual, key, budget.limits.max_depth
+                        ).nil?
 
         prepared_binding = @prepared.json_object_binding(key)
         candidate_binding = plan.json_object_binding(key)
@@ -482,8 +485,8 @@ module CrystalClick
         charge_layout_string_copies!(budget, 1_u64, path_size)
         path = left_object.dynamic_path_at(index)
         return false unless same_structure_layout?(
-          left.structures.dynamic_for(path), right.structures.dynamic_for(path), budget
-        )
+                              left.structures.dynamic_for(path), right.structures.dynamic_for(path), budget
+                            )
       end
 
       return false unless left.typed_path_count == right.typed_path_count
@@ -515,14 +518,14 @@ module CrystalClick
           right_site_path = right.typed_dynamic_site_path_at(path, site_index)
           return false unless left_site_path == right_site_path
           return false unless left.typed_dynamic_site_type_for(path, left_site_path) ==
-                              right.typed_dynamic_site_type_for(path, right_site_path)
+                                right.typed_dynamic_site_type_for(path, right_site_path)
           return false unless left.typed_dynamic_site_object_depth_for(path, left_site_path) ==
-                              right.typed_dynamic_site_object_depth_for(path, right_site_path)
+                                right.typed_dynamic_site_object_depth_for(path, right_site_path)
           return false unless same_structure_layout?(
-            left.typed_dynamic_site_structure_for(path, left_site_path),
-            right.typed_dynamic_site_structure_for(path, right_site_path),
-            budget,
-          )
+                                left.typed_dynamic_site_structure_for(path, left_site_path),
+                                right.typed_dynamic_site_structure_for(path, right_site_path),
+                                budget,
+                              )
         end
       end
 
@@ -543,7 +546,7 @@ module CrystalClick
       budget.charge_wire_bytes(byte_count)
       left_size.times do |byte_index|
         return false unless left.dynamic_path_byte_at(left_index, byte_index) ==
-                            right.dynamic_path_byte_at(right_index, byte_index)
+                              right.dynamic_path_byte_at(right_index, byte_index)
       end
       true
     end
@@ -561,7 +564,7 @@ module CrystalClick
       budget.charge_wire_bytes(add_size(left_size.to_u64, right_size.to_u64))
       left_size.times do |byte_index|
         return false unless left.typed_path_byte_at(left_index, byte_index) ==
-                            right.typed_path_byte_at(right_index, byte_index)
+                              right.typed_path_byte_at(right_index, byte_index)
       end
       true
     end
@@ -579,7 +582,7 @@ module CrystalClick
       budget.charge_wire_bytes(add_size(left_size.to_u64, right_size.to_u64))
       left_size.times do |byte_index|
         return false unless left.typed_dynamic_path_byte_at(left_index, byte_index) ==
-                            right.typed_dynamic_path_byte_at(right_index, byte_index)
+                              right.typed_dynamic_path_byte_at(right_index, byte_index)
       end
       true
     end

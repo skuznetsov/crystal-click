@@ -388,7 +388,7 @@ module CrystalClick
         grid,
         budget,
         mode,
-        BinaryBulkProfile.single_stream,
+        @plan.profile,
         BinaryBulkProfile.single_stream,
         site.descriptor_depth + 1,
         site.descriptor_depth + 1,
@@ -396,7 +396,7 @@ module CrystalClick
       nested = ObjectSharedNestedSerializationContext.for_write(
         binding.object_plan.structures.object.shared_data_version,
         1,
-        BinaryBulkProfile.single_stream,
+        @plan.profile,
       )
       layout = ObjectDocumentColumnWriter.inline_raw_layout_at_child_site(
         binding.physical_plan,

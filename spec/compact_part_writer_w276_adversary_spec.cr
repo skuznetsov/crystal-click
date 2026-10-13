@@ -1,8 +1,6 @@
 require "./spec_helper"
 require "file_utils"
 require "./support/compact_part_writer_w276_fixture"
-require "./support/compact_part_writer_w268_fixture"
-require "./support/compact_part_writer_w269_fixture"
 
 private def w276_adv_assert_no_side_effect(parent : String, target : String) : Nil
   File.exists?(target).should be_false
@@ -98,52 +96,6 @@ private def w276_adv_construct_metadata(
 end
 
 describe "W276 propagated String1 Compact writer adversaries" do
-  it "rejects explicit Dynamic and JSON columns under String1 without leaving stage artifacts" do
-    dynamic_parent = File.tempname("crystal-click-w276-dynamic-profile-")
-    json_parent = File.tempname("crystal-click-w276-json-profile-")
-    dynamic_target = File.join(dynamic_parent, "all_1_1_0")
-    json_target = File.join(json_parent, "all_1_1_0")
-    dynamic_columns = [CompactPartWriterW268Fixture.columns.first] of CrystalClick::CompactPartColumn
-    json_columns = [CompactPartWriterW269Fixture.columns.first] of CrystalClick::CompactPartColumn
-
-    begin
-      Dir.mkdir(dynamic_parent)
-      File.write(File.join(dynamic_parent, "keep.txt"), "unrelated")
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::CompactPartWriter.write_uint64_columns(
-          dynamic_target,
-          CompactPartWriterW268Fixture::KEY_NAME,
-          CompactPartWriterW268Fixture.keys,
-          dynamic_columns,
-          rows_per_mark: CompactPartWriterW268Fixture::ROWS_PER_MARK,
-          frame_bytes: CompactPartWriterW268Fixture::FRAME_BYTES,
-          mark_format: CrystalClick::CompactMarkFormat::Mrk4,
-          profile: CrystalClick::BinaryBulkProfile.with_size_stream,
-        )
-      end
-      w276_adv_assert_no_side_effect(dynamic_parent, dynamic_target)
-
-      Dir.mkdir(json_parent)
-      File.write(File.join(json_parent, "keep.txt"), "unrelated")
-      expect_raises(CrystalClick::UnsupportedFormatError) do
-        CrystalClick::CompactPartWriter.write_uint64_columns(
-          json_target,
-          CompactPartWriterW269Fixture::KEY_NAME,
-          CompactPartWriterW269Fixture::KEYS,
-          json_columns,
-          rows_per_mark: CompactPartWriterW269Fixture::ROWS_PER_MARK,
-          frame_bytes: CompactPartWriterW269Fixture::FRAME_BYTES,
-          mark_format: CrystalClick::CompactMarkFormat::Mrk4,
-          profile: CrystalClick::BinaryBulkProfile.with_size_stream,
-        )
-      end
-      w276_adv_assert_no_side_effect(json_parent, json_target)
-    ensure
-      FileUtils.rm_rf(dynamic_parent)
-      FileUtils.rm_rf(json_parent)
-    end
-  end
-
   it "rejects metadata inputs and callback plans that disagree with the selected profile" do
     single = CrystalClick::BinaryBulkProfile.single_stream
     sized = CrystalClick::BinaryBulkProfile.with_size_stream

@@ -107,8 +107,8 @@ module CrystalClick
       unless budget.writing? && same_limits?(budget.limits, limits)
         raise ArgumentError.new("Compact JSON callback planning requires a compatible write codec budget")
       end
-      unless input.profile.single_stream? && input.map_basic?
-        raise UnsupportedFormatError.new("Compact JSON writer requires the source single-stream BASIC Map profile")
+      unless (input.profile.single_stream? || input.profile.with_size_stream?) && input.map_basic?
+        raise UnsupportedFormatError.new("Compact JSON writer requires a supported String profile and BASIC Map serialization")
       end
       if input.name.empty?
         raise ArgumentError.new("Compact JSON column name must be nonempty")
@@ -187,7 +187,7 @@ module CrystalClick
         physical = ObjectDocumentPhysicalPlan.from_escaped_prefix(
           site.physical_prefix,
           object_plan,
-          BinaryBulkProfile.single_stream,
+          @profile,
           BinaryBulkProfile.single_stream,
           limits,
           site.array_level,
@@ -237,7 +237,7 @@ module CrystalClick
         body_events = ObjectDocumentInlineCallbackOrder.body_callback_events(
           physical,
           object_plan,
-          BinaryBulkProfile.single_stream,
+          @profile,
           site.callback_prefix,
           budget,
           false,
