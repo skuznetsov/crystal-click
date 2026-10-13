@@ -15,6 +15,7 @@ module CrystalClick
       mark_format : CompactMarkFormat = CompactMarkFormat::Mrk3,
       variant_discriminator_mode : CompactVariantDiscriminatorMode = CompactVariantDiscriminatorMode::Compact,
       compress_marks : Bool = false,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : String
       CompactPartOperation.write_uint64_columns(
         destination,
@@ -29,6 +30,7 @@ module CrystalClick
         mark_format,
         variant_discriminator_mode,
         compress_marks,
+        profile,
       )
     end
   end

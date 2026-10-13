@@ -1,5 +1,108 @@
 # Compact part writer frontier
 
+## Qualified propagated static String1 writer — W276
+
+Status: VERIFIED / root adversary ROBUST within finite serialization/native
+readback scope (2026-10-13), over W275
+`e3c4d7ebf49b486b6ebf850b7f4c1a124df8acac`.
+The existing authenticated reader and recursive BinaryBulk codecs already select
+String0 or String1. This slice closes the Compact public-writer profile binding
+gap, without introducing a second logical String serializer.
+
+CAUTION scope: optional trailing `profile : BinaryBulkProfile`, default
+`single_stream`, on the public whole-part writer. `with_size_stream` is part-wide
+with propagated type versions. Static input, key input, callback plan, body and
+`serialization.json` agree; the existing recursive codec, role plan and
+normalizer are reused. Nominal-type and public-carrier guards are unchanged.
+
+Binding laws:
+
+- One effective profile binds static input, callback roster/body bytes and
+  `serialization.json`. String1 emits a UInt64 little-endian size for every
+  occurrence, including zero, followed by concatenated exact bytes. Never infer
+  child occurrence counts from callback byte lengths or omit empty callbacks.
+- MRK3 keeps whole-column slots; MRK4 declares the exact ordered size/data
+  callbacks. Marks compression remains independent. Staged authenticated
+  readback must consume the generated metadata and verify exact logical values
+  before exclusive publication.
+- String0 remains the byte-identical default. String1 with explicit Dynamic
+  or JSON inputs is rejected before staging until those owner plans are wired;
+  never advertise String1 while silently serializing an owner as String0.
+- No mixed per-node profile or propagation=false option is introduced. Existing
+  resource, checksum, sorted UInt64-key and quiescent-stage boundaries remain.
+
+Observed DoD:
+
+- The public entry RED (`6a0fd7`) cannot express `profile`. Final focused DEBUG
+  (`98b843`) and actual RELEASE (`96acb1`) each pass 11 examples / three paths.
+  Affected DEBUG (`afd0b5`) and actual RELEASE (`c55dc9`) each pass 263 examples /
+  49 paths. Per mode: 274 examples / 52 disjoint paths in two executables,
+  zero failures/errors/pending; not a full-suite run.
+- Fresh DEBUG (`c168f9`) and actual RELEASE (`e4f92b`) native matrices each pass
+  four stock and four generated cells: MRK3/MRK4 x plain/compressed marks.
+  Crystal reads independent stock parts and its generated parts at full,
+  middle and EOF windows. Generated native ATTACH/CHECK and independent
+  literal SELECT pass at those windows. The eight-row fixture covers String,
+  Tuple, BASIC Map, named `Tuple(items Array(Nullable(String)))`,
+  `LowCardinality(String)` and `Variant(String, UInt64)`, alongside unchanged
+  UInt64/Nullable/Array controls. Empty, NULL, embedded NUL, non-UTF8, long and
+  zero-child values are distinguished. The LC dictionary retains its type's
+  default String0 serialization; this is not a String1 dictionary claim.
+- Each full capture has 36 native and 24 helper records / 300 raw invocation
+  sidecars, plus 42 stock and 38 generated raw part files. Root standalone
+  raw audits pass (`247130`, `c1f9c7`): exact argv/stdin/stdout/stderr and record
+  bijections, SQL subjects, independent literal rows, current source/active
+  inventory bytes and runtime/source pins. Missing/extra invocation,
+  wrong-table, omitted-window and malformed-token controls reject; NULL is
+  distinct from empty String. These checks are independent of the producer's
+  expected-row code, not independent model replication or OS attestation.
+- Four two-row data marks are separate from five physical marks including the
+  zero-row EOF in both stock and generated parts. Local selections count data
+  marks. The initially wrong generated-four-physical-marks assertion was a
+  probe error, not a writer change. Pre-ATTACH detached inventories remain
+  captured observations; the late audit does not attest consumed directories.
+- Local hostile checks reject profile/metadata/callback disagreement including
+  the key, explicit Dynamic/JSON owners under String1 before staging, and a
+  tiny transport budget without publication. Empty callbacks stay in the
+  ordered MRK4 roster; the LC dictionary byte-identity control passes.
+- Fresh DEBUG and actual RELEASE default writes preserve the frozen W264
+  plain MRK3 witness exactly: nine files / 17,902 bytes (`ecbb1d`). Root final
+  source/protected-file check passes (`a2bb45`); 11 Crystal paths pass formatter
+  (`c5d646`), and the Ruby probe passes syntax (`90a381`).
+
+Carrier discriminator: the first post-plumbing focused run reached the existing
+public-carrier guard, before encoding. Root's guarded per-column probe
+(`a22f82`, exit 0) identifies only the fixture's root
+`Array(Nullable(String))` as inadmitted, including String0; the named
+`Tuple(items Array(Nullable(String)))` is admitted through the existing generic
+route. The witness now targets that exact wrapper without changing admission.
+Both String profiles must still reject the bare Array shape before staging.
+This is a test-scope correction, not new bare Array/Nullable String support.
+
+Exact implementation ownership: static profile plumbing in
+`compact_part_writer.cr`, `compact_part_column.cr`, `compact_static_column_input.cr`,
+`compact_static_callback_plan.cr`, and the writer operation/metadata files;
+focused W276 specs/fixture and a separate native helper/probe. No additional
+logical serializer or owner class was introduced.
+Rollback is one atomic W276 commit, preserving the three user-owned untracked
+W263 specs. No push is authorized. Source/runtime pins are distinct; current
+source `ed30948f095ecb70679986d7d60e27ad770ae27a` is not a latest-source claim.
+Exact commands, rosters, hashes, pins, capture roots and instrument-failure
+lineage are in the [W276 evidence packet](../.landmark/evidence/compact-string-writer-w276.json).
+Helper/probe/auditor repairs do not qualify failed captures; one prior overlapping
+LLDTAPI probe is excluded from DoD, with no global serial-compliance claim.
+Refresh on source/test/compiler/runtime/profile drift, temporary evidence loss
+or widening. Rollback only W276; preserve the three protected W263 specs.
+
+No all-types/layouts, bare root `Array(Nullable(String))`, mixed per-node profile,
+Dynamic/JSON String1, Compact MV/projection, full-suite, granule-only-I/O, RSS or
+speed claim follows. LC reads can replay the whole selected-column schedule.
+The writer remains whole-part sorted UInt64-key, not arbitrary-key/append;
+quiescent parts/stage are assumed. Next: remaining stateful/profile/ownership
+layouts and typed carriers, then Compact MV/projection composition. All types/
+layouts and MV/projections still precede optimization; <=10% slowdown remains
+unmeasured and the full goal ACTIVE. Local atomic commit only; no push.
+
 ## Qualified compressed Compact marks writer — W275
 
 Status: VERIFIED / root adversary ROBUST within finite serialization/native

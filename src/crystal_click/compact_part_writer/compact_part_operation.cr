@@ -17,6 +17,7 @@ module CrystalClick
       mark_format : CompactMarkFormat,
       variant_discriminator_mode : CompactVariantDiscriminatorMode,
       compress_marks : Bool = false,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : String
       validate_mark_format!(mark_format)
       variant_discriminator_mode.wire_value
@@ -24,6 +25,9 @@ module CrystalClick
       validate_column_name!(key_name)
       validate_column_set!(key_name, columns)
       validate_key_order!(keys)
+      if profile.with_size_stream? && columns.any? { |column| column.dynamic_context? || column.json_context? }
+        raise UnsupportedFormatError.new("Compact String v1 does not admit Dynamic or JSON context inputs")
+      end
       target, parent = validate_destination(destination)
 
       write_codec_budget = BinaryCodecBudget.new(limits, true)
@@ -42,13 +46,14 @@ module CrystalClick
         elsif column.dynamic_context?
           value_inputs << column.dynamic_input
         else
-          value_inputs << column.static_input
+          value_inputs << column.static_input(profile)
         end
       end
       key_input = CompactStaticColumnInput.new(
         key_name,
         BinaryDataType.primitive("UInt64"),
         key_granules,
+        profile,
       )
       backend_columns = Array(CompactPartWriteInput).new(columns.size + 1)
       backend_columns << key_input
@@ -88,6 +93,7 @@ module CrystalClick
         write_transport_budget,
         write_plan,
         compress_marks,
+        profile,
       )
       files = case write_plan
               when CompactStaticWritePlan

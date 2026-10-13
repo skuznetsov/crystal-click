@@ -1,6 +1,35 @@
 # CrystalClick project status
 
-Current compressed Compact marks writer (W275, 2026-10-13):
+Current propagated static String1 Compact writer (W276, 2026-10-13):
+VERIFIED / root adversary ROBUST within finite serialization/native readback
+scope. The public writer accepts an optional trailing BinaryBulk profile,
+String0 by default. String1 binds input, callback/body and propagated metadata
+through the existing recursive codecs. Explicit Dynamic/JSON contexts under
+String1 reject before staging; nominal/public-carrier guards are unchanged.
+
+DEBUG and actual RELEASE each pass 274 examples / 52 disjoint paths in two
+executables. Fresh matrices each pass four stock and four generated cells:
+MRK3/MRK4 x plain/compressed, local full/middle/EOF reads, native ATTACH/CHECK
+and independent literal windows. Finite witnesses include nested String,
+named Tuple(Array(Nullable(String))), LC(String) and Variant(String, UInt64).
+LC dictionaries still use their default String0 serializer. Root raw audits
+pass 60 records / 300 invocation sidecars per matrix. Both stock and generated
+parts have four data marks plus a zero-row EOF. The frozen String0 plain MRK3
+witness stays byte-identical in both modes: nine files / 17,902 bytes.
+
+Exact commands, pins, rosters and residuals are in the
+[frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+[W276 evidence packet](../.landmark/evidence/compact-string-writer-w276.json).
+This is not all-types/layouts, root Array(Nullable(String)), Dynamic/JSON
+String1, full-suite, concurrent-part, granule-only-I/O, RSS or speed
+qualification. Whole-part sorted UInt64-key only; no arbitrary-key/append.
+Source/runtime pins remain distinct; protected W263 specs remain unchanged.
+
+Next: remaining stateful/profile/ownership layouts and public typed carriers,
+then Compact MV/projection composition, then memory/performance. The <=10%
+slowdown objective is unmeasured; full goal ACTIVE. Local commit/no push.
+
+Previously qualified compressed Compact marks writer (W275, 2026-10-13):
 VERIFIED / root adversary ROBUST within finite serialization/native readback
 scope. `compress_marks : Bool = false` selects plain or LZ4-framed physical
 marks independently of MRK3/MRK4. A separate owned-byte physical assembler

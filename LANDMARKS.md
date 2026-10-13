@@ -1,5 +1,44 @@
 # Crystal Click landmarks
 
+## Propagated static String1 Compact writer — W276
+
+- VERIFIED / root adversary ROBUST within finite serialization/native readback
+  scope (2026-10-13), over W275 `e3c4d7ebf49b486b6ebf850b7f4c1a124df8acac`.
+  Optional part-wide BinaryBulk profile defaults to String0. The public input,
+  key, callback roster/body and propagated metadata share the selected profile;
+  existing recursive codecs/physical backend are reused. String1 with explicit
+  Dynamic/JSON context owners rejects before staging. Public type/carrier
+  admission is not widened; bare Array(Nullable(String)) remains rejected.
+- DEBUG and actual RELEASE each pass 274 examples / 52 disjoint paths in two
+  executables. Fresh matrices (`c168f9`, `e4f92b`) each pass four stock and four
+  generated MRK3/MRK4 x plain/compressed cells with local/native full/middle/EOF
+  values and native ATTACH/CHECK. Finite nested String, named Tuple(Array
+  (Nullable(String))), LC(String) and Variant(String, UInt64) witnesses include
+  empty/NULL/non-UTF8/NUL/long/zero-child values. LC dictionary serialization
+  stays String0 by default. Five physical marks include four data marks + EOF.
+- Root raw audits (`247130`, `c1f9c7`) pass 60 invocation records / 300 sidecars
+  per matrix with exact SQL subjects, pins, independent literal rows and current
+  source/active byte inventories. Bounded negative controls reject. Captured
+  pre-ATTACH detached inventory is not late OS attestation; same-lineage review
+  is correlated, not independent model replication. Metadata/profile/key and
+  tiny-budget adversaries pass. Default plain MRK3 stays nine-file / 17,902-byte
+  identical in both modes (`ecbb1d`); source/protected seal, format and syntax pass.
+- The entry RED establishes the missing API. Carrier, escaped callback names,
+  hex casing, Ruby/Crystal helper API, symbol/JSON-key, process-label, physical
+  vs data mark and scratch-auditor issues were instrument defects, not reasons
+  to widen admission. Failed captures and the prior overlapping LLDTAPI probe
+  are excluded from DoD; no global serial-compliance claim. Exact lineage is in
+  [W276 evidence](.landmark/evidence/compact-string-writer-w276.json) and the
+  [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md).
+- Quiescent parts/stage and whole-part sorted UInt64-key only. No all-layout/
+  full-suite, Dynamic/JSON String1, granule-only-I/O, RSS/speed or global closure.
+  LC reads may replay the full selected-column schedule. Next: remaining
+  stateful/profile/ownership and typed carriers, then Compact MV/projections;
+  types/layouts and MV/projections precede optimization. <=10% slowdown
+  unmeasured, full goal ACTIVE. Local commit/no push. Refresh on source/test/
+  compiler/runtime/profile drift, temporary evidence loss or widening; rollback
+  only W276 and preserve protected W263 specs.
+
 ## Compressed Compact marks writer — W275
 
 - VERIFIED / root adversary ROBUST within finite serialization/native readback
