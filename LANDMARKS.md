@@ -1,5 +1,50 @@
 # Crystal Click landmarks
 
+## Recursive Array-chain JSON ownership — W273
+
+- VERIFIED / root adversary ROBUST within the finite serialization scope
+  (2026-10-13). Root's final hostile source/diff and raw/native/byte/negative
+  review authorized this bounded claim only. Baseline W272 is
+  `c39487774c0aefdba95f966ac25f236116567b52`; final held seals were rechecked:
+  production 609 files
+  `78766bc34791de62d336ad3fa8ef18fd4f0ba9eea923474ede61e9e7b254cf03` and
+  all 2042 source/spec/script files
+  `32bf269693e24ee72107e5e2b6b6b53f6094d610e29e67db0a2721f20b709c32`.
+  Root verified exact SHA-256 equality for all 12 protected/frozen W263 and
+  W271/W272/W273 fixture-control-baseline files; the three user-owned W263
+  specs remain unchanged.
+- Scope: bounded `Array* → JSON` actual at the existing root typed-Dynamic
+  field inside Object V3/wire 4, String0, MAP0/one bucket, plain MRK3/MRK4,
+  BASIC/COMPACT. Native depths 2/3; depth 4 local-only. Reuses existing Array
+  and JSON value codecs; `BinaryArrayJsonLeafShape` validates exact descriptor
+  shape while owner/site identity stays with callers. Grammar derives each
+  nested occurrence from its parsed sizes role. Direct JSON and one Array from
+  W272 remain unchanged; no root-Dynamic or arbitrary-wrapper admission.
+- DEBUG and actual RELEASE each pass 979 examples / 158 disjoint paths in seven
+  serial executables. Four 119-invocation native matrices and root
+  physical/mutant/pressure audits pass in both modes/depths. Run roots, hashes,
+  cohort IDs, raw byte evidence, and audit chunks are indexed in the
+  [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md) and
+  [W273 evidence packet](.landmark/evidence/compact-part-writer-w273.json).
+- Fresh W272 RELEASE native/byte regression (106 invocations / 424 raw files)
+  and the nine-file / 17,902-byte frozen-static guard pass narrowly. The
+  checksum-resealed nested size-count fault has an independent exact-byte audit:
+  only `data.bin` and checksums change, one raw byte at offset 589 is changed,
+  and the selected reader rejects trailing bytes after the JSON occurrence
+  schedule. No native CHECK/query or independent CityHash claim is made for
+  that supplemental fault.
+  The SQL-subject binder is a detached pre-ATTACH snapshot, not OS attestation.
+  JSON full-grid preflight can reject mark 0 after mark 3 corruption; no
+  granule isolation or granule-only-I/O claim.
+- Next slice: compressed Compact marks before advanced/chunked
+  ownership. No stock compressed-mark execution is recorded here. Other open
+  wrappers/sites/profiles and Compact MV/projection composition remain in the
+  active goal. All types/layouts and MV/projections precede optimization;
+  <=10% slowdown remains unmeasured. The guarded formatter check exited 1 and
+  left seven paths not format-clean; no format-clean/polish, full-suite,
+  all-types/layouts, RSS, granule-isolation, speed, or global-completion claim
+  follows. Full goal ACTIVE; no push.
+
 ## Typed-Dynamic Array(JSON) Compact ownership — W272
 
 - VERIFIED / root adversary ROBUST within the finite W272 scope over W271

@@ -521,7 +521,9 @@ module CrystalClick
       plan.typed_dynamic_json_object_leaf_plans_for(path, budget).any? do |entry|
         key = entry[0]
         key.canonical_arm_index == canonical_arm_index &&
-          CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(actual_type, key)
+          CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(
+            actual_type, key, budget.limits.max_depth
+          )
       end
     end
 

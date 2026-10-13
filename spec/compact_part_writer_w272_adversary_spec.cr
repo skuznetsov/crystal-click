@@ -289,18 +289,54 @@ describe "W272 Compact typed-Dynamic Array(JSON) admission adversaries" do
     end
   end
 
-  it "keeps deeper arrays and tuple wrappers outside the one-Array grant" do
-    [:nested_array, :tuple].each do |kind|
-      witness = w272a_wrapped_actual_column(kind)
-      w272a_common_codec_control!(
-        witness[:plan],
-        witness[:rows],
-        witness[:bindings],
-        witness[:actual_type],
+  it "admits deeper Array chains but keeps tuple wrappers outside the Array-chain grant" do
+    nested = w272a_wrapped_actual_column(:nested_array)
+    w272a_common_codec_control!(
+      nested[:plan],
+      nested[:rows],
+      nested[:bindings],
+      nested[:actual_type],
+    )
+
+    parent = File.tempname("crystal-click-w272-nested-array-admitted-")
+    part_path = File.join(parent, "all_1_1_0")
+    begin
+      Dir.mkdir(parent)
+      w272a_write(
+        part_path,
+        [nested[:column]] of CrystalClick::CompactPartColumn,
+        mark_format: CrystalClick::CompactMarkFormat::Mrk4,
+        discriminator_mode: CrystalClick::CompactVariantDiscriminatorMode::Basic,
+      ).should eq(part_path)
+      File.exists?(part_path).should be_true
+
+      reader = CrystalClick::CompactRecursiveJsonColumnReader.open(
+        part_path,
+        CompactPartWriterW272Fixture::COLUMN_NAME,
+        CompactPartWriterW272Fixture.schema,
       )
-      w272a_refuse_without_publish do |part_path|
-        w272a_write(part_path, [witness[:column]] of CrystalClick::CompactPartColumn)
+      actual = reader.read_marks(0, CompactPartWriterW272Fixture::MARK_COUNT).flatten
+      actual.size.should eq(CompactPartWriterW272Fixture::ROW_COUNT)
+      budget = CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default)
+      actual.each_with_index do |value, index|
+        expected = nested[:rows][index].object_document.value_for(CompactPartWriterW272Fixture::PAYLOAD_PATH)
+        observed = value.object_document.value_for(CompactPartWriterW272Fixture::PAYLOAD_PATH)
+        observed.type.should eq(CompactPartWriterW272Fixture.dynamic_type)
+        CrystalClick::CompactPartValueComparison.binary!(observed, expected, budget)
       end
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+
+    tuple = w272a_wrapped_actual_column(:tuple)
+    w272a_common_codec_control!(
+      tuple[:plan],
+      tuple[:rows],
+      tuple[:bindings],
+      tuple[:actual_type],
+    )
+    w272a_refuse_without_publish do |part_path|
+      w272a_write(part_path, [tuple[:column]] of CrystalClick::CompactPartColumn)
     end
   end
 

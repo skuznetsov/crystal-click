@@ -1,5 +1,43 @@
 # CrystalClick project status
 
+Current recursive Array-chain JSON ownership (W273, 2026-10-13):
+VERIFIED / root adversary ROBUST for finite serialization behavior only. The
+baseline is `c39487774c0aefdba95f966ac25f236116567b52`; final guarded source
+recheck confirmed the held 609-file production seal
+`78766bc34791de62d336ad3fa8ef18fd4f0ba9eea923474ede61e9e7b254cf03` and
+all-2042-file source/spec/script seal
+`32bf269693e24ee72107e5e2b6b6b53f6094d610e29e67db0a2721f20b709c32`. Root
+also verified exact SHA-256 equality for all 12 protected/frozen files; the
+three user-owned W263 specs were preserved. DEBUG and actual RELEASE each pass
+979 examples / 158 disjoint paths in seven serial executables. Four native
+matrices pass at 119 invocations / 476 raw files each with record, SQL-subject,
+inventory, physical, mutant and pressure audits. Fresh W272 RELEASE regression
+(106 invocations / 424 raw) and nine-file / 17,902-byte frozen-static guard pass
+narrowly. The checksum-resealed nested count fault is independently byte-audited:
+only its data/checksum files change, the exact size-lane mutation is isolated at
+raw byte 589, and the selected production reader rejects trailing bytes after
+the JSON occurrence schedule. Root's hostile review is ROBUST within this
+finite serialization scope. Within the existing Object V3/wire 4, String0,
+MAP0/one-bucket,
+plain MRK3/MRK4, BASIC/COMPACT path, bounded `Array* → JSON` is qualified for
+native descriptor depths 2/3 and local depth 4 only. This is not root-Dynamic
+ownership or arbitrary wrappers/profiles. The reusable shape predicate checks
+only exact Array-chain-to-JSON structure; existing recursive value codecs are
+reused and per-level occurrences come from parsed sizes roles.
+
+Exact run roots, summary hashes, cohort chunks, seals, and audit identifiers
+are indexed in the [frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+[W273 evidence packet](../.landmark/evidence/compact-part-writer-w273.json).
+SQL subject binding is a detached pre-ATTACH snapshot, not OS attestation.
+Whole-grid JSON preflight can reject mark 0 after corruption in mark 3; no
+granule-isolation claim follows. The guarded Crystal formatter check exited 1
+without changing files; seven source/spec paths remain not format-clean. This
+style-only residual is separate from the finite behavioral verdict. No
+all-types/layouts, full-suite, RSS, speed, or global-completion claim is made.
+The full goal remains ACTIVE: all types/layouts and MV/projections precede
+optimization; the <=10% slowdown objective is unmeasured. Next: compressed
+Compact marks, then advanced/chunked ownership. No push.
+
 Current typed-Dynamic Array(JSON) Compact ownership (W272, 2026-10-13):
 VERIFIED / root adversary ROBUST within the finite Object V3/wire 4,
 String0/MAP0/one-bucket, plain MRK3/MRK4, BASIC/COMPACT witness. The recursive

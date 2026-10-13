@@ -121,26 +121,37 @@ module CrystalClick
         raise(CorruptPartError.new("Compact typed-Dynamic selected arm index is outside its exact discriminator roster"))
     end
 
-    # Exact element occurrence for one admitted Array(JSON) arm. This is
-    # available only after that arm's physical sizes role has been parsed;
-    # the arm count remains the number of parent rows selecting the Array.
-    def selected_array_json_element_count(path : String, arm_index : Int) : UInt64
-      selected_rows = selected_arm_count(path, arm_index)
-      actual_type = @plan.arm_type(path, arm_index)
-      unless actual_type.tag == BinaryDataType::TAG_ARRAY && actual_type.child_count == 1 &&
-             actual_type.child_at(0).tag == BinaryDataType::TAG_JSON
-        raise UnsupportedFormatError.new("Compact typed-Dynamic Array element count is outside the single Array(JSON) slice")
+    # Exact JSON-leaf occurrence for one admitted Dynamic actual. Direct JSON
+    # inherits the discriminator count; every Array wrapper requires its own
+    # consumed sizes role and exact elements occurrence, including zero counts.
+    def selected_json_leaf_occurrence_count(path : String, key : BinaryDynamicJsonLeafKey) : UInt64
+      unless key.dynamic_site == path
+        raise CorruptPartError.new("Compact typed-Dynamic JSON leaf key names a different Dynamic site")
       end
 
-      arm_path = append_indexed_path(path, ".arm.", arm_index.to_i32)
+      arm_index = key.canonical_arm_index
+      selected_rows = selected_arm_count(path, arm_index)
+      actual_type = @plan.arm_type(path, arm_index)
+      wrapper_count = BinaryArrayJsonLeafShape.wrapper_count?(actual_type, key, @limits.max_depth) ||
+                      raise(UnsupportedFormatError.new("Compact typed-Dynamic JSON leaf is outside the bounded Array-chain-to-JSON slice"))
+      return selected_rows if wrapper_count == 0
+
+      arm_path = append_indexed_path(path, ".arm.", arm_index)
       unless required_occurrence(arm_path) == selected_rows
         raise CorruptPartError.new("Compact typed-Dynamic Array row occurrence differs from its discriminator arm census")
       end
-      sizes_role = append_path(arm_path, ".sizes")
-      unless @seen_roles.includes?(sizes_role)
-        raise CorruptPartError.new("Compact typed-Dynamic Array element count precedes its exact sizes callback")
+
+      current_path = arm_path
+      current_count = selected_rows
+      wrapper_count.times do
+        sizes_role = append_path(current_path, ".sizes")
+        unless @seen_roles.includes?(sizes_role)
+          raise CorruptPartError.new("Compact typed-Dynamic JSON leaf count precedes an exact Array sizes callback")
+        end
+        current_path = append_path(current_path, ".elements")
+        current_count = required_occurrence(current_path)
       end
-      required_occurrence(append_path(arm_path, ".elements"))
+      current_count
     end
 
     private def parse_node!(

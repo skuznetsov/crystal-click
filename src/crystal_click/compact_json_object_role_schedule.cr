@@ -103,9 +103,9 @@ module CrystalClick
         bindings.each do |entry|
           key = entry[0]
           unless CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(
-                   prefix.plan.typed_dynamic_for(path), key
+                   prefix.plan.typed_dynamic_for(path), key, budget.limits.max_depth
                  )
-            raise UnsupportedFormatError.new("Compact JSON reader admits only direct JSON or one Array(JSON) typed-Dynamic actual")
+            raise UnsupportedFormatError.new("Compact JSON reader admits only direct JSON or bounded Array-chain typed-Dynamic actuals")
           end
           site = dynamic_physical.json_object_site(key)
           child_prefix = nested_prefixes[key]? ||
@@ -299,9 +299,9 @@ module CrystalClick
         bindings.each do |entry|
           key = entry[0]
           unless CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(
-                   prefix.plan.typed_dynamic_for(path), key
+                   prefix.plan.typed_dynamic_for(path), key, budget.limits.max_depth
                  )
-            raise UnsupportedFormatError.new("Compact JSON reader admits only direct JSON or one Array(JSON) typed-Dynamic actual")
+            raise UnsupportedFormatError.new("Compact JSON reader admits only direct JSON or bounded Array-chain typed-Dynamic actuals")
           end
           site = dynamic_physical.json_object_site(key)
           child_root = ObjectDocumentInlineCallbackOrder.canonical_root_prefix(site.physical_plan)

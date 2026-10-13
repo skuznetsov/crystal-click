@@ -85,8 +85,10 @@ module CrystalClick
         entries.each do |entry|
           key = entry[0]
           child_plan = entry[1]
-          unless CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(dynamic_structure, key)
-            raise UnsupportedFormatError.new("typed-Dynamic JSON read context admits only direct JSON or one Array(JSON) actual leaves")
+          unless CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(
+                   dynamic_structure, key, budget.limits.max_depth
+                 )
+            raise UnsupportedFormatError.new("typed-Dynamic JSON read context admits only direct JSON or bounded Array-chain actual leaves")
           end
           unless seen_keys.add?(key)
             raise CorruptPartError.new("typed-Dynamic JSON leaf key is duplicated in its exact field owner")

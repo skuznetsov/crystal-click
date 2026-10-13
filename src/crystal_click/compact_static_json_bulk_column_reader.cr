@@ -599,10 +599,12 @@ module CrystalClick
         type = prefix.plan.typed_type_for(path)
         structure = prefix.plan.typed_dynamic_for(path)
         valid_bindings = bindings.all? do |key, _plan|
-          CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(structure, key)
+          CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(
+            structure, key, budget.limits.max_depth
+          )
         end
         unless type.tag == BinaryDataType::TAG_DYNAMIC && valid_bindings
-          raise UnsupportedFormatError.new("Compact static-root JSON admits only direct JSON or one Array(JSON) typed-Dynamic actual")
+          raise UnsupportedFormatError.new("Compact static-root JSON admits only direct JSON or bounded Array-chain typed-Dynamic actuals")
         end
       end
       nil

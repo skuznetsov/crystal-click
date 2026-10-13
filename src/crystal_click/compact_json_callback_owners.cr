@@ -1,18 +1,17 @@
 module CrystalClick
   # Exact JSON owners admitted by the bounded Compact typed-Dynamic slice:
-  # direct JSON and one Array(JSON) wrapper. The root Object already belongs
-  # to the caller; returned tuples are its JSON Object children in the
-  # callback-owner representation.
+  # direct JSON and bounded Array chains ending at JSON. The root Object
+  # already belongs to the caller; returned tuples are its JSON Object
+  # children in the callback-owner representation.
   class CompactJsonCallbackOwners
     alias CallbackOwner = ObjectDocumentInlineCallbackOrder::CallbackOwner
 
     private def initialize
     end
 
-    # Admit only a direct JSON actual or exactly one Array(JSON) actual at a
-    # declared typed Dynamic root. Its child Object can contain ordinary
-    # Object/Dynamic lanes, but no further typed- or inferred-Dynamic JSON
-    # owner is admitted in this slice.
+    # Admit only direct JSON or bounded Array-chain JSON actuals at a declared
+    # typed Dynamic root. Its child Object can contain ordinary Object/Dynamic
+    # lanes, but no further typed- or inferred-Dynamic JSON owner is admitted.
     def self.for_owner(
       physical_plan : ObjectDocumentPhysicalPlan,
       object_plan : ObjectDocumentPlan,
@@ -66,6 +65,9 @@ module CrystalClick
         bindings.each do |entry|
           key = entry[0]
           child_plan = entry[1]
+          unless key.dynamic_site == "root"
+            raise UnsupportedFormatError.new("Compact typed-Dynamic JSON binding names a non-root Dynamic site")
+          end
           actual_type = nil.as(BinaryDataType?)
           dynamic.type_count.times do |type_index|
             candidate = dynamic.type_at(type_index)
@@ -75,8 +77,8 @@ module CrystalClick
           end
           resolved_type = actual_type ||
                           raise(UnsupportedFormatError.new("Compact typed-Dynamic JSON binding names no canonical actual arm"))
-          unless admitted_typed_dynamic_json_leaf_key?(resolved_type, key)
-            raise UnsupportedFormatError.new("Compact typed-Dynamic JSON binding is not a direct JSON or single Array(JSON) actual arm")
+          unless admitted_typed_dynamic_json_leaf_key?(resolved_type, key, budget.limits.max_depth)
+            raise UnsupportedFormatError.new("Compact typed-Dynamic JSON binding is not a direct JSON or bounded Array-chain actual arm")
           end
 
           site = dynamic_physical.json_object_site(key)
@@ -137,27 +139,21 @@ module CrystalClick
     end
 
     # Exact leaf-key shape shared by the writer and all Compact read gates.
-    # The selected actual itself must be JSON, or one Array whose sole child
-    # is JSON; descriptor paths for every other wrapper remain refused.
+    # The selected actual must be JSON or a bounded chain of one-child Arrays
+    # ending at JSON; every other descriptor wrapper remains refused.
     def self.admitted_typed_dynamic_json_leaf_key?(
       actual_type : BinaryDataType,
       key : BinaryDynamicJsonLeafKey,
+      max_path_depth : Int32,
     ) : Bool
       return false unless key.dynamic_site == "root"
-      case actual_type.tag
-      when BinaryDataType::TAG_JSON
-        key.descriptor_path_size == 0
-      when BinaryDataType::TAG_ARRAY
-        actual_type.child_count == 1 && actual_type.child_at(0).tag == BinaryDataType::TAG_JSON &&
-          key.descriptor_path_size == 1 && key.descriptor_child_at(0) == 0
-      else
-        false
-      end
+      !BinaryArrayJsonLeafShape.wrapper_count?(actual_type, key, max_path_depth).nil?
     end
 
     def self.admitted_typed_dynamic_json_leaf_key?(
       structure : DynamicStructure,
       key : BinaryDynamicJsonLeafKey,
+      max_path_depth : Int32,
     ) : Bool
       return false unless key.dynamic_site == "root"
       actual_type = nil.as(BinaryDataType?)
@@ -167,7 +163,7 @@ module CrystalClick
         actual_type = candidate
         break
       end
-      actual_type ? admitted_typed_dynamic_json_leaf_key?(actual_type.not_nil!, key) : false
+      actual_type ? admitted_typed_dynamic_json_leaf_key?(actual_type.not_nil!, key, max_path_depth) : false
     end
 
     private def self.validate_parent_json_site_roster!(

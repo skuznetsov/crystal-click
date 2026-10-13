@@ -1,6 +1,144 @@
 # Compact part writer frontier
 
-## Current transition: typed-Dynamic Array(JSON) Compact ownership — W272
+## Current transition: recursive Array-chain JSON ownership — W273
+
+Status: VERIFIED / root adversary ROBUST within the finite W273 serialization
+scope (2026-10-13), under explicit root final-gate authorization. Baseline:
+`c39487774c0aefdba95f966ac25f236116567b52` (W272). Entry production remained
+608 files with seal
+`00dbc41d38e307f85d2127c721ab8795f71a44b71ff4b05129b6b6702041c422`. The held
+current production seal is 609 files:
+`78766bc34791de62d336ad3fa8ef18fd4f0ba9eea923474ede61e9e7b254cf03`; the
+all-2042-file source/spec/script seal is
+`32bf269693e24ee72107e5e2b6b6b53f6094d610e29e67db0a2721f20b709c32`. Root's
+final guarded recheck `d9752d` exited 0 and confirmed both seals at the held
+source. Root also confirmed exact SHA-256 equality for all 12 protected/frozen
+W263 and W271/W272/W273 fixture-control-baseline files (`b2a175`); the three
+user-owned W263 specs remain untouched. All twelve individual hashes, including
+the W273 triplet, are recorded in the W273 packet from that root check; they
+are not inferred from the previous packet. `git diff --check` passed (`d01b5f`).
+
+Admitted W273 surface: bounded `Array* → JSON` actuals only at the existing
+root typed-Dynamic field inside an Object column. Native witnesses qualify
+descriptor depths 2 and 3; depth 4 is local-only. Scope remains Object V3/wire
+4, String0, MAP0/one bucket, plain MRK3/MRK4, BASIC/COMPACT. This adds no new
+site or public root-Dynamic API; W272's direct JSON and one-Array behavior is
+preserved. Existing source/runtime pins remain those recorded in the
+[W272 evidence index](../.landmark/evidence/compact-part-writer-w272.json), not
+a claim about latest ClickHouse.
+
+Architecture: reuse the existing recursive Array/JSON value codecs. The new
+`BinaryArrayJsonLeafShape.wrapper_count?` recognizes only descriptor paths made
+of zero or more one-child Array wrappers ending at JSON; owner/site and
+canonical-arm identity remain with the caller
+(`src/crystal_click/binary_array_json_leaf_shape.cr:2-29`,
+`src/crystal_click/compact_json_callback_owners.cr:80-95`). The typed-Dynamic
+tape grammar derives each next occurrence count from its parsed Array sizes
+role, and the Object framer consumes the exact selected JSON-leaf count
+(`src/crystal_click/compact_json_typed_dynamic_tape_grammar.cr:124-167`,
+`src/crystal_click/compact_json_object_map_tape_framer.cr:217`). No duplicate
+logical value codec is introduced. Preserve one count per level; never infer
+counts from callback byte lengths. Empty outer/inner arrays remain distinct
+from Dynamic NULL, and exact owner identity, descriptor depth, statistics,
+profile, and codec/transport limits remain guarded.
+
+Entry falsifier at unchanged production: common-codec controls passed (2 DEBUG
+examples), while the public depth-two positive failed at the single-Array owner
+gate (1 expected physical-admission error). Separate stock-only depth-two and
+depth-three runs then exited zero against the W272-pinned runtime; native
+ordinary Array actual type and NULL/`[]`/`[[]]`/`[[[]]]` identities were
+observed. The stock-byte oracle qualified the MRK4 BASIC tapes and per-parent
+size vectors before implementation; these entry observations are not candidate
+read/write proof.
+
+Four final native matrices passed their runner and record/SQL-subject/inventory
+audits. Each matrix has 119 invocations, 476 raw files, 70 native and 49 helper
+invocations, two stock + four generated + one mutant cells, and seven windows.
+Summary hashes and captured roots:
+
+| Mode/depth | Captured root | Summary SHA-256 | Record audit |
+| --- | --- | --- | --- |
+| DEBUG d2 | `/private/tmp/crystal-click-w273-native-debug-d2-final.VoJrB5` | `0ca87b603bd35a785f8a178122b4768044e7bd9c2af86e02294272a8e757df05` | `7abd4b`, exit 0 |
+| DEBUG d3 | `/private/tmp/crystal-click-w273-native-debug-d3-final.1EB0Dv` | `dfb51794ac5b285968781b797b0228dfa674fa97a9025e5d11473a6d64442618` | `d3f7ba`, exit 0 |
+| RELEASE d2 | `/private/tmp/crystal-click-w273-native-release-d2-final.T8Xt1V` | `269f10dac297064a03c99e892b0ba3724ca6f38daf62b7b1cfe2b591afc97cb0` | `ea42d0`, exit 0 |
+| RELEASE d3 | `/private/tmp/crystal-click-w273-native-release-d3-final.UV7QLg` | `7ec9eacda9784c46cdea0e98bb4ec094f8db18cb9fc747be5bcafc5fb88360a1` | `95b870`, exit 0 |
+
+Root physical/mutant/pressure audits also pass on the held source for all four
+matrices. Their audit chunks are DEBUG d2 `2c8b4d`/`d61316`/`8ce6c9`, DEBUG d3
+`2d3974`/`4391c2`/`a2ce7d`, RELEASE d2 `5020e9`/`42088a`/`3d1b9c`, and RELEASE
+d3 `0edb86`/`524e5d`/`a7a82f` (matrix/mutant/pressure respectively). Each
+matrix checks six exact callback tapes, four data marks and EOF; callback counts
+are 20 at d2 and 21 at d3. The same-extent mark-3 mutation changes only
+`data.bin` and checksums (byte 4→5 at offsets 507/552; frames and grids stay
+fixed); no independent CityHash claim follows. Pressure checks reject a
+same-extent wrong table and a missing 119th invocation; they are in-memory and
+do not change captures. BASIC/stock-COMPACT/generated-COMPACT raw byte lengths
+are d2 627/633/633 and d3 720/724/725.
+
+All 14 affected source cohorts now pass: DEBUG and actual RELEASE each total
+979 examples over 158 disjoint paths in seven serial executables. The focused
+roster is 27 paths/74 examples (the W272 21 plus four W273 control/baseline/
+spec/adversary files and the two W187 recursive Array paths); the other cohort
+rosters are unchanged from the W272 packet. Exact cohort chunk IDs and counts
+are indexed in the [W273 evidence packet](../.landmark/evidence/compact-part-writer-w273.json).
+
+Final supplemental count-fault audit and boundaries: the SQL-subject binder is a detached
+pre-ATTACH snapshot; the consumed path is absent and binding is to the active
+source plus exact ClickHouse sidecar. This is not OS attestation. Whole-grid
+JSON preflight may reject mark 0 after corruption in mark 3, so no granule
+isolation or granule-only-I/O claim is made. The fresh W272 current-source
+RELEASE native regression passed narrowly: runner `e261c1` exited 0 in 38s
+(summary SHA-256
+`9de69a10a50bba1034f1239695867c8c07569903bcac992b6684c1c2c258083f`). The
+guarded record auditor `a4b627` exited 0 for 106 invocations / 424 raw files;
+the independent six-layout plus mark2 slot5 one-byte mutant auditor `a77312`
+exited 0 with `exact_callback_bytes_and_counts`. Their pinned record/layout/
+combined auditor hashes and the mutant byte details are indexed in the W273
+packet. The W269 dependency hash remained unchanged before/after. The separate
+W272 frozen-static guard also passed narrowly: helper build chunks `9da061` →
+`a62033` exited 0 (~25s; binary SHA-256
+`ff4ad7c6014db3fcfef86b0c73c333d7696584d68ef22dcaa37fa13012ebb73a`), guarded
+write-default `e594a0` exited 0, and independent audit `37d6b9` confirmed all
+nine frozen static files / 17,902 bytes equal the frozen original and committed
+W270 digest roster (auditor SHA-256
+`951eb29c4c4c03a59ecf0424ad9751526da8e8d45301ff6c576ce561a7467f85`). Final
+source/preservation checks, supplemental count-fault byte audit, and root final
+hostile review complete the finite behavioral DoD. The exact count-fault audit
+(`f94956`, exit 0; auditor SHA-256
+`6d01c0672866d283d07e81bd63881a03bad4392d0529f38868cde9ddc3af943d`) verifies
+the 10-file part roster and one checksum-resealed size-lane mutation: only
+`data.bin`/`checksums.txt` change; the 5x344 mark grid and four frames stay
+fixed; mark 3 slot 9 maps `(560,110)` to logical byte 589; size1 changes
+`[1,1,2,0]` to `[0,1,2,0]`, while size2 remains `[0,1,2,0]` at 621; the
+720-byte raw / 828-byte compressed part changes only raw byte 589. The selected
+reader rejects it with typed `CorruptPartError` for trailing bytes after the
+JSON occurrence schedule. A mark-0 control accepts two unchanged literal rows
+for this fault only; it does not establish general granule isolation. No
+independent CityHash or native CHECK/query claim is made for this supplemental
+fault. Root's pinned matrix reaffirmation `2033bd` → `f7fde2` exited 0 and
+retained the 119-invocation/476-raw evidence and original SQL/part lineage.
+
+Root hostile source/diff and raw/native/byte/negative review returned ROBUST
+within this declared finite serialization scope. This does not claim all
+types/layouts, full-suite coverage, RSS, mark isolation, speed, or global goal
+completion. The guarded `Crystal tool format --check` returned 1 at
+`root657593` and changed no files; seven paths remain not format-clean. This is
+a style-only follow-up, not a behavioral DoD failure. No formatting cleanup
+was applied to the held source or frozen fixture bytes, and no format-clean or
+polish claim follows.
+
+Risk: CAUTION (persistent recursive callback ownership). Roll back only the
+atomic W273 feature against W272; preserve frozen evidence and the three
+user-owned W263 specs. Strongest failure is a size lane applied at the wrong
+nested level, creating a checksum-valid part with wrong selected values or
+collapsing empty-array/NULL identity. Keep unsupported wrappers, sites and
+profiles fail-closed. Next slice: compressed Compact marks, before
+advanced/chunked ownership; no stock compressed-mark execution is recorded
+here. Compact MV/projection composition remains open. All types/layouts and
+MV/projections precede optimization; the <=10% slowdown objective is
+unmeasured and the full goal remains ACTIVE.
+
+## Previously qualified typed-Dynamic Array(JSON) Compact ownership — W272
 
 Status: VERIFIED / root adversary ROBUST within the finite W272 witnesses and
 affected cohorts (2026-10-13). Baseline:
