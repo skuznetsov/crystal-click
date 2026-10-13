@@ -1,0 +1,273 @@
+require "../../src/crystal_click"
+
+module CompactPartWriterW272NativeFixture
+  extend self
+
+  alias LeafPlan = Tuple(
+    CrystalClick::BinaryDynamicJsonLeafKey,
+    CrystalClick::ObjectDocumentPlan,
+  )
+
+  COLUMN_NAME   = "typed_dynamic_array_json"
+  KEY_NAME      = "pk"
+  ROWS_PER_MARK = 2
+  ROW_COUNT     = 8
+  MARK_COUNT    = 4
+  FRAME_BYTES   = 4096
+  SITE_PATH     = "root"
+  PAYLOAD_PATH  = "payload"
+  VALUE_PATH    = "value"
+  KEYS          = Slice.new(ROW_COUNT) { |index| index.to_u64 + 1_u64 }
+
+  # The source-native witness observed an ordinary Array(JSON) Dynamic arm.
+  # Each JSON element has an inferred Int64 value path; this is intentionally
+  # distinct from the public fixture's typed UInt8 element path.
+  def int64_type : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.primitive("Int64")
+  end
+
+  def dynamic_type : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.dynamic(max_types: 1)
+  end
+
+  def json_type : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.json
+  end
+
+  def array_json_type : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.array(json_type)
+  end
+
+  def declared_json_type : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.json(
+      max_dynamic_paths: 0,
+      max_dynamic_types: 1,
+      typed_paths: {PAYLOAD_PATH => dynamic_type} of String => CrystalClick::BinaryDataType,
+    )
+  end
+
+  def schema : CrystalClick::StorageColumnSchema
+    CrystalClick::CompactJsonColumnAdapter.schema_for_json_declaration(declared_json_type.name) ||
+      raise CrystalClick::UnsupportedFormatError.new("W272 native-shaped JSON declaration is not admitted")
+  end
+
+  private def empty_structures(
+    statistics : CrystalClick::StructureStatistics? = nil,
+  ) : CrystalClick::ObjectDynamicStructureSet
+    object_statistics = statistics || CrystalClick::StructureStatistics.new(
+      [] of UInt64,
+      [] of CrystalClick::StructureStatistic,
+    )
+    object = CrystalClick::ObjectStructure.new(
+      [] of String,
+      version: 4_u64,
+      shared_data_version: 0_u64,
+      bucket_count: 1_u64,
+      statistics: object_statistics,
+    )
+    CrystalClick::ObjectDynamicStructureSet.new(
+      object,
+      Hash(String, CrystalClick::DynamicStructure).new,
+    )
+  end
+
+  # The first complete parent block contains four selected Array(JSON) arms;
+  # NULL Dynamics do not enter either ordinary/shared discriminator count.
+  def actuals : CrystalClick::DynamicStructure
+    CrystalClick::DynamicStructure.new(
+      [array_json_type] of CrystalClick::BinaryDataType,
+      CrystalClick::StructureStatistics.new([4_u64, 0_u64] of UInt64, [] of CrystalClick::StructureStatistic),
+      version: CrystalClick::DynamicStructure::VERSION_V3,
+    )
+  end
+
+  # A child JSON Object is instantiated once per Array element. The fixture
+  # contains six such elements, all with one inferred Int64 Dynamic value.
+  private def child_json_plan : CrystalClick::ObjectDocumentPlan
+    int64_dynamic = CrystalClick::DynamicStructure.new(
+      [int64_type] of CrystalClick::BinaryDataType,
+      CrystalClick::StructureStatistics.new([6_u64, 0_u64] of UInt64, [] of CrystalClick::StructureStatistic),
+      version: CrystalClick::DynamicStructure::VERSION_V3,
+    )
+    child_object = CrystalClick::ObjectStructure.new(
+      [VALUE_PATH] of String,
+      version: 4_u64,
+      shared_data_version: 0_u64,
+      bucket_count: 1_u64,
+      statistics: CrystalClick::StructureStatistics.new([6_u64] of UInt64, [] of CrystalClick::StructureStatistic),
+    )
+    child_structures = CrystalClick::ObjectDynamicStructureSet.new(
+      child_object,
+      {VALUE_PATH => int64_dynamic} of String => CrystalClick::DynamicStructure,
+    )
+    CrystalClick::ObjectDocumentPlan.new(
+      child_structures,
+      json_type.json_type.not_nil!.typed_paths,
+    )
+  end
+
+  def json_bindings : Hash(String, Array(LeafPlan))
+    roster = actuals
+    key = CrystalClick::BinaryDynamicJsonLeafKey.new(
+      SITE_PATH,
+      roster.canonical_index_for(array_json_type),
+      [] of Int32,
+    ).with_child(0)
+    {PAYLOAD_PATH => [{key, child_json_plan}] of LeafPlan} of String => Array(LeafPlan)
+  end
+
+  def object_plan : CrystalClick::ObjectDocumentPlan
+    CrystalClick::ObjectDocumentPlan.new(
+      empty_structures,
+      schema.object_schema.typed_paths,
+      {PAYLOAD_PATH => actuals} of String => CrystalClick::DynamicStructure,
+      typed_dynamic_json_object_leaf_plans: json_bindings,
+    )
+  end
+
+  def context : CrystalClick::CompactJsonWriteContext
+    CrystalClick::CompactJsonWriteContext.new(
+      {SITE_PATH => object_plan} of String => CrystalClick::ObjectDocumentPlan,
+    )
+  end
+
+  private def json_value(value : Int64) : CrystalClick::BinaryValue
+    CrystalClick::BinaryValue.json(
+      json_type,
+      CrystalClick::BinaryJsonRow.new(
+        json_type,
+        [{VALUE_PATH, CrystalClick::BinaryValue.int64(value)}] of Tuple(String, CrystalClick::BinaryValue),
+      ),
+    )
+  end
+
+  private def array_value(values : Array(Int64)) : CrystalClick::BinaryValue
+    children = Array(CrystalClick::BinaryValue).new(values.size)
+    values.each { |value| children << json_value(value) }
+    CrystalClick::BinaryValue.array(array_json_type, children)
+  end
+
+  private def row(values : Array(Int64)?) : CrystalClick::StorageColumnValue
+    selected = values.try { |items| array_value(items) }
+    payload = CrystalClick::BinaryValue.dynamic(dynamic_type, selected)
+    CrystalClick::StorageColumnValue.object_document(
+      CrystalClick::ObjectDocument.new({PAYLOAD_PATH => payload} of String => CrystalClick::BinaryValue),
+    )
+  end
+
+  def expected_literals : Array(Array(Int64)?)
+    [
+      ([11_i64, 12_i64] of Int64),
+      nil,
+      nil,
+      nil,
+      ([] of Int64),
+      ([61_i64] of Int64),
+      nil,
+      ([81_i64, 82_i64, 83_i64] of Int64),
+    ] of Array(Int64)?
+  end
+
+  def expected_mark_arm_counts : Array(Int32)
+    [1, 0, 2, 1]
+  end
+
+  def expected_mark_json_element_counts : Array(Int32)
+    [2, 0, 1, 3]
+  end
+
+  def rows : Array(CrystalClick::StorageColumnValue)
+    expected_literals.map { |value| row(value) }
+  end
+
+  def granules(
+    values : Array(CrystalClick::StorageColumnValue) = rows,
+  ) : Array(Array(CrystalClick::StorageColumnValue))
+    output = Array(Array(CrystalClick::StorageColumnValue)).new(MARK_COUNT)
+    MARK_COUNT.times do |mark|
+      output << values[mark * ROWS_PER_MARK, ROWS_PER_MARK]
+    end
+    output
+  end
+
+  def literal_for(value : CrystalClick::StorageColumnValue) : Array(Int64)?
+    unless value.object?
+      raise CrystalClick::CorruptPartError.new("W272 value is not a root Object row")
+    end
+    selected = value.object_document.value_for(PAYLOAD_PATH)
+    unless selected.type == dynamic_type
+      raise CrystalClick::CorruptPartError.new("W272 payload descriptor is not the declared typed Dynamic")
+    end
+    return nil if selected.is_null?
+    unless selected.child_count == 1 && selected.child_at(0).type == array_json_type
+      raise CrystalClick::CorruptPartError.new("W272 selected Dynamic child is not ordinary Array(JSON)")
+    end
+    selected.child_at(0).elements.map do |json|
+      unless json.type == json_type && json.json_row.type == json_type
+        raise CrystalClick::CorruptPartError.new("W272 Array(JSON) element has the wrong JSON descriptor")
+      end
+      cell = json.json_row.value_for(VALUE_PATH).not_nil!
+      unless cell.type == int64_type
+        raise CrystalClick::CorruptPartError.new("W272 JSON value has the wrong inferred Int64 descriptor")
+      end
+      cell.as_int64
+    end
+  end
+
+  def column : CrystalClick::CompactPartColumn
+    CrystalClick::CompactPartColumn.json(
+      COLUMN_NAME,
+      schema,
+      granules,
+      context,
+    )
+  end
+
+  def common_codec_roundtrip! : Nil
+    actual_roster = actuals
+    bindings = json_bindings
+    unless bindings.size == 1 && bindings[PAYLOAD_PATH].size == 1
+      raise CrystalClick::CorruptPartError.new("W272 exact Array(JSON) leaf binding differs")
+    end
+    key, child_plan = bindings[PAYLOAD_PATH][0]
+    unless key.dynamic_site == SITE_PATH &&
+           key.canonical_arm_index == actual_roster.canonical_index_for(array_json_type) &&
+           key.descriptor_child_path == [0_i32] of Int32 &&
+           child_plan.typed_paths == json_type.json_type.not_nil!.typed_paths
+      raise CrystalClick::CorruptPartError.new("W272 Array(JSON) leaf identity differs")
+    end
+    unless actual_roster.statistics.not_nil!.counts == [4_u64, 0_u64] &&
+           child_plan.structures.object.statistics.not_nil!.counts == [6_u64]
+      raise CrystalClick::CorruptPartError.new("W272 caller-owned parent or child Object census differs")
+    end
+
+    documents = granules.map { |mark_rows| mark_rows.map(&.object_document) }
+    streams = CrystalClick::ObjectDocumentCodec.encode(object_plan, documents)
+    decoded = CrystalClick::ObjectDocumentCodec.decode(
+      schema.object_schema.typed_paths,
+      streams,
+      typed_dynamic_json_object_leaf_plans: bindings,
+    )
+    unless decoded.size == MARK_COUNT && decoded.all?(&.size.==(ROWS_PER_MARK))
+      raise CrystalClick::CorruptPartError.new("W272 common-codec mark grid differs from fixture")
+    end
+    actual = decoded.flat_map do |mark_rows|
+      mark_rows.map { |document| literal_for(CrystalClick::StorageColumnValue.object_document(document)) }
+    end
+    unless actual == expected_literals
+      raise CrystalClick::CorruptPartError.new("W272 common-codec Array(JSON) literals differ")
+    end
+    arm_counts = decoded.map do |mark_rows|
+      mark_rows.count { |document| !literal_for(CrystalClick::StorageColumnValue.object_document(document)).nil? }
+    end
+    element_counts = decoded.map do |mark_rows|
+      mark_rows.sum do |document|
+        literal_for(CrystalClick::StorageColumnValue.object_document(document)).try(&.size) || 0
+      end
+    end
+    unless arm_counts == expected_mark_arm_counts && element_counts == expected_mark_json_element_counts
+      raise CrystalClick::CorruptPartError.new("W272 common-codec parent/element census differs")
+    end
+    nil
+  end
+end

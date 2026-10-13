@@ -1,6 +1,30 @@
 # CrystalClick project status
 
-Current Dynamic-owned Compact JSON callback composition (W271, 2026-10-12):
+Current typed-Dynamic Array(JSON) Compact ownership (W272, 2026-10-13):
+VERIFIED / root adversary ROBUST within the finite Object V3/wire 4,
+String0/MAP0/one-bucket, plain MRK3/MRK4, BASIC/COMPACT witness. The recursive
+Array/JSON codecs are reused; the physical coordinator now admits exactly one
+Array(JSON) actual at the declared root typed-Dynamic site, with its sizes lane
+and an exact bound child Object. Parent rows, selected arrays and JSON elements
+remain separate counts; `[]` is not NULL. This is not arbitrary recursive JSON
+ownership or a standalone/root-Dynamic input API.
+
+DEBUG and actual RELEASE each pass 956 unique examples / 152 disjoint paths
+in seven serial executables, zero failures/errors/pending. Both fresh native
+matrices pass: two stock and four generated cells per mode, 106 authenticated
+invocation records / 424 raw files each, exact six-tape/19-callback audits and
+copy-only semantic child-version negatives. Fresh W271 RELEASE native/raw and
+nine-file/17902-byte frozen static guards pass; frozen fixtures and three
+protected W263 specs stay unchanged. Held source seals and distinct source/
+runtime pins are recorded in the [frontier](COMPACT_PART_WRITER_FRONTIER.md)
+and [W272 evidence index](../.landmark/evidence/compact-part-writer-w272.json).
+No combined/full-suite/fresh-clone, universal-layout, RSS, granule-only-I/O or
+speed-parity claim. Next: advanced/chunked/profile/mark layouts and deeper JSON
+ownership, then Compact MV/projection composition, then memory/performance.
+All types/layouts and MV/projections still precede optimization; <=10% slowdown
+remains unmeasured and the full goal ACTIVE. Local atomic commit only/no push.
+
+Previously qualified Dynamic-owned Compact JSON callback composition (W271, 2026-10-12):
 VERIFIED / root adversary ROBUST within the bounded finite scope below. Scope
 is the direct JSON actual arm of `payload Dynamic(max_types=1)` inside an
 existing Object column, with an Object V3/wire

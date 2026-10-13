@@ -214,7 +214,17 @@ module CrystalClick
             raise(CorruptPartError.new("Compact child Object owner has no exact typed-Dynamic JSON leaf key"))
       parent_grammar = @typed_dynamic_grammars[parent_path]? ||
                        raise(CorruptPartError.new("Compact child Object callback precedes its parent typed-Dynamic discriminator"))
-      selected_rows = parent_grammar.selected_arm_count("root", key.canonical_arm_index)
+      selected_rows = case key.descriptor_path_size
+                      when 0
+                        parent_grammar.selected_arm_count("root", key.canonical_arm_index)
+                      when 1
+                        unless key.descriptor_child_at(0) == 0
+                          raise UnsupportedFormatError.new("Compact MRK3 child JSON accepts only the first Array(JSON) leaf")
+                        end
+                        parent_grammar.selected_array_json_element_count("root", key.canonical_arm_index)
+                      else
+                        raise UnsupportedFormatError.new("Compact MRK3 child JSON is outside the direct or single Array(JSON) slice")
+                      end
       if owner.advanced
         raise UnsupportedFormatError.new("Compact typed-Dynamic JSON child Advanced shared layouts are outside this slice")
       end

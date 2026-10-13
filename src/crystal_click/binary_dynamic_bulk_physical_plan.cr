@@ -368,9 +368,9 @@ module CrystalClick
     end
 
     private def same_prepared_json_layout?(plan : BinaryDynamicBulkPlan, budget : BinaryCodecBudget) : Bool
-      # W271 is the direct ordinary JSON actual arm only. Wrapped JSON leaves,
-      # non-root Dynamic sites, and parent profile variants remain outside the
-      # structural read-layout comparison.
+      # W271/W272 admit a direct JSON actual or exactly one Array(JSON)
+      # actual. Other wrapped leaves, non-root Dynamic sites, and parent
+      # profile variants remain outside this structural read-layout comparison.
       return false unless @prepared.profile.single_stream? && plan.profile.single_stream?
 
       prepared_keys = @prepared.json_object_leaf_keys(budget)
@@ -381,7 +381,13 @@ module CrystalClick
 
       prepared_keys.each_with_index do |key, index|
         return false unless key == candidate_keys[index]
-        return false unless key.dynamic_site == "root" && key.descriptor_path_size == 0
+        return false unless key.dynamic_site == "root"
+
+        prepared_actual = @prepared.arm_type("root", key.canonical_arm_index)
+        candidate_actual = plan.arm_type("root", key.canonical_arm_index)
+        return false unless prepared_actual == candidate_actual
+        return false unless admitted_json_leaf_key_for_actual?(prepared_actual, key)
+        return false unless admitted_json_leaf_key_for_actual?(candidate_actual, key)
 
         prepared_binding = @prepared.json_object_binding(key)
         candidate_binding = plan.json_object_binding(key)
@@ -421,6 +427,21 @@ module CrystalClick
       end
 
       true
+    end
+
+    private def admitted_json_leaf_key_for_actual?(
+      actual_type : BinaryDataType,
+      key : BinaryDynamicJsonLeafKey,
+    ) : Bool
+      case actual_type.tag
+      when BinaryDataType::TAG_JSON
+        key.descriptor_path_size == 0
+      when BinaryDataType::TAG_ARRAY
+        actual_type.child_count == 1 && actual_type.child_at(0).tag == BinaryDataType::TAG_JSON &&
+          key.descriptor_path_size == 1 && key.descriptor_child_at(0) == 0
+      else
+        false
+      end
     end
 
     private def same_json_schema_layout?(

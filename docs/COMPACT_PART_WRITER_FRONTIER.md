@@ -1,6 +1,271 @@
 # Compact part writer frontier
 
-## Current transition: Dynamic-owned Object callback composition — W271
+## Current transition: typed-Dynamic Array(JSON) Compact ownership — W272
+
+Status: VERIFIED / root adversary ROBUST within the finite W272 witnesses and
+affected cohorts (2026-10-13). Baseline:
+`10e12bd283df225499dce649cc83df93e4b60352` (W271).
+The full goal remains all types/layouts and MV/projections before optimization;
+the eventual <=10% slowdown objective is still unmeasured.
+
+Target: one Array wrapper around an ordinary JSON actual at a declared
+`payload Dynamic(max_types=1)` field in the existing Compact Object-column
+path. Reuse recursive Array/JSON value codecs, but compose the wrapper's sizes
+lane and exact bound child Object callbacks with their own occurrence grids.
+This is not ordinary Array(JSON), which already has support, and it is not a
+standalone/root-Dynamic input API.
+
+Admitted surface: the previously qualified W271 behavior stays unchanged.
+The exact single-Array target below now passes public and native witnesses;
+this does not admit arbitrary recursive JSON ownership.
+Rejected/guard-only: other descriptor wrappers, deeper Array chains,
+root-Dynamic/grandchild JSON, child LowCardinality/QBit, advanced/chunked
+SharedData, String1, compressed marks and Compact MV/projection composition
+remain open and fail closed. They are not removed from the full objective.
+
+Design laws: parent rows, selected Array(JSON) actual rows and child JSON
+elements are distinct counts. An ordinary empty array is not a NULL Dynamic
+arm. Zero-selected marks still own their prefixes and empty lanes. Object
+Complete-statistics offsets belong to the exact parsed child owner; neither
+parent/sibling offsets nor callback lengths can supply that authority. Each
+Dynamic discriminator mode remains independently self-describing.
+
+Risk: CAUTION (persistent callback and wrapper ownership composition).
+Rollback: revert only the atomic W272 feature against W271; preserve previous
+frozen fixtures/native captures and all three user-owned W263 specs.
+Strongest failure: sizes are counted in parent/arm rows rather than selected
+JSON elements, or an empty actual is silently turned into NULL, producing a
+part that passes CHECK but returns wrong values. Guards must preserve exact
+leaf coordinates, selected empty arrays, zero-arm extents and owner-local
+statistics; refusals must leave no publication/staging residue.
+
+Execution order and DoD:
+
+1. Freeze a separate common-codec-valid public fixture with varying array
+   lengths, an ordinary empty array, a zero-selected mark and EOF. At unchanged
+   W271 production, run the control GREEN and public Compact positive RED;
+   require a behavioral physical-admission failure, not a malformed fixture.
+2. Inspect the pinned upstream Array/Dynamic/Object serialization paths and
+   qualify a stock fixture independently before using candidate output as an
+   oracle. Native actual type and ordinary/shared identity must be observed;
+   preserve the separate typed-UInt8 and native inferred-Int64 witnesses.
+3. Compose only the exact single-Array descriptor and its sizes/body callbacks.
+   Pass full/middle/zero-arm/last/empty windows for plain MRK3/MRK4 and
+   BASIC/COMPACT, exact child values and counts, wrong-binding/unsupported
+   wrapper refusals, caller-statistics preservation and selected corruption.
+4. Run focused and affected Array/JSON/writer/Dynamic/common-Object cohorts in
+   DEBUG and actual RELEASE, fresh W271 native and frozen-byte guards, then
+   hostile root source/raw/native review. Native CHECK is not semantic proof.
+   Preserve the existing serial worker/thread, process-tree and free-memory
+   guards. No memory/performance or full-suite/fresh-clone claim follows.
+
+Stop/pivot: if the stock constructor changes the actual type or stores it in
+SharedVariant, repair or replace that oracle before widening production. If
+the common-codec control fails, correct/freeze the fixture before interpreting
+its public failure. Never erase the descriptor guard to obtain a green test.
+
+Observed entry signals (root-run, serial, unchanged W271 production):
+
+- The W272 common-codec fixture control passes: 1 example, 0 failures, 0
+  errors, guard exit 0. It checks the exact Dynamic root/arm/[0] JSON binding,
+  eight independent literals, selected-arm counts `[1,0,2,1]` and child JSON
+  element counts `[2,0,1,3]`, including an ordinary empty array and NULLs.
+- The public positive baseline then fails: 1 example, 1
+  `UnsupportedFormatError`, guard exit 1. The refusal is
+  `Compact typed-Dynamic JSON binding is not a direct JSON actual arm`, in
+  `CompactJsonCallbackOwners.for_owner` at line 67. The common control runs
+  before the public call; this is a physical-admission RED, not a malformed
+  descriptor/value fixture or compilation failure.
+- Frozen W272 fixture/control/public-baseline SHA-256 respectively:
+  `a988d951ee911718254c14fc1fb033ba35d8af28dc203e0daa4a6fff4be939a3`,
+  `76a8fbf9335ce64e930232e62e85fa432f680d8644545788929a05532c700326`,
+  `cbd2dd95de0a84aa334328292d71ebe3dc92e827ad1518ebf2f61f686669b130`.
+  The frozen W271 fixture/control/baseline remain unchanged.
+- The first root-run stock-only constructor is refuted, not qualified. Native
+  CHECK succeeds and nonempty rows have ordinary `Array(JSON)` with child
+  `value: Int64`, but the selected empty row 5 becomes
+  `Array(Nullable(String))` in SharedVariant through the Array -> Dynamic ->
+  Tuple -> outer JSON cast chain. Eight rows are intact, but four nonnull
+  Dynamics are not four ordinary Array(JSON) arms. Raw SELECT and invocation
+  records are retained at
+  `/private/tmp/crystal-click-w272-stock-identity.KYCOht` (guard exit 1;
+  observation mismatch, no helper invocation). Preserve this capture, repair
+  the constructor and re-observe identity before widening production.
+- A second stock-only constant-expression constructor, typed Object
+  `payload Array(JSON)` -> typed Object `payload Dynamic(max_types=1)`,
+  produces the same empty-row identity mismatch. All four native invocations
+  succeed, but raw SELECT again observes row 5 as shared
+  `Array(Nullable(String))`; nonnull Dynamic counts are `[1,0,2,1]` while
+  ordinary Array(JSON) counts are `[1,0,1,1]`. The unchanged strict oracle
+  correctly exits 1 at
+  `/private/tmp/crystal-click-w272-stock-typed-object.OPs1ka`.
+  Probe SHA-256 for this run:
+  `65b840a561744846d396478cc46aa0963f84155dfea2ae1e75469d5723a2969d`.
+  Production remains unchanged. After these two non-improving routes, pivot
+  from constant expressions to an actual typed source column; the suspected
+  Field/type-inference cause is not yet established.
+- The typed-column pivot is qualified for this pinned stock BASIC/MRK4
+  witness. Its Memory source column observes four typed Array(JSON) rows
+  before conversion; the target observes row 5 as ordinary Array(JSON),
+  `Shared=false`, with length zero, and NULLs as `None`. Every nonempty child
+  has the independently observed `value: Int64` path and exact literals.
+  Root command `--stock-only --constructor=column_object` exits 0 at
+  `/private/tmp/crystal-click-w272-stock-column-object-retry.4ZQr3v`;
+  probe SHA-256 `1e50e093af498a9f3ed560e0a9a1503354a8b791aea4b964105e2fac0b86feca`.
+  A root-authored source/literal byte audit independently checks all 19
+  callback extents, the entire 575-byte decompressed tape, four data marks,
+  Array sizes `[ [2], [], [0,1], [3] ]`, A `[1,0,2,1]`, E `[2,0,1,3]`,
+  child array level 1 and EOF, and exits 0. This establishes the finite oracle,
+  not compatibility of the still-unchanged Crystal production code.
+  Production remains 608 files with seal
+  `70204584df95de458ec5d75febeb2e9e53513aa7f001efd4c2b8d1fe6a5f01df`
+  before implementation authorization. The earlier Ruby-2.6 `filter_map`
+  failure ran no native invocation and is retained separately as inconclusive.
+
+Executed bounded implementation plan (do not widen without new evidence):
+
+- `src/crystal_click/compact_json_callback_owners.cr` remains the exact
+  physical binding authority. Admit only direct JSON or one `Array(JSON)`
+  actual with key `root`/canonical arm/`[0]`; preserve child identity, depth,
+  array level, profile, statistics and grandchild refusal checks.
+- Update the corresponding writer/consumer gates in
+  `compact_json_callback_plan.cr`, `compact_json_object_role_schedule.cr`,
+  `object_document_typed_dynamic_json_read_context.cr` and
+  `compact_static_json_bulk_column_reader.cr`, all under
+  `src/crystal_click/`. No blanket JSON traversal admission is added.
+- `src/crystal_click/compact_json_typed_dynamic_tape_grammar.cr` exposes
+  a bounded child-element occurrence count only after the exact Array sizes
+  role has been parsed. `compact_json_object_map_tape_framer.cr` uses that E
+  count for the exact wrapped child in MRK3; direct W271 JSON retains A.
+  Existing Array offsets, physical roles, common codecs and child census
+  remain unchanged. Never obtain E from callback byte lengths or parent rows.
+- Root's first compiled candidate run executes 14 examples and exposes the
+  remaining MRK3 physical-read comparison gate: all five MRK3 positives stop
+  at `CompactJsonTypedDynamicTapeGrammar.initialize`, whose
+  `same_prepared_layout?` still rejects every nonempty JSON leaf descriptor
+  path. MRK4 positives pass. Extend only the corresponding exact direct-JSON
+  or single-Array(JSON)/[0] shape gate in
+  `src/crystal_click/binary_dynamic_bulk_physical_plan.cr`; retain prepared
+  arm equality, read budget, schema/profile, child depth/array-level checks
+  and the encoder's identity-only contract. This adds one justified source
+  file to the bounded plan, not a general recursive JSON layout admission.
+  The same run also exposes two negative-fixture defects: statistics are not
+  rejected at the assumed constructor boundary, and Nullable(Array(JSON)) is
+  structurally invalid before Compact admission. Correct these tests against
+  their actual legal rejection boundaries; neither is physical-compatibility
+  evidence. An earlier block-parameter syntax failure executed no examples.
+- Keep the three W272 entry files frozen. Add focused/negative tests in
+  `spec/compact_part_writer_w272_spec.cr` and
+  `spec/compact_part_writer_w272_adversary_spec.cr`; change only the obsolete
+  Array(JSON) refusal example in the W271 adversary spec. Preserve all other
+  wrapper refusals and the three user-owned W263 specs.
+- The source/probe worker owns only
+  `scripts/probe_compact_part_writer_w272.rb`,
+  `scripts/compact_part_writer_w272_helper.cr` and
+  `scripts/support/compact_part_writer_w272_native_fixture.cr`.
+  Run its stock-only identity witness before authorizing production edits.
+  Root alone runs guarded jobs serially, audits source/native/raw evidence,
+  maintains docs/evidence and commits exact owned paths after the DoD.
+
+Root entry commands (each under the unchanged guarded runner, 480 seconds,
+12288 MiB, one worker/thread and 50-percent free-memory threshold):
+
+```
+crystal spec spec/compact_part_writer_w272_fixture_control_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color
+crystal spec spec/compact_part_writer_w272_baseline_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color
+```
+
+These produced GREEN and physical-admission RED respectively above. Both now
+pass in the held-source focused DEBUG and actual RELEASE cohorts below.
+
+Final qualification (root-run, serial; exact commands and rosters in the
+[W272 evidence index](../.landmark/evidence/compact-part-writer-w272.json)):
+
+- DEBUG and actual RELEASE each pass 956 unique examples / 152 disjoint spec
+  paths in seven separate executables per mode, zero failures/errors/pending.
+  Per mode: focused 21 paths/51 examples, JSON 61/398, writer 32/202,
+  LowCardinality 11/108, Variant 9/59, Dynamic 14/109 and common Object 4/29.
+  The focused cohort includes all four frozen W272 entry/positive/adversary
+  paths and the prior W270/W271 guards. This is not a combined/full-suite or
+  fresh-clone result; two user-owned untracked specs are in the JSON cohort
+  but remain excluded from the commit.
+- Fresh DEBUG and RELEASE native matrices each create two stock MRK4 parts
+  and four generated MRK3/MRK4 x BASIC/COMPACT parts. Root independently
+  authenticates 106 invocation records and 424 argv/stdin/stdout/stderr files
+  per mode, including exact source/runtime/helper pins and all local/native
+  windows. Native source-column identity is observed before conversion;
+  generated bytes/helper counters are not the native semantic oracle.
+- All six tapes per mode independently match the 19-callback source/literal
+  byte oracle: BASIC 575 bytes, stock COMPACT 584 bytes, generated COMPACT
+  581 bytes. The generated child's discriminator mode is BASIC even when
+  its parent is COMPACT; the stock COMPACT child is COMPACT. These are decoded
+  tape observations, not compressed-byte parity. Exact Array sizes are
+  `[[2],[],[0,1],[3]]`; A is `[1,0,2,1]`, E is `[2,0,1,3]`.
+  First-prefix parent Dynamic statistics remain `[4,0]`; child Object counts
+  are `[6]` and child Dynamic counts `[6,0]`. Later/zero-arm prefixes are
+  independently checked. Plain mark grids contain four two-row data records
+  and a zero-row whole-grid EOF record.
+- Both APIs return exact full/middle/zero-arm/selected-empty/last/EOF physical
+  windows. The selected-empty SQL predicate is pk=5, a single ordinary
+  `Array(JSON)`, shared=false, payload `[]`, length zero, with no child paths.
+  The corresponding local mark window (2,1) contains pk=5 and pk=6; its A=2,
+  E=1 is not the SQL row count. Separate local fixtures qualify A=1/E=0 in
+  every mark-format/discriminator cell. NULL Dynamic rows remain `None`, not
+  an ordinary empty Array or SharedVariant.
+- A copy-only MRK4 BASIC child Dynamic version 4 -> 5 defect changes exactly
+  one decompressed byte at independently mark-derived offset 338, slot 5,
+  mark 2. It preserves all frame coordinates, the 683-byte compressed extent,
+  the 575-byte decoded extent, marks and all files except data.bin/checksums.
+  After checksum resealing, native CHECK remains healthy but selected child
+  JSON rejects with native exit 117 / invalid Dynamic version 5 / mark-2
+  owner context; local selected reads reject as CorruptPartError. Independent
+  PK control still returns pk=5,6. CHECK is not semantic proof or locality.
+- Fresh W271 RELEASE helper/native regression passes: 94 invocation records,
+  376 raw files, exact six-tape audit and mark-derived child-version negative.
+  Its direct-JSON decoded sizes remain BASIC 505, stock COMPACT 516 and
+  generated COMPACT 511 bytes. A freshly generated static MRK3 guard matches
+  all nine frozen files / 17902 bytes. All three protected W263 specs and
+  both frozen W271/W272 fixture-control-baseline triplets remain unchanged.
+- Root source/raw review returns ROBUST only for this finite scope. The Luna
+  source-only review is correlated, not independent runtime evidence. Exact
+  canonical actual/leaf coordinates, owner depth/array level, schema/profile,
+  parsed statistics and encoder identity are retained; unsupported deeper or
+  foreign wrappers refuse without publication/staging residue.
+
+Held source seals are unchanged before cohorts, after cohorts and after all
+native/frozen-byte checks: production 608 files,
+`00dbc41d38e307f85d2127c721ab8795f71a44b71ff4b05129b6b6702041c422`;
+source/spec/script 2033 files,
+`7dda6e0b07d83fcc06ada69734553adba6ab9b60cb38ad498f6e95dc6c53eede`.
+Compiler: Crystal 1.21.0, LLVM 22.1.8, aarch64-apple-darwin25.6.0.
+Pinned source revision: `ed30948f095ecb70679986d7d60e27ad770ae27a`.
+Pinned runtime: 26.10.1.1201, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`, binary SHA-256
+`bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+The source and runtime pins are distinct; no latest/all-version claim follows.
+
+DEBUG evidence: `/private/tmp/crystal-click-w272-native-debug.LepPrB`, summary
+SHA-256 `bacb0f8a1c1b1040f4dc3ee9603c335e79c12539bc2ed53fb17ff045d3af12df`.
+RELEASE evidence: `/private/tmp/crystal-click-w272-native-release.JlxSqH`, summary
+SHA-256 `e7a1a982c417e2c82746253851fa7588ce79f0a521b304cd1ab1af2be10146ed`.
+Fresh W271 regression: `/private/tmp/crystal-click-w272-w271-regression-native.6QdyEG`,
+summary SHA-256 `b3e59bcf7cf8d4969c6ec6ab5954c2bb33a8634d3dfdc0c29bd4d97a54e94e01`.
+Root audit construction defects (canonical schema whitespace, raw-file versus
+directory checks, a shadowed summary-hash output label, and the regression
+runner's historical stock-field name) were repaired and rerun; none is a
+production semantic RED. The final raw-record and byte auditors pass.
+
+Next bounded falsifier: a source-grounded stock-first positive for an advanced/
+chunked child profile or a deeper/root-Dynamic JSON owner, preserving empty,
+NULL, zero-child and later-prefix observations. No blanket traversal admission.
+Then qualify Compact MV/projection composition before memory/performance.
+The public writer remains whole-part sorted UInt64-key writing, not arbitrary
+keys or incremental append. No granule-only-I/O, large-part/RSS, universal-
+layout or <=10% speed claim. Full goal ACTIVE; local atomic commit only/no push.
+Refresh after relevant source/test/profile/compiler/runtime/capture drift,
+temporary-evidence loss or scope widening; preserve frozen captures on rollback.
+
+## Previously qualified transition: Dynamic-owned Object callback composition — W271
 
 Status: VERIFIED / root adversary ROBUST within the finite W271 witnesses and
 affected cohorts (2026-10-12). This closes only the bounded W271 slice below;
@@ -159,8 +424,8 @@ performance or fresh-clone qualification. The native source pin
 `ed30948f095ecb70679986d7d60e27ad770ae27a` and runtime
 `26.10.1.1201`/build `d9bcb5ab007f0f6299f7f973f2642245bab3d028` are distinct.
 
-Next bounded falsifier: typed Dynamic actual `Array(JSON)` using the existing
-W271 adversary ranges 157–198 and 410–415; ordinary `Array(JSON)` already has
+Historical next falsifier (now qualified by W272 above): typed Dynamic actual
+`Array(JSON)` using the W271 adversary fixture; ordinary `Array(JSON)` already has
 support, but this typed-Dynamic owner remains to be demonstrated. Keep
 root-Dynamic/wrapped/grandchild JSON, child LowCardinality/QBit, advanced or
 chunked profiles and compressed marks open. Then continue remaining types and

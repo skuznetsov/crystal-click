@@ -58,6 +58,7 @@ module CrystalClick
         end
 
         dynamic_plan = prefix.typed_dynamic_plan_for(path)
+        dynamic_structure = prefix.plan.typed_dynamic_for(path)
         dynamic_physical = physical.typed_dynamic(path)
         prefixes = prefix.typed_dynamic_json_prefixes_for(path)
         unless entries.size == dynamic_plan.json_object_binding_count &&
@@ -84,8 +85,8 @@ module CrystalClick
         entries.each do |entry|
           key = entry[0]
           child_plan = entry[1]
-          unless key.dynamic_site == "root" && key.descriptor_path_size == 0
-            raise UnsupportedFormatError.new("typed-Dynamic JSON read context admits only direct JSON actual leaves")
+          unless CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(dynamic_structure, key)
+            raise UnsupportedFormatError.new("typed-Dynamic JSON read context admits only direct JSON or one Array(JSON) actual leaves")
           end
           unless seen_keys.add?(key)
             raise CorruptPartError.new("typed-Dynamic JSON leaf key is duplicated in its exact field owner")

@@ -94,7 +94,7 @@ module CrystalClick
       )
       owner_contexts[root_owner[0]] = {prefix, physical_plan, nil, nil}
 
-      # Resolve the callback owner's direct typed-Dynamic JSON leaves through
+      # Resolve the callback owner's admitted typed-Dynamic JSON leaves through
       # their exact key and physical site. No synthetic key or longest-prefix
       # matching is involved.
       typed_bindings.each do |path, bindings|
@@ -102,8 +102,10 @@ module CrystalClick
         dynamic_physical = physical_plan.typed_dynamic(path)
         bindings.each do |entry|
           key = entry[0]
-          unless key.dynamic_site == "root" && key.descriptor_path_size == 0
-            raise UnsupportedFormatError.new("Compact JSON reader admits only a direct typed-Dynamic JSON actual")
+          unless CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(
+                   prefix.plan.typed_dynamic_for(path), key
+                 )
+            raise UnsupportedFormatError.new("Compact JSON reader admits only direct JSON or one Array(JSON) typed-Dynamic actual")
           end
           site = dynamic_physical.json_object_site(key)
           child_prefix = nested_prefixes[key]? ||
@@ -296,8 +298,10 @@ module CrystalClick
         dynamic_physical = physical_plan.typed_dynamic(path)
         bindings.each do |entry|
           key = entry[0]
-          unless key.dynamic_site == "root" && key.descriptor_path_size == 0
-            raise UnsupportedFormatError.new("Compact JSON reader admits only a direct typed-Dynamic JSON actual")
+          unless CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(
+                   prefix.plan.typed_dynamic_for(path), key
+                 )
+            raise UnsupportedFormatError.new("Compact JSON reader admits only direct JSON or one Array(JSON) typed-Dynamic actual")
           end
           site = dynamic_physical.json_object_site(key)
           child_root = ObjectDocumentInlineCallbackOrder.canonical_root_prefix(site.physical_plan)

@@ -481,7 +481,7 @@ module CrystalClick
             end
             structure.type_count.times do |type_index|
               actual_type = structure.type_at(type_index)
-              next if bound_direct_typed_dynamic_json_actual?(plan, path, actual_type, budget)
+              next if bound_typed_dynamic_json_actual?(plan, path, actual_type, budget)
               CompactDynamicBulkPrefixTraversal.validate_compact_type_admission!(actual_type, limits, actual_depth.to_i32)
             end
           end
@@ -506,14 +506,13 @@ module CrystalClick
       nil
     end
 
-    private def bound_direct_typed_dynamic_json_actual?(
+    private def bound_typed_dynamic_json_actual?(
       plan : ObjectDocumentPlan,
       path : String,
       actual_type : BinaryDataType,
       budget : BinaryCodecBudget,
     ) : Bool
-      return false unless actual_type.tag == BinaryDataType::TAG_JSON &&
-                          plan.typed_type_for(path).tag == BinaryDataType::TAG_DYNAMIC &&
+      return false unless plan.typed_type_for(path).tag == BinaryDataType::TAG_DYNAMIC &&
                           plan.typed_dynamic_site_count_for(path) == 1 &&
                           plan.typed_dynamic_site_path_at(path, 0) == "root"
 
@@ -521,8 +520,8 @@ module CrystalClick
       canonical_arm_index = structure.canonical_index_for(actual_type)
       plan.typed_dynamic_json_object_leaf_plans_for(path, budget).any? do |entry|
         key = entry[0]
-        key.dynamic_site == "root" && key.canonical_arm_index == canonical_arm_index &&
-          key.descriptor_path_size == 0
+        key.canonical_arm_index == canonical_arm_index &&
+          CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(actual_type, key)
       end
     end
 

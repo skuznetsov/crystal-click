@@ -1,16 +1,18 @@
 module CrystalClick
-  # Exact direct JSON owners admitted by the first Compact typed-Dynamic
-  # slice. The root Object already belongs to the caller; returned tuples are
-  # its JSON Object children in the callback-owner representation.
+  # Exact JSON owners admitted by the bounded Compact typed-Dynamic slice:
+  # direct JSON and one Array(JSON) wrapper. The root Object already belongs
+  # to the caller; returned tuples are its JSON Object children in the
+  # callback-owner representation.
   class CompactJsonCallbackOwners
     alias CallbackOwner = ObjectDocumentInlineCallbackOrder::CallbackOwner
 
     private def initialize
     end
 
-    # Admit only a direct JSON actual at a declared typed Dynamic root. Its
-    # child Object can contain ordinary Object/Dynamic lanes, but no further
-    # typed- or inferred-Dynamic JSON owner is admitted in this slice.
+    # Admit only a direct JSON actual or exactly one Array(JSON) actual at a
+    # declared typed Dynamic root. Its child Object can contain ordinary
+    # Object/Dynamic lanes, but no further typed- or inferred-Dynamic JSON
+    # owner is admitted in this slice.
     def self.for_owner(
       physical_plan : ObjectDocumentPhysicalPlan,
       object_plan : ObjectDocumentPlan,
@@ -64,8 +66,17 @@ module CrystalClick
         bindings.each do |entry|
           key = entry[0]
           child_plan = entry[1]
-          unless key.dynamic_site == "root" && key.descriptor_path_size == 0
-            raise UnsupportedFormatError.new("Compact typed-Dynamic JSON binding is not a direct JSON actual arm")
+          actual_type = nil.as(BinaryDataType?)
+          dynamic.type_count.times do |type_index|
+            candidate = dynamic.type_at(type_index)
+            next unless dynamic.canonical_index_for(candidate) == key.canonical_arm_index
+            actual_type = candidate
+            break
+          end
+          resolved_type = actual_type ||
+                          raise(UnsupportedFormatError.new("Compact typed-Dynamic JSON binding names no canonical actual arm"))
+          unless admitted_typed_dynamic_json_leaf_key?(resolved_type, key)
+            raise UnsupportedFormatError.new("Compact typed-Dynamic JSON binding is not a direct JSON or single Array(JSON) actual arm")
           end
 
           site = dynamic_physical.json_object_site(key)
@@ -123,6 +134,40 @@ module CrystalClick
       end
 
       output
+    end
+
+    # Exact leaf-key shape shared by the writer and all Compact read gates.
+    # The selected actual itself must be JSON, or one Array whose sole child
+    # is JSON; descriptor paths for every other wrapper remain refused.
+    def self.admitted_typed_dynamic_json_leaf_key?(
+      actual_type : BinaryDataType,
+      key : BinaryDynamicJsonLeafKey,
+    ) : Bool
+      return false unless key.dynamic_site == "root"
+      case actual_type.tag
+      when BinaryDataType::TAG_JSON
+        key.descriptor_path_size == 0
+      when BinaryDataType::TAG_ARRAY
+        actual_type.child_count == 1 && actual_type.child_at(0).tag == BinaryDataType::TAG_JSON &&
+          key.descriptor_path_size == 1 && key.descriptor_child_at(0) == 0
+      else
+        false
+      end
+    end
+
+    def self.admitted_typed_dynamic_json_leaf_key?(
+      structure : DynamicStructure,
+      key : BinaryDynamicJsonLeafKey,
+    ) : Bool
+      return false unless key.dynamic_site == "root"
+      actual_type = nil.as(BinaryDataType?)
+      structure.type_count.times do |type_index|
+        candidate = structure.type_at(type_index)
+        next unless structure.canonical_index_for(candidate) == key.canonical_arm_index
+        actual_type = candidate
+        break
+      end
+      actual_type ? admitted_typed_dynamic_json_leaf_key?(actual_type.not_nil!, key) : false
     end
 
     private def self.validate_parent_json_site_roster!(

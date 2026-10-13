@@ -407,11 +407,47 @@ describe "W271 Compact typed-Dynamic JSON writer adversaries" do
     end
   end
 
-  it "rejects a wrapped JSON Dynamic actual and unknown discriminator mode before publication" do
+  it "admits the qualified Array(JSON) Dynamic actual and rejects an unknown discriminator mode" do
     fixture = CompactPartWriterW271Fixture
     wrapped_actual = w271a_array_json_actual_column
-    w271a_refuse_without_publish do |part_path|
-      w271a_write(part_path, [wrapped_actual] of CrystalClick::CompactPartColumn)
+    parent = File.tempname("crystal-click-w271-array-json-")
+    part_path = File.join(parent, "all_1_1_0")
+    begin
+      Dir.mkdir(parent)
+      w271a_write(
+        part_path,
+        [wrapped_actual] of CrystalClick::CompactPartColumn,
+        mark_format: CrystalClick::CompactMarkFormat::Mrk4,
+        discriminator_mode: CrystalClick::CompactVariantDiscriminatorMode::Compact,
+      ).should eq(part_path)
+      File.exists?(part_path).should be_true
+
+      actual = w271a_read_full(part_path)
+      actual.size.should eq(CompactPartWriterW271Fixture::ROW_COUNT)
+      actual.each_with_index do |value, index|
+        expected = fixture.expected_literals[index]
+        payload = value.object_document.value_for(CompactPartWriterW271Fixture::PAYLOAD_PATH)
+        payload.type.should eq(fixture.dynamic_type)
+        if literal = expected
+          payload.is_null?.should be_false
+          payload.child_count.should eq(1)
+          array_type = CrystalClick::BinaryDataType.array(fixture.json_type)
+          array = payload.child_at(0)
+          array.type.should eq(array_type)
+          array.elements.size.should eq(1)
+          json = array.elements[0]
+          json.type.should eq(fixture.json_type)
+          cell = json.json_row.value_for(CompactPartWriterW271Fixture::VALUE_PATH).not_nil!
+          cell.type.should eq(fixture.uint8_type)
+          cell.byte_at(0).should eq(literal)
+        else
+          payload.is_null?.should be_true
+        end
+      end
+      first_prefix = w271a_first_dynamic_prefix(part_path)
+      first_prefix.statistics.not_nil!.counts.should eq([4_u64, 0_u64])
+    ensure
+      FileUtils.rm_rf(parent)
     end
 
     unsupported_mode = CrystalClick::CompactVariantDiscriminatorMode.new(2_u64)

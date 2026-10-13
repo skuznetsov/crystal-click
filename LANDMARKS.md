@@ -1,6 +1,52 @@
 # Crystal Click landmarks
 
-## Dynamic-owned Compact JSON callback composition — W271
+## Typed-Dynamic Array(JSON) Compact ownership — W272
+
+- VERIFIED / root adversary ROBUST within the finite W272 scope over W271
+  `10e12bd283df225499dce649cc83df93e4b60352` (2026-10-13). One Array(JSON)
+  actual at declared `payload Dynamic(max_types=1)` inside an existing Compact
+  Object column: Object V3/wire 4, String0/MAP0/one bucket, plain MRK3/MRK4,
+  BASIC/COMPACT. Common-codec GREEN and public physical-admission RED precede
+  implementation at an unchanged production seal. Ordinary Array(JSON) already
+  had support; this closes its Dynamic-owned child callback composition only.
+- Exact root/canonical arm/[0] binding, child owner identity/depth/array level,
+  schema/profile and parsed-prefix statistics are preserved. MRK3 child framing
+  uses parsed Array sizes for E, not parent P or selected-array A. The literal
+  grids A `[1,0,2,1]` and E `[2,0,1,3]`, selected `[]` versus NULL, A=0/E=0 and
+  A=1/E=0 marks are checked. No blanket descriptor traversal or encoder layout
+  relaxation. Deeper/root-Dynamic/grandchild JSON and advanced/chunked profiles
+  remain open and fail closed.
+- DEBUG and actual RELEASE each pass 956 unique examples / 152 disjoint paths
+  in seven serial executables; all zero failures/errors/pending. Per mode,
+  fresh native evidence authenticates 106 invocation records / 424 raw files,
+  two stock and four generated cells, six-tape/19-callback byte oracles and
+  exact SQL/physical windows. The native empty SQL row pk=5 is not the two-row
+  local mark (2,1). Child discriminator modes are independent; decoded BASIC,
+  stock COMPACT and generated COMPACT tapes are 575/584/581 bytes respectively.
+  This is not compressed-byte, full-suite or fresh-clone parity.
+- One checksum-resealed child Dynamic wire-version byte 4 -> 5 at mark-derived
+  offset 338 preserves marks/frame extents; CHECK remains healthy, local
+  selected read rejects and native selected child read exits 117 with exact
+  invalid-version/mark-2 context. Independent PK control returns 5,6. CHECK is
+  not semantic or I/O-locality proof. A fresh current-source W271 RELEASE
+  native/raw regression passes 94 records / 376 raw files and exact six tapes;
+  nine frozen static files / 17902 bytes, both frozen fixture triplets and
+  three protected W263 specs remain unchanged and outside unrelated staging.
+- Held production 608-file and source/spec/script 2033-file seals remain equal
+  before/after cohorts and native checks. Exact pins, commands, rosters,
+  repaired oracle/auditor construction defects and captured roots are in the
+  [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md) and
+  [W272 evidence index](.landmark/evidence/compact-part-writer-w272.json).
+  Luna source review is correlated; root raw/source/native checks support the
+  finite verdict. Refresh on source/test/profile/compiler/runtime/capture
+  drift, temporary-evidence loss or widening; rollback only the atomic feature.
+- Next stock-first falsifier: an advanced/chunked child profile or deeper/
+  root-Dynamic JSON owner with nonuniform, empty, NULL and later-prefix marks.
+  Then Compact MV/projections, then optimization. Writer remains whole-part
+  sorted UInt64-key, not append/arbitrary-key. Full goal ACTIVE; <=10% speed
+  objective unmeasured; local commit only/no push.
+
+## Previously qualified Dynamic-owned Compact JSON callback composition — W271
 
 - VERIFIED / root adversary ROBUST within this finite slice: direct JSON actual
   arm of declared
@@ -25,8 +71,9 @@
   authority, and CHECK-versus-semantic distinction. Do not infer byte parity:
   generated COMPACT-parent child framing is BASIC and has a different raw tape
   size than either stock mode.
-- Next bounded falsifier: typed Dynamic actual `Array(JSON)` from W271 adversary
-  ranges 157–198 and 410–415; ordinary `Array(JSON)` already has support.
+- Historical next falsifier, qualified by W272 above: typed Dynamic actual
+  `Array(JSON)` from the W271 adversary fixture; ordinary `Array(JSON)` already
+  has support.
   Root-Dynamic/wrapped/grandchild JSON, child LowCardinality/QBit, advanced or
   chunked profiles and compressed marks remain open. Full goal ACTIVE; all
   types/layouts and MV/projections precede optimization; no <=10% performance
