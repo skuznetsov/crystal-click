@@ -12,6 +12,7 @@ module CrystalClick
     @prefix : ObjectDocumentCallbackPrefix
     @physical_plan : ObjectDocumentPhysicalPlan
     @schedule : CompactJsonObjectRoleSchedule
+    @owner : CompactJsonObjectRoleSchedule::OwnerSchedule
     @source : T
     @row_count : UInt64
     @profile : BinaryBulkProfile
@@ -20,6 +21,7 @@ module CrystalClick
     @string_totals : Hash(String, UInt64)
     @dynamic_arm_counts : Hash(String, Array(UInt64))
     @typed_dynamic_grammars : Hash(String, CompactJsonTypedDynamicTapeGrammar)
+    @child_framers : Hash(String, CompactJsonObjectMapTapeFramer(T))
     @map_counts : Array(UInt64)?
     @map_entry_count : UInt64?
     @bucket_counts : Hash(String, Array(UInt64))
@@ -36,7 +38,13 @@ module CrystalClick
       @profile : BinaryBulkProfile,
       @limits : BinaryCodecLimits,
       @budget : BinaryCodecBudget,
+      owner_root : String? = nil,
     )
+      root = owner_root || ObjectDocumentInlineCallbackOrder.canonical_root_prefix(@physical_plan)
+      @owner = @schedule.owner_for_root(root)
+      unless @owner.physical_plan.same?(@physical_plan) && @owner.prefix.same?(@prefix)
+        raise CorruptPartError.new("Compact MAP framer owner differs from its exact parsed callback prefix")
+      end
       @string_totals = Hash(String, UInt64).new
       @dynamic_arm_counts = Hash(String, Array(UInt64)).new
       typed_dynamic_owners = @prefix.plan.typed_dynamic_count.to_u64
@@ -49,12 +57,13 @@ module CrystalClick
       @typed_dynamic_grammars = Hash(String, CompactJsonTypedDynamicTapeGrammar).new(
         initial_capacity: typed_dynamic_owners.to_i,
       )
+      @child_framers = Hash(String, CompactJsonObjectMapTapeFramer(T)).new
       @map_counts = nil
       @map_entry_count = nil
       @bucket_counts = Hash(String, Array(UInt64)).new
       @bucket_entry_counts = Hash(String, UInt64).new
       @bucket_seen_roles = Hash(String, Set(String)).new
-      @advanced_grammar = if @schedule.advanced
+      @advanced_grammar = if @owner.advanced
                             CompactJsonObjectSharedAdvancedTapeGrammar.new(
                               @prefix,
                               @physical_plan,
@@ -82,24 +91,57 @@ module CrystalClick
       new(prefix, physical_plan, schedule, source, row_count, profile, limits, budget).capture_body!
     end
 
+    # Narrow class factory for schedule-proven child owners. Keep initialize
+    # private; its constructor still validates the exact prefix/physical owner
+    # pair against the shared callback registry.
+    def self.for_child_owner(
+      owner : CompactJsonObjectRoleSchedule::OwnerSchedule,
+      schedule : CompactJsonObjectRoleSchedule,
+      source : T,
+      row_count : UInt64,
+      profile : BinaryBulkProfile,
+      limits : BinaryCodecLimits,
+      budget : BinaryCodecBudget,
+    ) : CompactJsonObjectMapTapeFramer(T) forall T
+      unless owner.parent_typed_path && owner.parent_key
+        raise CorruptPartError.new("Compact child Object owner has no exact typed-Dynamic parent identity")
+      end
+      new(owner.prefix, owner.physical_plan, schedule, source, row_count, profile, limits, budget, owner.root)
+    end
+
     def capture_body! : Nil
       if @row_count > Int32::MAX.to_u64
         raise UnsupportedFormatError.new("Compact MRK3 root MAP mark rows exceed the parser domain")
       end
-      bindings = @schedule.body_bindings
-      pairs = @schedule.body_pairs
-      unless bindings.size == pairs.size
-        raise CorruptPartError.new("Compact MRK3 body schedule has mismatched bindings and callback names")
+      @schedule.body_events.each do |event|
+        owner = @schedule.owner_for_root(event[0])
+        binding, pair = owner_binding_for_event(owner, event)
+        target = framer_for_owner(owner)
+        target.capture_owner_body_event!(owner.prefix, binding, pair)
       end
 
-      bindings.each_with_index do |binding, index|
-        pair = pairs[index]
-        unless pair[0] == binding[0]
-          raise CorruptPartError.new("Compact MRK3 body callback is not bound to its descriptor role")
-        end
-        capture_one!(binding, pair)
-      end
+      finish!
+      nil
+    end
 
+    # Parent framers dispatch flattened descendant events only after resolving
+    # the exact owner-local binding. Keep the capture operation narrow and
+    # public for that cross-instance call; parsing remains private.
+    def capture_owner_body_event!(
+      owner_prefix : ObjectDocumentCallbackPrefix,
+      binding : BodyBinding,
+      pair : CallbackPair,
+    ) : Nil
+      unless owner_prefix.same?(@prefix)
+        raise CorruptPartError.new("Compact MAP body event was routed to a foreign callback-prefix owner")
+      end
+      unless pair[0] == binding[0]
+        raise CorruptPartError.new("Compact MAP body event differs from its exact owner-local binding")
+      end
+      capture_one!(owner_prefix, binding, pair)
+    end
+
+    def finish! : Nil
       unless @typed_dynamic_grammars.size == @prefix.plan.typed_dynamic_count
         raise CorruptPartError.new("Compact JSON typed-Dynamic body schedule omitted a declared typed Dynamic owner")
       end
@@ -120,13 +162,14 @@ module CrystalClick
       else
         raise UnsupportedFormatError.new("Compact MRK3 shared-data version is outside the admitted role grammar")
       end
+      @child_framers.each_value(&.finish!)
       nil
     end
 
-    private def capture_one!(binding : BodyBinding, pair : CallbackPair) : Nil
+    private def capture_one!(owner_prefix : ObjectDocumentCallbackPrefix, binding : BodyBinding, pair : CallbackPair) : Nil
       canonical_name, callback_name = pair
       start = @source.position
-      @prefix.capture_body_callback_from!(canonical_name, callback_name, @budget) do
+      owner_prefix.capture_body_callback_from!(canonical_name, callback_name, @budget) do
         _value, exact_bytes = @source.with_grammar_extent(callback_name) do |remaining|
           context = BinaryCodecContext.new(@limits, remaining, false, @budget, false, false)
           parse_binding!(binding, context, remaining)
@@ -136,6 +179,58 @@ module CrystalClick
         @source.inline_callback_slice(canonical_name, callback_name, start, finish, exact_bytes)
       end
       nil
+    end
+
+    private def owner_binding_for_event(
+      owner : CompactJsonObjectRoleSchedule::OwnerSchedule,
+      event : CompactJsonObjectRoleSchedule::CallbackEvent,
+    ) : Tuple(BodyBinding, CallbackPair)
+      found : Tuple(BodyBinding, CallbackPair)? = nil
+      unless owner.body_bindings.size == owner.body_pairs.size
+        raise CorruptPartError.new("Compact MAP owner has mismatched local bindings and callback names")
+      end
+      owner.body_bindings.each_with_index do |binding, index|
+        pair = owner.body_pairs[index]
+        next unless pair[0] == event[1]
+        unless pair[1] == event[2] && binding[0] == event[1]
+          raise CorruptPartError.new("Compact MAP event differs from its exact raw callback identity")
+        end
+        if found
+          raise CorruptPartError.new("Compact MAP event has more than one owner-local role")
+        end
+        found = {binding, pair}
+      end
+      found || raise(CorruptPartError.new("Compact MAP event has no exact owner-local role binding"))
+    end
+
+    private def framer_for_owner(owner : CompactJsonObjectRoleSchedule::OwnerSchedule) : CompactJsonObjectMapTapeFramer(T)
+      return self if owner.root == @owner.root
+      if existing = @child_framers[owner.root]?
+        return existing
+      end
+      parent_path = owner.parent_typed_path ||
+                    raise(CorruptPartError.new("Compact child Object owner has no typed-Dynamic parent path"))
+      key = owner.parent_key ||
+            raise(CorruptPartError.new("Compact child Object owner has no exact typed-Dynamic JSON leaf key"))
+      parent_grammar = @typed_dynamic_grammars[parent_path]? ||
+                       raise(CorruptPartError.new("Compact child Object callback precedes its parent typed-Dynamic discriminator"))
+      selected_rows = parent_grammar.selected_arm_count("root", key.canonical_arm_index)
+      if owner.advanced
+        raise UnsupportedFormatError.new("Compact typed-Dynamic JSON child Advanced shared layouts are outside this slice")
+      end
+      @budget.preflight_children(1_u64)
+      @budget.charge_node
+      child = CompactJsonObjectMapTapeFramer(T).for_child_owner(
+        owner,
+        @schedule,
+        @source,
+        selected_rows,
+        @profile,
+        @limits,
+        @budget,
+      )
+      @child_framers[owner.root] = child
+      child
     end
 
     private def parse_binding!(
@@ -184,7 +279,7 @@ module CrystalClick
         physical = @physical_plan.typed_dynamic(owner_path)
         created = CompactJsonTypedDynamicTapeGrammar.new(
           @prefix,
-          @schedule.prefix_pairs,
+          @owner.prefix_pairs,
           physical,
           plan,
           @row_count,
@@ -637,7 +732,7 @@ module CrystalClick
       end
       prefix_name = body_name.byte_slice(0, body_name.bytesize - suffix.bytesize) + ".variant_discr_prefix"
       schedule_entry_found = false
-      @schedule.prefix_pairs.each do |canonical, callback|
+      @owner.prefix_pairs.each do |canonical, callback|
         if canonical == prefix_name
           if schedule_entry_found
             raise CorruptPartError.new("Compact MRK3 Dynamic discriminator prefix is duplicated in its parsed schedule")

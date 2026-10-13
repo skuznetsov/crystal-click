@@ -17,6 +17,7 @@ module CrystalClick
       getter rows : UInt64
       getter typed_descriptor_root_depth : Int32
       getter inferred_actual_root_depth : Int32
+      getter typed_json_context : ObjectDocumentTypedDynamicJsonReadContext?
 
       def initialize(
         @typed_schema : Hash(String, BinaryDataType),
@@ -26,6 +27,7 @@ module CrystalClick
         @rows : UInt64,
         @typed_descriptor_root_depth : Int32,
         @inferred_actual_root_depth : Int32,
+        @typed_json_context : ObjectDocumentTypedDynamicJsonReadContext?,
       )
       end
     end
@@ -562,12 +564,11 @@ module CrystalClick
             root_dynamic_json_budget: budget,
           )
           prefix.bind_physical_plan!(physical_plan)
-          unless prefix.plan.root_dynamic_json_object_leaf_plans(budget).empty? &&
-                 prefix.plan.typed_dynamic_json_object_leaf_plans(budget).empty?
-            raise UnsupportedFormatError.new("Compact recursive JSON Dynamic-owned JSON sites are outside this capture slice")
+          unless prefix.plan.root_dynamic_json_object_leaf_plans(budget).empty?
+            raise UnsupportedFormatError.new("Compact recursive root-Dynamic JSON sites are outside this capture slice")
           end
           schedule = CompactJsonObjectRoleSchedule.build(prefix, physical_plan, @ordinary_profile, budget)
-          prefixes[site.key] = schedule.prefix_pairs.map { |_canonical, callback| String.new(callback.to_slice) }
+          prefixes[site.key] = schedule.prefix_events.map { |_owner, _canonical, callback| String.new(callback.to_slice) }
           source.begin_body_capture!
           captures[site.key] = PrefixCapture.new(
             site,
@@ -632,11 +633,15 @@ module CrystalClick
           capture.statistics_offsets.each { |name, offset| stats[name] = offset }
           object_callback = PhysicalStreamName.append_literal(site.callback_prefix, ".object_structure")
           stats[object_callback] = capture.prefix.object_structure_statistics_offset
+          typed_json_context = ObjectDocumentTypedDynamicJsonReadContext.from_prefix(capture.prefix, budget)
           object_mark = if capture.schedule.advanced
                           owner_observer = ->(owner_bytes : UInt64) do
                             active = checked_add(retained_workspace_bytes_without_prepared, physical_workspace)
                             active = checked_add(active, ledger.retained_workspace_bytes)
                             active = checked_add(active, local_prepared_workspace_bytes(object_marks, uint8_bytes, array_sizes))
+                            if current_context = typed_json_context
+                              active = checked_add(active, current_context.retained_workspace_bytes)
+                            end
                             observer.call(checked_add(active, owner_bytes))
                             nil
                           end
@@ -651,6 +656,7 @@ module CrystalClick
                             @ordinary_profile,
                             capture.source,
                             owner_observer,
+                            capture.schedule,
                           )
                           unless advanced.logical_row_count == rows
                             raise CorruptPartError.new("Compact recursive Advanced Object owner returned the wrong Q grid")
@@ -669,6 +675,7 @@ module CrystalClick
                             rows,
                             capture.prefix.typed_descriptor_root_depth,
                             capture.prefix.inferred_actual_root_depth,
+                            typed_json_context,
                           )
                         else
                           capture.source.validate_prepared_source!(
@@ -677,6 +684,7 @@ module CrystalClick
                             capture.schedule.body_bindings,
                             capture.schedule.body_pairs,
                             budget,
+                            capture.schedule,
                           )
                           streams = ObjectDocumentCallbackBodyMaterializer.materialize(
                             capture.prefix,
@@ -704,6 +712,7 @@ module CrystalClick
                             rows,
                             capture.prefix.typed_descriptor_root_depth,
                             capture.prefix.inferred_actual_root_depth,
+                            typed_json_context,
                           )
                         end
           object_marks[site.key] << object_mark
@@ -745,7 +754,7 @@ module CrystalClick
         capture = captures[key]? || raise(CorruptPartError.new("Compact recursive Object site is absent from its parent prefix phase"))
         prefix = capture.prefix
         source = capture.source
-        prefix.start_body_capture!
+        capture.schedule.begin_body_capture!(budget)
         rows = site_rows[key]? || raise(CorruptPartError.new("Compact recursive Object site has no inherited occurrence grid"))
         if ledger.mode.mrk3?
           CompactJsonObjectMapTapeFramer.capture_body!(
@@ -759,13 +768,9 @@ module CrystalClick
             budget,
           )
         else
-          capture.schedule.body_pairs.each do |canonical_name, callback_name|
-            prefix.capture_body_callback_from!(canonical_name, callback_name, budget) do
-              source.take_physical_inline_fragment_slice(canonical_name, callback_name)
-            end
-          end
+          capture.schedule.capture_physical_body_events!(source, budget)
         end
-        prefix.finish_body_capture!(capture.schedule.body_pairs.size)
+        capture.schedule.finish_body_capture!(budget)
         source.validate_expected_events!(capture.schedule.event_names)
         source.finish!
       elsif schema.bulk?
@@ -848,6 +853,7 @@ module CrystalClick
                           shared_profile: BinaryBulkProfile.single_stream,
                           typed_descriptor_root_depth: prepared.typed_descriptor_root_depth,
                           inferred_actual_root_depth: prepared.inferred_actual_root_depth,
+                          typed_dynamic_json_read_context: prepared.typed_json_context,
                         )
                         unless decoded.size == 1
                           raise CorruptPartError.new("Compact recursive Object codec returned the wrong mark count")
@@ -1327,6 +1333,9 @@ module CrystalClick
     private def object_mark_workspace_bytes(mark : PreparedObjectMark) : UInt64
       bytes = sizeof(PreparedObjectMark).to_u64
       bytes = checked_add(bytes, typed_schema_workspace_bytes(mark.typed_schema))
+      if typed_json_context = mark.typed_json_context
+        bytes = checked_add(bytes, typed_json_context.retained_workspace_bytes)
+      end
       if advanced = mark.advanced
         bytes = checked_add(bytes, advanced.retained_workspace_bytes)
       else
@@ -1563,10 +1572,10 @@ module CrystalClick
       canonical_by_callback = Hash(String, String).new(initial_capacity: logical_names.size)
       seen_canonical = Set(String).new(initial_capacity: logical_names.size)
       schedules.each_value do |schedule|
-        schedule.prefix_pairs.each do |canonical, callback|
+        schedule.prefix_events.each do |_owner, canonical, callback|
           register_physical_callback_pair!(canonical_by_callback, seen_canonical, canonical, callback)
         end
-        schedule.body_pairs.each do |canonical, callback|
+        schedule.body_events.each do |_owner, canonical, callback|
           register_physical_callback_pair!(canonical_by_callback, seen_canonical, canonical, callback)
         end
       end

@@ -39,7 +39,7 @@ module CrystalClick
       unless @physical.initial_descriptor_depth == @prefix.typed_descriptor_root_depth
         raise CorruptPartError.new("Compact typed-Dynamic physical owner changed its descriptor depth")
       end
-      unless @plan.profile == @profile && @physical.same_prepared_layout?(@plan)
+      unless @plan.profile == @profile && @physical.same_prepared_layout?(@plan, @budget)
         raise CorruptPartError.new("Compact typed-Dynamic tape grammar changed its prepared physical plan")
       end
       if @row_count > Int32::MAX.to_u64 || @row_count > @limits.max_elements.to_u64
@@ -106,6 +106,19 @@ module CrystalClick
         raise CorruptPartError.new("Compact typed-Dynamic body role schedule is incomplete")
       end
       nil
+    end
+
+    # Exact selected count for one already-consumed discriminator arm. JSON
+    # child Object framers use this local count, never the enclosing Object
+    # row count or another Dynamic field's arm census.
+    def selected_arm_count(path : String, arm_index : Int) : UInt64
+      unless arm_index >= 0
+        raise CorruptPartError.new("Compact typed-Dynamic selected arm index is negative")
+      end
+      counts = @arm_counts[path]? ||
+               raise(CorruptPartError.new("Compact typed-Dynamic child owner precedes its discriminator census"))
+      counts[arm_index]? ||
+        raise(CorruptPartError.new("Compact typed-Dynamic selected arm index is outside its exact discriminator roster"))
     end
 
     private def parse_node!(

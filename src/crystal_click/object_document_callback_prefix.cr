@@ -30,6 +30,7 @@ module CrystalClick
     @root_dynamic_sites : Hash(String, Hash(String, DynamicStructure))
     @typed_dynamic_plans : Hash(String, BinaryDynamicBulkPlan)
     @root_dynamic_plans : Hash(String, BinaryDynamicBulkPlan)
+    @typed_dynamic_json_prefixes : Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap)
     @root_dynamic_json_prefixes : Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap)
     @physical_plan : ObjectDocumentPhysicalPlan?
     @body_callbacks : Array(Callback)?
@@ -50,6 +51,7 @@ module CrystalClick
       @nested_context : ObjectSharedNestedSerializationContext,
       @object_structure_statistics_offset : Int32,
       @statistics_context : StatisticsContext,
+      @statistics_offsets : Hash(String, Int32),
       @plan : ObjectDocumentPlan,
       @structures : ObjectDynamicStructureSet,
       prefix_callbacks : Array(Callback),
@@ -58,6 +60,7 @@ module CrystalClick
       typed_dynamic_plans : Hash(String, BinaryDynamicBulkPlan),
       root_dynamic_plans : Hash(String, BinaryDynamicBulkPlan),
       root_dynamic_json_prefixes : Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap),
+      typed_dynamic_json_prefixes : Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap) = Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap).new,
     )
       # These owner arrays and site maps are moved, not copied, into this exact
       # selected-site state. Child-prefix maps remain keyed by real Dynamic
@@ -67,6 +70,7 @@ module CrystalClick
       @root_dynamic_sites = root_dynamic_sites
       @typed_dynamic_plans = typed_dynamic_plans
       @root_dynamic_plans = root_dynamic_plans
+      @typed_dynamic_json_prefixes = typed_dynamic_json_prefixes
       @root_dynamic_json_prefixes = root_dynamic_json_prefixes
       @physical_plan = nil
       @body_callbacks = nil
@@ -79,6 +83,26 @@ module CrystalClick
 
     def prefix_callback_count : Int32
       @prefix_callbacks.size
+    end
+
+    # Materializers receive a defensive snapshot so callers cannot mutate the
+    # exact parser-owned offsets retained by this callback prefix.
+    def statistics_offsets_snapshot(budget : BinaryCodecBudget) : Hash(String, Int32)
+      count = @statistics_offsets.size.to_u64
+      byte_count = 0_u64
+      @statistics_offsets.each_key do |name|
+        byte_count = checked_add(byte_count, name.bytesize.to_u64)
+      end
+      budget.ensure_wire_bytes(byte_count)
+      budget.preflight_children(count) if count > 0_u64
+
+      snapshot = Hash(String, Int32).new(initial_capacity: @statistics_offsets.size)
+      @statistics_offsets.each do |name, offset|
+        budget.charge_node
+        budget.charge_wire_bytes(name.bytesize.to_u64)
+        snapshot[String.new(name.to_slice)] = offset
+      end
+      snapshot
     end
 
     def prefix_callback_at(index : Int, budget : BinaryCodecBudget) : Callback
@@ -299,6 +323,55 @@ module CrystalClick
       slices[index]
     end
 
+    # Logical retained-owner estimate for callback bytes kept by a nested
+    # prefix after its parent tape has been prepared. Body byte payloads are
+    # shared by the callback tuple and its authenticated slice, so count that
+    # borrowed payload once while counting both owner descriptors and names.
+    def retained_callback_capture_workspace_bytes : UInt64
+      unless @body_capture_finished
+        raise ArgumentError.new("Object callback capture workspace requires a complete body capture")
+      end
+      callbacks = @body_callbacks || raise(ArgumentError.new("Object body callbacks have not been captured"))
+      slices = @body_callback_slices || raise(ArgumentError.new("Object body callback slices have not been captured"))
+      unless callbacks.size == slices.size
+        raise CorruptPartError.new("Object callback capture workspace has mismatched bodies and slices")
+      end
+
+      bytes = instance_sizeof(ObjectDocumentCallbackPrefix).to_u64
+      bytes = checked_add(bytes, string_owner_bytes(@physical_prefix))
+      bytes = checked_add(bytes, string_owner_bytes(@callback_prefix))
+      bytes = checked_add(bytes, instance_sizeof(Hash(String, Int32)).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(@statistics_offsets.size.to_u64, sizeof(Tuple(String, Int32)).to_u64))
+      @statistics_offsets.each_key do |name|
+        bytes = checked_add(bytes, string_owner_bytes(name))
+      end
+      bytes = checked_add(bytes, instance_sizeof(Array(Callback)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(@prefix_callbacks.size.to_u64, sizeof(Callback).to_u64))
+      @prefix_callbacks.each do |name, payload|
+        bytes = checked_add(bytes, string_owner_bytes(name))
+        bytes = checked_add(bytes, sizeof(Bytes).to_u64 + payload.size.to_u64)
+      end
+      bytes = checked_add(bytes, instance_sizeof(Array(Callback)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(callbacks.size.to_u64, sizeof(Callback).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Array(ObjectSharedInlineCallbackReadSlice)).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(slices.size.to_u64, sizeof(Pointer(ObjectSharedInlineCallbackReadSlice)).to_u64))
+      callbacks.each_with_index do |(name, payload), index|
+        slice = slices[index]
+        unless slice.canonical_name == name && slice.bytes.size == payload.size
+          raise CorruptPartError.new("Object callback capture workspace differs from its authenticated slice")
+        end
+        bytes = checked_add(bytes, string_owner_bytes(name))
+        bytes = checked_add(bytes, sizeof(Bytes).to_u64)
+        bytes = checked_add(bytes, instance_sizeof(ObjectSharedInlineCallbackReadSlice).to_u64)
+        bytes = checked_add(bytes, string_owner_bytes(slice.canonical_name))
+        bytes = checked_add(bytes, string_owner_bytes(slice.callback_name))
+        bytes = checked_add(bytes, slice.byte_size.to_u64)
+      end
+      bytes
+    end
+
     def typed_schema_for(budget : BinaryCodecBudget) : Hash(String, BinaryDataType)
       count = @plan.typed_path_count.to_u64
       byte_count = 0_u64
@@ -340,6 +413,10 @@ module CrystalClick
       @root_dynamic_json_prefixes[path]? || raise(KeyError.new("Object root Dynamic JSON prefixes not found: #{path.inspect}"))
     end
 
+    def typed_dynamic_json_prefixes_for(path : String) : ObjectSharedPathJsonTapeCodec::PrefixMap
+      @typed_dynamic_json_prefixes[path]? || raise(KeyError.new("Object typed Dynamic JSON prefixes not found: #{path.inspect}"))
+    end
+
     private def copy_sites(
       sites : Hash(String, DynamicStructure),
       budget : BinaryCodecBudget,
@@ -360,6 +437,17 @@ module CrystalClick
         raise UnsupportedFormatError.new("Object callback state work size overflows UInt64")
       end
       left + right
+    end
+
+    private def checked_multiply(left : UInt64, right : UInt64) : UInt64
+      if right > 0_u64 && left > UInt64::MAX // right
+        raise UnsupportedFormatError.new("Object callback state work size overflows UInt64")
+      end
+      left * right
+    end
+
+    private def string_owner_bytes(value : String) : UInt64
+      checked_add(sizeof(String).to_u64, value.bytesize.to_u64)
     end
   end
 end

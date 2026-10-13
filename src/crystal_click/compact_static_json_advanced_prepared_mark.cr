@@ -25,6 +25,7 @@ module CrystalClick
       ordinary_profile : BinaryBulkProfile,
       source_framer : CompactJsonObjectSiteFramer | CompactRecursiveJsonObjectSiteSource,
       workspace_observer : Proc(UInt64, Nil)? = nil,
+      schedule : CompactJsonObjectRoleSchedule? = nil,
     ) : CompactStaticJsonAdvancedPreparedMark
       nested_context = prefix.nested_context
       if budget.writing? || nested_context.writing?
@@ -50,12 +51,19 @@ module CrystalClick
       # This is the source-authentication boundary: only a completed framer
       # for this exact physical owner, prefix, schedule, and budget can reach
       # either materializer below.
+      prepared_schedule = schedule || begin
+        unless prefix.plan.typed_dynamic_json_object_leaf_plans(budget).empty?
+          raise UnsupportedFormatError.new("prepared Compact Advanced JSON child requires its captured callback schedule")
+        end
+        CompactJsonObjectRoleSchedule.build(prefix, physical_plan, ordinary_profile, budget)
+      end
       source_framer.validate_prepared_source!(
         prefix,
         physical_plan,
         role_bindings,
         callback_pairs,
         budget,
+        prepared_schedule,
       )
 
       ordinary_streams = ObjectDocumentInlineBodyMaterializer.materialize(

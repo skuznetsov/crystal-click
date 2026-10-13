@@ -101,10 +101,44 @@ module CrystalClick
     # returned prefix length. A zero-length extent is permitted for a
     # scheduled body role with zero occurrences.
     def with_grammar_extent(expected_name : String, &block : Bytes -> Tuple(T, Int32)) : Tuple(T, Bytes) forall T
+      with_physical_grammar_extent(expected_name, expected_name) do |bytes|
+        yield bytes
+      end
+    end
+
+    # Parsed Object prefixes keep physical and callback identities separate.
+    # MRK4 selects the canonical physical shard while the logical traversal
+    # records the raw getter name. MRK3 remains positional and records only
+    # that raw logical name.
+    def with_physical_grammar_extent(
+      canonical_physical_name : String,
+      raw_callback_name : String,
+      &block : Bytes -> Tuple(T, Int32)
+    ) : Tuple(T, Bytes) forall T
       if @cursor.mrk4?
-        return with_self_delimited(expected_name) do |bytes|
+        ensure_no_active_parser!
+        ensure_no_active_grammar_parser!
+        @grammar_parser_active = true
+        begin
+          name, bytes = current_event(canonical_physical_name)
           value, consumed = yield bytes
-          { {value, bytes}, consumed }
+          unless consumed == bytes.size
+            raise CorruptPartError.new("Compact mrk4 parser did not consume its exact canonical callback")
+          end
+          preflight_path_advance(consumed)
+
+          # The parser receives an immutable snapshot. Validate its exact
+          # extent before committing the canonical physical event or exposing
+          # the raw callback identity to the logical traversal.
+          @cursor.begin_event(name)
+          @cursor.advance_borrowed_prefix(consumed)
+          @cursor.finish_event
+          @event_index += 1
+          advance_path_position(consumed)
+          @logical_event_names << String.new(raw_callback_name.to_slice)
+          return {value, bytes}
+        ensure
+          @grammar_parser_active = false
         end
       end
 
@@ -130,8 +164,8 @@ module CrystalClick
         @cursor.advance_borrowed_prefix(consumed)
         observed = @cursor.consumed_slice(start)
         advance_path_position(consumed)
-        @logical_event_names << expected_name
-        record_positional_event!(expected_name, start.to_u64, finish.to_u64) if track_position
+        @logical_event_names << String.new(raw_callback_name.to_slice)
+        record_positional_event!(raw_callback_name, start.to_u64, finish.to_u64) if track_position
         {value, observed}
       ensure
         @grammar_parser_active = false
@@ -139,16 +173,27 @@ module CrystalClick
     end
 
     def take_exact(expected_name : String, size : Int32) : Bytes
+      take_physical_exact(expected_name, expected_name, size)
+    end
+
+    # Read an exact fixed callback using its canonical MRK4 physical name,
+    # retaining the raw callback name only for the logical traversal.
+    def take_physical_exact(
+      canonical_physical_name : String,
+      raw_callback_name : String,
+      size : Int32,
+    ) : Bytes
       ensure_no_active_parser!
       ensure_no_active_grammar_parser!
       if size < 0
         raise CorruptPartError.new("Compact static JSON fixed callback size is negative")
       end
       if @cursor.mrk4?
-        name, bytes = current_event(expected_name)
+        name, bytes = current_event(canonical_physical_name)
         unless bytes.size == size
           raise CorruptPartError.new("Compact static JSON fixed callback has the wrong byte extent")
         end
+        preflight_path_advance(size)
         @cursor.begin_event(name)
         observed = @cursor.read_exact(size)
         @cursor.finish_event
@@ -161,9 +206,9 @@ module CrystalClick
         track_position = preflight_positional_event!(start.to_u64, finish.to_u64)
         observed = @cursor.read_exact(size)
         advance_path_position(size)
-        record_positional_event!(expected_name, start.to_u64, finish.to_u64) if track_position
+        record_positional_event!(raw_callback_name, start.to_u64, finish.to_u64) if track_position
       end
-      @logical_event_names << expected_name
+      @logical_event_names << String.new(raw_callback_name.to_slice)
       observed
     end
 
@@ -295,9 +340,10 @@ module CrystalClick
       role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding),
       callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair),
       budget : BinaryCodecBudget,
+      schedule : CompactJsonObjectRoleSchedule? = nil,
     ) : Nil
       unless @cursor.mrk4?
-        validate_prepared_mrk3_source!(prefix, physical_plan, role_bindings, callback_pairs, budget)
+        validate_prepared_mrk3_source!(prefix, physical_plan, role_bindings, callback_pairs, budget, schedule)
         return nil
       end
       unless @cursor.mrk4? && @finished
@@ -316,52 +362,74 @@ module CrystalClick
         raise UnsupportedFormatError.new("prepared Compact Advanced source requires complete Object statistics")
       end
 
-      schedule = CompactJsonObjectRoleSchedule.build(
-        prefix,
-        physical_plan,
-        prefix.nested_context.profile,
-        budget,
-      )
-      unless schedule.body_bindings == role_bindings && schedule.body_pairs == callback_pairs
+      callback_schedule = prepared_role_schedule(prefix, physical_plan, budget, schedule)
+      root_owner = callback_schedule.validate_root_owner!(prefix, physical_plan, budget)
+      unless root_owner.body_bindings == role_bindings && root_owner.body_pairs == callback_pairs
         raise CorruptPartError.new("prepared Compact body roles differ from the parsed Object schedule")
       end
-      prefix_pairs = schedule.prefix_pairs
-      unless prefix.prefix_callback_count == prefix_pairs.size
-        raise CorruptPartError.new("prepared Compact prefix callbacks differ from the parsed Object schedule")
+      callback_schedule.each_owner do |owner|
+        unless owner.prefix.prefix_callback_count == owner.prefix_pairs.size
+          raise CorruptPartError.new("prepared Compact prefix callbacks differ from their owner-local schedule")
+        end
+        body_count = owner.prefix.body_callback_count
+        unless body_count == owner.body_pairs.size && owner.prefix.body_callback_slice_count == body_count
+          raise CorruptPartError.new("prepared Compact body callbacks differ from their owner-local schedule")
+        end
       end
-      body_count = prefix.body_callback_count
-      unless body_count == callback_pairs.size && prefix.body_callback_slice_count == body_count
-        raise CorruptPartError.new("prepared Compact body callbacks differ from the parsed Object schedule")
-      end
-      unless @event_index == @events.size && @logical_event_names == schedule.event_names
+      unless @event_index == @events.size && @logical_event_names == callback_schedule.event_names
         raise CorruptPartError.new("prepared Compact source did not consume its exact logical callback roster")
       end
-      unless @events.size == prefix_pairs.size + callback_pairs.size
+      unless @events.size == callback_schedule.prefix_events.size + callback_schedule.body_events.size
         raise CorruptPartError.new("prepared Compact source roster has a different callback count")
       end
 
       path_position = 0_u64
       event_index = 0
-      prefix_pairs.each_with_index do |pair, index|
-        parsed_name, parsed_bytes = prefix.prefix_callback_at(index, budget)
+      prefix_owner_indices = Hash(String, Int32).new(initial_capacity: callback_schedule.owner_schedules.size)
+      callback_schedule.owner_schedules.each_key { |root| prefix_owner_indices[root] = 0 }
+      callback_schedule.prefix_events.each do |event|
+        owner = callback_schedule.owner_for_root(event[0])
+        owner_index = prefix_owner_indices[event[0]]? ||
+                      raise(CorruptPartError.new("prepared Compact prefix event has no owner-local index"))
+        pair = owner.prefix_pairs[owner_index]? ||
+               raise(CorruptPartError.new("prepared Compact prefix event exceeds its owner-local schedule"))
+        parsed_name, parsed_bytes = owner.prefix.prefix_callback_at(owner_index, budget)
         event_name, event_bytes = @events[event_index]? ||
                                   raise(CorruptPartError.new("prepared Compact prefix callback is missing from its source"))
-        unless pair[0] == parsed_name && pair[1] == parsed_name && event_name == pair[0] &&
+        unless pair[0] == event[1] && pair[1] == event[2] && parsed_name == event[1] &&
+               event_name == event[1] && @logical_event_names[event_index]? == event[2] &&
                same_bytes?(event_bytes, parsed_bytes)
           raise CorruptPartError.new("prepared Compact prefix bytes differ from their authenticated callback source")
         end
+        coordinate_context.validate_path_bytes!(path_position, event_bytes, budget)
         path_position = checked_add(path_position, event_bytes.size.to_u64)
         event_index += 1
+        prefix_owner_indices[event[0]] = owner_index + 1
+      end
+      prefix_owner_indices.each do |root, count|
+        unless count == callback_schedule.owner_for_root(root).prefix_pairs.size
+          raise CorruptPartError.new("prepared Compact prefix owner was not consumed exactly")
+        end
       end
 
-      callback_pairs.each_with_index do |pair, index|
-        parsed_name, parsed_bytes = prefix.body_callback_at(index, budget)
-        slice = prefix.body_callback_slice_at(index)
+      body_owner_indices = Hash(String, Int32).new(initial_capacity: callback_schedule.owner_schedules.size)
+      callback_schedule.owner_schedules.each_key { |root| body_owner_indices[root] = 0 }
+      callback_schedule.body_events.each do |event|
+        owner = callback_schedule.owner_for_root(event[0])
+        owner_index = body_owner_indices[event[0]]? ||
+                      raise(CorruptPartError.new("prepared Compact body event has no owner-local index"))
+        pair = owner.body_pairs[owner_index]? ||
+               raise(CorruptPartError.new("prepared Compact body event exceeds its owner-local schedule"))
+        binding = owner.body_bindings[owner_index]? ||
+                  raise(CorruptPartError.new("prepared Compact body event has no owner-local role binding"))
+        parsed_name, parsed_bytes = owner.prefix.body_callback_at(owner_index, budget)
+        slice = owner.prefix.body_callback_slice_at(owner_index)
         event_name, event_bytes = @events[event_index]? ||
                                   raise(CorruptPartError.new("prepared Compact body callback is missing from its source"))
         finish = checked_add(path_position, event_bytes.size.to_u64)
-        unless parsed_name == pair[0] && event_name == pair[0] &&
-               slice.canonical_name == pair[0] && slice.callback_name == pair[1] &&
+        unless pair[0] == event[1] && pair[1] == event[2] && binding[0] == event[1] &&
+               parsed_name == event[1] && event_name == event[1] && @logical_event_names[event_index]? == event[2] &&
+               slice.canonical_name == event[1] && slice.callback_name == event[2] &&
                same_bytes?(event_bytes, parsed_bytes) && same_bytes?(event_bytes, slice.bytes) &&
                slice.context.same?(coordinate_context) && slice.relative_start == path_position &&
                slice.relative_end == finish
@@ -372,6 +440,12 @@ module CrystalClick
         coordinate_context.validate_path_bytes!(slice.relative_start, slice.bytes, budget)
         path_position = finish
         event_index += 1
+        body_owner_indices[event[0]] = owner_index + 1
+      end
+      body_owner_indices.each do |root, count|
+        unless count == callback_schedule.owner_for_root(root).body_pairs.size
+          raise CorruptPartError.new("prepared Compact body owner was not consumed exactly")
+        end
       end
       unless event_index == @events.size && path_position == @path_position &&
              path_position == coordinate_context.path_data_size.to_u64
@@ -383,14 +457,14 @@ module CrystalClick
       # deferred decoder holder. Ordinary MAP materialization binds its own
       # schedule immediately afterward; binding here would make that normal
       # publication path attempt a forbidden second bind.
-      if schedule.advanced
+      if callback_schedule.advanced
         begin
-          unless prefix.body_role_bindings == schedule.body_bindings &&
-                 prefix.body_callback_pairs == schedule.body_pairs
+          unless prefix.body_role_bindings == root_owner.body_bindings &&
+                 prefix.body_callback_pairs == root_owner.body_pairs
             raise CorruptPartError.new("prepared Compact prefix retained a different body-role binding")
           end
         rescue ex : ArgumentError
-          prefix.bind_body_schedule!(schedule.body_bindings, schedule.body_pairs)
+          prefix.bind_body_schedule!(root_owner.body_bindings, root_owner.body_pairs)
         end
       end
       nil
@@ -402,6 +476,7 @@ module CrystalClick
       role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding),
       callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair),
       budget : BinaryCodecBudget,
+      schedule : CompactJsonObjectRoleSchedule?,
     ) : Nil
       unless @finished
         raise UnsupportedFormatError.new("prepared Compact MRK3 source requires a successfully finished capture")
@@ -437,51 +512,73 @@ module CrystalClick
         raise UnsupportedFormatError.new("prepared Compact Advanced source requires complete Object statistics")
       end
 
-      schedule = CompactJsonObjectRoleSchedule.build(
-        prefix,
-        physical_plan,
-        prefix.nested_context.profile,
-        budget,
-      )
-      unless schedule.body_bindings == role_bindings && schedule.body_pairs == callback_pairs
+      callback_schedule = prepared_role_schedule(prefix, physical_plan, budget, schedule)
+      root_owner = callback_schedule.validate_root_owner!(prefix, physical_plan, budget)
+      unless root_owner.body_bindings == role_bindings && root_owner.body_pairs == callback_pairs
         raise CorruptPartError.new("prepared Compact body roles differ from the parsed Object schedule")
       end
-      prefix_pairs = schedule.prefix_pairs
-      unless prefix.prefix_callback_count == prefix_pairs.size
-        raise CorruptPartError.new("prepared Compact prefix callbacks differ from the parsed Object schedule")
+      callback_schedule.each_owner do |owner|
+        unless owner.prefix.prefix_callback_count == owner.prefix_pairs.size
+          raise CorruptPartError.new("prepared Compact prefix callbacks differ from their owner-local schedule")
+        end
+        body_count = owner.prefix.body_callback_count
+        unless body_count == owner.body_pairs.size && owner.prefix.body_callback_slice_count == body_count
+          raise CorruptPartError.new("prepared Compact body callbacks differ from their owner-local schedule")
+        end
       end
-      body_count = prefix.body_callback_count
-      unless body_count == callback_pairs.size && prefix.body_callback_slice_count == body_count
-        raise CorruptPartError.new("prepared Compact body callbacks differ from the parsed Object schedule")
-      end
-      unless @logical_event_names == schedule.event_names &&
-             @positional_events.size == schedule.event_names.size
+      unless @logical_event_names == callback_schedule.event_names &&
+             @positional_events.size == callback_schedule.prefix_events.size + callback_schedule.body_events.size
         raise CorruptPartError.new("prepared Compact MRK3 source did not consume its exact positional callback roster")
       end
 
       path_position = 0_u64
       event_index = 0
-      prefix_pairs.each_with_index do |pair, index|
-        parsed_name, parsed_bytes = prefix.prefix_callback_at(index, budget)
+      prefix_owner_indices = Hash(String, Int32).new(initial_capacity: callback_schedule.owner_schedules.size)
+      callback_schedule.owner_schedules.each_key { |root| prefix_owner_indices[root] = 0 }
+      callback_schedule.prefix_events.each do |event|
+        owner = callback_schedule.owner_for_root(event[0])
+        owner_index = prefix_owner_indices[event[0]]? ||
+                      raise(CorruptPartError.new("prepared Compact MRK3 prefix event has no owner-local index"))
+        pair = owner.prefix_pairs[owner_index]? ||
+               raise(CorruptPartError.new("prepared Compact MRK3 prefix event exceeds its owner-local schedule"))
+        parsed_name, parsed_bytes = owner.prefix.prefix_callback_at(owner_index, budget)
         event_name, event_start, event_end = @positional_events[event_index]? ||
                                              raise(CorruptPartError.new("prepared Compact prefix callback is missing from its positional source"))
         finish = checked_add(path_position, parsed_bytes.size.to_u64)
-        unless pair[1] == parsed_name && event_name == parsed_name &&
+        unless pair[0] == event[1] && pair[1] == event[2] && parsed_name == event[1] &&
+               event_name == event[2] && @logical_event_names[event_index]? == event[2] &&
                event_start == path_position && event_end == finish
           raise CorruptPartError.new("prepared Compact MRK3 prefix callback differs from its positional source interval")
         end
         coordinate_context.validate_path_bytes!(event_start, parsed_bytes, budget)
         path_position = finish
         event_index += 1
+        prefix_owner_indices[event[0]] = owner_index + 1
+      end
+      prefix_owner_indices.each do |root, count|
+        unless count == callback_schedule.owner_for_root(root).prefix_pairs.size
+          raise CorruptPartError.new("prepared Compact MRK3 prefix owner was not consumed exactly")
+        end
       end
 
-      callback_pairs.each_with_index do |pair, index|
-        parsed_name, parsed_bytes = prefix.body_callback_at(index, budget)
-        slice = prefix.body_callback_slice_at(index)
+      body_owner_indices = Hash(String, Int32).new(initial_capacity: callback_schedule.owner_schedules.size)
+      callback_schedule.owner_schedules.each_key { |root| body_owner_indices[root] = 0 }
+      callback_schedule.body_events.each do |event|
+        owner = callback_schedule.owner_for_root(event[0])
+        owner_index = body_owner_indices[event[0]]? ||
+                      raise(CorruptPartError.new("prepared Compact MRK3 body event has no owner-local index"))
+        pair = owner.body_pairs[owner_index]? ||
+               raise(CorruptPartError.new("prepared Compact MRK3 body event exceeds its owner-local schedule"))
+        binding = owner.body_bindings[owner_index]? ||
+                  raise(CorruptPartError.new("prepared Compact MRK3 body event has no owner-local role binding"))
+        parsed_name, parsed_bytes = owner.prefix.body_callback_at(owner_index, budget)
+        slice = owner.prefix.body_callback_slice_at(owner_index)
         event_name, event_start, event_end = @positional_events[event_index]? ||
                                              raise(CorruptPartError.new("prepared Compact body callback is missing from its positional source"))
         finish = checked_add(path_position, parsed_bytes.size.to_u64)
-        unless parsed_name == pair[0] && event_name == pair[1] &&
+        unless pair[0] == event[1] && pair[1] == event[2] && binding[0] == event[1] &&
+               parsed_name == event[1] && event_name == event[2] &&
+               @logical_event_names[event_index]? == event[2] &&
                slice.canonical_name == pair[0] && slice.callback_name == pair[1] &&
                same_bytes?(parsed_bytes, slice.bytes) && slice.context.same?(coordinate_context) &&
                slice.relative_start == path_position && slice.relative_end == finish &&
@@ -491,6 +588,12 @@ module CrystalClick
         coordinate_context.validate_path_bytes!(event_start, parsed_bytes, budget)
         path_position = finish
         event_index += 1
+        body_owner_indices[event[0]] = owner_index + 1
+      end
+      body_owner_indices.each do |root, count|
+        unless count == callback_schedule.owner_for_root(root).body_pairs.size
+          raise CorruptPartError.new("prepared Compact MRK3 body owner was not consumed exactly")
+        end
       end
 
       unless event_index == @positional_events.size && path_position == @path_position &&
@@ -505,14 +608,14 @@ module CrystalClick
       # deferred decoder holder. Ordinary MAP materialization binds its own
       # schedule immediately afterward; binding here would make that normal
       # publication path attempt a forbidden second bind.
-      if schedule.advanced
+      if callback_schedule.advanced
         begin
-          unless prefix.body_role_bindings == schedule.body_bindings &&
-                 prefix.body_callback_pairs == schedule.body_pairs
+          unless prefix.body_role_bindings == root_owner.body_bindings &&
+                 prefix.body_callback_pairs == root_owner.body_pairs
             raise CorruptPartError.new("prepared Compact prefix retained a different body-role binding")
           end
         rescue ex : ArgumentError
-          prefix.bind_body_schedule!(schedule.body_bindings, schedule.body_pairs)
+          prefix.bind_body_schedule!(root_owner.body_bindings, root_owner.body_pairs)
         end
       end
       nil
@@ -550,6 +653,29 @@ module CrystalClick
       bytes
     end
 
+    private def prepared_role_schedule(
+      prefix : ObjectDocumentCallbackPrefix,
+      physical_plan : ObjectDocumentPhysicalPlan,
+      budget : BinaryCodecBudget,
+      schedule : CompactJsonObjectRoleSchedule?,
+    ) : CompactJsonObjectRoleSchedule
+      return schedule if schedule
+
+      # A typed-Dynamic JSON child binds its keyed prefix to this schedule's
+      # one-shot event registry during capture. Rebuilding here would either
+      # rebind that owner or authenticate a different callback context, so
+      # descendants require the exact schedule retained by the capture path.
+      unless prefix.plan.typed_dynamic_json_object_leaf_plans(budget).empty?
+        raise UnsupportedFormatError.new("prepared Compact JSON child requires its captured callback schedule")
+      end
+      CompactJsonObjectRoleSchedule.build(
+        prefix,
+        physical_plan,
+        prefix.nested_context.profile,
+        budget,
+      )
+    end
+
     private def current_event(expected_name : String) : Tuple(String, Bytes)
       event = @events[@event_index]? ||
               raise(CorruptPartError.new("Compact mrk4 static JSON callback is missing from its exact roster"))
@@ -583,6 +709,15 @@ module CrystalClick
       if @path_position > @coordinate_context.not_nil!.path_data_size.to_u64
         raise CorruptPartError.new("Compact inline callback path exceeds its authenticated shard extent")
       end
+      nil
+    end
+
+    private def preflight_path_advance(consumed : Int32) : Nil
+      return unless context = @coordinate_context
+      if consumed < 0 || consumed.to_u64 > UInt64::MAX - @path_position
+        raise CorruptPartError.new("Compact inline callback path position overflows")
+      end
+      validate_path_extent!(@path_position, @path_position + consumed.to_u64)
       nil
     end
 

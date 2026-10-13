@@ -1,6 +1,23 @@
 # CrystalClick project status
 
-Current recursive typed-Dynamic Compact framing (W270, 2026-10-12): VERIFIED /
+Current Dynamic-owned Compact JSON callback composition (W271, 2026-10-12):
+VERIFIED / root adversary ROBUST within the bounded finite scope below. Scope
+is the direct JSON actual arm of `payload Dynamic(max_types=1)` inside an
+existing Object column, with an Object V3/wire
+4, MAP0/one-bucket child, plain MRK3/MRK4, BASIC/COMPACT. DEBUG and actual
+RELEASE each pass 941 unique examples / 148 disjoint paths in seven serial
+executables (14 total), with zero failures/errors/pending. W271 stock/generated
+native windows and the copy-only child-version negative pass independent record/raw
+audits; exact scope, per-cohort counts and source/runtime pins are in the
+[frontier](COMPACT_PART_WRITER_FRONTIER.md). Fresh W270 RELEASE native/audit,
+nine-file/17902-byte static guard, original-capture audit and protected-file
+rechecks also pass. This is not a full-suite, fresh-clone, universal-layout,
+RSS, granule-only-I/O or performance claim. Full types/layouts and Compact
+MV/projections still precede optimization; <=10% slowdown remains unmeasured
+and the full goal ACTIVE. See the [W271 evidence packet](../.landmark/evidence/compact-part-writer-w271.json).
+
+Previously qualified recursive typed-Dynamic Compact framing (W270,
+2026-10-12): VERIFIED /
 root adversary ROBUST within the finite native witnesses and affected cohorts.
 Compact reader/writer already reuse recursive logical codecs; one physical
 assembler owns granule-major data.bin, marks, metadata, compression and staged

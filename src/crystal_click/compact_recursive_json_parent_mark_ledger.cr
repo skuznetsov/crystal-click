@@ -34,6 +34,7 @@ module CrystalClick
     @captured_size_lanes : Int32
     @self_delimited_source : CompactRecursiveJsonObjectSiteSource?
     @self_delimited_name : String?
+    @self_delimited_callback_name : String?
     @self_delimited_size : Int32
     @completed : Bool
 
@@ -71,6 +72,7 @@ module CrystalClick
       @captured_size_lanes = 0
       @self_delimited_source = nil
       @self_delimited_name = nil
+      @self_delimited_callback_name = nil
       @self_delimited_size = 0
       @completed = false
     end
@@ -140,6 +142,18 @@ module CrystalClick
       capture_exact(callback_name, byte_count)
     end
 
+    def capture_site_physical_exact(
+      source : CompactRecursiveJsonObjectSiteSource,
+      canonical_physical_name : String,
+      raw_callback_name : String,
+      byte_count : Int32,
+    ) : Capture
+      validate_site_source!(source)
+      ensure_phase!(Phase::Prefixes, "recursive Compact JSON prefix callback") if source.prefix_capturing?
+      ensure_phase!(Phase::Bodies, "recursive Compact JSON body callback") unless source.prefix_capturing?
+      capture_exact(canonical_physical_name, byte_count, raw_callback_name)
+    end
+
     def capture_site_inline_fragment(
       source : CompactRecursiveJsonObjectSiteSource,
       callback_name : String,
@@ -159,6 +173,14 @@ module CrystalClick
       source : CompactRecursiveJsonObjectSiteSource,
       callback_name : String,
     ) : Bytes
+      borrow_site_self_delimited(source, callback_name, callback_name)
+    end
+
+    def borrow_site_self_delimited(
+      source : CompactRecursiveJsonObjectSiteSource,
+      canonical_physical_name : String,
+      raw_callback_name : String,
+    ) : Bytes
       validate_site_source!(source)
       ensure_phase!(source.prefix_capturing? ? Phase::Prefixes : Phase::Bodies,
         "recursive Compact self-delimited Object callback")
@@ -168,13 +190,14 @@ module CrystalClick
       if @self_delimited_source
         raise CorruptPartError.new("recursive Compact parent already has a borrowed self-delimited callback")
       end
-      shard = shard_for_event(callback_name)
+      shard = shard_for_event(canonical_physical_name)
       size = shard.logical_end - shard.logical_start
       if size < 0 || size > Int32::MAX
         raise CorruptPartError.new("recursive Compact callback exceeds its supported byte domain")
       end
       @self_delimited_source = source
-      @self_delimited_name = String.new(callback_name.to_slice)
+      @self_delimited_name = String.new(canonical_physical_name.to_slice)
+      @self_delimited_callback_name = String.new(raw_callback_name.to_slice)
       @self_delimited_size = size.to_i32
       shard.bytes
     end
@@ -184,30 +207,59 @@ module CrystalClick
       callback_name : String,
       consumed : Int32,
     ) : Capture
-      unless @self_delimited_source.try(&.same?(source)) && @self_delimited_name == callback_name
+      commit_site_self_delimited(source, callback_name, callback_name, consumed)
+    end
+
+    def commit_site_self_delimited(
+      source : CompactRecursiveJsonObjectSiteSource,
+      canonical_physical_name : String,
+      raw_callback_name : String,
+      consumed : Int32,
+    ) : Capture
+      unless @self_delimited_source.try(&.same?(source)) &&
+             @self_delimited_name == canonical_physical_name &&
+             @self_delimited_callback_name == raw_callback_name
         raise CorruptPartError.new("recursive Compact self-delimited callback differs from its parent reservation")
       end
       unless consumed == @self_delimited_size
         raise CorruptPartError.new("recursive Compact self-delimited parser did not consume its exact named callback")
       end
-      capture = capture_site_exact(source, callback_name, consumed)
-      @self_delimited_source = nil
-      @self_delimited_name = nil
-      @self_delimited_size = 0
+      capture = capture_site_physical_exact(source, canonical_physical_name, raw_callback_name, consumed)
+      clear_self_delimited_reservation!
       capture
     end
 
     def with_site_grammar_extent(source : CompactRecursiveJsonObjectSiteSource, callback_name : String, &block : Bytes -> Tuple(T, Int32)) : Tuple(T, Capture) forall T
+      with_site_physical_grammar_extent(source, callback_name, callback_name) do |bytes|
+        yield bytes
+      end
+    end
+
+    def with_site_physical_grammar_extent(
+      source : CompactRecursiveJsonObjectSiteSource,
+      canonical_physical_name : String,
+      raw_callback_name : String,
+      &block : Bytes -> Tuple(T, Int32)
+    ) : Tuple(T, Capture) forall T
       validate_site_source!(source)
       phase = source.prefix_capturing? ? Phase::Prefixes : Phase::Bodies
       phase_name = source.prefix_capturing? ? "recursive Compact JSON prefix grammar" : "recursive Compact JSON body grammar"
       ensure_phase!(phase, phase_name)
 
       if @mode.mrk4?
-        borrowed = borrow_site_self_delimited(source, callback_name)
-        value, consumed = yield borrowed
-        capture = commit_site_self_delimited(source, callback_name, consumed)
-        {value, capture}
+        reservation_acquired = false
+        begin
+          borrowed = borrow_site_self_delimited(source, canonical_physical_name, raw_callback_name)
+          reservation_acquired = true
+          value, consumed = yield borrowed
+          capture = commit_site_self_delimited(source, canonical_physical_name, raw_callback_name, consumed)
+          reservation_acquired = false
+          {value, capture}
+        ensure
+          if reservation_acquired
+            clear_self_delimited_reservation_if_owned!(source, canonical_physical_name, raw_callback_name)
+          end
+        end
       else
         shard = @shards[0]? || raise(CorruptPartError.new("recursive Compact mrk3 parent tape is missing"))
         start = @cursor.position
@@ -217,7 +269,7 @@ module CrystalClick
           raise CorruptPartError.new("recursive Compact mrk3 parser consumed outside the parent tape")
         end
         @cursor.advance_borrowed_prefix(consumed)
-        @captured_event_names << String.new(callback_name.to_slice)
+        @captured_event_names << String.new(raw_callback_name.to_slice)
         {value, Capture.new(@cursor.consumed_slice(start), shard, start)}
       end
     end
@@ -275,15 +327,22 @@ module CrystalClick
         bytes = checked_add(bytes, instance_sizeof(String).to_u64)
         bytes = checked_add(bytes, name.bytesize.to_u64 + 1_u64)
       end
+      if name = @self_delimited_callback_name
+        bytes = checked_add(bytes, instance_sizeof(String).to_u64)
+        bytes = checked_add(bytes, name.bytesize.to_u64 + 1_u64)
+      end
       bytes
     end
 
-    private def capture_exact(callback_name : String, byte_count : Int32) : Capture
+    private def capture_exact(callback_name : String, byte_count : Int32, logical_name : String = callback_name) : Capture
       if byte_count < 0
         raise CorruptPartError.new("recursive Compact callback requested a negative byte count")
       end
       capture = if @mode.mrk4?
                   shard = shard_for_event(callback_name)
+                  unless shard.bytes.size == byte_count
+                    raise CorruptPartError.new("recursive Compact named callback has the wrong byte extent")
+                  end
                   @cursor.begin_event(callback_name)
                   unless @cursor.remaining == byte_count
                     raise CorruptPartError.new("recursive Compact named callback has the wrong byte extent")
@@ -299,8 +358,30 @@ module CrystalClick
       if @phase == Phase::ArraySizes
         @captured_size_lanes += 1
       end
-      @captured_event_names << String.new(callback_name.to_slice)
+      event_name = @mode.mrk4? ? callback_name : logical_name
+      @captured_event_names << String.new(event_name.to_slice)
       capture
+    end
+
+    private def clear_self_delimited_reservation_if_owned!(
+      source : CompactRecursiveJsonObjectSiteSource,
+      canonical_physical_name : String,
+      raw_callback_name : String,
+    ) : Nil
+      if @self_delimited_source.try(&.same?(source)) &&
+         @self_delimited_name == canonical_physical_name &&
+         @self_delimited_callback_name == raw_callback_name
+        clear_self_delimited_reservation!
+      end
+      nil
+    end
+
+    private def clear_self_delimited_reservation! : Nil
+      @self_delimited_source = nil
+      @self_delimited_name = nil
+      @self_delimited_callback_name = nil
+      @self_delimited_size = 0
+      nil
     end
 
     private def capture_remaining_event(callback_name : String) : Capture

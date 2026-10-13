@@ -444,8 +444,7 @@ module CrystalClick
       @callback_names.each_with_index do |name, callback_index|
         source = @plan.structure_source_for_callback(name)
         next unless source
-        binding = @plan.site_binding(source.site_key)
-        full, empty = structure_prefix_pair(source, binding, budget)
+        full, empty = structure_prefix_pair(source, budget)
         @structure_prefixes[callback_index] = {full, empty}
       end
       nil
@@ -453,10 +452,9 @@ module CrystalClick
 
     private def structure_prefix_pair(
       source : CompactJsonCallbackPlan::StructureSource,
-      binding : CompactJsonCallbackPlan::SiteBinding,
       budget : BinaryCodecBudget,
     ) : Tuple(Bytes, Bytes)
-      structures = binding.object_plan.structures
+      structures = source.owner_plan.structures
       context = BinaryCodecContext.new(budget.limits, nil, true, budget)
       case source.kind
       when :object
@@ -478,9 +476,9 @@ module CrystalClick
         dynamic = if source.kind == :object_dynamic
                     structures.dynamic_for(source.owner_path)
                   else
-                    binding.object_plan.typed_dynamic_site_structure_for(source.owner_path, source.structure_path)
+                    source.owner_plan.typed_dynamic_site_structure_for(source.owner_path, source.structure_path)
                   end
-        depth = dynamic_type_depth(source, binding, budget.limits)
+        depth = dynamic_type_depth(source, budget.limits)
         DynamicStructureCodec.write_to(dynamic, context, 1, depth)
         full = context.finish_bytes
         empty_statistics = if dynamic.version == DynamicStructure::VERSION_V3
@@ -524,18 +522,17 @@ module CrystalClick
 
     private def dynamic_type_depth(
       source : CompactJsonCallbackPlan::StructureSource,
-      binding : CompactJsonCallbackPlan::SiteBinding,
       limits : BinaryCodecLimits,
     ) : Int32
-      site = binding.site
       actual_depth = if source.kind == :object_dynamic
-                       site.descriptor_depth.to_i64 + 1_i64
+                       source.owner_physical_plan.inferred_actual_root_depth.to_i64
                      else
-                       object_depth = binding.object_plan.typed_dynamic_site_object_depth_for(
+                       object_depth = source.owner_plan.typed_dynamic_site_object_depth_for(
                          source.owner_path,
                          source.structure_path,
                        ).to_i64
-                       site.descriptor_depth.to_i64 - 1_i64 + object_depth + 1_i64
+                       source.owner_physical_plan.typed_descriptor_root_depth.to_i64 - 1_i64 +
+                         object_depth + 1_i64
                      end
       unless actual_depth > 0_i64 && actual_depth <= limits.max_depth.to_i64 &&
              actual_depth <= Int32::MAX.to_i64

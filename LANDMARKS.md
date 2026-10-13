@@ -1,6 +1,38 @@
 # Crystal Click landmarks
 
-## Recursive typed-Dynamic Compact framing — W270
+## Dynamic-owned Compact JSON callback composition — W271
+
+- VERIFIED / root adversary ROBUST within this finite slice: direct JSON actual
+  arm of declared
+  `payload Dynamic(max_types=1)` inside an existing Compact Object column:
+  Object V3/wire 4, MAP0/one bucket, plain MRK3/MRK4 and BASIC/COMPACT. Native
+  stock child path is inferred `value: Int64`; the local typed-UInt8 witness is
+  separate. Root/standalone Dynamic ownership, wrapped/grandchild JSON, child
+  LowCardinality/QBit, String1, advanced/chunked profiles and compressed marks
+  remain outside this slice and open in the full goal.
+- DEBUG and actual RELEASE native captures passed the record
+  auditor: 94 invocations each with authenticated captured records; separate raw six-tape and
+  one-byte semantic-negative audits passed. Captured roots and summary hashes,
+  source/runtime pins, query windows, and exact negative semantics are recorded
+  in the [writer frontier](docs/COMPACT_PART_WRITER_FRONTIER.md). DEBUG and
+  actual RELEASE each pass 941 unique examples / 148 disjoint paths in seven
+  serial executables per mode (14 total; zero failures/errors/pending). Fresh
+  W270 RELEASE native and audit, nine-file/17902-byte static guard, original-capture audit and
+  protected-file rechecks pass. Held seals are recorded in the frontier; these
+  are not full-suite or fresh-clone results.
+- Primary risk is stale child ownership or incorrect zero-arm extent;
+  preserve exact owner-local prefix/statistics and callback selection, parsed
+  authority, and CHECK-versus-semantic distinction. Do not infer byte parity:
+  generated COMPACT-parent child framing is BASIC and has a different raw tape
+  size than either stock mode.
+- Next bounded falsifier: typed Dynamic actual `Array(JSON)` from W271 adversary
+  ranges 157–198 and 410–415; ordinary `Array(JSON)` already has support.
+  Root-Dynamic/wrapped/grandchild JSON, child LowCardinality/QBit, advanced or
+  chunked profiles and compressed marks remain open. Full goal ACTIVE; all
+  types/layouts and MV/projections precede optimization; no <=10% performance
+  claim or push. See the [W271 evidence packet](.landmark/evidence/compact-part-writer-w271.json).
+
+## Previously qualified recursive typed-Dynamic Compact framing — W270
 
 - VERIFIED / root adversary ROBUST over W269 baseline
   `f4e0c6f0bc6cb299267d96f0c60da791ec5d4b94` within the finite native witnesses

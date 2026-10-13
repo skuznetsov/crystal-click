@@ -323,7 +323,7 @@ module CrystalClick
       if schema.object?
         schedule = schedules[key]? ||
                    raise(CorruptPartError.new("recursive Compact Object body schedule is missing"))
-        schedule.body_pairs.each { |_canonical, callback| output << String.new(callback.to_slice) }
+        schedule.body_events.each { |_owner, _canonical, callback| output << String.new(callback.to_slice) }
       elsif schema.bulk?
         output << String.new(uint8_site(key).callback_name.to_slice)
       elsif schema.array?

@@ -1,6 +1,174 @@
 # Compact part writer frontier
 
-## Current transition: recursive typed-Dynamic Compact MRK3 framing — W270
+## Current transition: Dynamic-owned Object callback composition — W271
+
+Status: VERIFIED / root adversary ROBUST within the finite W271 witnesses and
+affected cohorts (2026-10-12). This closes only the bounded W271 slice below;
+the full goal remains ACTIVE.
+Baseline: `842cdd85de7073792e9ffaaa6eb7bc5f7781cec8` (W270).
+All remaining types/layouts and MV/projections precede optimization; the
+eventual <=10% slowdown objective remains unmeasured.
+
+Target: the direct JSON actual arm of the declared field
+`payload Dynamic(max_types=1)` in the existing `CompactPartColumn.json`
+Object path. Its exact typed-Dynamic leaf binding owns a physical child Object
+subtree with its own prefixes, body roles, statistics and arm-local occurrence
+counts; it is not a scalar `.data` lane. The admitted child profile is Object
+V3/wire 4, MAP0, one bucket, plain MRK3/MRK4, BASIC/COMPACT. The stock native
+child path is inferred `value: Int64`; the local typed-UInt8 fixture is a
+separate witness. W270 behavior remains unchanged.
+
+This slice does not admit standalone Dynamic input, root-Dynamic JSON,
+descriptor-path/wrapped or grandchild JSON, child LowCardinality/QBit, String1,
+advanced/chunked profiles, or compressed marks. They remain in the full goal,
+not exclusions from it. Child nested typed/root JSON bindings stay refused.
+
+Rejected/guard-only: unbound or foreign JSON leaf plans, unsupported versions,
+profiles, advanced relocations, compressed marks and unqualified recursive
+combinations still fail closed. Do not erase refusal gates to make an unknown
+owner look empty. No new scalar serde, broad refactor, performance rewrite,
+native-capture mutation or relaxation of common budgets/statistical authority.
+
+Risk: CAUTION (persistent callback composition and shared read consumers).
+Rollback: remove only W271-owned edits against the baseline; preserve all
+three user-owned W263 specs and frozen W264-W270 fixtures/native captures.
+Strongest failure: a zero-selected-arm mark borrows another owner's bytes or
+uses parent rows for the child's body, yet publishes a semantically wrong part.
+Guard: exact leaf-coordinate and ordered physical/logical callback ownership,
+separate parent/arm/child occurrence grids, no publication/staging residue on
+refusal, selected semantic corruption and clean independent-column controls.
+
+Execution boundary: root ran compiler/spec/native work serially under the
+established worker/thread, process-tree and free-memory guards. Candidate
+output did not define the native semantic oracle; source and runtime pins stay
+separate. Native capture/auditor and source seals are recorded below.
+
+Finite W271 DoD: frozen public baseline RED then GREEN; plain MRK3/MRK4,
+BASIC/COMPACT and zero-arm/middle/last/empty windows; exact child payloads and
+Dynamic type; wrong leaf/schema, missing first-prefix statistics and unsupported
+child-prefix refusals before publication; caller-statistics preservation and
+valid SharedVariant fallback (neither is an actual-roster refusal); stock
+Compact reads and generated native ATTACH/CHECK plus literal SELECT. The
+affected writer/LC/Variant/Dynamic/common-Object cohorts pass DEBUG and actual
+RELEASE, with fresh W270 native and frozen-byte guards below. CHECK is not
+semantic proof and a finite native matrix is not universal qualification.
+Observed evidence and source/test seals are recorded below.
+
+Observed entry signals (root-run, serial):
+
+- Common-codec fixture control: 1 example, 0 failures, 0 errors (guard exit 0).
+  The exact bound typed-Dynamic JSON leaf and its zero-arm mark are valid.
+- Positive public Compact writer/reader baseline at unchanged production HEAD:
+  1 example, 1 `UnsupportedFormatError` (guard exit 1), at
+  `CompactDynamicBulkPrefixTraversal.validate_compact_type_admission!` called
+  from `CompactJsonCallbackPlan.validate_object_layout!`. This is a physical
+  admission refusal, not a compiler or fixture-construction failure.
+- Frozen W271 fixture/control/baseline SHA-256 respectively:
+  `7fad66795123b2fa47cf1fabee825556908d97b7edfb0bbcc8960ef266b75074`,
+  `34b3606f3bac2202bd9ed189f8cf2bf0b70a87c4ad70f5efb7f956e96d7ad148`,
+  `152df2d81e26643f9857b5ad42da79415fb4db2f548189fa00a1410bcc574d58`.
+- Independent native scalar discriminator: the explicit JSON -> Dynamic ->
+  typed Object construction retains an ordinary JSON arm (`dynamicType=JSON`,
+  `isDynamicElementInSharedData=false`) and literal `{"payload":{"value":11}}`,
+  but erases the intended nested typed UInt8 declaration. The observed child
+  path is `value: Int64`. Local parameterized-UInt8 and native inferred-Int64
+  witnesses therefore stay separate; equal values do not prove equal layouts.
+  Runtime: 26.10.1.1201, build ID `DB3524E5F34139BEA7B1D573C45D031F`,
+  binary SHA-256
+  `bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+  Inspected upstream source HEAD:
+  `ed30948f095ecb70679986d7d60e27ad770ae27a` (distinct source pin).
+- Root-created stock Compact MRK4 parts in BASIC and COMPACT both pass native
+  CHECK and exact literal/type/path SELECTs before any candidate writer use.
+  A separate root-authored raw-byte audit covers all 18 callbacks (one UInt64
+  key plus 17 JSON subtree callbacks), four marks and whole-grid EOF. It
+  matches the complete 505-byte BASIC / 516-byte COMPACT decompressed tapes
+  to independent literals, parent JSON and child Int64 first-prefix counts
+  `[4,0]`, later omitted statistics, MAP0/bucket1 prefixes, selected child rows
+  `[1,0,2,1]`, and empty child body lanes in the zero-arm mark. This qualifies
+  the stock fixture/oracle, not the unfinished library reader/writer.
+- The first fresh W271 DEBUG stock-first probe rejects its untouched native
+  MRK4 BASIC part with `CorruptPartError: complete Object statistics offsets
+  are missing`. A separate raw-byte audit of that exact failing copy matches
+  all 18 callbacks and its 505-byte tape. Local typed-UInt8 cohorts passing
+  DEBUG/RELEASE therefore do not qualify this native inferred-Int64 child.
+  Source inspection localizes a metadata handoff gap: the JSON boundary drops
+  the statistics observer, and `decode_child` invokes the inline materializer
+  without an owner-local offset map. A separate native-shaped bare-JSON/
+  inferred-Int64 local positive compiles, passes its common-codec/shape control,
+  then reproduces the same error through the public writer's staged readback
+  (1 example, 0 failures, 1 error, guard exit 1) before the propagation fix.
+  Freeze this positive as a second discriminator. Do not weaken the Complete
+  guard, substitute callback length for a parsed offset, or borrow a global map.
+- W271 native capture/audit, matching the final production seal below:
+  DEBUG root `/private/tmp/crystal-click-w271-native-complete-debug.TVXaZS`,
+  summary SHA-256
+  `b821119e3824d9821b1c2bec4beda568ae4fb19a066b0e4a7a55cc8642a35f4b`; actual
+  RELEASE root `/private/tmp/crystal-click-w271-native-complete-release.bx16vP`,
+  summary SHA-256
+  `c41380b7b6bb4bf204068a6449b3c9c7b4d9db04f2c53605167e9dba52a66dca`. Each
+  record auditor run accepted 94 invocations. The final preservation/index
+  check (`2ff663`, exit 0) matched 376 argv/stdin/stdout/stderr files plus 94
+  record JSON files per mode (470 total); this is not a semantic verifier. Independent raw
+  six-tape plus mutation audits passed for DEBUG (`dc210e`) and RELEASE
+  (`578b69`). These captures include stock BASIC/COMPACT MRK4 and generated
+  plain MRK3/MRK4 × BASIC/COMPACT, with full/middle/zero-arm/last/empty
+  windows and exact literal, type, path and ordinary/shared checks. The root
+  confirmed these captures and raw audits against unchanged current production;
+  they qualify only the finite W271 scope, not universal layout coverage.
+- The generated part has a COMPACT parent but independently uses BASIC for its
+  child Dynamic discriminator; its 511-byte raw tape therefore does not claim
+  byte parity with stock BASIC (505) or COMPACT (516). The copy-only resealed
+  semantic negative changes child Dynamic version 4 to 5 at raw offset 310,
+  preserving 613 compressed bytes, 505 raw bytes and four frames. Local read
+  rejects with `CorruptPartError`; native CHECK remains 1, but the selected
+  child JSON read exits 117 with the invalid-version-5 error. Independent PK
+  rows 5 and 6 remain exact. CHECK is not semantic proof.
+- The focused workspace-census RED was 473 vs 529 bytes: the production
+  owner-local statistics Hash header contributes 56 bytes. The spec-only
+  correction includes `instance_sizeof(Hash(String, Int32)).to_u64`; no
+  production guard was weakened. The fresh focused disjoint 17-path cohort
+  passes 36/0/0/0 in DEBUG (`805912`) and actual RELEASE (`e59ef2`).
+- Final source DoD: 14 serial executables; DEBUG and actual RELEASE each pass
+  941 unique examples / 148 disjoint paths / 0 failures, errors or pending.
+  Per mode the disjoint cohorts are focused 17/36, JSON 61/398, writer 32/202,
+  LC 11/108, Variant 9/59, Dynamic 14/109 and common Object 4/29 (paths /
+  examples). Production seal (608 files) SHA-256
+  `70204584df95de458ec5d75febeb2e9e53513aa7f001efd4c2b8d1fe6a5f01df` and
+  source/spec/scripts seal (2025 files) SHA-256
+  `274b6ee8366ba4f90869231f6cd155da6f8d81cecb7baf07e1171595fe07a5e6` were
+  rechecked (`9e4bb8`, exit 0). These were separate serial executables, not a
+  full-suite or fresh-clone run; protected untracked specs were present.
+- A fresh W270 RELEASE guard also passes: helper SHA-256
+  `6d60cabf434d1e675e14d0828b8d65474bc2a118269f5dcfa7358814a64058dc`, root
+  `/private/tmp/crystal-click-w271-previous-w270-native.km7oJu`, native run
+  `c80533` exit 0, and independent existing audit `8e4b28` exit 0. The fresh
+  static guard also passes: W265 helper SHA-256
+  `ea1204c9b0c7e8d697b1c376d4633ec9cb470cafb371cf375061a1d8c0453965`, built
+  binary build `dd661d` completed at `1f1b5f`, exit 0; new write `83b891` exit 0 and
+  independent nine-file/17902-byte frozen-original/current-byte audit `7b6eb4`
+  exit 0. Original 52 parts / 544 files / 756378 bytes audit `661a3a` exits 0.
+  Preservation recheck `4d23bf` exits 0 for three protected specs and the
+  frozen W271 fixture/control/baseline, helper/probe/native fixture, runtime
+  and guard. No claim extends to a fresh clone or unlisted layouts.
+
+Root adversary verdict: ROBUST within the exact finite W271 scope: direct
+typed-Dynamic JSON actual, Object wire 4/String0/MAP0/one bucket, plain
+MRK3/MRK4, BASIC/COMPACT. This is not universal layout, RSS, granule-only-I/O,
+performance or fresh-clone qualification. The native source pin
+`ed30948f095ecb70679986d7d60e27ad770ae27a` and runtime
+`26.10.1.1201`/build `d9bcb5ab007f0f6299f7f973f2642245bab3d028` are distinct.
+
+Next bounded falsifier: typed Dynamic actual `Array(JSON)` using the existing
+W271 adversary ranges 157–198 and 410–415; ordinary `Array(JSON)` already has
+support, but this typed-Dynamic owner remains to be demonstrated. Keep
+root-Dynamic/wrapped/grandchild JSON, child LowCardinality/QBit, advanced or
+chunked profiles and compressed marks open. Then continue remaining types and
+Compact MV/projections before optimization. Local atomic commit only, no push.
+See the
+[W271 evidence packet](../.landmark/evidence/compact-part-writer-w271.json).
+
+## Previous qualified transition: recursive typed-Dynamic Compact MRK3 framing — W270
 
 Status: VERIFIED / root adversary ROBUST within the finite native witnesses and
 affected cohorts (2026-10-12). Baseline:
