@@ -32,6 +32,7 @@ module CrystalClick
     @captured_event_names : Array(String)
     @expected_size_lanes : Int32
     @captured_size_lanes : Int32
+    @mixed_body_schedule : Bool
     @self_delimited_source : CompactRecursiveJsonObjectSiteSource?
     @self_delimited_name : String?
     @self_delimited_callback_name : String?
@@ -70,6 +71,7 @@ module CrystalClick
       @captured_event_names = [] of String
       @expected_size_lanes = -1
       @captured_size_lanes = 0
+      @mixed_body_schedule = false
       @self_delimited_source = nil
       @self_delimited_name = nil
       @self_delimited_callback_name = nil
@@ -114,11 +116,39 @@ module CrystalClick
       if @expected_size_lanes < 0 || @captured_size_lanes >= @expected_size_lanes
         raise CorruptPartError.new("recursive Compact Array-size callback is outside its frozen parent schedule")
       end
-      capture_exact(callback_name, byte_count).bytes
+      capture_exact(callback_name, byte_count, size_lane: true).bytes
+    end
+
+    # Start the serializer-DFS body schedule after every JSON Object prefix is
+    # complete. Array sizes are now captured in place immediately before their
+    # descendants rather than in a global prepass.
+    def begin_mixed_body_schedule!(expected_size_lanes : Int32) : Nil
+      ensure_phase!(Phase::ArraySizes, "recursive Compact mixed body schedule")
+      if expected_size_lanes < 0 || @expected_size_lanes >= 0 || @mixed_body_schedule
+        raise CorruptPartError.new("recursive Compact mixed body schedule was initialized more than once")
+      end
+      @expected_size_lanes = expected_size_lanes
+      @mixed_body_schedule = true
+      @phase = Phase::Bodies
+      nil
+    end
+
+    def capture_mixed_array_size_lane(callback_name : String, byte_count : Int32) : Bytes
+      ensure_phase!(Phase::Bodies, "recursive Compact mixed Array-size callback")
+      unless @mixed_body_schedule && @expected_size_lanes >= 0 &&
+             @captured_size_lanes < @expected_size_lanes
+        raise CorruptPartError.new("recursive Compact mixed Array-size callback is outside its frozen parent schedule")
+      end
+      capture_exact(callback_name, byte_count, size_lane: true).bytes
     end
 
     def capture_uint8_body(callback_name : String, byte_count : Int32) : Bytes
       ensure_phase!(Phase::Bodies, "recursive Compact UInt8 body callback")
+      capture_exact(callback_name, byte_count).bytes
+    end
+
+    def capture_bulk_body(callback_name : String, byte_count : Int32) : Bytes
+      ensure_phase!(Phase::Bodies, "recursive Compact opaque Bulk body callback")
       capture_exact(callback_name, byte_count).bytes
     end
 
@@ -284,6 +314,10 @@ module CrystalClick
           raise CorruptPartError.new("recursive Compact parent mark has an unfinished JSON site")
         end
       end
+      if @mixed_body_schedule &&
+         (@expected_size_lanes < 0 || @captured_size_lanes != @expected_size_lanes)
+        raise CorruptPartError.new("recursive Compact mixed traversal did not consume its exact Array-size lane count")
+      end
       unless @captured_event_names == expected_events
         raise CorruptPartError.new("recursive Compact parent callback sequence differs from its frozen serializer schedule")
       end
@@ -334,7 +368,12 @@ module CrystalClick
       bytes
     end
 
-    private def capture_exact(callback_name : String, byte_count : Int32, logical_name : String = callback_name) : Capture
+    private def capture_exact(
+      callback_name : String,
+      byte_count : Int32,
+      logical_name : String = callback_name,
+      size_lane : Bool = false,
+    ) : Capture
       if byte_count < 0
         raise CorruptPartError.new("recursive Compact callback requested a negative byte count")
       end
@@ -355,7 +394,7 @@ module CrystalClick
                   start = @cursor.position
                   Capture.new(@cursor.read_exact(byte_count), shard, start)
                 end
-      if @phase == Phase::ArraySizes
+      if size_lane
         @captured_size_lanes += 1
       end
       event_name = @mode.mrk4? ? callback_name : logical_name

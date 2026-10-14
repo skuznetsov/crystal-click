@@ -1,35 +1,40 @@
 # CrystalClick project status
 
-Active frontier: W279 typed-Dynamic JSON child shared layouts are VERIFIED /
-root adversary ROBUST within finite serialization/native scope (2026-10-13),
-over W278 `b54685723f01adebeef514a225c73f253be03e41`. Existing recursive
-Object/Array/Dynamic codecs and Compact relocation are reused: matching parent
-and child Object wire version 4, MAP0/bucket-one or SharedData v1/v2/v3 with
-two buckets, matching String0/String1 ordinary profiles and shared String0.
-Direct JSON and existing bounded Array-chain owners are retained; the new
-native matrix exercises depths zero/two/three, not arbitrary recursive products.
+Active frontier: W280 bounded recursive Compact Array/Tuple/JSON traversal is
+VERIFIED / root adversary ROBUST within the declared serialization/native
+scope (2026-10-14), over W279 `9667d75842e1cbf7feae3ce8372776843f5740b8`.
+It reuses Object and BinaryBulk codecs rather than adding topology-specific
+serializer arms. Root-local Object prefixes precede schema-ordered DFS bodies;
+each Array carries its own inherited occurrence domain, including zero rows.
+The initial JSON-free Bulk family recursively admits UInt8, Array and nonempty
+named/unnamed Tuple. Other ordinary/stateful leaves and Object layouts are not
+automatically admitted by this traversal.
 
-Fresh DEBUG and actual RELEASE each pass 433 examples on the exact 81 affected
-paths (`de2f6b`, `785043`). Fresh native matrices each pass 64 stock + 64
-generated cells (`c24aef`, `5d7541`); composed raw audits (`4fc16e`, `2f37fe`)
-each check 1,344 records / 6,720 sidecars and reject 43 negative controls.
-Native ATTACH/CHECK and literal full/middle/EOF values qualify interoperability;
-child-header parsing remains library-coupled, not an independent full-frame
-decoder. After exact source/runtime restoration, fresh default outputs match
-the nine-file / 17,902-byte durable W264 digest witness (`ae4db0`); the original
-raw baseline and separate historical W263 raw roots are unavailable. The
-declared W279 cohort was not reduced, and no full-suite claim is made.
+Fresh DEBUG and actual RELEASE each pass 455 examples on the exact 85 affected
+paths (`48b3ba`, `4c11d8`); one separately filtered W263 admission case passes.
+Fresh native matrices each pass ten stock and ten generated cells (`2ee6e1`,
+`1a9ec5`): five literal shapes x MRK3/MRK4, plain/S0/MAP0/BASIC. ROOT's raw
+audits each bind 180 records / 900 sidecars, native ATTACH/CHECK, literal
+full/middle/last/EOF values and exact mark grids. Generated payload files are
+preserved through ATTACH; exactly one pinned native invalidation sidecar is
+allowed. A complete independent JSON/frame decoder, full-suite qualification
+and the new shape/layout cross product are not claimed.
 
 The Compact reader/writer already exist. The typed facade composes same-schema
 Wide/Compact parts; its Compact backend opens one physical part at a time.
-Writing remains create-only whole-part with sorted UInt64 keys. Public outer
-JSON topology admission is still finite, and MV output/projection readers are
-Wide-only. Next: stock-backed two-Array JSON topology and remaining public
-carriers/layouts, then Compact MV/projections, then memory/performance.
-The <=10% slowdown objective is unmeasured; full goal ACTIVE. Local commit/no
-push; protected W263 specs remain unchanged. See the
+Writing remains create-only whole-part with sorted UInt64 keys. Compact may
+feed an offline MV transform, but MV output and projection child readers remain
+Wide-only. Next: supported static-leaf parity through the generic Bulk owner,
+remaining public carriers/layouts, then Compact MV/projections, then memory/
+performance. The <=10% slowdown objective is unmeasured; full goal ACTIVE.
+Protected W263 specs remain unchanged. Local atomic commit only, no push. See the
 [frontier](COMPACT_PART_WRITER_FRONTIER.md) and
-[W279 evidence](../.landmark/evidence/compact-child-json-writer-w279.json).
+[W280 evidence](../.landmark/evidence/compact-recursive-arrays-w280.json).
+
+Previously qualified W279 typed-Dynamic JSON child shared layouts remain
+documented in the frontier and [W279 evidence](../.landmark/evidence/compact-child-json-writer-w279.json).
+Their finite matching parent/child Object wire-4, SharedData v1/v2/v3 and S0/S1
+coverage is not a full cross-product witness for the new W280 shapes.
 
 Previously qualified frontier: W278 advanced shared-data JSON Compact writer is
 VERIFIED / root adversary ROBUST within finite serialization/native scope (2026-10-13),

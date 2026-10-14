@@ -140,11 +140,12 @@ module CrystalClick
       json_site_count = @schema_plan.json_site_count
       array_site_count = @schema_plan.array_site_count
       uint8_site_count = @schema_plan.uint8_site_count
+      bulk_site_count = @schema_plan.bulk_site_count
       site_slots = checked_add(
         checked_add(json_site_count.to_u64, array_site_count.to_u64),
-        uint8_site_count.to_u64,
+        checked_add(uint8_site_count.to_u64, bulk_site_count.to_u64),
       )
-      unless json_site_count > 0 && site_slots <= 4_u64
+      unless json_site_count > 0
         raise UnsupportedFormatError.new("Compact JSON callback plan has an inconsistent schema-site roster")
       end
       budget.ensure_future_nodes(3_u64)
@@ -154,6 +155,11 @@ module CrystalClick
       sites = @schema_plan.json_sites
       array_sites = @schema_plan.array_sites
       uint8_sites = @schema_plan.uint8_sites
+      bulk_sites = @schema_plan.bulk_sites
+      unless sites.size == json_site_count && array_sites.size == array_site_count &&
+             uint8_sites.size == uint8_site_count && bulk_sites.size == bulk_site_count
+        raise UnsupportedFormatError.new("Compact JSON schema-site roster changed after planning")
+      end
       object_schemas = Hash(String, ObjectDocumentSchema).new(initial_capacity: sites.size)
       input.schema.each_json_site { |path, schema| object_schemas[String.new(path.to_slice)] = schema }
       unless @json_context.site_count == sites.size
@@ -275,6 +281,15 @@ module CrystalClick
         end
         seen_callback_names << site.callback_name
       end
+      bulk_sites.each do |site|
+        site.each_role do |role|
+          callback_name = site.callback_name_for(role.name)
+          if seen_callback_names.includes?(callback_name)
+            raise UnsupportedFormatError.new("Compact JSON callback schedule repeats a physical callback")
+          end
+          seen_callback_names << callback_name
+        end
+      end
 
       ordered_names = @schema_plan.expected_event_names(prefixes, body_pairs_by_site)
       seen_ordered = Set(String).new
@@ -317,6 +332,12 @@ module CrystalClick
       end
       uint8_sites.each do |site|
         register_physical_pair!(canonical_by_callback, seen_canonical, site.callback_name, site.callback_name)
+      end
+      bulk_sites.each do |site|
+        site.each_role do |role|
+          callback_name = site.callback_name_for(role.name)
+          register_physical_pair!(canonical_by_callback, seen_canonical, callback_name, callback_name)
+        end
       end
       unless canonical_by_callback.size == expected_count
         raise UnsupportedFormatError.new("Compact JSON physical callback projection is not a complete roster")
@@ -394,6 +415,14 @@ module CrystalClick
 
     def uint8_site_count : Int32
       @schema_plan.uint8_site_count
+    end
+
+    def bulk_sites : Array(CompactRecursiveJsonBulkSite)
+      @schema_plan.bulk_sites
+    end
+
+    def bulk_site_count : Int32
+      @schema_plan.bulk_site_count
     end
 
     def site_binding(path : String) : SiteBinding

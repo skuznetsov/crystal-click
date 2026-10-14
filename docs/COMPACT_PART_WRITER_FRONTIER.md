@@ -1,5 +1,248 @@
 # Compact part writer frontier
 
+## Recursive Array/Tuple JSON body traversal — W280
+
+Status: VERIFIED / root adversary ROBUST within bounded traversal and native
+interoperability scope
+(2026-10-14), over W279 `9667d75842e1cbf7feae3ce8372776843f5740b8`.
+The generic Array/Tuple traversal and initial stateless Bulk family are
+implemented. The full type/MV/projection/performance goal remains ACTIVE;
+performance is still deferred. The qualification below does not admit every
+leaf/layout combination supported elsewhere in the library.
+
+W279 baseline boundary: `CompactRecursiveJsonSchemaPlan.admitted_schema?`
+accepted only root Object, Array(Object), Array(Tuple(Object, UInt8)) and
+Tuple(Object, Object). Its reader/writer event plan collects all Object
+prefixes, then all Array sizes, then schema-ordered bodies. The recursive
+column reader likewise captures all sizes before any Object body. Two Array
+branches are rejected; merely removing that guard would not establish a
+correct physical traversal.
+
+The first observed discriminator is a genuine stock Compact column
+`Tuple(left Array(JSON), right Array(JSON))`, with independently alternating
+empty/populated branches over four two-row marks. The stock-first probe is
+`scripts/probe_compact_recursive_arrays_w280.rb`; ROOT reviewed and executed it
+before production edits. Retain exact literal inputs, full/middle/EOF value SQL,
+stdout/stderr/argv, active-part schema/path/rows, raw metadata/marks and the
+existing distinct source/runtime pins. Start with MRK3/plain/S0/MAP0 and use
+MRK4 to observe labeled substream coordinates. Stock schema/input rejection,
+stock success with our API rejection, and malformed instrumentation are
+different outcomes; never replace the tested shape with an easier one.
+
+Observed stock capture: `/private/tmp/crystal-click-w280-stock.aABM42`, final
+tool chunk `a2b8c3`, exit zero. The two-Array column and single-Array control
+each pass literal full/middle/EOF reads in MRK3 and MRK4: four cases, 24 native
+invocations. MRK4 names place the left size and body callbacks before the right
+size and body callbacks. This is stock-only evidence, not Crystal support.
+Frozen probe SHA-256:
+`722affc4b89990330fadbca359652fdb236856792ebc6ca7c9a5d71ec8098dc8`.
+Source remains `ed30948f095ecb70679986d7d60e27ad770ae27a`; runtime remains
+26.10.1.1201/build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`, binary
+SHA-256 `bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
+These are distinct pins, not a latest-version or same-build assertion.
+
+ROOT's direct stock-record audit (`8d365e`, exit zero) rechecks 24 records /
+120 exact sidecars, native executable identity and 28 pinned source files.
+Independent plain mark parsing (`1f994a`, exit zero) observes five rows
+`[2,2,2,2,0]`, monotone coordinates, 23 MRK4 slots / 1,880 bytes for the
+sibling-Array case and 12 slots / 1,000 bytes for the single-Array control;
+both MRK3 grids have two root-column slots / 200 bytes. A separate selected
+LZ4 lane audit (`5b8fe2`, exit zero) checks eight Array-size and eight typed-id
+lanes over four marks against literal inputs: left C `[3,1,2,1]`, right C
+`[1,2,2,3]`. This does not independently validate CityHash128 or complete JSON
+bodies. These preliminary stock observations alone do not qualify the library;
+the final bidirectional qualification is recorded below.
+
+Observed local entry RED: guarded DEBUG
+`spec/compact_part_writer_w280_entry_spec.cr`, final tool chunk `c6a024`, exit
+one: five examples, zero assertion failures, four explicit unsupported-schema
+errors. The existing Array(JSON) control passes. The positive basis retains
+sibling Arrays, four nested sibling Objects, five Object sites with nested
+Array/Tuple and UInt8, and positional UInt8/Array(UInt8)/JSON siblings. The
+positional fixture's Array(UInt8) carrier is corrected before implementation:
+its JSON-free subtree is a Bulk leaf, not a structural storage Array.
+
+Design-sealed implementation direction: reuse Object and BinaryBulk codecs;
+compile a
+bounded schema-owned recursive Array/Tuple body traversal that emits each
+Array size lane immediately before its own child body and preserves each
+inherited row domain. Object prefixes remain a separately authenticated phase
+within one root column; never sweep prefixes across root columns.
+The intended generalization is structural traversal within the existing leaf
+family, not one more hardcoded topology whitelist arm. Generic named/unnamed
+Tuple and nested/sibling Array admission requires source-backed ordering,
+structural falsifiers and native witnesses of that width before widening.
+Keep `StorageColumnSchemaParser` unchanged: direct UInt8 retains its existing
+site API, while JSON-free Array/Tuple subtrees retain `StorageColumnValue.bulk`
+and a codec-backed BulkSite. The initial stateless Bulk family is recursively
+UInt8, Array and nonempty named/unnamed Tuple; do not replace this with another
+finite outer-topology whitelist. Each BulkSite retains escaped physical prefix,
+structural depth and initial Array level. Its callback roles follow serializer
+DFS, never the lexically sorted BinaryBulk role roster. Other ordinary leaves,
+stateful opaque Bulk prefixes, outer Dynamic products and new Object layouts
+do not become admitted merely because traversal is recursive.
+
+Reader law: carry inherited Q through the DFS, capture Array sizes at the node,
+checked-sum child C, and recurse even when Q/C is zero. Store each Array's Q
+grid separately from the root physical P grid. Authenticate the complete parent
+mark before publishing any Object or Bulk child. The parent ledger permits
+interleaved size/body callbacks only after every root-local prefix completes;
+retain exact-once, exact-size-count and final-roster authentication, including
+the legacy single-Array ledger API. Replace both four-site caps with bounded
+preflight before proportional site/fragment/name allocation. Physical-name
+collisions (including a JSON typed path named `size0`) fail closed, not dedupe.
+
+CAUTION: persistent callback order, Array occurrence domains and shared
+reader/writer schedule. Likeliest failure: a global sizes-first schedule or
+sibling row count passes library roundtrip but produces a different native
+part. Guard: stock physical order plus native ATTACH/CHECK and independent
+literal values; reject reordered/missing lanes and parent/child row mismatch.
+Rollback: one coherent W280 commit over W279; preserve protected W263 specs,
+temporary W279 qualification captures and all unrelated work; no push.
+
+Pre-qualification integration review finds two additional logical-limit gaps:
+Array-size metadata vectors preflight but do not cumulatively charge their
+UInt64 entries, and the workspace observer runs after transient Bulk streams
+have been cleared. The narrow corrective slice charges metadata visits/edges
+before allocation and observes copied stream owners both before decoding and
+while decoded values still coexist with them. Falsifiers: a one-below cumulative
+metadata budget must fail without charging either dimension, and a workspace
+observer must see the stream/value overlap before clear. Exact existing 85-path
+DEBUG and RELEASE runs pass 451 examples each before these corrections; they
+are pre-correction regression evidence, not final qualification. This remains
+a bounded logical-owner estimate, not an allocator/RSS or decoder-internal
+peak guarantee; retained PhysicalPlan internals remain outside that estimate.
+ROOT's guarded integration RED (`ea445d`, exit one) executes six examples:
+four assertion failures and no errors. Metadata counters stay zero, both
+one-below metadata budgets fail to reject, and the unmodified workspace
+observer sees seven callbacks instead of fifteen for four Bulk Array marks.
+Two earlier fixture compilation errors are instrumentation failures, not RED
+evidence for production behavior. The repaired fixture reuses the existing
+positional UInt8/Array(UInt8)/JSON basis.
+The narrow correction is implemented: both metadata callers pass their shared
+budget into exact-extent decoding, which preflights both dimensions and charges
+entries before allocation; paired observer snapshots now include all staged
+Bulk streams before decoding and while decoded values coexist with them.
+ROOT's final focused DEBUG run (`655c56`, exit zero) passes 19 examples. The
+post-correction local and native qualification below supersedes the pending
+checkpoint.
+
+Ownership: Luna implementation owns
+`src/crystal_click/compact_recursive_json_schema_plan.cr`,
+`compact_json_callback_plan.cr`, `compact_json_encoded_column.cr`,
+`compact_recursive_json_column_reader.cr`,
+`compact_recursive_json_parent_mark_ledger.cr`, new own-file
+`compact_recursive_json_bulk_site.cr` / `compact_recursive_json_bulk_mark.cr`
+if needed, and their requires in `src/crystal_click.cr`. It also owns the two
+W280 fixture/entry files and the first self-contained admission example in
+`spec/compact_json_recursive_public_w263_adversary_spec.cr`. Any additional
+shared-core edit needs a consumer inventory and ROOT review first. ROOT owns
+frontier/status/evidence and direct hostile verification. Separate Luna
+instrument work owns only the new W280 matrix/helper scripts; the initial
+stock probe stays frozen. The source-audit Luna owns only the new
+`spec/compact_recursive_json_w280_adversary_spec.cr` for independent literal
+ordering, occurrence-domain, collision and budget counterexamples; ROOT runs
+all builds and native processes. Three user-owned untracked W263 specs stay
+untouched.
+
+Consumer inventory: `rg -n 'expected_event_names|begin_array_sizes!|finish_array_sizes!|capture_uint8_body|UInt8Site|uint8_site\\(' src spec --glob '*.cr'`
+identifies the schema/callback/reader path plus W271 source-owner and physical
+prefix selector specs and the tracked W263 mutant fixture. Retain the legacy
+ledger entrypoints so those single-Array capture consumers do not silently
+change order. The tracked W263 first admission example changes its finite
+shape expectation; the historical raw-dependent examples remain separate.
+
+Frozen candidate checkpoint: the generic bounded traversal is implemented,
+and ROOT's guarded focused DEBUG run passes 15 examples (`fa61fc`). The first
+combined adversary run exposed two oracle defects (`a95933`), not production
+RED: a typed UInt8 path rejected before the intended duplicate-name guard, and
+a data rewrite invalidating compressed mark coordinates. The corrected tests
+use an admitted typed UInt64 path and remap every MRK4 slot through the
+re-encoder, retaining the authenticated roster, row grid and logical extents.
+
+Opaque Bulk packaging is now a separate one-class-per-file owner. Its
+allocation-free guard checks all dimensions before charging or proportional
+allocation: for N roles, C copied lane bytes and S bytes in one key roster,
+the package charges `3 + 5N` logical nodes and `8N + C + 2S` elements. Borrowed
+lane staging separately charges two nodes and N references. Exact/one-below
+tests do not recharge parent wire bytes. This is a logical allocation census,
+not exact heap/RSS accounting; the BulkSite retained-workspace estimate omits
+its physical-plan internals and is not qualified as a complete memory bound.
+
+Execution order: pinned-source/consumer inventory and stock falsifier; local
+expected-success RED; smallest generic traversal/reader/writer change; focused
+and affected DEBUG/actual RELEASE cohorts; fresh stock and generated native
+controls plus hostile raw review.
+
+DoD: use the exact 81-path `dod.local_roster` in
+`.landmark/evidence/compact-child-json-writer-w279.json`, union the W280 entry,
+adversary and BulkMark budget paths and W271 physical-prefix selector path
+(85 distinct paths). ROOT runs guarded
+Crystal DEBUG and actual `--release` with `CRYSTAL_WORKERS=1`, `--single-module
+--threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color`; expected zero
+failures/errors/pending, with no path silently dropped. Run only the explicitly
+filtered self-contained W263 admission example separately; its missing old raw
+roots do not qualify a historical full raw suite. Native DoD is the new
+`scripts/probe_compact_recursive_arrays_w280_matrix.rb` with the distinct pins
+above and a fresh evidence root, invoked through `run_safe.sh /usr/bin/ruby
+1800 12288`: all five literal basis shapes, both MRK3/MRK4, stock-to-Crystal
+and generated-to-native, public full/middle/last/EOF reads, exact ATTACH/CHECK
+and literal SELECT values. Helper builds use actual DEBUG and RELEASE.
+Require zero/mixed-empty nested marks, duplicate physical-name refusal,
+below/exact budget boundary tests, wrong-domain and missing/reordered event
+counterexamples, plus ROOT raw-record/mark-order checks. Existing compressed
+marks, String1 and W279 shared-child guards remain in the unchanged 81-path
+cohort; this basis does not itself qualify their full cross product. Freeze
+final executed commands and source hashes in the W280 evidence packet before
+a compatibility closure claim. This is not a full-suite/RSS/speed claim.
+Stop or pivot on unsupported stock schema, inconclusive captures or pin drift.
+Rejected surfaces stay rejected until matching falsifiers pass. Compact
+MV/projection composition follows type/layout parity, then optimization;
+the <=10% slowdown objective remains unmeasured.
+
+Final qualification (2026-10-14): ROOT's exact 85-path DEBUG (`48b3ba`) and
+actual RELEASE (`4c11d8`) runs each pass 455 examples with no failures, errors
+or pending cases. The separately filtered, self-contained W263 admission
+example passes (`9c8a69`); its historical raw-dependent suite is not claimed.
+Fresh DEBUG (`2ee6e1`) and RELEASE (`1a9ec5`) native matrices each pass ten
+stock and ten generated cells: five literal shapes x MRK3/MRK4, Object V3,
+S0/MAP0, plain marks and BASIC discriminators. They exercise stock-to-Crystal
+reads, generated native ATTACH/CHECK and literal full/middle/last/EOF windows.
+ROOT's final read-only audits (`cc66b6`/`419b91`, `84fc78`/`23849f`) each bind
+180 invocation records and 900 exact sidecars, source/runtime/helper pins,
+literal inputs, raw outputs, part inventories and plain mark grids. Raw marks
+are `[2,2,2,2,0]`; public data marks are `[2,2,2,2]`. The final auditor's
+Ruby-only negative controls pass (`91fe7f`).
+
+The first native matrix stopped at an overstrict post-ATTACH inventory oracle,
+not a library serialization failure. Every generated file remains byte-identical;
+the pinned runtime additionally writes exactly one 28-byte
+`invalidated_system_columns.txt` containing `_block_offset\n_block_number\n`.
+The repaired guard permits only that exact sidecar, rejecting other additions,
+missing/mutated payload files or wrong sidecar bytes. Pinned source
+`MergeTreeData.cpp:9089-9100` and `IMergeTreeDataPart.cpp:1899-1905,1949-1962`
+explain the load-time metadata repair. Subsequent auditor-only repairs match
+the existing origin-specific process records, native trailing-slash paths,
+five physical marks and the nested helper report envelope; no producer/library
+change was needed. Failed instrumentation is retained separately from RED
+production evidence.
+
+The final 652-file `src` + `spec/support` Crystal census is unchanged
+(`68f980`); it is not a full spec/require-graph seal. All 17 owned code/instrument
+hashes and three protected user W263 specs are checked. Same-lineage review is
+correlated; native literal checks and raw mark parsing supply separate evidence,
+not an independent complete-frame JSON/CityHash decoder. The verdict is ROBUST
+only inside this declared basis and bounded admission law. Logical budgets are
+not RSS/allocator peaks; new ordinary/stateful Bulk leaves, arbitrary Object
+layouts, the full new compressed/S1/shared-child cross product, Compact MV
+output/projection children and performance remain outside the claim.
+See [W280 evidence](../.landmark/evidence/compact-recursive-arrays-w280.json)
+for exact commands, pins, source-linked falsifiers and failure history. Refresh
+on code/test/compiler/runtime/source/instrument drift, lost raw evidence or
+widened admission. Next: supported static-leaf parity through the generic Bulk
+owner, then Compact MV/projection composition, then optimization. Local atomic
+commit only; no push.
+
 ## Typed-Dynamic JSON child shared layouts — W279
 
 Status: VERIFIED / root adversary ROBUST within finite serialization and

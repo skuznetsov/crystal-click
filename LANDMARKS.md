@@ -1,5 +1,40 @@
 # Crystal Click landmarks
 
+## Recursive Compact Array/Tuple JSON traversal — W280
+
+- VERIFIED / root adversary ROBUST within bounded structural and native
+  interoperability scope (2026-10-14), over W279
+  `9667d75842e1cbf7feae3ce8372776843f5740b8`. Reuse Object/BinaryBulk codecs;
+  compile root-local prefix phase then serializer-DFS bodies. Array size lanes
+  immediately precede their own children; retain separate P/Q/C domains and
+  zero-occurrence obligations. Authenticate the complete parent mark before
+  publishing children. Replace four-site caps with bounded preflight, not
+  another topology whitelist. JSON-free Bulk initially admits recursive
+  UInt8/Array/nonempty Tuple only; physical-name collisions fail closed.
+- Post-guard DEBUG (`48b3ba`) and actual RELEASE (`4c11d8`) each pass 455
+  examples / the exact 85 paths, plus the separate self-contained W263 case.
+  Fresh native matrices (`2ee6e1`, `1a9ec5`) each pass ten stock + ten generated
+  cells. ROOT raw audits (`cc66b6`/`419b91`, `84fc78`/`23849f`) each bind 180
+  records / 900 sidecars and literal ATTACH/CHECK/full/middle/last/EOF reads.
+  Basis: five shapes, MRK3/MRK4, plain/S0/MAP0/BASIC. Raw EOF marks and public
+  data marks are distinct. Generated files stay byte-identical through ATTACH;
+  only the exact pinned native invalidation sidecar may be added.
+- Integration RED exposed uncharged metadata visits/edges and an observer
+  after Bulk-stream clear. Charge both dimensions before allocation and observe
+  staged/decoded overlap. Limits remain logical, not RSS/allocator/decoder-peak
+  or PhysicalPlan-internal guarantees. First native inventory and subsequent
+  raw-auditor failures were instrumentation defects, not production RED.
+- The 652-file src/support census, 17 owned hashes and three protected user
+  W263 specs remain sealed. Same-lineage review is correlated; independent
+  literal/mark checks are not complete-frame JSON/CityHash validation. No new
+  all-leaf/layout/compressed/S1/shared-child cross-product, Compact MV output,
+  projection-child, full-suite or performance claim. Refresh on pin/code/test/
+  compiler/instrument drift, raw evidence loss or admission widening.
+  Continuation: generic static-leaf parity, then Compact MV/projections, then
+  optimization. Full goal ACTIVE; <=10% slowdown unmeasured; local commit/no
+  push. See [W280 evidence](.landmark/evidence/compact-recursive-arrays-w280.json)
+  and [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md).
+
 ## Typed-Dynamic JSON child shared layouts — W279
 
 - VERIFIED / root adversary ROBUST within finite serialization/native

@@ -1,9 +1,8 @@
 module CrystalClick
-  # EOF-first reader for the finite Compact JSON tree slice captured by the
-  # native matrix: root Object, Array(Object), Array(Tuple(Object, UInt8)),
-  # and Tuple(Object, Object). Root Object keeps its existing root framer;
-  # recursive forms share one physical parent-mark cursor and prepare each
-  # child JSON source only after that complete parent lifecycle is sealed.
+  # EOF-first reader for the bounded static Compact JSON tree slice. Root
+  # Object keeps its existing root framer; recursive forms share one physical
+  # parent-mark cursor and prepare each child only after the complete parent
+  # lifecycle is sealed.
   class CompactRecursiveJsonColumnReader
     getter row_count : UInt64
     getter mark_count : Int32
@@ -36,12 +35,14 @@ module CrystalClick
       getter budget : BinaryCodecBudget
       getter object_marks : Hash(String, Array(PreparedObjectMark))
       getter uint8_bytes : Hash(String, Array(Bytes))
+      getter bulk_values : Hash(String, Array(Array(BinaryValue)))
       getter array_frames : Hash(String, StorageArrayOccurrenceFrame)
 
       def initialize(
         @budget : BinaryCodecBudget,
         @object_marks : Hash(String, Array(PreparedObjectMark)),
         @uint8_bytes : Hash(String, Array(Bytes)),
+        @bulk_values : Hash(String, Array(Array(BinaryValue))),
         @array_frames : Hash(String, StorageArrayOccurrenceFrame),
       )
       end
@@ -121,8 +122,11 @@ module CrystalClick
       new(part_path, column_name, expected_schema, limits, transport_limits, codec_budget, transport_budget)
     end
 
-    def self.admitted_schema?(schema : StorageColumnSchema) : Bool
-      CompactRecursiveJsonSchemaPlan.admitted_schema?(schema)
+    def self.admitted_schema?(
+      schema : StorageColumnSchema,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+    ) : Bool
+      CompactRecursiveJsonSchemaPlan.admitted_schema?(schema, limits)
     rescue ex : ArgumentError | UnsupportedFormatError
       false
     end
@@ -146,8 +150,8 @@ module CrystalClick
       )
       @codec_budget = codec_budget
       @transport_budget = transport_budget || CompressedStreamBudget.new(@transport_limits)
-      unless self.class.admitted_schema?(@schema)
-        raise UnsupportedFormatError.new("Compact recursive JSON schema is outside the captured four-form subset")
+      unless self.class.admitted_schema?(@schema, @limits)
+        raise UnsupportedFormatError.new("Compact recursive JSON schema is outside the bounded static-site subset")
       end
       if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
         raise ArgumentError.new("Compact recursive JSON column name is empty or exceeds its bound")
@@ -509,12 +513,17 @@ module CrystalClick
       json_sites = plan.json_sites
       array_sites = plan.array_sites
       uint8_sites = plan.uint8_sites
+      bulk_sites = plan.bulk_sites
       object_marks = Hash(String, Array(PreparedObjectMark)).new(initial_capacity: json_sites.size)
       json_sites.each { |site| object_marks[site.key] = Array(PreparedObjectMark).new(@mark_count) }
       uint8_bytes = Hash(String, Array(Bytes)).new(initial_capacity: uint8_sites.size)
       uint8_sites.each { |site| uint8_bytes[site.key] = Array(Bytes).new(@mark_count) }
+      bulk_values = Hash(String, Array(Array(BinaryValue))).new(initial_capacity: bulk_sites.size)
+      bulk_sites.each { |site| bulk_values[site.key] = Array(Array(BinaryValue)).new(@mark_count) }
       array_sizes = Hash(String, Array(Array(UInt64))).new(initial_capacity: array_sites.size)
       array_sites.each { |site| array_sizes[site.key] = Array(Array(UInt64)).new(@mark_count) }
+      array_parent_rows = Hash(String, Array(UInt64)).new(initial_capacity: array_sites.size)
+      array_sites.each { |site| array_parent_rows[site.key] = Array(UInt64).new(@mark_count) }
       frozen_events = nil.as(Array(String)?)
       typed_schemas = Hash(String, Hash(String, BinaryDataType)).new
 
@@ -581,25 +590,41 @@ module CrystalClick
         end
 
         ledger.finish_prefixes!
-        ledger.begin_array_sizes!(array_sites.size)
-        array_sites.each do |site|
-          parent_count = granule.row_count
-          byte_count = checked_byte_count(parent_count, 8_u64, "Compact recursive Array size lane")
-          budget.ensure_wire_bytes(byte_count.to_u64)
-          budget.ensure_future_nodes(parent_count)
-          budget.ensure_future_elements(parent_count)
-          lane = ledger.capture_array_size_lane(site.callback_name, byte_count)
-          sizes = decode_uint64_lane(lane, parent_count, "Compact recursive Array size lane")
-          array_sizes[site.key] << sizes
+        expected_size_lanes = array_sites.size.to_u64
+        bulk_sites.each do |site|
+          expected_size_lanes = checked_add(expected_size_lanes, site.size_lane_count.to_u64)
         end
-        ledger.finish_array_sizes!
-
+        if expected_size_lanes > Int32::MAX.to_u64
+          raise CorruptPartError.new("Compact recursive mixed Array-size schedule exceeds Int32")
+        end
+        ledger.begin_mixed_body_schedule!(expected_size_lanes.to_i32)
         mark_sizes = Hash(String, Array(UInt64)).new(initial_capacity: array_sites.size)
-        array_sites.each do |site|
-          mark_sizes[site.key] = array_sizes[site.key][mark_index]
-        end
+        mark_parent_rows = Hash(String, UInt64).new(initial_capacity: array_sites.size)
+        mark_bulk_streams = Hash(String, BinaryBulkStreams).new(initial_capacity: bulk_sites.size)
+        capture_body_traversal(
+          @schema,
+          "root",
+          granule.row_count,
+          captures,
+          uint8_bytes,
+          array_sizes,
+          array_parent_rows,
+          mark_sizes,
+          mark_parent_rows,
+          mark_bulk_streams,
+          ledger,
+          budget,
+        )
         site_rows = plan.mark_site_rows(granule.row_count, mark_sizes)
-        capture_body_traversal(@schema, "root", site_rows, captures, uint8_bytes, ledger, budget)
+        array_sites.each do |site|
+          captured_parent_rows = mark_parent_rows[site.key]? ||
+                                 raise(CorruptPartError.new("Compact recursive Array traversal omitted its inherited Q domain"))
+          planned_parent_rows = site_rows[site.key]? ||
+                                raise(CorruptPartError.new("Compact recursive Array plan omitted its inherited Q domain"))
+          unless captured_parent_rows == planned_parent_rows
+            raise CorruptPartError.new("Compact recursive Array traversal differs from its inherited Q row domain")
+          end
+        end
         schedules = Hash(String, CompactJsonObjectRoleSchedule).new(initial_capacity: captures.size)
         captures.each { |key, capture| schedules[key] = capture.schedule }
         expected_events = plan.expected_event_names(prefixes, schedules)
@@ -611,11 +636,54 @@ module CrystalClick
           frozen_events = copy_strings(expected_events)
         end
         physical_events = if ledger.mode.mrk4?
-                            physical_callback_names(expected_events, schedules, array_sites, uint8_sites, budget)
+                            physical_callback_names(expected_events, schedules, array_sites, uint8_sites, bulk_sites, budget)
                           else
                             expected_events
                           end
         ledger.finish_mark!(physical_events)
+
+        # Opaque BinaryBulk children are decoded only after the shared parent
+        # cursor has authenticated its exact complete mark schedule.
+        bulk_sites.each do |site|
+          streams = mark_bulk_streams[site.key]? ||
+                    raise(CorruptPartError.new("Compact recursive Bulk site has no complete parent capture"))
+          rows = site_rows[site.key]? ||
+                 raise(CorruptPartError.new("Compact recursive Bulk site has no inherited Q row count"))
+          observer.call(bulk_decode_workspace_bytes(
+            physical_workspace,
+            ledger,
+            object_marks,
+            uint8_bytes,
+            bulk_values,
+            array_sizes,
+            array_parent_rows,
+            mark_bulk_streams,
+          ))
+          decoded = BinaryBulkCodec.decode_with_budget(
+            site.type,
+            streams,
+            [rows] of UInt64,
+            budget,
+            first_mark: 0,
+            mark_count: 1,
+            profile: @ordinary_profile,
+          )
+          unless decoded.size == 1 && decoded[0].size.to_u64 == rows
+            raise CorruptPartError.new("Compact recursive Bulk decoder returned the wrong inherited Q grid")
+          end
+          bulk_values[site.key] << decoded[0]
+          observer.call(bulk_decode_workspace_bytes(
+            physical_workspace,
+            ledger,
+            object_marks,
+            uint8_bytes,
+            bulk_values,
+            array_sizes,
+            array_parent_rows,
+            mark_bulk_streams,
+          ))
+        end
+        mark_bulk_streams.clear
 
         # Only after the entire parent mark has completed may any noncontiguous
         # child Object site publish streams or an Advanced prepared owner.
@@ -638,7 +706,10 @@ module CrystalClick
                           owner_observer = ->(owner_bytes : UInt64) do
                             active = checked_add(retained_workspace_bytes_without_prepared, physical_workspace)
                             active = checked_add(active, ledger.retained_workspace_bytes)
-                            active = checked_add(active, local_prepared_workspace_bytes(object_marks, uint8_bytes, array_sizes))
+                            active = checked_add(
+                              active,
+                              local_prepared_workspace_bytes(object_marks, uint8_bytes, bulk_values, array_sizes, array_parent_rows),
+                            )
                             if current_context = typed_json_context
                               active = checked_add(active, current_context.retained_workspace_bytes)
                             end
@@ -721,7 +792,10 @@ module CrystalClick
         ledger_workspace = ledger.retained_workspace_bytes
         observer.call(checked_add(
           checked_add(retained_workspace_bytes_without_prepared, physical_workspace),
-          checked_add(ledger_workspace, local_prepared_workspace_bytes(object_marks, uint8_bytes, array_sizes)),
+          checked_add(
+            ledger_workspace,
+            local_prepared_workspace_bytes(object_marks, uint8_bytes, bulk_values, array_sizes, array_parent_rows),
+          ),
         ))
       end
 
@@ -730,12 +804,12 @@ module CrystalClick
         frames[site.key] = StorageArrayOccurrenceFrame.for_read(
           site.array_level,
           @mark_row_counts,
-          @mark_row_counts,
+          array_parent_rows[site.key]? || raise(CorruptPartError.new("Compact recursive Array has no complete parent Q grid")),
           array_sizes[site.key],
           budget,
         )
       end
-      state = PreparedState.new(budget, object_marks, uint8_bytes, frames)
+      state = PreparedState.new(budget, object_marks, uint8_bytes, bulk_values, frames)
       observer.call(checked_add(retained_workspace_bytes_without_prepared, prepared_state_workspace_bytes(state)))
       @prepared_state = state
       nil
@@ -744,9 +818,14 @@ module CrystalClick
     private def capture_body_traversal(
       schema : StorageColumnSchema,
       key : String,
-      site_rows : Hash(String, UInt64),
+      rows : UInt64,
       captures : Hash(String, PrefixCapture),
       uint8_bytes : Hash(String, Array(Bytes)),
+      array_sizes : Hash(String, Array(Array(UInt64))),
+      array_parent_rows : Hash(String, Array(UInt64)),
+      mark_sizes : Hash(String, Array(UInt64)),
+      mark_parent_rows : Hash(String, UInt64),
+      mark_bulk_streams : Hash(String, BinaryBulkStreams),
       ledger : CompactRecursiveJsonParentMarkLedger,
       budget : BinaryCodecBudget,
     ) : Nil
@@ -755,7 +834,6 @@ module CrystalClick
         prefix = capture.prefix
         source = capture.source
         capture.schedule.begin_body_capture!(budget)
-        rows = site_rows[key]? || raise(CorruptPartError.new("Compact recursive Object site has no inherited occurrence grid"))
         if ledger.mode.mrk3?
           CompactJsonObjectMapTapeFramer.capture_body!(
             prefix,
@@ -774,24 +852,60 @@ module CrystalClick
         source.validate_expected_events!(capture.schedule.event_names)
         source.finish!
       elsif schema.bulk?
-        site = (@plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))).uint8_site(key)
-        rows = site_rows[key]? || raise(CorruptPartError.new("Compact recursive UInt8 site has no inherited occurrence grid"))
-        byte_count = checked_byte_count(rows, 1_u64, "Compact recursive UInt8 lane")
-        budget.ensure_wire_bytes(byte_count.to_u64)
-        captured = ledger.capture_uint8_body(site.callback_name, byte_count)
-        owned = Bytes.new(captured.size)
-        captured.copy_to(owned)
-        uint8_bytes[key] << owned
+        plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
+        if schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+          site = plan.uint8_site(key)
+          byte_count = checked_byte_count(rows, 1_u64, "Compact recursive UInt8 lane")
+          budget.ensure_wire_bytes(byte_count.to_u64)
+          captured = ledger.capture_uint8_body(site.callback_name, byte_count)
+          owned = Bytes.new(captured.size)
+          captured.copy_to(owned)
+          uint8_bytes[key] << owned
+        else
+          site = plan.bulk_site(key)
+          mark_bulk_streams[key] = capture_bulk_site_streams(site, rows, ledger, budget)
+        end
       elsif schema.array?
-        capture_body_traversal(schema.child_at(0), array_child_key(key), site_rows, captures, uint8_bytes, ledger, budget)
+        plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
+        site = plan.array_site(key)
+        byte_count = checked_byte_count(rows, 8_u64, "Compact recursive Array size lane")
+        budget.ensure_wire_bytes(byte_count.to_u64)
+        budget.ensure_future_nodes(rows)
+        budget.ensure_future_elements(rows)
+        lane = ledger.capture_mixed_array_size_lane(site.callback_name, byte_count)
+        sizes = decode_uint64_lane(lane, rows, "Compact recursive Array size lane", budget)
+        mark_sizes[key] = sizes
+        mark_parent_rows[key] = rows
+        (array_sizes[key]? || raise(CorruptPartError.new("Compact recursive Array schedule is missing its owner"))) << sizes
+        (array_parent_rows[key]? || raise(CorruptPartError.new("Compact recursive Array parent schedule is missing its owner"))) << rows
+        child_rows = checked_child_rows(sizes, "Compact recursive Array child occurrence count")
+        capture_body_traversal(
+          schema.child_at(0),
+          array_child_key(key),
+          child_rows,
+          captures,
+          uint8_bytes,
+          array_sizes,
+          array_parent_rows,
+          mark_sizes,
+          mark_parent_rows,
+          mark_bulk_streams,
+          ledger,
+          budget,
+        )
       elsif schema.tuple?
         schema.child_count.times do |index|
           capture_body_traversal(
             schema.child_at(index),
             tuple_child_key(key, index),
-            site_rows,
+            rows,
             captures,
             uint8_bytes,
+            array_sizes,
+            array_parent_rows,
+            mark_sizes,
+            mark_parent_rows,
+            mark_bulk_streams,
             ledger,
             budget,
           )
@@ -800,6 +914,70 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact recursive JSON schema contains an unsupported body node")
       end
       nil
+    end
+
+    private def capture_bulk_site_streams(
+      site : CompactRecursiveJsonBulkSite,
+      rows : UInt64,
+      ledger : CompactRecursiveJsonParentMarkLedger,
+      budget : BinaryCodecBudget,
+    ) : BinaryBulkStreams
+      mark = CompactRecursiveJsonBulkMark.open(site, budget)
+      capture_bulk_type!(site.type, "root", rows, site, mark, ledger, budget)
+      mark.build_streams(budget)
+    end
+
+    private def capture_bulk_type!(
+      type : BinaryDataType,
+      role_name : String,
+      rows : UInt64,
+      site : CompactRecursiveJsonBulkSite,
+      mark : CompactRecursiveJsonBulkMark,
+      ledger : CompactRecursiveJsonParentMarkLedger,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      case type.tag
+      when BinaryDataType::TAG_UINT8
+        role = "#{role_name}.data"
+        callback = site.callback_name_for(role)
+        byte_count = checked_byte_count(rows, 1_u64, "Compact recursive Bulk UInt8 lane")
+        budget.ensure_wire_bytes(byte_count.to_u64)
+        bytes = ledger.capture_bulk_body(callback, byte_count)
+        mark.capture_lane(role, bytes)
+      when BinaryDataType::TAG_ARRAY
+        size_role = "#{role_name}.sizes"
+        callback = site.callback_name_for(size_role)
+        byte_count = checked_byte_count(rows, 8_u64, "Compact recursive Bulk Array size lane")
+        budget.ensure_wire_bytes(byte_count.to_u64)
+        budget.ensure_future_nodes(rows)
+        budget.ensure_future_elements(rows)
+        bytes = ledger.capture_mixed_array_size_lane(callback, byte_count)
+        sizes = decode_uint64_lane(bytes, rows, "Compact recursive Bulk Array size lane", budget)
+        mark.capture_lane(size_role, bytes)
+        child_rows = checked_child_rows(sizes, "Compact recursive Bulk Array child occurrence count")
+        capture_bulk_type!(type.child_at(0), "#{role_name}.elements", child_rows, site, mark, ledger, budget)
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        type.child_count.times do |index|
+          capture_bulk_type!(type.child_at(index), "#{role_name}.field.#{index}", rows, site, mark, ledger, budget)
+        end
+      else
+        raise CorruptPartError.new("Compact recursive Bulk role capture encountered an unsupported type")
+      end
+      nil
+    end
+
+    private def checked_child_rows(sizes : Array(UInt64), label : String) : UInt64
+      children = 0_u64
+      sizes.each do |size|
+        if size > Int32::MAX.to_u64 || children > UInt64::MAX - size
+          raise CorruptPartError.new("#{label} exceeds its supported domain")
+        end
+        children += size
+      end
+      if children > Int32::MAX.to_u64
+        raise CorruptPartError.new("#{label} exceeds Int32")
+      end
+      children
     end
 
     private def decode_recursive_marks(
@@ -814,12 +992,14 @@ module CrystalClick
       end
       output = Array(Array(StorageColumnValue)).new(mark_count)
       observer.call(checked_add(retained_workspace_bytes, output_workspace_bytes(output)))
-      object_sites = (@plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))).json_sites
-      uint8_sites = (@plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))).uint8_sites
+      plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
+      object_sites = plan.json_sites
+      uint8_sites = plan.uint8_sites
+      bulk_sites = plan.bulk_sites
       mark_count.times do |selection_index|
         mark = first_mark + selection_index
         object_rows = Hash(String, Array(ObjectDocument)).new(initial_capacity: object_sites.size)
-        bulk_rows = Hash(String, Array(BinaryValue)).new(initial_capacity: uint8_sites.size)
+        bulk_rows = Hash(String, Array(BinaryValue)).new(initial_capacity: object_sites.size + uint8_sites.size + bulk_sites.size)
         object_sites.each do |site|
           site_marks = state.object_marks[site.key]? ||
                        raise(CorruptPartError.new("Compact recursive Object site has no prepared mark grid"))
@@ -894,6 +1074,19 @@ module CrystalClick
           observe_partial_decode_workspace!(observer, first_mark, output, object_rows, bulk_rows, state)
         end
 
+        bulk_sites.each do |site|
+          rows = occurrence_rows(@schema, "root", mark, @mark_row_counts[mark], site.key, state)
+          site_marks = state.bulk_values[site.key]? ||
+                       raise(CorruptPartError.new("Compact recursive Bulk site has no decoded mark grid"))
+          values = site_marks[mark]? ||
+                   raise(CorruptPartError.new("Compact recursive Bulk site has no value rows for this mark"))
+          unless values.size.to_u64 == rows
+            raise(CorruptPartError.new("Compact recursive Bulk values differ from their inherited Q grid"))
+          end
+          bulk_rows[site.key] = values
+          observe_partial_decode_workspace!(observer, first_mark, output, object_rows, bulk_rows, state)
+        end
+
         row_count = @mark_row_counts[mark]
         if row_count > Int32::MAX.to_u64
           raise CorruptPartError.new("Compact recursive parent mark exceeds the supported row domain")
@@ -952,8 +1145,8 @@ module CrystalClick
           documents[row_index]? || raise(CorruptPartError.new("Compact recursive Object site is missing a row")),
         )
       elsif schema.bulk?
-        values = bulk_rows[key]? || raise(CorruptPartError.new("Compact recursive UInt8 row has no decoded site"))
-        return StorageColumnValue.bulk(values[row_index]? || raise(CorruptPartError.new("Compact recursive UInt8 site is missing a row")))
+        values = bulk_rows[key]? || raise(CorruptPartError.new("Compact recursive Bulk row has no decoded site"))
+        return StorageColumnValue.bulk(values[row_index]? || raise(CorruptPartError.new("Compact recursive Bulk site is missing a row")))
       elsif schema.array?
         frame = state.array_frames[key]? || raise(CorruptPartError.new("Compact recursive Array has no occurrence frame"))
         expected_parent = array_parent_cursors[key]?.try(&.to_i64) || 0_i64
@@ -1322,6 +1515,17 @@ module CrystalClick
         bytes = checked_add(bytes, checked_multiply(marks.size.to_u64, sizeof(Bytes).to_u64))
         marks.each { |mark| bytes = checked_add(bytes, sizeof(Bytes).to_u64 + mark.size.to_u64) }
       end
+      bytes = checked_add(bytes, instance_sizeof(Hash(String, Array(Array(BinaryValue)))).to_u64)
+      state.bulk_values.each do |key, marks|
+        bytes = checked_add(bytes, string_owner_bytes(key))
+        bytes = checked_add(bytes, instance_sizeof(Array(Array(BinaryValue))).to_u64)
+        bytes = checked_add(bytes, checked_multiply(marks.size.to_u64, sizeof(Array(BinaryValue)).to_u64))
+        marks.each do |values|
+          bytes = checked_add(bytes, instance_sizeof(Array(BinaryValue)).to_u64)
+          bytes = checked_add(bytes, checked_multiply(values.size.to_u64, sizeof(Pointer(BinaryValue)).to_u64))
+          values.each { |value| bytes = checked_add(bytes, binary_value_workspace_bytes(value)) }
+        end
+      end
       bytes = checked_add(bytes, instance_sizeof(Hash(String, StorageArrayOccurrenceFrame)).to_u64)
       state.array_frames.each do |key, frame|
         bytes = checked_add(bytes, string_owner_bytes(key))
@@ -1414,7 +1618,9 @@ module CrystalClick
     private def local_prepared_workspace_bytes(
       object_marks : Hash(String, Array(PreparedObjectMark)),
       uint8_bytes : Hash(String, Array(Bytes)),
+      bulk_values : Hash(String, Array(Array(BinaryValue))),
       array_sizes : Hash(String, Array(Array(UInt64))),
+      array_parent_rows : Hash(String, Array(UInt64)),
     ) : UInt64
       bytes = 0_u64
       object_marks.each do |key, marks|
@@ -1428,6 +1634,15 @@ module CrystalClick
         bytes = checked_add(bytes, instance_sizeof(Array(Bytes)).to_u64)
         marks.each { |mark| bytes = checked_add(bytes, sizeof(Bytes).to_u64 + mark.size.to_u64) }
       end
+      bulk_values.each do |key, marks|
+        bytes = checked_add(bytes, string_owner_bytes(key))
+        bytes = checked_add(bytes, instance_sizeof(Array(Array(BinaryValue))).to_u64)
+        marks.each do |values|
+          bytes = checked_add(bytes, instance_sizeof(Array(BinaryValue)).to_u64)
+          bytes = checked_add(bytes, checked_multiply(values.size.to_u64, sizeof(Pointer(BinaryValue)).to_u64))
+          values.each { |value| bytes = checked_add(bytes, binary_value_workspace_bytes(value)) }
+        end
+      end
       array_sizes.each do |key, marks|
         bytes = checked_add(bytes, string_owner_bytes(key))
         bytes = checked_add(bytes, instance_sizeof(Array(Array(UInt64))).to_u64)
@@ -1435,6 +1650,48 @@ module CrystalClick
           bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
           bytes = checked_add(bytes, checked_multiply(sizes.size.to_u64, sizeof(UInt64).to_u64))
         end
+      end
+      array_parent_rows.each do |key, rows|
+        bytes = checked_add(bytes, string_owner_bytes(key))
+        bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
+        bytes = checked_add(bytes, checked_multiply(rows.size.to_u64, sizeof(UInt64).to_u64))
+      end
+      bytes
+    end
+
+    private def bulk_decode_workspace_bytes(
+      physical_workspace : UInt64,
+      ledger : CompactRecursiveJsonParentMarkLedger,
+      object_marks : Hash(String, Array(PreparedObjectMark)),
+      uint8_bytes : Hash(String, Array(Bytes)),
+      bulk_values : Hash(String, Array(Array(BinaryValue))),
+      array_sizes : Hash(String, Array(Array(UInt64))),
+      array_parent_rows : Hash(String, Array(UInt64)),
+      mark_bulk_streams : Hash(String, BinaryBulkStreams),
+    ) : UInt64
+      bytes = retained_workspace_bytes_without_prepared
+      bytes = checked_add(bytes, physical_workspace)
+      bytes = checked_add(bytes, ledger.retained_workspace_bytes)
+      bytes = checked_add(bytes, local_prepared_workspace_bytes(
+        object_marks,
+        uint8_bytes,
+        bulk_values,
+        array_sizes,
+        array_parent_rows,
+      ))
+      checked_add(bytes, mark_bulk_streams_workspace_bytes(mark_bulk_streams))
+    end
+
+    # This is a logical transient-owner estimate, not RSS or allocator capacity.
+    # Decoder-internal allocations and retained PhysicalPlan internals are outside
+    # this aggregate; the current mark's copied lanes are included here.
+    private def mark_bulk_streams_workspace_bytes(
+      mark_bulk_streams : Hash(String, BinaryBulkStreams),
+    ) : UInt64
+      bytes = instance_sizeof(Hash(String, BinaryBulkStreams)).to_u64
+      mark_bulk_streams.each do |site_key, streams|
+        bytes = checked_add(bytes, string_owner_bytes(site_key))
+        bytes = checked_add(bytes, binary_streams_workspace_bytes(streams))
       end
       bytes
     end
@@ -1530,10 +1787,23 @@ module CrystalClick
       budget
     end
 
-    private def decode_uint64_lane(bytes : Bytes, count : UInt64, label : String) : Array(UInt64)
+    private def decode_uint64_lane(
+      bytes : Bytes,
+      count : UInt64,
+      label : String,
+      budget : BinaryCodecBudget,
+    ) : Array(UInt64)
       expected = checked_byte_count(count, 8_u64, label)
       unless bytes.size == expected
         raise CorruptPartError.new("#{label} has the wrong exact callback extent")
+      end
+      budget.ensure_future_nodes(count)
+      budget.ensure_future_elements(count)
+      budget.charge_elements(count) if count > 0_u64
+      remaining_nodes = count
+      while remaining_nodes > 0_u64
+        budget.charge_node
+        remaining_nodes -= 1_u64
       end
       values = Array(UInt64).new(count.to_i)
       count.to_i.times do |value_index|
@@ -1556,6 +1826,7 @@ module CrystalClick
       schedules : Hash(String, CompactJsonObjectRoleSchedule),
       array_sites : Array(CompactRecursiveJsonSchemaPlan::ArraySite),
       uint8_sites : Array(CompactRecursiveJsonSchemaPlan::UInt8Site),
+      bulk_sites : Array(CompactRecursiveJsonBulkSite),
       budget : BinaryCodecBudget,
     ) : Array(String)
       count = logical_names.size.to_u64
@@ -1584,6 +1855,12 @@ module CrystalClick
       end
       uint8_sites.each do |site|
         register_physical_callback_pair!(canonical_by_callback, seen_canonical, site.callback_name, site.callback_name)
+      end
+      bulk_sites.each do |site|
+        site.each_role do |role|
+          callback = site.callback_name_for(role.name)
+          register_physical_callback_pair!(canonical_by_callback, seen_canonical, callback, callback)
+        end
       end
       unless canonical_by_callback.size.to_u64 == count
         raise CorruptPartError.new("Compact recursive JSON physical callback projection is not a complete roster")

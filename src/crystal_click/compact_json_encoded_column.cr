@@ -16,6 +16,7 @@ module CrystalClick
       property json : Int32 = 0
       property array : Int32 = 0
       property uint8 : Int32 = 0
+      property bulk : Int32 = 0
     end
 
     @plan : CompactJsonCallbackPlan
@@ -72,22 +73,24 @@ module CrystalClick
       json_site_count = plan.json_site_count
       array_site_count = plan.array_site_count
       uint8_site_count = plan.uint8_site_count
+      bulk_site_count = plan.bulk_site_count
       site_slots = checked_add(
         checked_add(json_site_count.to_u64, array_site_count.to_u64),
-        uint8_site_count.to_u64,
+        checked_add(uint8_site_count.to_u64, bulk_site_count.to_u64),
       )
-      unless json_site_count > 0 && site_slots <= 4_u64
+      unless json_site_count > 0
         raise UnsupportedFormatError.new("Compact JSON callback plan has an inconsistent schema-site roster")
       end
-      budget.ensure_future_nodes(3_u64)
+      budget.ensure_future_nodes(4_u64)
       budget.ensure_future_elements(site_slots)
-      3.times { budget.charge_node }
+      4.times { budget.charge_node }
       budget.charge_elements(site_slots) if site_slots > 0_u64
       json_sites = plan.json_sites
       array_sites = plan.array_sites
       uint8_sites = plan.uint8_sites
+      bulk_sites = plan.bulk_sites
       unless json_sites.size == json_site_count && array_sites.size == array_site_count &&
-             uint8_sites.size == uint8_site_count
+             uint8_sites.size == uint8_site_count && bulk_sites.size == bulk_site_count
         raise UnsupportedFormatError.new("Compact JSON schema-site roster changed after planning")
       end
 
@@ -101,17 +104,19 @@ module CrystalClick
       budget.charge_elements(plan_elements)
       cursor = SiteCursor.new
       root_node = build_value_plan_node(plan.bound_schema, cursor)
-      unless cursor.json == json_sites.size && cursor.array == array_sites.size && cursor.uint8 == uint8_sites.size
+      unless cursor.json == json_sites.size && cursor.array == array_sites.size &&
+             cursor.uint8 == uint8_sites.size && cursor.bulk == bulk_sites.size
         raise UnsupportedFormatError.new("Compact JSON value traversal differs from its schema-owned site roster")
       end
       prepare_structure_prefixes!(budget)
 
       @mark_count.times do |mark_index|
-        json_documents, array_sizes, uint8_values = collect_mark_values(
+        json_documents, array_sizes, uint8_values, bulk_values = collect_mark_values(
           root_node,
           json_sites.size,
           array_sites.size,
           uint8_sites.size,
+          bulk_sites.size,
           mark_index,
           budget,
         )
@@ -137,6 +142,10 @@ module CrystalClick
         uint8_sites.each_with_index do |site, site_index|
           bytes = encode_binary_lane!(site.type, uint8_values[site_index], budget)
           append_fragment!(site.callback_name, bytes, mark_index, filled)
+        end
+
+        bulk_sites.each_with_index do |site, site_index|
+          encode_bulk_site!(site, bulk_values[site_index], mark_index, filled, budget)
         end
 
         filled.each_with_index do |value, callback_index|
@@ -265,8 +274,13 @@ module CrystalClick
         site_index = cursor.array
         cursor.array += 1
       elsif schema.bulk?
-        site_index = cursor.uint8
-        cursor.uint8 += 1
+        if schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+          site_index = cursor.uint8
+          cursor.uint8 += 1
+        else
+          site_index = cursor.bulk
+          cursor.bulk += 1
+        end
       end
 
       children = Array(ValuePlanNode).new(schema.child_count)
@@ -292,29 +306,42 @@ module CrystalClick
       json_site_count : Int32,
       array_site_count : Int32,
       uint8_site_count : Int32,
+      bulk_site_count : Int32,
       mark_index : Int32,
       budget : BinaryCodecBudget,
-    ) : Tuple(Array(Array(ObjectDocument)), Array(Array(BinaryValue)), Array(Array(BinaryValue)))
-      budget.ensure_future_nodes(3_u64)
-      budget.ensure_future_elements((json_site_count + array_site_count + uint8_site_count).to_u64)
-      3.times { budget.charge_node }
-      budget.charge_elements((json_site_count + array_site_count + uint8_site_count).to_u64)
+    ) : Tuple(Array(Array(ObjectDocument)), Array(Array(BinaryValue)), Array(Array(BinaryValue)), Array(Array(BinaryValue)))
+      budget.ensure_future_nodes(4_u64)
+      site_count = (json_site_count + array_site_count + uint8_site_count + bulk_site_count).to_u64
+      budget.ensure_future_elements(site_count)
+      4.times { budget.charge_node }
+      budget.charge_elements(site_count)
       json_counts = Array(Int32).new(json_site_count, 0)
       array_counts = Array(Int32).new(array_site_count, 0)
       uint8_counts = Array(Int32).new(uint8_site_count, 0)
+      bulk_counts = Array(Int32).new(bulk_site_count, 0)
 
       row_count = @plan.bound_row_count(mark_index)
       row_count.times do |row_index|
-        count_value!(root, @plan.bound_value_at(mark_index, row_index), json_counts, array_counts, uint8_counts, budget, 1)
+        count_value!(
+          root,
+          @plan.bound_value_at(mark_index, row_index),
+          json_counts,
+          array_counts,
+          uint8_counts,
+          bulk_counts,
+          budget,
+          1,
+        )
       end
 
       json_total = total_counts(json_counts)
       array_total = total_counts(array_counts)
       uint8_total = total_counts(uint8_counts)
-      all_sites = (json_site_count + array_site_count + uint8_site_count).to_u64
-      reference_slots = checked_add(checked_add(json_total, array_total), uint8_total)
+      bulk_total = total_counts(bulk_counts)
+      all_sites = site_count
+      reference_slots = checked_add(checked_add(checked_add(json_total, array_total), uint8_total), bulk_total)
       generated_size_values = array_total
-      output_nodes = checked_add(checked_add(all_sites, generated_size_values), 3_u64)
+      output_nodes = checked_add(checked_add(all_sites, generated_size_values), 4_u64)
       output_elements = checked_add(
         checked_add(all_sites, reference_slots),
         checked_multiply(generated_size_values, 8_u64),
@@ -333,16 +360,19 @@ module CrystalClick
       array_counts.each { |count| array_sizes << Array(BinaryValue).new(count) }
       uint8_values = Array(Array(BinaryValue)).new(uint8_site_count)
       uint8_counts.each { |count| uint8_values << Array(BinaryValue).new(count) }
+      bulk_values = Array(Array(BinaryValue)).new(bulk_site_count)
+      bulk_counts.each { |count| bulk_values << Array(BinaryValue).new(count) }
 
       row_count.times do |row_index|
-        fill_value!(root, @plan.bound_value_at(mark_index, row_index), json_documents, array_sizes, uint8_values)
+        fill_value!(root, @plan.bound_value_at(mark_index, row_index), json_documents, array_sizes, uint8_values, bulk_values)
       end
       unless json_documents.each_with_index.all? { |values, index| values.size == json_counts[index] } &&
              array_sizes.each_with_index.all? { |values, index| values.size == array_counts[index] } &&
-             uint8_values.each_with_index.all? { |values, index| values.size == uint8_counts[index] }
+             uint8_values.each_with_index.all? { |values, index| values.size == uint8_counts[index] } &&
+             bulk_values.each_with_index.all? { |values, index| values.size == bulk_counts[index] }
         raise UnsupportedFormatError.new("Compact JSON value grid changed during bounded projection")
       end
-      {json_documents, array_sizes, uint8_values}
+      {json_documents, array_sizes, uint8_values, bulk_values}
     end
 
     private def count_value!(
@@ -351,6 +381,7 @@ module CrystalClick
       json_counts : Array(Int32),
       array_counts : Array(Int32),
       uint8_counts : Array(Int32),
+      bulk_counts : Array(Int32),
       budget : BinaryCodecBudget,
       depth : Int32,
     ) : Nil
@@ -368,7 +399,7 @@ module CrystalClick
         increment_count!(array_counts, node.site_index)
         budget.preflight_children(value.child_count.to_u64)
         value.child_count.times do |index|
-          count_value!(node.children[0], value.child_at(index), json_counts, array_counts, uint8_counts, budget, depth + 1)
+          count_value!(node.children[0], value.child_at(index), json_counts, array_counts, uint8_counts, bulk_counts, budget, depth + 1)
         end
       elsif schema.tuple?
         unless value.tuple? && value.child_count == schema.child_count
@@ -376,7 +407,7 @@ module CrystalClick
         end
         budget.preflight_children(schema.child_count.to_u64)
         schema.child_count.times do |index|
-          count_value!(node.children[index], value.child_at(index), json_counts, array_counts, uint8_counts, budget, depth + 1)
+          count_value!(node.children[index], value.child_at(index), json_counts, array_counts, uint8_counts, bulk_counts, budget, depth + 1)
         end
       elsif schema.bulk?
         unless value.bulk?
@@ -388,7 +419,11 @@ module CrystalClick
         unless binary.type == schema.bulk_type
           raise UnsupportedFormatError.new("Compact JSON BinaryBulk leaf differs from its canonical declaration")
         end
-        increment_count!(uint8_counts, node.site_index)
+        if schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+          increment_count!(uint8_counts, node.site_index)
+        else
+          increment_count!(bulk_counts, node.site_index)
+        end
       else
         raise UnsupportedFormatError.new("Compact JSON value traversal encountered an unknown schema node")
       end
@@ -401,6 +436,7 @@ module CrystalClick
       json_documents : Array(Array(ObjectDocument)),
       array_sizes : Array(Array(BinaryValue)),
       uint8_values : Array(Array(BinaryValue)),
+      bulk_values : Array(Array(BinaryValue)),
     ) : Nil
       schema = node.schema
       if schema.object?
@@ -408,14 +444,20 @@ module CrystalClick
       elsif schema.array?
         array_sizes[node.site_index] << BinaryValue.uint64(value.child_count.to_u64)
         value.child_count.times do |index|
-          fill_value!(node.children[0], value.child_at(index), json_documents, array_sizes, uint8_values)
+          fill_value!(node.children[0], value.child_at(index), json_documents, array_sizes, uint8_values, bulk_values)
         end
       elsif schema.tuple?
         schema.child_count.times do |index|
-          fill_value!(node.children[index], value.child_at(index), json_documents, array_sizes, uint8_values)
+          fill_value!(node.children[index], value.child_at(index), json_documents, array_sizes, uint8_values, bulk_values)
+        end
+      elsif schema.bulk?
+        if schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+          uint8_values[node.site_index] << value.bulk_value
+        else
+          bulk_values[node.site_index] << value.bulk_value
         end
       else
-        uint8_values[node.site_index] << value.bulk_value
+        raise UnsupportedFormatError.new("Compact JSON value projection encountered an unknown schema node")
       end
       nil
     end
@@ -496,6 +538,51 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact JSON Object body callback is outside its sealed plan")
         end
         append_fragment!(callback_name, callback[1], mark_index, filled)
+      end
+      nil
+    end
+
+    private def encode_bulk_site!(
+      site : CompactRecursiveJsonBulkSite,
+      values : Array(BinaryValue),
+      mark_index : Int32,
+      filled : Array(Bool),
+      budget : BinaryCodecBudget,
+    ) : Nil
+      budget.ensure_future_nodes(1_u64)
+      budget.ensure_future_elements(1_u64)
+      budget.charge_node
+      budget.charge_elements(1_u64)
+      granules = Array(Array(BinaryValue)).new(1)
+      granules << values
+      streams = BinaryBulkCodec.encode_with_budget(
+        site.type,
+        granules,
+        budget,
+        BinaryBulkProfile.single_stream,
+      )
+      unless streams.mark_count == 1 && streams.role_count == site.role_count
+        raise UnsupportedFormatError.new("Compact JSON opaque Bulk callback roster differs from its physical plan")
+      end
+      site.each_role do |role|
+        unless streams.has_role?(role.name)
+          raise UnsupportedFormatError.new("Compact JSON opaque Bulk encoder omitted a physical role")
+        end
+        stream = streams.stream(role.name)
+        first = stream.offset_at(0)
+        last = stream.offset_at(1)
+        if last < first
+          raise UnsupportedFormatError.new("Compact JSON opaque Bulk stream has a reversed mark range")
+        end
+        bytes = stream.borrowed_slice(first, last - first)
+        budget.ensure_future_nodes(1_u64)
+        budget.ensure_future_elements(bytes.size.to_u64)
+        budget.ensure_wire_bytes(bytes.size.to_u64)
+        budget.charge_node
+        budget.charge_elements(bytes.size.to_u64) if bytes.size > 0
+        budget.charge_wire_bytes(bytes.size.to_u64) if bytes.size > 0
+        detached = Bytes.new(bytes.size) { |index| bytes[index] }
+        append_fragment!(site.callback_name_for(role.name), detached, mark_index, filled)
       end
       nil
     end
