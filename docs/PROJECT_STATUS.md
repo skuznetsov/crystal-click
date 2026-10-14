@@ -1,7 +1,38 @@
 # CrystalClick project status
 
-Active frontier: W278 advanced shared-data JSON Compact writer is VERIFIED /
+Active frontier: W279 typed-Dynamic JSON child shared layouts are VERIFIED /
 root adversary ROBUST within finite serialization/native scope (2026-10-13),
+over W278 `b54685723f01adebeef514a225c73f253be03e41`. Existing recursive
+Object/Array/Dynamic codecs and Compact relocation are reused: matching parent
+and child Object wire version 4, MAP0/bucket-one or SharedData v1/v2/v3 with
+two buckets, matching String0/String1 ordinary profiles and shared String0.
+Direct JSON and existing bounded Array-chain owners are retained; the new
+native matrix exercises depths zero/two/three, not arbitrary recursive products.
+
+Fresh DEBUG and actual RELEASE each pass 433 examples on the exact 81 affected
+paths (`de2f6b`, `785043`). Fresh native matrices each pass 64 stock + 64
+generated cells (`c24aef`, `5d7541`); composed raw audits (`4fc16e`, `2f37fe`)
+each check 1,344 records / 6,720 sidecars and reject 43 negative controls.
+Native ATTACH/CHECK and literal full/middle/EOF values qualify interoperability;
+child-header parsing remains library-coupled, not an independent full-frame
+decoder. After exact source/runtime restoration, fresh default outputs match
+the nine-file / 17,902-byte durable W264 digest witness (`ae4db0`); the original
+raw baseline and separate historical W263 raw roots are unavailable. The
+declared W279 cohort was not reduced, and no full-suite claim is made.
+
+The Compact reader/writer already exist. The typed facade composes same-schema
+Wide/Compact parts; its Compact backend opens one physical part at a time.
+Writing remains create-only whole-part with sorted UInt64 keys. Public outer
+JSON topology admission is still finite, and MV output/projection readers are
+Wide-only. Next: stock-backed two-Array JSON topology and remaining public
+carriers/layouts, then Compact MV/projections, then memory/performance.
+The <=10% slowdown objective is unmeasured; full goal ACTIVE. Local commit/no
+push; protected W263 specs remain unchanged. See the
+[frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+[W279 evidence](../.landmark/evidence/compact-child-json-writer-w279.json).
+
+Previously qualified frontier: W278 advanced shared-data JSON Compact writer is
+VERIFIED / root adversary ROBUST within finite serialization/native scope (2026-10-13),
 over W277 `865ff29c428e0cda2b8917fda420b24d4b5344b6`. Root JSON,
 `Array(JSON)`, `Array(Tuple(JSON, UInt8))`, and `Tuple(JSON, JSON)` reuse the
 existing recursive codecs for Object V3 SharedData ADVANCED/ADVANCED_CHUNKED,
@@ -16,8 +47,9 @@ observations per mode
 (80 MRK4 sites; MRK3 checks only root JSON at offset zero). The frozen W264
 default-byte witness remains nine files / 17,902 bytes in both modes
 (`6e8d11`).
-Typed-Dynamic JSON children remain MAP0/bucket1/shared-S0; this does not qualify
-other carriers or layouts, MV/projection, full-suite, RSS or performance. The W277
+At W278, typed-Dynamic JSON children remained MAP0/bucket1/shared-S0; W279
+supersedes that restriction only for the matching sealed layouts above. W278 did
+not qualify other carriers or layouts, MV/projection, full-suite, RSS or performance. The W277
 advanced refusal is superseded only for these W278 owners. See the
 [frontier](COMPACT_PART_WRITER_FRONTIER.md) and
 [W278 evidence packet](../.landmark/evidence/compact-advanced-json-writer-w278.json).

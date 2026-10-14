@@ -1,5 +1,180 @@
 # Compact part writer frontier
 
+## Typed-Dynamic JSON child shared layouts — W279
+
+Status: VERIFIED / root adversary ROBUST within finite serialization and
+native-interoperability scope (2026-10-13), over
+W278 `b54685723f01adebeef514a225c73f253be03e41`. Existing direct typed-Dynamic
+actual `JSON` and bounded `Array^N(JSON)` owners stay the shape boundary. The
+admitted widening is matching parent/child Object wire version 4 with these
+sealed SharedData tuples: MAP (0, one bucket), MAP_WITH_BUCKETS (1, two buckets),
+ADVANCED (2, two buckets), and ADVANCED_CHUNKED (3, two buckets). Ordinary
+String0/String1 profiles must match; the shared envelope remains String0.
+This is not arbitrary Object bucket-count or recursive-product admission.
+
+Root observed the guarded four-example entry (`feee2e`, exit 1): MAP0 control
+passes; matching v1/v2/v3 expected-success cases each raise at the existing
+`CompactJsonCallbackOwners.for_owner:46` layout guard. Entry SHA-256
+`7c2c3748e10ec47fc91b2c8c0902109a9a6d4f2a289f4ccc9c965350b620d163` and fixture
+`414379a1cb60b642d9eb691d669ed30c17edf3016fe2601043e180bfa36a6eb1` were frozen.
+This admits the bounded implementation step, not compatibility qualification.
+
+The first five-seam candidate moves the entry to two passing controls and two
+Advanced readback errors (`4699ed`, exit 1, four examples). The authenticated
+typed-Dynamic JSON read context is lost by
+`CompactStaticJsonAdvancedPreparedMark.decode_with_budget`; the ordinary
+Dynamic guard therefore rejects JSON actual rosters. The sixth admitted seam
+is `compact_static_json_advanced_prepared_mark.cr`: retain the context from its
+exact source-validated prefix, transport it to the existing child-site decoder,
+and account retained workspace. Generic Dynamic/JSON admission is not widened.
+The corrected depth-three fixture actual counts are `[1, 0, 2, 2]`; this is a
+literal oracle correction, not a production RED.
+
+The corrected six-seam MRK4 entry passes four examples (`5b9c7e`, exit 0).
+That entry does not exercise MRK3 owner-local framing. Root's combined existing
+78-path regression cohort (`8fe440`, 420 examples, zero assertion failures,
+one error) then catches an omitted event context in Advanced owner-local
+callback validation, affecting previously admitted W278 static JSON owners.
+The grammar now constructs a validated registry for its exact owner and
+descendants before deriving canonical local callback pairs and role bindings;
+it still compares both against the captured owner schedule. A targeted MRK3
+static-owner regression is added. Final DEBUG (`781423`, exit 0) passes 433
+examples on 81 affected paths, including the 192 positive typed-child cells.
+Actual RELEASE (`0274bd`, exit 0) also passes the same 433 examples. Root's
+fresh default byte guard (`090497`, exit 0) confirms nine files / 17,902 bytes
+unchanged in DEBUG and actual RELEASE. These initial local checks alone were
+not a native interoperability closure claim.
+
+The helper-free stock control passes all 64 cells (`96c35c`, exit 0). Root's
+independent raw audit (`33adfc`, exit 0; auditor SHA-256
+`b98d16914fc6a169cf75c41cd18df5190e6a8a0f6feb0283b5d63c0815fcd4be`)
+binds 384 native invocations / 1,920 sidecars to literal RowBinary inputs,
+exact SQL projections and full/middle/EOF results, source/runtime pins and
+current part inventories. Twenty negative controls reject; four concern
+deferred header/empty-value unit seams, not stock physical-header evidence.
+Auditor runtime/marker/empty-String parsing repairs are instrumentation fixes,
+not production RED. Stock-only makes no child-header or library interoperability
+claim; it was only the stock-first control, not the final DoD.
+
+Final qualification: the exact 81-path cohort was replayed after runtime/source
+recovery, with 433 examples, zero failures/errors/pending in DEBUG (`de2f6b`)
+and actual RELEASE (`785043`). Fresh full native matrices each pass 64 stock
+and 64 library-generated cells (`c24aef`, `5d7541`). Root's composed raw audits
+(`4fc16e`, `2f37fe`) each bind 1,344 process records / 6,720 sidecars and reject
+43 adversary controls. They check native CREATE/ATTACH/CHECK/catalog and literal
+full/middle/EOF values, exact captured/current inventories, and library-coupled
+child headers, selected leaf counts, callback ownership and String lanes.
+The base auditor is SHA-256 `099df0dca663fe1cbdad3fca51c4c17a0164c0fbe76949c3cac238d20d5ff08c`;
+the generated-native wrapper is `1a8eea94c7671606727eb8c3904f2b41ba29676e081a76b95d00fce005ee452c`.
+Helper path/full-summary adapters and raw-versus-normalized schema checks were
+auditor defects, not production RED; strict pins and type identity remain.
+This is not independent decoding of complete compressed frames or chunk bodies.
+
+The lost upstream/runtime were restored to their exact recorded pins, not
+upgraded. The fresh nine-file / 17,902-byte default replay (`ae4db0`) matches
+the durable W264 digest witness referenced by W276. Its original raw baseline
+directory is unavailable, so this is not a new raw-to-raw baseline comparison.
+Lost historical W263 raw roots leave their separate authenticated specs outside
+this replay; no path was dropped from W279's declared 81-path cohort and no
+full-suite claim is made. A dedicated tight retained-child-context codec-budget
+test remains a residual beyond the exercised transport-budget guard.
+Exact commands, seals, raw-audit results and evidence-loss boundaries are in the
+[W279 evidence packet](../.landmark/evidence/compact-child-json-writer-w279.json).
+
+CAUTION: persistent serialization, child row grids, and shared Dynamic physical
+plan identity. Rollback is this atomic slice over W278. Preserve the three
+user-owned untracked W263 specs; no push. The likeliest failure is applying the
+parent's row grid or advanced role roster to the child. The discriminator is a
+populated child with mark-local occurrence counts different from its parent's,
+including NULL, empty selected arrays and zero JSON occurrences, small frames,
+and populated shared values in both buckets.
+
+Source anchor: `/private/tmp/clickhouse-w254-upstream.AqeqyC` at
+`ed30948f095ecb70679986d7d60e27ad770ae27a`, distinct from the pinned native
+runtime 26.10.1.1201 (`d9bcb5ab007f0f6299f7f973f2642245bab3d028`). Compact's
+granule writer recursively prefixes, writes and suffixes each column with the
+same Object/shared-data settings (`MergeTreeDataPartWriterCompact.cpp:174-230`).
+Object V3 writes its local shared version and configured bucket count
+(`SerializationObject.cpp:411-429`), including for empty Compact shared data.
+The corresponding ClickHouse setting is `object_serialization_version='v3'`;
+its serialized Object version is numeric 4, not a setting named `v4`
+(`SerializationObject.h:41-44`).
+Thus same-version/effective-bucket parent and registered typed-Dynamic child
+are stock-writer settings here; this is not a general constraint of the CH
+reader. Dynamic overflow SharedVariant is an opaque type-and-value String
+payload, not an Object bulk owner (`ColumnDynamic.cpp:793-805`). Advanced
+shared-path nested Objects use a different fresh settings context with default
+one bucket (`SerializationObjectSharedData.cpp:375-391`) and remain excluded.
+
+Design laws:
+
+- Reuse the recursive Object/Array/Dynamic codecs and W278 relocation transport.
+  Child callback identity is its exact leaf key, full physical prefix, parsed
+  Object prefix and descriptor depth; no synthetic keys or prefix heuristics.
+- Derive child row counts from the selected Dynamic arm and every Array sizes
+  lane. Never substitute parent rows, actual-arm counts or leaf count alone for
+  the successive Array vectors. Zero child occurrences still own callbacks.
+- Bind Advanced framing to the exact owner-local role schedule, not the root's
+  same-looking roster. Preserve seven roles per bucket, three Copy roles, native
+  stream-then-chunks order and exact per-column/per-mark relocation endpoints.
+- Match parent/child version, effective buckets, ordinary profile and shared
+  profile; keep exact prepared/physical schema and binding equality. Statistics
+  remain local prefix authority rather than part of structural identity.
+- Check allocation/relocation budgets before allocation or publication. An
+  unsupported layout, mismatch, corrupt capture or exhausted budget must leave
+  the destination absent and unrelated files unchanged.
+
+Execution order and DoD:
+
+1. Tests first in `spec/support/compact_part_writer_w279_fixture.cr` and
+   `spec/compact_part_writer_w279_entry_spec.cr`. Root runs guarded `crystal
+   spec spec/compact_part_writer_w279_entry_spec.cr --single-module --threads 1
+   --link-flags=-fuse-ld=ld --error-trace --no-color`: MAP0 control passes while
+   matching v1/v2/v3 expected-success cases fail at the existing layout guard.
+   Instrument or fixture errors are not behavioral RED.
+2. After RED, minimum production seams are `compact_json_callback_owners.cr`,
+   `object_document_typed_dynamic_json_read_context.cr`,
+   `binary_dynamic_bulk_physical_plan.cr`,
+   `compact_json_object_map_tape_framer.cr` and, if required for exact child
+   schedule binding, `compact_json_object_shared_advanced_tape_grammar.cr`, plus
+   the RED-backed Advanced prepared-mark context transport described above.
+   Existing role planning and writer relocation are reused, not reimplemented.
+   Focused `spec/compact_part_writer_w279_spec.cr` and adversary sibling test
+   direct JSON and Array-chain depths two/three, both public readers, MRK3/MRK4,
+   plain/compressed marks, BASIC/COMPACT and String0/String1; mismatched layout,
+   profile, buckets, bindings, incomplete capture and budget exhaustion reject.
+3. Bounded consumer inventory: `rg -n 'same_prepared_layout\?' src spec` finds
+   the Compact typed-Dynamic tape grammar and existing physical-plan specs.
+   Because the comparator is shared, run W278's 59-path affected roster plus
+   the W277 packet's 19-path generic-consumer roster and new W279 paths, in
+   DEBUG and actual `--release`. Expected: zero failures, with explicit roster
+   and observed counts; no full-suite claim. Recheck the W264 nine-file default
+   String0 byte witness unchanged.
+4. Native instruments are `scripts/probe_compact_child_json_writer_w279.rb`,
+   `scripts/compact_child_json_writer_w279_helper.cr` and
+   `scripts/support/compact_part_writer_w279_native_fixture.cr`. Stock-first
+   control is helper-free and must produce genuine registered Object arms, not
+   SharedVariant, with frozen literal/RowBinary inputs, raw parts and exact
+   native full/middle/EOF values. It does not qualify physical child headers.
+   Full mode first adopts the library helper to inspect retained stock child
+   prefixes/version/buckets/counts, then generates parts for native ATTACH/CHECK
+   and exact windows. This is library-coupled physical parsing, not an
+   independent whole-frame decoder. Qualify finite cells and raw captures;
+   requested settings alone do not prove the child wire layout.
+
+Rejected surfaces: root-Dynamic JSON child owners, further JSON owners beneath
+the admitted child, arbitrary wrappers/products, mixed parent/child shared
+layouts, other Object versions, unsealed bucket counts and advanced shared-path
+nested Object values. MV/projections, RSS, performance and the <=10% slowdown
+target remain outside this slice; the full goal is ACTIVE. Stop or narrow on
+inconclusive stock layout, source/runtime/probe drift or lost raw evidence.
+Refresh these claims on that drift, compiler/test changes or owner/layout
+widening. Next discriminator: a stock-emitted Compact
+`Tuple(left Array(JSON), right Array(JSON))` with alternating empty/populated
+branches and multiple marks; public two-Array topology remains rejected until
+its traversal is authenticated. Compact MV/projection composition follows the
+remaining public-carrier/layout qualification, before optimization.
+
 ## Advanced shared-data JSON Compact writer — W278
 
 Status: VERIFIED / root adversary ROBUST within finite serialization and

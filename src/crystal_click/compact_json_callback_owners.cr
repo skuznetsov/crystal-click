@@ -38,12 +38,13 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact typed-Dynamic JSON owner does not admit root-Dynamic JSON children")
       end
 
-      unless object_plan.structures.object.version == 4_u64 &&
-             object_plan.structures.object.shared_data_version == 0_u64 &&
-             object_plan.structures.object.bucket_count == 1_u64 &&
-             physical_plan.shared_bucket_count == 1 &&
+      parent_object = object_plan.structures.object
+      expected_bucket_count = sealed_bucket_count(parent_object.shared_data_version)
+      unless parent_object.version == 4_u64 && expected_bucket_count &&
+             parent_object.bucket_count == expected_bucket_count.not_nil!.to_u64 &&
+             physical_plan.shared_bucket_count == expected_bucket_count.not_nil! &&
              physical_plan.shared_profile == BinaryBulkProfile.single_stream
-        raise UnsupportedFormatError.new("Compact typed-Dynamic JSON owner requires Object V3 MAP0/bucket1 single-stream layout")
+        raise UnsupportedFormatError.new("Compact typed-Dynamic JSON owner requires Object V3 MAP0/bucket1 or matching SharedData v1-v3/two-bucket single-stream layout")
       end
       output = Array(CallbackOwner).new
       seen_roots = Set(String).new
@@ -205,10 +206,14 @@ module CrystalClick
       budget : BinaryCodecBudget,
     ) : Nil
       object = child_plan.structures.object
-      unless object.version == 4_u64 && object.shared_data_version == 0_u64 && object.bucket_count == 1_u64
-        raise UnsupportedFormatError.new("Compact JSON child Object must use Object V3 MAP0/bucket1")
+      expected_bucket_count = sealed_bucket_count(object.shared_data_version)
+      unless object.version == 4_u64 && expected_bucket_count &&
+             object.bucket_count == expected_bucket_count.not_nil!.to_u64 &&
+             child_physical.shared_bucket_count == expected_bucket_count.not_nil!
+        raise UnsupportedFormatError.new("Compact JSON child Object must use Object V3 MAP0/bucket1 or SharedData v1-v3/two-bucket layout")
       end
       unless object.shared_data_version == parent_plan.structures.object.shared_data_version &&
+             child_physical.shared_bucket_count == parent_physical.shared_bucket_count &&
              child_physical.shared_profile == parent_physical.shared_profile
         raise UnsupportedFormatError.new("Compact JSON child Object changed its inherited shared layout or profile")
       end
@@ -218,7 +223,7 @@ module CrystalClick
       # child would create another callback owner and needs its own qualification.
       typed_json = child_plan.typed_dynamic_json_object_leaf_plans(budget)
       root_json = child_plan.root_dynamic_json_object_leaf_plans(budget)
-      unless typed_json.empty? && root_json.empty? && child_physical.shared_bucket_count == 1
+      unless typed_json.empty? && root_json.empty?
         raise UnsupportedFormatError.new("Compact JSON child Object contains an unqualified nested JSON owner")
       end
       descriptor_root_depth = child_physical.typed_descriptor_root_depth
@@ -229,6 +234,14 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact JSON child Object lost its inherited descriptor depths")
       end
       nil
+    end
+
+    private def self.sealed_bucket_count(shared_data_version : UInt64) : Int32?
+      case shared_data_version
+      when 0_u64               then 1
+      when 1_u64, 2_u64, 3_u64 then 2
+      else                          nil
+      end
     end
 
     private def self.account_owner!(canonical_root : String, raw_root : String, budget : BinaryCodecBudget) : Nil

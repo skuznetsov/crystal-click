@@ -215,9 +215,6 @@ module CrystalClick
       parent_grammar = @typed_dynamic_grammars[parent_path]? ||
                        raise(CorruptPartError.new("Compact child Object callback precedes its parent typed-Dynamic discriminator"))
       selected_rows = parent_grammar.selected_json_leaf_occurrence_count("root", key)
-      if owner.advanced
-        raise UnsupportedFormatError.new("Compact typed-Dynamic JSON child Advanced shared layouts are outside this slice")
-      end
       @budget.preflight_children(1_u64)
       @budget.charge_node
       child = CompactJsonObjectMapTapeFramer(T).for_child_owner(

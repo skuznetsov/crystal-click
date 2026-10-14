@@ -26,13 +26,25 @@ module CrystalClick
       end
       physical = prefix.physical_plan
       prefix.validate_physical_owner!(physical)
-
       root_json = prefix.plan.root_dynamic_json_object_leaf_plans(budget)
       unless root_json.empty?
         raise UnsupportedFormatError.new("root-Dynamic JSON is outside the typed-Dynamic JSON read context")
       end
       leaf_plans = prefix.plan.typed_dynamic_json_object_leaf_plans(budget)
       return nil if leaf_plans.empty?
+
+      # Keep the established fast path for Objects with no JSON children. This
+      # profile gate is needed only when this context will authenticate child
+      # owners, and must not narrow unrelated Object prefixes.
+      parent_object = prefix.plan.structures.object
+      parent_bucket_count = sealed_bucket_count(parent_object.shared_data_version)
+      unless parent_object.version == 4_u64 && parent_bucket_count &&
+             parent_object.bucket_count == parent_bucket_count.not_nil!.to_u64 &&
+             physical.shared_bucket_count == parent_bucket_count.not_nil! &&
+             prefix.nested_context.shared_data_version == parent_object.shared_data_version &&
+             physical.shared_profile == BinaryBulkProfile.single_stream
+        raise UnsupportedFormatError.new("typed-Dynamic JSON parent must use a sealed Object V3 shared layout")
+      end
 
       record_count = leaf_plans.size.to_u64
       leaf_plans.each_value do |entries|
@@ -109,14 +121,18 @@ module CrystalClick
             raise CorruptPartError.new("typed-Dynamic JSON child prefix differs from its exact binding or descriptor context")
           end
           child_prefix.validate_physical_owner!(site.physical_plan)
+          child_object = child_plan.structures.object
+          child_bucket_count = sealed_bucket_count(child_object.shared_data_version)
           unless child_prefix.nested_context.profile == prefix.nested_context.profile &&
-                 child_prefix.plan.structures.object.shared_data_version ==
-                   prefix.plan.structures.object.shared_data_version &&
-                 site.physical_plan.shared_bucket_count == 1 &&
-                 child_plan.structures.object.version == 4_u64 &&
-                 child_plan.structures.object.shared_data_version == 0_u64 &&
-                 child_plan.structures.object.bucket_count == 1_u64
-            raise UnsupportedFormatError.new("typed-Dynamic JSON child Object changed its inherited MAP0 context")
+                 child_prefix.nested_context.shared_data_version == parent_object.shared_data_version &&
+                 child_object.version == 4_u64 &&
+                 child_object.shared_data_version == parent_object.shared_data_version &&
+                 child_bucket_count &&
+                 child_object.bucket_count == child_bucket_count.not_nil!.to_u64 &&
+                 site.physical_plan.shared_bucket_count == child_bucket_count.not_nil! &&
+                 site.physical_plan.shared_bucket_count == physical.shared_bucket_count &&
+                 site.physical_plan.shared_profile == physical.shared_profile
+            raise UnsupportedFormatError.new("typed-Dynamic JSON child Object changed its inherited shared layout or profile")
           end
           unless child_prefix.body_callback_count == child_prefix.body_callback_slice_count
             raise CorruptPartError.new("typed-Dynamic JSON child body capture is incomplete")
@@ -134,6 +150,14 @@ module CrystalClick
       end
 
       new(sites, retained)
+    end
+
+    private def self.sealed_bucket_count(shared_data_version : UInt64) : Int32?
+      case shared_data_version
+      when 0_u64               then 1
+      when 1_u64, 2_u64, 3_u64 then 2
+      else                          nil
+      end
     end
 
     def has_path?(path : String) : Bool

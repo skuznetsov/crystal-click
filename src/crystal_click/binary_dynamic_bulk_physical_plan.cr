@@ -414,7 +414,8 @@ module CrystalClick
         return false unless site.escaped_prefix.bytesize.to_u64 <= budget.limits.max_bytes.to_u64
         return false unless site.physical_plan.initial_array_level == site.array_level
         return false unless site.physical_plan.shared_profile.single_stream?
-        return false unless site.physical_plan.shared_bucket_count == 1
+        child_bucket_count = sealed_object_bucket_count(prepared_binding.plan.structures.object)
+        return false unless child_bucket_count && site.physical_plan.shared_bucket_count == child_bucket_count.not_nil!
 
         expected_descriptor_depth64 = prepared_depth.to_i64 + 1_i64
         return false if expected_descriptor_depth64 > Int32::MAX.to_i64
@@ -462,12 +463,19 @@ module CrystalClick
       left_object = left.structures.object
       right_object = right.structures.object
 
-      # This slice is specifically the existing Object V3 MAP owner. The
-      # Object and Dynamic statistics are not layout identity; parsed prefix
-      # plans retain authority over their own statistics callbacks.
+      # Typed-Dynamic JSON children admit only the sealed Object V3 shared
+      # layouts: MAP0 uses one bucket; MAP_WITH_BUCKETS, ADVANCED and CHUNKED
+      # use exactly two. The Object and Dynamic statistics are not layout
+      # identity; parsed prefix plans retain authority over their own
+      # statistics callbacks.
       return false unless left_object.version == 4_u64 && right_object.version == 4_u64
-      return false unless left_object.shared_data_version == 0_u64 && right_object.shared_data_version == 0_u64
-      return false unless left_object.bucket_count == 1_u64 && right_object.bucket_count == 1_u64
+      left_bucket_count = sealed_object_bucket_count(left_object)
+      right_bucket_count = sealed_object_bucket_count(right_object)
+      return false unless left_bucket_count && right_bucket_count
+      return false unless left_object.shared_data_version == right_object.shared_data_version
+      return false unless left_bucket_count == right_bucket_count
+      return false unless left_object.bucket_count == left_bucket_count.not_nil!.to_u64
+      return false unless right_object.bucket_count == right_bucket_count.not_nil!.to_u64
       return false unless left_object.legacy_max_dynamic_paths.nil? && right_object.legacy_max_dynamic_paths.nil?
       return false unless left.inferred_actual_root_depth == right.inferred_actual_root_depth
 
@@ -530,6 +538,18 @@ module CrystalClick
       end
 
       true
+    end
+
+    private def sealed_object_bucket_count(object : ObjectStructure) : Int32?
+      return nil unless object.version == 4_u64
+      case object.shared_data_version
+      when 0_u64
+        object.bucket_count == 1_u64 ? 1 : nil
+      when 1_u64, 2_u64, 3_u64
+        object.bucket_count == 2_u64 ? 2 : nil
+      else
+        nil
+      end
     end
 
     private def same_object_path_bytes?(

@@ -1,5 +1,38 @@
 # Crystal Click landmarks
 
+## Typed-Dynamic JSON child shared layouts — W279
+
+- VERIFIED / root adversary ROBUST within finite serialization/native
+  interoperability scope (2026-10-13), over W278
+  `b54685723f01adebeef514a225c73f253be03e41`. Reuse recursive codecs and Compact
+  relocation; admit matching parent/child Object wire 4, MAP0/bucket-one or
+  SharedData v1/v2/v3 with two buckets, matching ordinary S0/S1 and shared S0.
+  Child counts come from each selected Dynamic arm and successive Array size
+  lanes; zero occurrences still own headers/callbacks. Advanced validation is
+  owner-local, with exact prefix/physical identity, roles, bindings and context.
+- Fresh DEBUG (`de2f6b`) and actual RELEASE (`785043`) pass 433 examples / the
+  same 81 paths. Fresh native matrices pass 64 stock + 64 generated cells per
+  mode (`c24aef`, `5d7541`); root composed raw audits (`4fc16e`, `2f37fe`) each
+  bind 1,344 records / 6,720 sidecars and reject 43 controls. Child headers and
+  String lanes are library-coupled physical observations, not independent
+  complete-frame/chunk decoding. Same-lineage review is correlated.
+- Original temporary source/runtime disappeared; exact pins were restored.
+  Current nine-file / 17,902-byte defaults match the durable W264 digest witness
+  (`ae4db0`), not a newly observed raw baseline. Separate historical W263 raw
+  roots remain unavailable; the W279 81-path cohort did not lose any paths.
+  Auditor helper/full-summary and raw-schema normalization repairs are not
+  production RED. Protected user W263 specs remain unchanged.
+- Public outer JSON wrappers are still a finite subset. No arbitrary products,
+  further child JSON, mixed layouts/versions/buckets, full-suite, Compact
+  MV/projection, RSS or performance claim. A tight retained-child-context
+  codec-budget test remains unexecuted. Refresh on code/compiler/source/runtime/
+  probe drift, evidence loss or widening; rollback only this atomic slice.
+  Continuation: stock-backed two-Array JSON topology/public-carrier qualification,
+  then Compact MV/projections, then optimization. Full goal ACTIVE; <=10%
+  slowdown unmeasured; local commit/no push. See
+  [W279 evidence](.landmark/evidence/compact-child-json-writer-w279.json) and
+  [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md).
+
 ## Advanced shared-data JSON Compact writer — W278
 
 - VERIFIED / root adversary ROBUST within finite serialization/native
@@ -20,8 +53,9 @@
   It reuses the library physical/Object parser; nested MRK3 headers are not
   independently checked. The frozen W264 default-byte witness remains nine
   files / 17,902 bytes in both modes.
-- Typed-Dynamic JSON children remain MAP0/bucket-one/shared-S0. Other carriers,
-  Object layouts/products, full-suite, MV/projections, RSS and performance are
+- At W278, typed-Dynamic JSON children remained MAP0/bucket-one/shared-S0;
+  W279 supersedes that restriction only for its matching sealed layouts.
+  Other carriers, Object layouts/products, full-suite, MV/projections, RSS and performance are
   outside the claim; the <=10% target is unmeasured and the full goal ACTIVE.
   Source/runtime pins are distinct. Refresh on source/test/compiler/runtime/
   probe drift, evidence loss or owner/layout widening; rollback W278 only and

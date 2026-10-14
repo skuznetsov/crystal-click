@@ -1,0 +1,592 @@
+{
+  "format": "crystal_click_compact_child_json_writer_w279_evidence_v1",
+  "date": "2026-10-13",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Finite matching parent/typed-Dynamic JSON-child shared layouts for existing Compact Object owners: Object wire 4, MAP0/bucket1 or SharedData 1/2/3 with two buckets; ordinary String0/String1, shared String0, MRK3/MRK4, plain/compressed marks, BASIC/COMPACT.",
+    "adversary": "ROBUST within the executed finite serialization/native oracle and root-reviewed physical ownership/context transport. Same-lineage model review is correlated, not independent replication.",
+    "not_claimed": "No all-type/layout, arbitrary recursive-product, independent whole-frame/chunk decoder, full-suite, Compact MV/projection, RSS or performance closure."
+  },
+  "baseline": "b54685723f01adebeef514a225c73f253be03e41",
+  "risk": {
+    "tier": "CAUTION",
+    "reason": "Persistent serde, selected-child row grids, callback/relocation ownership and a comparator consumed by generic Dynamic physical plans.",
+    "strongest_failure": "Parent row counts or root Advanced bindings silently substituted for selected JSON-child leaf counts/local callback schedule.",
+    "discriminator": "Native three-column four-mark fixture with irregular Dynamic actual counts, successive Array sizes, NULL versus empty nested arrays, zero-leaf headers, both buckets and 64-byte frames.",
+    "rollback": "One atomic W279 local commit over W278; revert only that slice in a clean checkout, preserving unrelated/protected work."
+  },
+  "ownership": {
+    "implementation": "Scoped Luna implementation/native instruments, root direct diff review, guarded DoD and composed raw capture verification.",
+    "source_review": "Luna pinned-source review; root retained source anchors and independently checked production paths and qualification scope.",
+    "protected_sha256": {
+      "spec/compact_json_w263_native_spec.cr": "f1a8c38033477981ebc85928660f7c297d09e85d7e00264d59fcf2f606d0e0ac",
+      "spec/compact_static_json_internal_w263_spec.cr": "497914c5acd908caef6adff695d202fd6a638e292707035dd21a0c3887607ae8",
+      "spec/compact_static_json_root_w263_adversary_spec.cr": "d3d858b157f31e7daee0d171b8d0d0d8684cd0ab0dcd505145308bddfccc0dc6"
+    },
+    "commit_paths": [
+      "src/crystal_click/binary_dynamic_bulk_physical_plan.cr",
+      "src/crystal_click/compact_json_callback_owners.cr",
+      "src/crystal_click/compact_json_object_map_tape_framer.cr",
+      "src/crystal_click/compact_json_object_shared_advanced_tape_grammar.cr",
+      "src/crystal_click/compact_static_json_advanced_prepared_mark.cr",
+      "src/crystal_click/object_document_typed_dynamic_json_read_context.cr",
+      "spec/compact_part_writer_w279_entry_spec.cr",
+      "spec/compact_part_writer_w279_spec.cr",
+      "spec/compact_part_writer_w279_adversary_spec.cr",
+      "spec/support/compact_part_writer_w279_fixture.cr",
+      "scripts/probe_compact_child_json_writer_w279.rb",
+      "scripts/compact_child_json_writer_w279_helper.cr",
+      "scripts/support/compact_part_writer_w279_native_fixture.cr",
+      "docs/COMPACT_PART_WRITER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-child-json-writer-w279.json"
+    ],
+    "remote": "No push or remote history mutation."
+  },
+  "source_state": {
+    "baseline": "b54685723f01adebeef514a225c73f253be03e41",
+    "candidate_sha256": {
+      "src/crystal_click/binary_dynamic_bulk_physical_plan.cr": "dffe85e739db006d4e51ad13699bbecf208f95993165788e4822e4e18df8db38",
+      "src/crystal_click/compact_json_callback_owners.cr": "3c3e43ec9acf668ba12f8af2d6c494e601750491575d5145a39d4224a65a687a",
+      "src/crystal_click/compact_json_object_map_tape_framer.cr": "907f3272bb5cd63a9f67dc840103059e7aa90e26ccf09fc7817a825a4fa0fba4",
+      "src/crystal_click/compact_json_object_shared_advanced_tape_grammar.cr": "ead05cd1973778849319e4c6d48f0b7332fe4a73aa2fd5c781e67ac6cdbef24e",
+      "src/crystal_click/compact_static_json_advanced_prepared_mark.cr": "8a9df5fe0e8c307c944f7ff3c05b889226f284640fb8c4149d7c32232a01f8d0",
+      "src/crystal_click/object_document_typed_dynamic_json_read_context.cr": "cf7bcc66788ce79ecd651108dfbecbe7cfd17901122b537ed3aee42cc4f0a6d2",
+      "spec/compact_part_writer_w279_entry_spec.cr": "4a529792e7062c2071c11999de8eeceeeb02a7cd51916f2a022366cacf8ca937",
+      "spec/compact_part_writer_w279_spec.cr": "f5c24d81850c2bb5fecf3a5fd14c4c85a94dee74a4d5e751d8e6205943303cc1",
+      "spec/compact_part_writer_w279_adversary_spec.cr": "eb412957630a5396293eeaef5d548c4357a4d57b648eb0d6147422d05fd98f06",
+      "spec/support/compact_part_writer_w279_fixture.cr": "69ab6f10a3288b07b568d30dd1d17787ec8938bda24f5225bd118446fdef84da",
+      "scripts/probe_compact_child_json_writer_w279.rb": "d978eb5027eb96d684205ce6380ebd21cd1ba204b12aa47425d231138e05fe92",
+      "scripts/compact_child_json_writer_w279_helper.cr": "13007fd785374be566c1b9d930f0613198a247ac8bad573626ab9c409143f64b",
+      "scripts/support/compact_part_writer_w279_native_fixture.cr": "7062c1d8740661fb5a61dabd4a6fee8468d3dbdd894c5135f5ff28bb2d902c12"
+    },
+    "seal_boundary": "Ten owned Crystal sources/specs plus three instruments, not a complete-tree/require-graph seal. Docs/index reviewed separately; producer require inputs are additionally pinned before/after in each full matrix."
+  },
+  "pins": {
+    "clickhouse_source": {
+      "root": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+      "revision": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+      "revision_before": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+      "revision_after": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+      "sha256": {
+        "src/DataTypes/Serializations/SerializationObject.cpp": "9ba4b6ff274e56bd90652c32557565569d3b342a03ebbc6e2cafdad983bf17f8",
+        "src/DataTypes/Serializations/SerializationObjectSharedData.cpp": "2534b49ac9f188696625aea26ecfbdeacea0580e5465091b9ef7f81b1c06b1fe",
+        "src/DataTypes/Serializations/SerializationDynamic.cpp": "691029f31451f9e7f431922f8764764125ef434c3bd9ddf3868efc7742ba890a",
+        "src/DataTypes/Serializations/SerializationArray.cpp": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791",
+        "src/DataTypes/Serializations/SerializationNullable.cpp": "7f8f0f97725f21d196beabae47fefcc3bcb32e250f4a1f9a87b37f73eae7c43f",
+        "src/DataTypes/Serializations/SerializationTuple.cpp": "12e38b357204e005fc4780bac7e2e358b0a14357e0e246137414166062a1a884",
+        "src/DataTypes/Serializations/SerializationVariant.cpp": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022",
+        "src/DataTypes/Serializations/SerializationJSON.cpp": "940ea0d129649357779df8858e66545fc26198dc122b9b690e02e8c287619602",
+        "src/DataTypes/Serializations/ISerialization.cpp": "87ca6647aeb0dd4022e3437a155f923f817d4447c547eff9ec29ab6876d16dd2",
+        "src/DataTypes/Serializations/SerializationInfo.cpp": "ccccf6c60c0c4228386b140ea75311ad5db92d4c7f7c7e9d7f098f41db512767",
+        "src/Storages/MergeTree/MergeTreeSettings.cpp": "99ec4877b2a7db63a05272cf918c6b312e674140f9ea2d221c4ef4542ffefe46",
+        "src/Columns/ColumnString.h": "2e19882e461794a1be79c62387cd090c304e1a3866deff8d2bd02f672ea31627",
+        "src/DataTypes/DataTypeString.cpp": "774c22bd247021f9631f83c309bc8e4462f047c9ef6261f5e0d38e76f9862b38",
+        "src/DataTypes/DataTypeLowCardinality.cpp": "e75ef3196f929ed61313394fe8ba13c0a377446f73fac12f2b2425128d625c5c",
+        "src/DataTypes/Serializations/SerializationString.cpp": "630253117d3b9f2a67ef68f25b3c06286fa38cf85583ddba56f727e331588f03",
+        "src/DataTypes/Serializations/SerializationLowCardinality.cpp": "86fdddb8a6cd30ff440c6230aae884e978738885c916130310ba0413eff7f02a",
+        "src/DataTypes/Serializations/SerializationNamed.cpp": "08bdb2afd8e8e43c1767d52dac573bb6a7f10ec7acd4b207fc2fa138bae5253e",
+        "src/DataTypes/DataTypeTuple.cpp": "350d50a6d0c5cefbf8b31bad1106f7e2200cc69ada1bac50704723d66edde2a0",
+        "src/Columns/ColumnObject.cpp": "3c16a6ea4ea20d0ef9ea7e626ba23a98bab74a0af82da21e36352ec595c5dcde",
+        "src/DataTypes/DataTypeObject.cpp": "17aa66e87730ef2710d501ae08ed78b0e9ffa914f7a9d33541bb63983d3741b7",
+        "src/DataTypes/DataTypesBinaryEncoding.cpp": "78ba394f20ccd2a00f5be6b8c4d470fafb1c91a6f87bb27c301c2d3203f28f87",
+        "src/DataTypes/DataTypesBinaryEncoding.h": "92c3362477dc283302fc84713413f45fd6c92c7273309c6efb41425d22c5485f",
+        "src/Formats/FormatFactory.cpp": "142f35a34b1e237f1aaee95ac06c49cddf059e3d28b7c6e56bfabd69ba18f820",
+        "src/Formats/FormatSettings.h": "e9bd538293f86843ebb71109a27777be9a96cb84719f4adef0fecac2d1e758db",
+        "src/Formats/registerFormats.cpp": "db88f98d0c57f406f5fca164d1596b1b451a1d83a30db3a9b3742266b1bd5dab",
+        "src/Storages/MergeTree/MergeTreeIOSettings.cpp": "8e797f442879d1d7b61b486942583ce731f6ed2999b079699465e935725f5d3e",
+        "src/Storages/MergeTree/MergeTreeDataPartWriterCompact.cpp": "0b551c2e4efe5638fc734f854e45d78beab342ce43fffd464b6196d1eeff2072",
+        "src/DataTypes/Serializations/SerializationObject.h": "f2ceb7935c502f58e4789975b4c9a776e2b9f8a02d67b746c123214525b2db9f"
+      },
+      "sha256_before": {
+        "src/DataTypes/Serializations/SerializationObject.cpp": "9ba4b6ff274e56bd90652c32557565569d3b342a03ebbc6e2cafdad983bf17f8",
+        "src/DataTypes/Serializations/SerializationObjectSharedData.cpp": "2534b49ac9f188696625aea26ecfbdeacea0580e5465091b9ef7f81b1c06b1fe",
+        "src/DataTypes/Serializations/SerializationDynamic.cpp": "691029f31451f9e7f431922f8764764125ef434c3bd9ddf3868efc7742ba890a",
+        "src/DataTypes/Serializations/SerializationArray.cpp": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791",
+        "src/DataTypes/Serializations/SerializationNullable.cpp": "7f8f0f97725f21d196beabae47fefcc3bcb32e250f4a1f9a87b37f73eae7c43f",
+        "src/DataTypes/Serializations/SerializationTuple.cpp": "12e38b357204e005fc4780bac7e2e358b0a14357e0e246137414166062a1a884",
+        "src/DataTypes/Serializations/SerializationVariant.cpp": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022",
+        "src/DataTypes/Serializations/SerializationJSON.cpp": "940ea0d129649357779df8858e66545fc26198dc122b9b690e02e8c287619602",
+        "src/DataTypes/Serializations/ISerialization.cpp": "87ca6647aeb0dd4022e3437a155f923f817d4447c547eff9ec29ab6876d16dd2",
+        "src/DataTypes/Serializations/SerializationInfo.cpp": "ccccf6c60c0c4228386b140ea75311ad5db92d4c7f7c7e9d7f098f41db512767",
+        "src/Storages/MergeTree/MergeTreeSettings.cpp": "99ec4877b2a7db63a05272cf918c6b312e674140f9ea2d221c4ef4542ffefe46",
+        "src/Columns/ColumnString.h": "2e19882e461794a1be79c62387cd090c304e1a3866deff8d2bd02f672ea31627",
+        "src/DataTypes/DataTypeString.cpp": "774c22bd247021f9631f83c309bc8e4462f047c9ef6261f5e0d38e76f9862b38",
+        "src/DataTypes/DataTypeLowCardinality.cpp": "e75ef3196f929ed61313394fe8ba13c0a377446f73fac12f2b2425128d625c5c",
+        "src/DataTypes/Serializations/SerializationString.cpp": "630253117d3b9f2a67ef68f25b3c06286fa38cf85583ddba56f727e331588f03",
+        "src/DataTypes/Serializations/SerializationLowCardinality.cpp": "86fdddb8a6cd30ff440c6230aae884e978738885c916130310ba0413eff7f02a",
+        "src/DataTypes/Serializations/SerializationNamed.cpp": "08bdb2afd8e8e43c1767d52dac573bb6a7f10ec7acd4b207fc2fa138bae5253e",
+        "src/DataTypes/DataTypeTuple.cpp": "350d50a6d0c5cefbf8b31bad1106f7e2200cc69ada1bac50704723d66edde2a0",
+        "src/Columns/ColumnObject.cpp": "3c16a6ea4ea20d0ef9ea7e626ba23a98bab74a0af82da21e36352ec595c5dcde",
+        "src/DataTypes/DataTypeObject.cpp": "17aa66e87730ef2710d501ae08ed78b0e9ffa914f7a9d33541bb63983d3741b7",
+        "src/DataTypes/DataTypesBinaryEncoding.cpp": "78ba394f20ccd2a00f5be6b8c4d470fafb1c91a6f87bb27c301c2d3203f28f87",
+        "src/DataTypes/DataTypesBinaryEncoding.h": "92c3362477dc283302fc84713413f45fd6c92c7273309c6efb41425d22c5485f",
+        "src/Formats/FormatFactory.cpp": "142f35a34b1e237f1aaee95ac06c49cddf059e3d28b7c6e56bfabd69ba18f820",
+        "src/Formats/FormatSettings.h": "e9bd538293f86843ebb71109a27777be9a96cb84719f4adef0fecac2d1e758db",
+        "src/Formats/registerFormats.cpp": "db88f98d0c57f406f5fca164d1596b1b451a1d83a30db3a9b3742266b1bd5dab",
+        "src/Storages/MergeTree/MergeTreeIOSettings.cpp": "8e797f442879d1d7b61b486942583ce731f6ed2999b079699465e935725f5d3e",
+        "src/Storages/MergeTree/MergeTreeDataPartWriterCompact.cpp": "0b551c2e4efe5638fc734f854e45d78beab342ce43fffd464b6196d1eeff2072",
+        "src/DataTypes/Serializations/SerializationObject.h": "f2ceb7935c502f58e4789975b4c9a776e2b9f8a02d67b746c123214525b2db9f"
+      },
+      "sha256_after": {
+        "src/DataTypes/Serializations/SerializationObject.cpp": "9ba4b6ff274e56bd90652c32557565569d3b342a03ebbc6e2cafdad983bf17f8",
+        "src/DataTypes/Serializations/SerializationObjectSharedData.cpp": "2534b49ac9f188696625aea26ecfbdeacea0580e5465091b9ef7f81b1c06b1fe",
+        "src/DataTypes/Serializations/SerializationDynamic.cpp": "691029f31451f9e7f431922f8764764125ef434c3bd9ddf3868efc7742ba890a",
+        "src/DataTypes/Serializations/SerializationArray.cpp": "825295e177ae7f406c1a1c155e0c9e17b4cc39f4747cb1f3fb327b54db043791",
+        "src/DataTypes/Serializations/SerializationNullable.cpp": "7f8f0f97725f21d196beabae47fefcc3bcb32e250f4a1f9a87b37f73eae7c43f",
+        "src/DataTypes/Serializations/SerializationTuple.cpp": "12e38b357204e005fc4780bac7e2e358b0a14357e0e246137414166062a1a884",
+        "src/DataTypes/Serializations/SerializationVariant.cpp": "9e91cc5a2aa9498841aa7524193247d55a30c77682c65a0991c77a2968b9e022",
+        "src/DataTypes/Serializations/SerializationJSON.cpp": "940ea0d129649357779df8858e66545fc26198dc122b9b690e02e8c287619602",
+        "src/DataTypes/Serializations/ISerialization.cpp": "87ca6647aeb0dd4022e3437a155f923f817d4447c547eff9ec29ab6876d16dd2",
+        "src/DataTypes/Serializations/SerializationInfo.cpp": "ccccf6c60c0c4228386b140ea75311ad5db92d4c7f7c7e9d7f098f41db512767",
+        "src/Storages/MergeTree/MergeTreeSettings.cpp": "99ec4877b2a7db63a05272cf918c6b312e674140f9ea2d221c4ef4542ffefe46",
+        "src/Columns/ColumnString.h": "2e19882e461794a1be79c62387cd090c304e1a3866deff8d2bd02f672ea31627",
+        "src/DataTypes/DataTypeString.cpp": "774c22bd247021f9631f83c309bc8e4462f047c9ef6261f5e0d38e76f9862b38",
+        "src/DataTypes/DataTypeLowCardinality.cpp": "e75ef3196f929ed61313394fe8ba13c0a377446f73fac12f2b2425128d625c5c",
+        "src/DataTypes/Serializations/SerializationString.cpp": "630253117d3b9f2a67ef68f25b3c06286fa38cf85583ddba56f727e331588f03",
+        "src/DataTypes/Serializations/SerializationLowCardinality.cpp": "86fdddb8a6cd30ff440c6230aae884e978738885c916130310ba0413eff7f02a",
+        "src/DataTypes/Serializations/SerializationNamed.cpp": "08bdb2afd8e8e43c1767d52dac573bb6a7f10ec7acd4b207fc2fa138bae5253e",
+        "src/DataTypes/DataTypeTuple.cpp": "350d50a6d0c5cefbf8b31bad1106f7e2200cc69ada1bac50704723d66edde2a0",
+        "src/Columns/ColumnObject.cpp": "3c16a6ea4ea20d0ef9ea7e626ba23a98bab74a0af82da21e36352ec595c5dcde",
+        "src/DataTypes/DataTypeObject.cpp": "17aa66e87730ef2710d501ae08ed78b0e9ffa914f7a9d33541bb63983d3741b7",
+        "src/DataTypes/DataTypesBinaryEncoding.cpp": "78ba394f20ccd2a00f5be6b8c4d470fafb1c91a6f87bb27c301c2d3203f28f87",
+        "src/DataTypes/DataTypesBinaryEncoding.h": "92c3362477dc283302fc84713413f45fd6c92c7273309c6efb41425d22c5485f",
+        "src/Formats/FormatFactory.cpp": "142f35a34b1e237f1aaee95ac06c49cddf059e3d28b7c6e56bfabd69ba18f820",
+        "src/Formats/FormatSettings.h": "e9bd538293f86843ebb71109a27777be9a96cb84719f4adef0fecac2d1e758db",
+        "src/Formats/registerFormats.cpp": "db88f98d0c57f406f5fca164d1596b1b451a1d83a30db3a9b3742266b1bd5dab",
+        "src/Storages/MergeTree/MergeTreeIOSettings.cpp": "8e797f442879d1d7b61b486942583ce731f6ed2999b079699465e935725f5d3e",
+        "src/Storages/MergeTree/MergeTreeDataPartWriterCompact.cpp": "0b551c2e4efe5638fc734f854e45d78beab342ce43fffd464b6196d1eeff2072",
+        "src/DataTypes/Serializations/SerializationObject.h": "f2ceb7935c502f58e4789975b4c9a776e2b9f8a02d67b746c123214525b2db9f"
+      },
+      "guards": {
+        "inherited_string1_and_size_stream_guard": {
+          "column_string_allows_embedded_nul_and_is_not_terminated": true,
+          "column_string_insert_copies_exact_length": true,
+          "datatype_string_uses_selected_string_serialization_version": true,
+          "string1_serializes_per_row_sizes_and_exact_data_extent": true,
+          "string1_enumerates_size_before_regular_data": 1152,
+          "low_cardinality_dictionary_uses_default_string_serialization": true,
+          "tuple_element_separator_is_escaped_for_compatibility": true,
+          "unnamed_tuple_fields_use_one_based_named_elements": true,
+          "tuple_array_sizes_are_emitted_before_nested_array_elements": 10489,
+          "array_size_path_suffix_is_appended_after_escaped_tuple_element": true,
+          "nullable_map_precedes_nested_element_streams": 3071,
+          "low_cardinality_scope": "LowCardinality dictionary and inner serializer use their type default; this does not assert a String1 dictionary stream",
+          "string_extent_scope": "String data bytes use actual logical lengths including zero for empty and embedded NUL bytes; no implicit trailing NUL is part of the String value"
+        },
+        "object_rowbinary_path_dispatch_pinned": true,
+        "dynamic_type_tag_dispatch_pinned": true,
+        "rowbinary_type_encoding_pinned": true,
+        "string_and_array_rowbinary_lengths_pinned": true,
+        "rowbinary_registration_pinned": true,
+        "binary_json_setting_binding_pinned": true,
+        "runtime_source_are_distinct_pins": true,
+        "advanced_and_chunked_wire_branches_pinned": true,
+        "small_shared_chunk_target_pinned": true,
+        "object_setting_v3_supports_shared_layouts": true,
+        "object_wire_v3_is_enum_value_4": true,
+        "object_setting": "v3",
+        "expected_wire_version_enum": 4,
+        "scope": "setting selects the format family; parsed physical child header is checked only by full helper mode"
+      }
+    },
+    "clickhouse_runtime": {
+      "binary": "/private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped",
+      "expected_sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "sha256_before": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "sha256_after": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "distinction": "runtime executable SHA/version/build and upstream source revision are pinned independently"
+    },
+    "producer_inputs": {
+      "paths": [
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_advanced_json_writer_w278.rb",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_child_json_writer_w279.rb",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_context_string_writer_w277.rb",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_part_writer_w264.rb",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_part_writer_w271.rb",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_part_writer_w273.rb",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_string_writer_w276.rb",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_object_shared_json_interop_w241.rb",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/compact_child_json_writer_w279_helper.cr",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/support/compact_part_writer_w279_native_fixture.cr"
+      ],
+      "sha256_before": {
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_advanced_json_writer_w278.rb": "98280a3e42e3300a8121e72926c3861fa4286c7be925805dbd9cee42181843f0",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_child_json_writer_w279.rb": "d978eb5027eb96d684205ce6380ebd21cd1ba204b12aa47425d231138e05fe92",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_context_string_writer_w277.rb": "3825cc97bf486f56abc98760e9239d608085c76eab2b9909d4c1e3b9ecf6aec5",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_part_writer_w264.rb": "5cecf5c8d6391136ca9df9a2b55b75c9133543470fefd79801428dd2624464f2",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_part_writer_w271.rb": "26bfb0ddedf459b0194c14673d0f06be10a94dd7228bbcf06afb5ac82ccfdb82",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_part_writer_w273.rb": "812490075910ca6669e0e7dce98dd5c0a53b5fa91902d4e2b93a9efbf1ed7381",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_string_writer_w276.rb": "7057f412ea7c2ce2964cf9af894bd4f84150fa5f342485e7db230970843f8b6c",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_object_shared_json_interop_w241.rb": "6330b660a7d4369f68a8b95e7a57a81bb6434549ee7d61357a60e89921d3aa6d",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/compact_child_json_writer_w279_helper.cr": "13007fd785374be566c1b9d930f0613198a247ac8bad573626ab9c409143f64b",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/support/compact_part_writer_w279_native_fixture.cr": "7062c1d8740661fb5a61dabd4a6fee8468d3dbdd894c5135f5ff28bb2d902c12"
+      },
+      "sha256_after": {
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_advanced_json_writer_w278.rb": "98280a3e42e3300a8121e72926c3861fa4286c7be925805dbd9cee42181843f0",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_child_json_writer_w279.rb": "d978eb5027eb96d684205ce6380ebd21cd1ba204b12aa47425d231138e05fe92",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_context_string_writer_w277.rb": "3825cc97bf486f56abc98760e9239d608085c76eab2b9909d4c1e3b9ecf6aec5",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_part_writer_w264.rb": "5cecf5c8d6391136ca9df9a2b55b75c9133543470fefd79801428dd2624464f2",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_part_writer_w271.rb": "26bfb0ddedf459b0194c14673d0f06be10a94dd7228bbcf06afb5ac82ccfdb82",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_part_writer_w273.rb": "812490075910ca6669e0e7dce98dd5c0a53b5fa91902d4e2b93a9efbf1ed7381",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_compact_string_writer_w276.rb": "7057f412ea7c2ce2964cf9af894bd4f84150fa5f342485e7db230970843f8b6c",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/probe_object_shared_json_interop_w241.rb": "6330b660a7d4369f68a8b95e7a57a81bb6434549ee7d61357a60e89921d3aa6d",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/compact_child_json_writer_w279_helper.cr": "13007fd785374be566c1b9d930f0613198a247ac8bad573626ab9c409143f64b",
+        "/Users/sergey/Projects/Crystal/crystal-click/scripts/support/compact_part_writer_w279_native_fixture.cr": "7062c1d8740661fb5a61dabd4a6fee8468d3dbdd894c5135f5ff28bb2d902c12"
+      }
+    },
+    "compiler": {
+      "path": "/opt/homebrew/bin/crystal",
+      "version": "1.21.0 (2026-07-16)",
+      "llvm": "22.1.8",
+      "target": "aarch64-apple-darwin25.6.0",
+      "observed_chunk": "719241"
+    },
+    "outer_guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+      "policy": "Root qualification jobs use one Crystal worker/thread and minimum free memory 50%; monitor process-group RSS, memory/FD/timeouts. Not a hard RLIMIT or a measured RSS/speed certificate.",
+      "observed_chunk": "719241"
+    },
+    "auditors": {
+      "base": {
+        "path": "/private/tmp/crystal-click-w279-root.YlQ0Ct/audit_w279.rb",
+        "sha256": "099df0dca663fe1cbdad3fca51c4c17a0164c0fbe76949c3cac238d20d5ff08c"
+      },
+      "generated_native": {
+        "path": "/private/tmp/crystal-click-w279-root.YlQ0Ct/audit_generated_native_w279.rb",
+        "sha256": "1a8eea94c7671606727eb8c3904f2b41ba29676e081a76b95d00fce005ee452c"
+      },
+      "boundary": "Temporary audit programs/captures are not committed; losing them invalidates raw-audit replay until exact-pin recovery or fresh qualification."
+    }
+  },
+  "behavior": {
+    "admitted": "Matching sealed SharedData layouts for existing direct typed-Dynamic JSON and bounded Array-chain JSON children; native depths 0/2/3 exercised, depth 1 remains historical W272 coverage.",
+    "unchanged_rejections": [
+      "Root-Dynamic JSON children and further JSON owners beneath the admitted child",
+      "Arbitrary outer wrappers/products, mixed parent/child versions, shared layouts, bucket counts or profiles",
+      "Advanced shared-path nested Objects and unqualified public typed carriers",
+      "Arbitrary-key/append writers and Compact MV/projection integration"
+    ],
+    "count_oracles": {
+      "parent_rows": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "physical_marks_including_eof": [
+        2,
+        2,
+        2,
+        2,
+        0
+      ],
+      "selected_actual_counts": {
+        "depth0": [
+          1,
+          0,
+          1,
+          1
+        ],
+        "depth2": [
+          1,
+          0,
+          2,
+          1
+        ],
+        "depth3": [
+          1,
+          0,
+          2,
+          2
+        ]
+      },
+      "json_leaf_counts": {
+        "depth0": [
+          1,
+          0,
+          1,
+          1
+        ],
+        "depth2": [
+          3,
+          0,
+          0,
+          3
+        ],
+        "depth3": [
+          4,
+          0,
+          0,
+          3
+        ]
+      },
+      "boundary": "Selected actual, each Array-level vector and JSON-leaf counts are separate; an empty selected Array is not NULL or an absent callback."
+    },
+    "production_changes": [
+      "Sealed parent/child layout comparison instead of MAP-only constants; statistics remain local prefix authority",
+      "MRK3 child framing uses selected Dynamic/Array counts and exact local Advanced role schedule",
+      "Authenticated child read context retained through Advanced prepared decoding and included in workspace accounting"
+    ]
+  },
+  "falsifier_lineage": {
+    "observed_red": {
+      "chunk": "feee2e",
+      "exit_code": 1,
+      "examples": 4,
+      "reason": "MAP control passes; SharedData 1/2/3 expected-success cases fail at existing layout guard."
+    },
+    "useful_failures": [
+      {
+        "chunk": "4699ed",
+        "reason": "Two Advanced read errors reveal dropped authenticated child context."
+      },
+      {
+        "chunk": "8fe440",
+        "examples": 420,
+        "failures": 0,
+        "errors": 1,
+        "reason": "Existing static MRK3 owner regression reveals missing event context; add exact local registry and regression."
+      }
+    ],
+    "instrumentation_not_production": [
+      "Depth-three fixture count oracle corrected to [1,0,2,2].",
+      "Scratch auditor helper-path and strict full-summary projection adapters repaired, preserving exact path/SHA/key rosters.",
+      "Raw active schema contains native whitespace; compare raw tagged rows to independent raw literals and separately bind normalized declared/summary types, not summary-as-raw oracle."
+    ],
+    "invalid_or_excluded": [
+      "Older non-final producer canary is not full-pin-qualified.",
+      "Agent RLIMIT/ulimit-v attempts are not resource-guard evidence; root reran under normal guard.",
+      "Two scratch count-only report-shape probes failed; no aggregate header-observation count is inferred from them."
+    ]
+  },
+  "dod": {
+    "local_roster": [
+      "spec/compact_part_writer_w277_entry_spec.cr",
+      "spec/compact_part_writer_w277_spec.cr",
+      "spec/compact_part_writer_w277_adversary_spec.cr",
+      "spec/compact_mark_file_adapter_w274_adversary_spec.cr",
+      "spec/compact_mark_file_adapter_w274_entry_spec.cr",
+      "spec/compact_mark_file_adapter_w274_integration_spec.cr",
+      "spec/compact_mark_file_adapter_w274_spec.cr",
+      "spec/compact_part_writer_w264_spec.cr",
+      "spec/compact_part_writer_w265_adversary_spec.cr",
+      "spec/compact_part_writer_w265_publication_spec.cr",
+      "spec/compact_part_writer_w265_spec.cr",
+      "spec/compact_part_writer_w266_adversary_spec.cr",
+      "spec/compact_part_writer_w266_spec.cr",
+      "spec/compact_part_writer_w267_adversary_spec.cr",
+      "spec/compact_part_writer_w267_spec.cr",
+      "spec/compact_part_writer_w268_adversary_spec.cr",
+      "spec/compact_part_writer_w268_spec.cr",
+      "spec/compact_part_writer_w269_adversary_spec.cr",
+      "spec/compact_part_writer_w269_baseline_spec.cr",
+      "spec/compact_part_writer_w269_spec.cr",
+      "spec/compact_part_writer_w270_adversary_spec.cr",
+      "spec/compact_part_writer_w270_baseline_spec.cr",
+      "spec/compact_part_writer_w270_spec.cr",
+      "spec/compact_part_writer_w271_adversary_spec.cr",
+      "spec/compact_part_writer_w271_baseline_spec.cr",
+      "spec/compact_part_writer_w271_fixture_control_spec.cr",
+      "spec/compact_part_writer_w271_inferred_json_spec.cr",
+      "spec/compact_part_writer_w271_owner_grid_spec.cr",
+      "spec/compact_part_writer_w271_recursive_owner_spec.cr",
+      "spec/compact_part_writer_w271_source_owner_adversary_spec.cr",
+      "spec/compact_part_writer_w271_spec.cr",
+      "spec/compact_part_writer_w271_workspace_spec.cr",
+      "spec/compact_part_writer_w272_adversary_spec.cr",
+      "spec/compact_part_writer_w272_baseline_spec.cr",
+      "spec/compact_part_writer_w272_fixture_control_spec.cr",
+      "spec/compact_part_writer_w272_spec.cr",
+      "spec/compact_part_writer_w273_adversary_spec.cr",
+      "spec/compact_part_writer_w273_baseline_spec.cr",
+      "spec/compact_part_writer_w273_fixture_control_spec.cr",
+      "spec/compact_part_writer_w273_spec.cr",
+      "spec/compressed_mark_positions_w194_spec.cr",
+      "spec/compressed_mark_transport_w124_root_spec.cr",
+      "spec/compressed_mark_transport_w124_spec.cr",
+      "spec/part_checksums_spec.cr",
+      "spec/compact_part_writer_w275_entry_spec.cr",
+      "spec/compact_part_writer_w275_spec.cr",
+      "spec/compact_part_writer_w275_adversary_spec.cr",
+      "spec/bulk_string_size_w122_spec.cr",
+      "spec/compact_typed_w260_spec.cr",
+      "spec/compact_typed_w260_adversary_spec.cr",
+      "spec/compact_physical_context_w259_spec.cr",
+      "spec/compact_physical_context_w259_adversary_spec.cr",
+      "spec/compact_part_writer_w276_entry_spec.cr",
+      "spec/compact_part_writer_w276_spec.cr",
+      "spec/compact_part_writer_w276_adversary_spec.cr",
+      "spec/compact_typed_dynamic_read_binding_w270_spec.cr",
+      "spec/compact_part_writer_w278_entry_spec.cr",
+      "spec/compact_part_writer_w278_spec.cr",
+      "spec/compact_part_writer_w278_adversary_spec.cr",
+      "spec/aggregate_dynamic_w226_adversary_spec.cr",
+      "spec/aggregate_dynamic_w226_core_spec.cr",
+      "spec/binary_dynamic_physical_w156_adversary_spec.cr",
+      "spec/binary_dynamic_physical_w156_red_spec.cr",
+      "spec/binary_dynamic_physical_w156_spec.cr",
+      "spec/binary_nested_specialized_w201_spec.cr",
+      "spec/dynamic_bulk_part_w203_spec.cr",
+      "spec/dynamic_json_physical_w210_spec.cr",
+      "spec/dynamic_json_recursive_physical_w212_spec.cr",
+      "spec/dynamic_qbit_recursive_transport_w233_spec.cr",
+      "spec/dynamic_table_consumer_w211_spec.cr",
+      "spec/interval_w160_recursive_spec.cr",
+      "spec/json_dynamic_legacy_handoff_w251_spec.cr",
+      "spec/multi_column_tuple_dynamic_w246_spec.cr",
+      "spec/object_runtime_qbit_transport_w234_spec.cr",
+      "spec/object_shared_path_nested_w197_spec.cr",
+      "spec/object_typed_dynamic_json_context_w215_spec.cr",
+      "spec/projection_specialized_consumers_w217_spec.cr",
+      "spec/simple_aggregate_w161_recursive_spec.cr",
+      "spec/compact_part_writer_w279_entry_spec.cr",
+      "spec/compact_part_writer_w279_spec.cr",
+      "spec/compact_part_writer_w279_adversary_spec.cr"
+    ],
+    "path_count": 81,
+    "local_debug": {
+      "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w279-root.YlQ0Ct/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_part_writer_w277_entry_spec.cr spec/compact_part_writer_w277_spec.cr spec/compact_part_writer_w277_adversary_spec.cr spec/compact_mark_file_adapter_w274_adversary_spec.cr spec/compact_mark_file_adapter_w274_entry_spec.cr spec/compact_mark_file_adapter_w274_integration_spec.cr spec/compact_mark_file_adapter_w274_spec.cr spec/compact_part_writer_w264_spec.cr spec/compact_part_writer_w265_adversary_spec.cr spec/compact_part_writer_w265_publication_spec.cr spec/compact_part_writer_w265_spec.cr spec/compact_part_writer_w266_adversary_spec.cr spec/compact_part_writer_w266_spec.cr spec/compact_part_writer_w267_adversary_spec.cr spec/compact_part_writer_w267_spec.cr spec/compact_part_writer_w268_adversary_spec.cr spec/compact_part_writer_w268_spec.cr spec/compact_part_writer_w269_adversary_spec.cr spec/compact_part_writer_w269_baseline_spec.cr spec/compact_part_writer_w269_spec.cr spec/compact_part_writer_w270_adversary_spec.cr spec/compact_part_writer_w270_baseline_spec.cr spec/compact_part_writer_w270_spec.cr spec/compact_part_writer_w271_adversary_spec.cr spec/compact_part_writer_w271_baseline_spec.cr spec/compact_part_writer_w271_fixture_control_spec.cr spec/compact_part_writer_w271_inferred_json_spec.cr spec/compact_part_writer_w271_owner_grid_spec.cr spec/compact_part_writer_w271_recursive_owner_spec.cr spec/compact_part_writer_w271_source_owner_adversary_spec.cr spec/compact_part_writer_w271_spec.cr spec/compact_part_writer_w271_workspace_spec.cr spec/compact_part_writer_w272_adversary_spec.cr spec/compact_part_writer_w272_baseline_spec.cr spec/compact_part_writer_w272_fixture_control_spec.cr spec/compact_part_writer_w272_spec.cr spec/compact_part_writer_w273_adversary_spec.cr spec/compact_part_writer_w273_baseline_spec.cr spec/compact_part_writer_w273_fixture_control_spec.cr spec/compact_part_writer_w273_spec.cr spec/compressed_mark_positions_w194_spec.cr spec/compressed_mark_transport_w124_root_spec.cr spec/compressed_mark_transport_w124_spec.cr spec/part_checksums_spec.cr spec/compact_part_writer_w275_entry_spec.cr spec/compact_part_writer_w275_spec.cr spec/compact_part_writer_w275_adversary_spec.cr spec/bulk_string_size_w122_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_part_writer_w276_entry_spec.cr spec/compact_part_writer_w276_spec.cr spec/compact_part_writer_w276_adversary_spec.cr spec/compact_typed_dynamic_read_binding_w270_spec.cr spec/compact_part_writer_w278_entry_spec.cr spec/compact_part_writer_w278_spec.cr spec/compact_part_writer_w278_adversary_spec.cr spec/aggregate_dynamic_w226_adversary_spec.cr spec/aggregate_dynamic_w226_core_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/dynamic_json_physical_w210_spec.cr spec/dynamic_json_recursive_physical_w212_spec.cr spec/dynamic_qbit_recursive_transport_w233_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/interval_w160_recursive_spec.cr spec/json_dynamic_legacy_handoff_w251_spec.cr spec/multi_column_tuple_dynamic_w246_spec.cr spec/object_runtime_qbit_transport_w234_spec.cr spec/object_shared_path_nested_w197_spec.cr spec/object_typed_dynamic_json_context_w215_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/simple_aggregate_w161_recursive_spec.cr spec/compact_part_writer_w279_entry_spec.cr spec/compact_part_writer_w279_spec.cr spec/compact_part_writer_w279_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "expected": "433 examples; zero failures/errors/pending on exact 81-path roster",
+      "observed": {
+        "exit_code": 0,
+        "chunk": "de2f6b",
+        "output": ".................................................................................................................................................................................................................................................................................................................................................................................................................................................\n\nFinished in 36.58 seconds\n433 examples, 0 failures, 0 errors, 0 pending\n[EXIT: 0] after ~71s\n"
+      }
+    },
+    "local_release": {
+      "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w279-root.YlQ0Ct/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 600 12288 spec spec/compact_part_writer_w277_entry_spec.cr spec/compact_part_writer_w277_spec.cr spec/compact_part_writer_w277_adversary_spec.cr spec/compact_mark_file_adapter_w274_adversary_spec.cr spec/compact_mark_file_adapter_w274_entry_spec.cr spec/compact_mark_file_adapter_w274_integration_spec.cr spec/compact_mark_file_adapter_w274_spec.cr spec/compact_part_writer_w264_spec.cr spec/compact_part_writer_w265_adversary_spec.cr spec/compact_part_writer_w265_publication_spec.cr spec/compact_part_writer_w265_spec.cr spec/compact_part_writer_w266_adversary_spec.cr spec/compact_part_writer_w266_spec.cr spec/compact_part_writer_w267_adversary_spec.cr spec/compact_part_writer_w267_spec.cr spec/compact_part_writer_w268_adversary_spec.cr spec/compact_part_writer_w268_spec.cr spec/compact_part_writer_w269_adversary_spec.cr spec/compact_part_writer_w269_baseline_spec.cr spec/compact_part_writer_w269_spec.cr spec/compact_part_writer_w270_adversary_spec.cr spec/compact_part_writer_w270_baseline_spec.cr spec/compact_part_writer_w270_spec.cr spec/compact_part_writer_w271_adversary_spec.cr spec/compact_part_writer_w271_baseline_spec.cr spec/compact_part_writer_w271_fixture_control_spec.cr spec/compact_part_writer_w271_inferred_json_spec.cr spec/compact_part_writer_w271_owner_grid_spec.cr spec/compact_part_writer_w271_recursive_owner_spec.cr spec/compact_part_writer_w271_source_owner_adversary_spec.cr spec/compact_part_writer_w271_spec.cr spec/compact_part_writer_w271_workspace_spec.cr spec/compact_part_writer_w272_adversary_spec.cr spec/compact_part_writer_w272_baseline_spec.cr spec/compact_part_writer_w272_fixture_control_spec.cr spec/compact_part_writer_w272_spec.cr spec/compact_part_writer_w273_adversary_spec.cr spec/compact_part_writer_w273_baseline_spec.cr spec/compact_part_writer_w273_fixture_control_spec.cr spec/compact_part_writer_w273_spec.cr spec/compressed_mark_positions_w194_spec.cr spec/compressed_mark_transport_w124_root_spec.cr spec/compressed_mark_transport_w124_spec.cr spec/part_checksums_spec.cr spec/compact_part_writer_w275_entry_spec.cr spec/compact_part_writer_w275_spec.cr spec/compact_part_writer_w275_adversary_spec.cr spec/bulk_string_size_w122_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_part_writer_w276_entry_spec.cr spec/compact_part_writer_w276_spec.cr spec/compact_part_writer_w276_adversary_spec.cr spec/compact_typed_dynamic_read_binding_w270_spec.cr spec/compact_part_writer_w278_entry_spec.cr spec/compact_part_writer_w278_spec.cr spec/compact_part_writer_w278_adversary_spec.cr spec/aggregate_dynamic_w226_adversary_spec.cr spec/aggregate_dynamic_w226_core_spec.cr spec/binary_dynamic_physical_w156_adversary_spec.cr spec/binary_dynamic_physical_w156_red_spec.cr spec/binary_dynamic_physical_w156_spec.cr spec/binary_nested_specialized_w201_spec.cr spec/dynamic_bulk_part_w203_spec.cr spec/dynamic_json_physical_w210_spec.cr spec/dynamic_json_recursive_physical_w212_spec.cr spec/dynamic_qbit_recursive_transport_w233_spec.cr spec/dynamic_table_consumer_w211_spec.cr spec/interval_w160_recursive_spec.cr spec/json_dynamic_legacy_handoff_w251_spec.cr spec/multi_column_tuple_dynamic_w246_spec.cr spec/object_runtime_qbit_transport_w234_spec.cr spec/object_shared_path_nested_w197_spec.cr spec/object_typed_dynamic_json_context_w215_spec.cr spec/projection_specialized_consumers_w217_spec.cr spec/simple_aggregate_w161_recursive_spec.cr spec/compact_part_writer_w279_entry_spec.cr spec/compact_part_writer_w279_spec.cr spec/compact_part_writer_w279_adversary_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+      "expected": "Same 433 examples/81 paths with actual --release",
+      "observed": {
+        "exit_code": 0,
+        "chunk": "785043",
+        "output": ".................................................................................................................................................................................................................................................................................................................................................................................................................................................\n\nFinished in 9.64 seconds\n433 examples, 0 failures, 0 errors, 0 pending\n[EXIT: 0] after ~56s\n"
+      }
+    },
+    "format": {
+      "command": "/opt/homebrew/bin/crystal tool format --check src/crystal_click/binary_dynamic_bulk_physical_plan.cr src/crystal_click/compact_json_callback_owners.cr src/crystal_click/compact_json_object_map_tape_framer.cr src/crystal_click/compact_json_object_shared_advanced_tape_grammar.cr src/crystal_click/compact_static_json_advanced_prepared_mark.cr src/crystal_click/object_document_typed_dynamic_json_read_context.cr spec/compact_part_writer_w279_entry_spec.cr spec/compact_part_writer_w279_spec.cr spec/compact_part_writer_w279_adversary_spec.cr spec/support/compact_part_writer_w279_fixture.cr scripts/compact_child_json_writer_w279_helper.cr scripts/support/compact_part_writer_w279_native_fixture.cr",
+      "exit_code": 0,
+      "chunk": "c10e25",
+      "signal": "Crystal format --check passes on ten candidate files and two Crystal instruments."
+    },
+    "ruby_syntax": {
+      "command": "ruby -c scripts/probe_compact_child_json_writer_w279.rb",
+      "exit_code": 0,
+      "chunk": "18eedc",
+      "signal": "Syntax OK"
+    },
+    "raw_scope": "Stock-native semantics plus generated CREATE/ATTACH/CHECK/catalog and independent full/middle/EOF literal values, exact process argv/runtime pins/SQL/stdin/stdout and captured/current inventories. Original ObjectStructure bytes/version/shared version/buckets, selected counts/callback rosters and child String lanes are checked through library-coupled helper reports. No independent complete-frame/chunk decoding."
+  },
+  "native_qualification": [
+    {
+      "mode": "debug",
+      "root": "/private/tmp/crystal-click-w279-full-debug-rehydrated.lyasZJ",
+      "summary": {
+        "file": "summary.json",
+        "bytes": 88980574,
+        "sha256": "45c2ee9340da4c6c273b0b17b6ecf96863cdc1bd4aadd283bb606952c37b9301"
+      },
+      "helper": {
+        "path": "/private/tmp/crystal-click-w279-root.YlQ0Ct/helper-debug",
+        "sha256": "3f3e4b34caafff7ee11dff7eec8aab7e5a31b658a92bcb4996cefebdfe71f0a3"
+      },
+      "native": {
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w279-root.YlQ0Ct/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 1800 12288 scripts/probe_compact_child_json_writer_w279.rb --full-matrix --helper /private/tmp/crystal-click-w279-root.YlQ0Ct/helper-debug --helper-sha256 3f3e4b34caafff7ee11dff7eec8aab7e5a31b658a92bcb4996cefebdfe71f0a3 --evidence-root /private/tmp/crystal-click-w279-full-debug-rehydrated.lyasZJ",
+        "expected": "stock_native_and_library_generated_matrix_exact; 64 stock and 64 generated cells",
+        "observed": {
+          "exit_code": 0,
+          "chunk": "c24aef",
+          "output": "W279 status=stock_native_and_library_generated_matrix_exact; stock=64; generated=64; evidence=/private/tmp/crystal-click-w279-full-debug-rehydrated.lyasZJ\n[EXIT: 0] after ~515s\n"
+        }
+      },
+      "raw_audit": {
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w279-root.YlQ0Ct/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 300 4096 /private/tmp/crystal-click-w279-root.YlQ0Ct/audit_generated_native_w279.rb --full-native /private/tmp/crystal-click-w279-full-debug-rehydrated.lyasZJ",
+        "expected": "full_generated_native_and_helper_header_raw_audit_exact; 1344 invocations, 6720 sidecars, 43 rejected controls",
+        "observed": {
+          "exit_code": 0,
+          "chunk": "4fc16e",
+          "output": "[PREFLIGHT] System memory free 69% > 50%\n{\n  \"status\": \"full_generated_native_and_helper_header_raw_audit_exact\",\n  \"source_summary_status\": \"stock_native_and_library_generated_matrix_exact\",\n  \"stock_cells\": 64,\n  \"generated_cells\": 64,\n  \"invocations\": 1344,\n  \"sidecars\": 6720,\n  \"negative_controls\": 43,\n  \"child_header_scope\": \"Stock and generated helper stdout reports are bound to exact helper argv/stdout bytes, independent source inventory/callback roster, selected owner/mark/type/Array depth, original ObjectStructure bytes, bounded Object wire/shared version/bucket fields, statistics context, and captured child String lanes. Full native semantics are validated for stock only.\",\n  \"claim_boundary\": \"This finite 64-cell audit adds generated-native semantics to the base stock-native and library-coupled helper-header audit. It does not independently decode full Compact part frames, shared-data frame bodies, or chunks; helper Object parsing remains library-coupled.\",\n  \"generated_native_cells\": 64,\n  \"generated_native_invocations\": 384,\n  \"generated_native_scope\": \"All 64 generated cells bind native CREATE/ATTACH/CHECK/catalog/value actions to exact process sidecars, target schema/path, source and attached inventories, and independent full/middle/EOF value literals.\"\n}\n[EXIT: 0] after ~4s\n"
+        }
+      }
+    },
+    {
+      "mode": "actual_release",
+      "root": "/private/tmp/crystal-click-w279-full-release-rehydrated.dEP4ET",
+      "summary": {
+        "file": "summary.json",
+        "bytes": 88999394,
+        "sha256": "4398149416df3a02d4895271f417249c7377985302e71265f94d12b6942478df"
+      },
+      "helper": {
+        "path": "/private/tmp/crystal-click-w279-root.YlQ0Ct/helper-release",
+        "sha256": "4d1eaa5fc6cb1926f8695e3983bd88944ac7f1ddb1774149c9246e2b95e61961"
+      },
+      "native": {
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w279-root.YlQ0Ct/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 1800 12288 scripts/probe_compact_child_json_writer_w279.rb --full-matrix --helper /private/tmp/crystal-click-w279-root.YlQ0Ct/helper-release --helper-sha256 4d1eaa5fc6cb1926f8695e3983bd88944ac7f1ddb1774149c9246e2b95e61961 --evidence-root /private/tmp/crystal-click-w279-full-release-rehydrated.dEP4ET",
+        "expected": "stock_native_and_library_generated_matrix_exact; 64 stock and 64 generated cells",
+        "observed": {
+          "exit_code": 0,
+          "chunk": "5d7541",
+          "output": "W279 status=stock_native_and_library_generated_matrix_exact; stock=64; generated=64; evidence=/private/tmp/crystal-click-w279-full-release-rehydrated.dEP4ET\n[EXIT: 0] after ~489s\n"
+        }
+      },
+      "raw_audit": {
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w279-root.YlQ0Ct/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 300 4096 /private/tmp/crystal-click-w279-root.YlQ0Ct/audit_generated_native_w279.rb --full-native /private/tmp/crystal-click-w279-full-release-rehydrated.dEP4ET",
+        "expected": "full_generated_native_and_helper_header_raw_audit_exact; 1344 invocations, 6720 sidecars, 43 rejected controls",
+        "observed": {
+          "exit_code": 0,
+          "chunk": "2f37fe",
+          "output": "[PREFLIGHT] System memory free 69% > 50%\n{\n  \"status\": \"full_generated_native_and_helper_header_raw_audit_exact\",\n  \"source_summary_status\": \"stock_native_and_library_generated_matrix_exact\",\n  \"stock_cells\": 64,\n  \"generated_cells\": 64,\n  \"invocations\": 1344,\n  \"sidecars\": 6720,\n  \"negative_controls\": 43,\n  \"child_header_scope\": \"Stock and generated helper stdout reports are bound to exact helper argv/stdout bytes, independent source inventory/callback roster, selected owner/mark/type/Array depth, original ObjectStructure bytes, bounded Object wire/shared version/bucket fields, statistics context, and captured child String lanes. Full native semantics are validated for stock only.\",\n  \"claim_boundary\": \"This finite 64-cell audit adds generated-native semantics to the base stock-native and library-coupled helper-header audit. It does not independently decode full Compact part frames, shared-data frame bodies, or chunks; helper Object parsing remains library-coupled.\",\n  \"generated_native_cells\": 64,\n  \"generated_native_invocations\": 384,\n  \"generated_native_scope\": \"All 64 generated cells bind native CREATE/ATTACH/CHECK/catalog/value actions to exact process sidecars, target schema/path, source and attached inventories, and independent full/middle/EOF value literals.\"\n}\n[EXIT: 0] after ~4s\n"
+        }
+      }
+    }
+  ],
+  "default_byte_identity": {
+    "command": "/usr/bin/ruby -rjson -rdigest -e 'p=JSON.parse(File.read(\".landmark/evidence/compact-string-writer-w276.json\")).fetch(\"default_byte_identity\").fetch(\"guard\").fetch(\"report\"); pins=p.fetch(\"file_pins\"); names=%w[checksums.txt columns.txt count.txt data.bin data.mrk3 default_compression_codec.txt metadata_version.txt primary.idx serialization.json]; abort \"reference roster differs\" unless pins.keys.sort == names.sort && pins.values.sum { |v| v.fetch(\"size\") } == 17902; roots=[\"/private/tmp/crystal-click-w279-default-final-debug.EMYqRJ/all_1_1_0\", \"/private/tmp/crystal-click-w279-default-final-release.apx9yq/all_1_1_0\"]; roots.each { |root| abort \"unsafe part\" unless File.directory?(root) && !File.symlink?(root) && File.realpath(root)==root; abort \"part roster differs\" unless Dir.children(root).sort == names.sort; pins.each { |name,pin| file=File.join(root,name); st=File.lstat(file); abort \"file differs: #{file}\" unless st.file? && !st.symlink? && st.size==pin.fetch(\"size\") && Digest::SHA256.file(file).hexdigest==pin.fetch(\"sha256\") } }; puts JSON.generate({status:\"root_default_digest_replay_exact\",files:9,bytes:17902,roots:roots,modes:[\"debug\",\"actual_release\"],reference:\".landmark/evidence/compact-string-writer-w276.json#default_byte_identity.guard.report.file_pins\",reference_packet_sha256:Digest::SHA256.file(\".landmark/evidence/compact-string-writer-w276.json\").hexdigest,boundary:\"Current W279 output bytes match the durable nine-file W264 digest witness; the original native baseline directory is unavailable, so no current raw-to-raw baseline claim.\"})'",
+    "expected": "Nine default files /17902 bytes match durable W264 file digests referenced by W276, in both modes; no new raw-to-raw baseline claim.",
+    "observed": {
+      "exit_code": 0,
+      "chunk": "ae4db0",
+      "output": "{\"status\":\"root_default_digest_replay_exact\",\"files\":9,\"bytes\":17902,\"roots\":[\"/private/tmp/crystal-click-w279-default-final-debug.EMYqRJ/all_1_1_0\",\"/private/tmp/crystal-click-w279-default-final-release.apx9yq/all_1_1_0\"],\"modes\":[\"debug\",\"actual_release\"],\"reference\":\".landmark/evidence/compact-string-writer-w276.json#default_byte_identity.guard.report.file_pins\",\"reference_packet_sha256\":\"df711d50c9dd220e97be1d7b7e96827f3185533f36f2dbb222c030bce087f68a\",\"boundary\":\"Current W279 output bytes match the durable nine-file W264 digest witness; the original native baseline directory is unavailable, so no current raw-to-raw baseline claim.\"}\n"
+    }
+  },
+  "adversary": {
+    "verdict": "ROBUST within declared finite scope",
+    "exercised": [
+      "Mismatched Object versions/shared layouts/buckets/profiles, foreign key or physical binding, missing child binding/capture",
+      "Incomplete/reordered child Advanced roles; child-local schedule cannot borrow root bindings",
+      "Transport-budget exhaustion leaves destination absent and unrelated files unchanged",
+      "Native raw oracle rejects missing invocation, wrong SQL subject/projection/window, altered raw value or summary mirror/inventory",
+      "Five new raw-schema controls reject wrong marker/name/type, summary-normalized raw spelling and changed normalized summary"
+    ],
+    "residuals": [
+      "Dedicated tight retained-child-context BinaryCodecLimits guard test not executed; code accounting reviewed, transport-budget test is not its substitute.",
+      "Finite tiny-row fixture is not fuzzing or all-depth/all-version/all-bucket proof.",
+      "Library-coupled parsing is correlated with writer codecs; native ClickHouse literal readback supplies a distinct interoperability discriminator."
+    ]
+  },
+  "recovery": {
+    "upstream_runtime": "Temporary source/runtime disappeared. Exact recorded source revision and runtime digest were restored; not updated to a different latest build.",
+    "runtime_origin": "https://clickhouse-builds.s3.us-east-1.amazonaws.com/REFs/master/d9bcb5ab007f0f6299f7f973f2642245bab3d028/masterci/build_arm_darwin/clickhouse",
+    "historical_raw_gap": "Original W263 multichunk/Compact raw roots and native W264 baseline remain unavailable. Their separate authenticated-spec replay is not claimed. The exact W279 declared 81-path roster was replayed unchanged.",
+    "evidence_semantics": "Captured pre-ATTACH inventory is an observation of that moment, not late OS attestation. Current attached inventory is separately validated against captured bytes, schema, part and path."
+  },
+  "continuation": {
+    "active_goal": "Finish type reader/writer compatibility and MV/projections before optimization; <=10% native-read slowdown is unmeasured.",
+    "confirmed_frontier": "W279 finite child shared-layout DoD qualified; Compact public wrapper/carrier compatibility and integration remain.",
+    "return_pointer": "docs/COMPACT_PART_WRITER_FRONTIER.md#typed-dynamic-json-child-shared-layouts--w279",
+    "next_falsifier": "Proposed, not executed: pinned stock Compact Tuple(left Array(JSON), right Array(JSON)), alternating empty/populated branches across marks; retain stock acceptance/rejection, physical traversal and public-reader result before admitting it.",
+    "remaining": [
+      "Public recursive wrapper/typed-carrier and stateful/profile/ownership layouts",
+      "Compact MV/projection reader/writer composition",
+      "Memory/performance and direct native-reader benchmark"
+    ],
+    "authority": "Continue safe scoped local type/storage work with Luna and root hostile review; exact local feature commit after DoD, no push, preserve protected user specs.",
+    "decay_trigger": "Source/test/compiler/runtime/probe/helper drift, temporary raw/auditor evidence loss or owner/layout widening.",
+    "refresh": "Verify exact pins; rerun the exact local cohort and guarded fresh native matrix plus raw audit. Stop or narrow the affected claim when missing/drifted evidence cannot be recovered."
+  }
+}
