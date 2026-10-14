@@ -1,5 +1,45 @@
 # Crystal Click landmarks
 
+## Prefix-free static Bulk parity in recursive Compact JSON — W281
+
+- VERIFIED / root adversary ROBUST within finite static-owner and native
+  interoperability scope (2026-10-14), over W280
+  `b8beb088a81c16a47aa32f4814c171d5e709ca7c`. Reuse generic BinaryBulk value
+  codecs, not per-type Compact copies. Preserve serializer-DFS callbacks and
+  P/Q/C domains, including empty callbacks. Bind S0/S1 end-to-end; String0
+  captures only its grammar-consumed MRK3 suffix/MRK4 shard. The shared
+  StorageStaticBulkDeclaration fallback checks source and residual limits
+  before copying and transfers all trial counters only after successful
+  admission. Failed/rejected trials leave the parent budget unchanged.
+- DEBUG passes 618 examples / exact 113 paths (`f56708`); actual RELEASE
+  `--no-debug` passes the same roster/count in six disjoint guarded executions
+  (`e40c71`, `019e27`, `e83943`, `9badb9`/`5bdb8d`, `ccc46d`, `446fd3`).
+  Separately filtered W263 admission passes in both modes; no full-suite claim.
+  Fresh native matrices (`467477`, `36fad9`) each pass four stock + four
+  generated cells and 73 recorded invocations. Basis: S0/S1 x MRK3/MRK4,
+  plain/MAP0/bucket-one/BASIC/Object-v3, eight rows/four data marks plus EOF.
+  ATTACH/CHECK and literal full/middle/last/EOF values are observed. Bare
+  Nothing's Code370 rejection is a guard, not native-compatible storage.
+- ROOT raw audits (`8aa4f0`, `ad7eda`) bind 365 invocation sidecars per mode,
+  raw part inventories/metadata/marks and exact ATTACH invalidation sidecar.
+  Fifteen seeds and eight real-capture mutations reject the intended invalid
+  evidence. A separate no-oracle-import spot-check confirms 16 native outputs
+  and 24 raw mark files (`135462`). The auditor shares the Ruby fixture model;
+  neither check is a full independent frame/JSON/CityHash decoder. Initial
+  helper compilation and auditor path/slash-escaping construction failures
+  were instrumentation failures, not library failures. Host-memory guard
+  stops before tests remain non-passes; guards were not relaxed.
+- Preserve 21 owned hashes, 656-file src/support census, exact 113-path roster
+  and the three protected user W263 specs. Stateful opaque islands, further
+  layouts/public carriers, Compact MV output/projection children and RSS/
+  performance remain open; existing support outside the opaque owner is not
+  removed. Refresh on code/test/compiler/source/runtime/instrument drift,
+  capture loss/mutation or admission widening. Next: owner-specific type/layout
+  qualification, Compact MV/projection composition, then optimization. Full
+  goal ACTIVE; <=10% slowdown unmeasured; local atomic commit/no push. See
+  [W281 evidence](.landmark/evidence/compact-static-bulk-w281.json) and
+  [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md).
+
 ## Recursive Compact Array/Tuple JSON traversal — W280
 
 - VERIFIED / root adversary ROBUST within bounded structural and native

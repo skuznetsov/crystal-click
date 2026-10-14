@@ -252,24 +252,38 @@ describe "W277 propagated String1 Compact context adversaries" do
     end
   end
 
-  it "keeps the outer recursive JSON ordinary-leaf carrier UInt8-only under String1" do
+  it "admits prefix-free static leaves but rejects stateful Bulk islands under String1" do
     json_type = CompactPartWriterW269Fixture.json_type
     supported = CrystalClick::StorageColumnSchema.parse(
       "Array(Tuple(#{json_type.name}, UInt8))",
     )
-    unsupported = CrystalClick::StorageColumnSchema.parse(
+    static_string = CrystalClick::StorageColumnSchema.parse(
       "Array(Tuple(#{json_type.name}, String))",
     )
+    unsupported = CrystalClick::StorageColumnSchema.parse(
+      "Array(Tuple(#{json_type.name}, LowCardinality(String)))",
+    )
     CrystalClick::CompactRecursiveJsonSchemaPlan.admitted_schema?(supported).should be_true
+    CrystalClick::CompactRecursiveJsonSchemaPlan.admitted_schema?(static_string).should be_true
     CrystalClick::CompactRecursiveJsonSchemaPlan.admitted_schema?(unsupported).should be_false
 
-    # Construct the String1-bound input directly so the existing schema gate
-    # is exercised in the selected context profile before any writer stage.
+    # W281 supersedes the former UInt8-only boundary, not the stateful owner
+    # guard. Exercise both at the String1-bound input boundary before staging.
     sized = CrystalClick::BinaryBulkProfile.with_size_stream
     context = CompactPartWriterW277Fixture.columns(:map)[2].json_input(sized).json_context
-    expect_raises(CrystalClick::UnsupportedFormatError) do
+    CrystalClick::CompactJsonColumnInput.new(
+      "outer_string_generic_leaf",
+      static_string,
+      [] of Array(CrystalClick::StorageColumnValue),
+      context,
+      profile: sized,
+    ).profile.should eq(sized)
+    expect_raises(
+      CrystalClick::UnsupportedFormatError,
+      "Compact JSON schema is outside the admitted static-site subset",
+    ) do
       CrystalClick::CompactJsonColumnInput.new(
-        "outer_string_generic_leaf",
+        "outer_low_cardinality_leaf",
         unsupported,
         [] of Array(CrystalClick::StorageColumnValue),
         context,

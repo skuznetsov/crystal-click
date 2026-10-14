@@ -136,7 +136,7 @@ module CrystalClick
       @bound_grid = Array(Array(StorageColumnValue)).new(input.granules.size)
       input.granules.each { |rows| @bound_grid << rows.dup }
 
-      @schema_plan = CompactRecursiveJsonSchemaPlan.new(input.schema, input.name, limits, budget)
+      @schema_plan = CompactRecursiveJsonSchemaPlan.new(input.schema, input.name, limits, budget, input.profile)
       json_site_count = @schema_plan.json_site_count
       array_site_count = @schema_plan.array_site_count
       uint8_site_count = @schema_plan.uint8_site_count

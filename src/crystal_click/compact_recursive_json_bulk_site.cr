@@ -33,12 +33,12 @@ module CrystalClick
       budget : BinaryCodecBudget,
     )
       unless self.class.admitted_type?(@type, @descriptor_depth, limits)
-        raise UnsupportedFormatError.new("recursive Compact Bulk site is outside the stateless UInt8/Array/Tuple grammar")
+        raise UnsupportedFormatError.new("recursive Compact Bulk site is outside the prefix-free static grammar")
       end
       @key = String.new(key.to_slice)
       @physical_prefix = String.new(physical_prefix.to_slice)
-      role_count = self.class.measure_role_count(@type)
-      role_bytes = self.class.measure_role_name_bytes(@type, 4_u64)
+      role_count = self.class.measure_role_count(@type, @physical_plan.profile)
+      role_bytes = self.class.measure_role_name_bytes(@type, 4_u64, @physical_plan.profile)
       unless role_count == @physical_plan.stream_count.to_u64
         raise UnsupportedFormatError.new("recursive Compact Bulk role DFS differs from its physical plan")
       end
@@ -51,88 +51,33 @@ module CrystalClick
       role_count.times { budget.charge_node }
       budget.charge_elements(role_count * 2_u64) if role_count > 0_u64
       budget.charge_wire_bytes(role_bytes) if role_bytes > 0_u64
-      @roles = [] of Role
-      @size_lane_count = 0
-      append_roles(@type, "root", @roles)
+      @roles = CompactRecursiveJsonStaticBulkGrammar.ordered_roles(@type, @physical_plan.profile)
       unless @roles.size == @physical_plan.stream_count
         raise UnsupportedFormatError.new("recursive Compact Bulk role DFS differs from its physical plan")
       end
+      @size_lane_count = CompactRecursiveJsonStaticBulkGrammar.size_lane_count(@type).to_i32
       @roles.each do |role|
         @physical_plan.stream_name_for(role.name)
       end
     end
 
-    def self.measure_role_count(type : BinaryDataType) : UInt64
-      case type.tag
-      when BinaryDataType::TAG_UINT8
-        1_u64
-      when BinaryDataType::TAG_ARRAY
-        checked_measure_add(1_u64, measure_role_count(type.child_at(0)))
-      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
-        total = 0_u64
-        type.child_count.times do |index|
-          total = checked_measure_add(total, measure_role_count(type.child_at(index)))
-        end
-        total
-      else
-        0_u64
-      end
+    def self.measure_role_count(
+      type : BinaryDataType,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : UInt64
+      CompactRecursiveJsonStaticBulkGrammar.measure_role_count(type, profile)
     end
 
-    def self.measure_role_name_bytes(type : BinaryDataType, prefix_bytes : UInt64) : UInt64
-      case type.tag
-      when BinaryDataType::TAG_UINT8
-        checked_measure_add(prefix_bytes, 5_u64) # .data
-      when BinaryDataType::TAG_ARRAY
-        own = checked_measure_add(prefix_bytes, 6_u64)          # .sizes
-        child_prefix = checked_measure_add(prefix_bytes, 9_u64) # .elements
-        checked_measure_add(own, measure_role_name_bytes(type.child_at(0), child_prefix))
-      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
-        total = 0_u64
-        type.child_count.times do |index|
-          field_prefix = checked_measure_add(prefix_bytes, 7_u64 + decimal_digits(index.to_u64)) # .field.N
-          total = checked_measure_add(total, measure_role_name_bytes(type.child_at(index), field_prefix))
-        end
-        total
-      else
-        0_u64
-      end
-    end
-
-    private def self.decimal_digits(value : UInt64) : UInt64
-      digits = 1_u64
-      while value >= 10_u64
-        value //= 10_u64
-        digits += 1_u64
-      end
-      digits
-    end
-
-    private def self.checked_measure_add(left : UInt64, right : UInt64) : UInt64
-      if right > UInt64::MAX - left
-        raise UnsupportedFormatError.new("recursive Compact Bulk role workspace exceeds UInt64")
-      end
-      left + right
+    def self.measure_role_name_bytes(
+      type : BinaryDataType,
+      prefix_bytes : UInt64,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : UInt64
+      CompactRecursiveJsonStaticBulkGrammar.measure_role_name_bytes(type, profile, prefix_bytes)
     end
 
     def self.admitted_type?(type : BinaryDataType, depth : Int32, limits : BinaryCodecLimits) : Bool
-      return false if depth <= 0 || depth > limits.max_depth
-      case type.tag
-      when BinaryDataType::TAG_UINT8
-        true
-      when BinaryDataType::TAG_ARRAY
-        admitted_type?(type.child_at(0), depth + 1, limits)
-      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
-        return false if type.child_count == 0
-        type.child_count.times do |index|
-          return false unless admitted_type?(type.child_at(index), depth + 1, limits)
-        end
-        true
-      else
-        false
-      end
-    rescue ex : ArgumentError | UnsupportedFormatError
-      false
+      CompactRecursiveJsonStaticBulkGrammar.admitted_type?(type, depth, limits)
     end
 
     def role_count : Int32
@@ -164,24 +109,6 @@ module CrystalClick
       bytes = checked_add(bytes, checked_multiply(@roles.size.to_u64, sizeof(Role).to_u64))
       @roles.each { |role| bytes = checked_add(bytes, string_owner_bytes(role.name)) }
       checked_add(bytes, instance_sizeof(BinaryDataType).to_u64)
-    end
-
-    private def append_roles(type : BinaryDataType, role_name : String, output : Array(Role)) : Nil
-      case type.tag
-      when BinaryDataType::TAG_UINT8
-        output << Role.new("#{role_name}.data", false)
-      when BinaryDataType::TAG_ARRAY
-        output << Role.new("#{role_name}.sizes", true)
-        @size_lane_count += 1
-        append_roles(type.child_at(0), "#{role_name}.elements", output)
-      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
-        type.child_count.times do |index|
-          append_roles(type.child_at(index), "#{role_name}.field.#{index}", output)
-        end
-      else
-        raise UnsupportedFormatError.new("recursive Compact Bulk role visitor encountered an unsupported type")
-      end
-      nil
     end
 
     private def string_owner_bytes(value : String) : UInt64

@@ -74,6 +74,7 @@ module CrystalClick
 
     @schema : StorageColumnSchema
     @limits : BinaryCodecLimits
+    @profile : BinaryBulkProfile
     @json_sites : Array(JsonSite)
     @array_sites : Array(ArraySite)
     @uint8_sites : Array(UInt8Site)
@@ -112,12 +113,15 @@ module CrystalClick
       return false unless schema.bulk?
       type = schema.bulk_type
       !type.contains_json? && !type.contains_dynamic? &&
-        CompactRecursiveJsonBulkSite.admitted_type?(type, depth, limits)
+        BinaryPrefixFreeStaticTypeAdmission.admitted?(type, depth, limits)
     rescue ex : ArgumentError | UnsupportedFormatError
       false
     end
 
-    def self.measure_shape(schema : StorageColumnSchema) : SiteShape
+    def self.measure_shape(
+      schema : StorageColumnSchema,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : SiteShape
       if schema.object?
         SiteShape.new(1_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 1_u64)
       elsif schema.bulk?
@@ -130,13 +134,13 @@ module CrystalClick
             0_u64,
             0_u64,
             1_u64,
-            CompactRecursiveJsonBulkSite.measure_role_count(type),
-            CompactRecursiveJsonBulkSite.measure_role_name_bytes(type, 4_u64),
+            CompactRecursiveJsonStaticBulkGrammar.measure_role_count(type, profile),
+            CompactRecursiveJsonStaticBulkGrammar.measure_role_name_bytes(type, profile, 4_u64),
             1_u64,
           )
         end
       elsif schema.array?
-        child = measure_shape(schema.child_at(0))
+        child = measure_shape(schema.child_at(0), profile)
         SiteShape.new(
           child.json_count,
           checked_measure_add(child.array_count, 1_u64),
@@ -149,7 +153,7 @@ module CrystalClick
       elsif schema.tuple?
         total = SiteShape.new(0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 1_u64)
         schema.child_count.times do |index|
-          child = measure_shape(schema.child_at(index))
+          child = measure_shape(schema.child_at(index), profile)
           total = SiteShape.new(
             checked_measure_add(total.json_count, child.json_count),
             checked_measure_add(total.array_count, child.array_count),
@@ -285,12 +289,13 @@ module CrystalClick
       column_name : String,
       @limits : BinaryCodecLimits,
       @budget : BinaryCodecBudget,
+      @profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     )
       reader_schema = !@budget.writing? && (@schema.tuple? || @schema.array?) && @schema.has_json?
       unless self.class.admitted_schema?(@schema, @limits) && (@budget.writing? || reader_schema)
         raise UnsupportedFormatError.new("recursive Compact JSON schema is outside the bounded static-site subset")
       end
-      shape = self.class.measure_shape(@schema)
+      shape = self.class.measure_shape(@schema, @profile)
       self.class.preflight_shape!(@schema, column_name, shape, @budget)
       context = PhysicalStreamPlanContext.new(@limits)
       @root_prefix = PhysicalStreamName.escape(column_name, context)
@@ -455,13 +460,13 @@ module CrystalClick
       elsif schema.bulk?
         type = schema.bulk_type
         unless !type.contains_json? && !type.contains_dynamic? &&
-               CompactRecursiveJsonBulkSite.admitted_type?(type, descriptor_depth, @limits)
-          raise UnsupportedFormatError.new("recursive Compact opaque Bulk subtree is outside the stateless UInt8/Array/Tuple grammar")
+               BinaryPrefixFreeStaticTypeAdmission.admitted?(type, descriptor_depth, @limits)
+          raise UnsupportedFormatError.new("recursive Compact opaque Bulk subtree is outside the prefix-free static grammar")
         end
         bulk_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
           type,
           physical_prefix,
-          BinaryBulkProfile.single_stream,
+          @profile,
           @limits,
           context,
           array_level,

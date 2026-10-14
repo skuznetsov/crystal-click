@@ -386,7 +386,13 @@ module CrystalClick
         context.row_count,
         @transport_budget,
       )
-      plan = CompactRecursiveJsonSchemaPlan.new(@schema, @column_name, @limits, open_budget)
+      plan = CompactRecursiveJsonSchemaPlan.new(
+        @schema,
+        @column_name,
+        @limits,
+        open_budget,
+        serialization_profile.ordinary_profile,
+      )
 
       slots = context.physical_roster.select { |slot| slot.column_name == @column_name }
       if slots.empty?
@@ -666,7 +672,7 @@ module CrystalClick
             budget,
             first_mark: 0,
             mark_count: 1,
-            profile: @ordinary_profile,
+            profile: site.physical_plan.profile,
           )
           unless decoded.size == 1 && decoded[0].size.to_u64 == rows
             raise CorruptPartError.new("Compact recursive Bulk decoder returned the wrong inherited Q grid")
@@ -936,34 +942,16 @@ module CrystalClick
       ledger : CompactRecursiveJsonParentMarkLedger,
       budget : BinaryCodecBudget,
     ) : Nil
-      case type.tag
-      when BinaryDataType::TAG_UINT8
-        role = "#{role_name}.data"
-        callback = site.callback_name_for(role)
-        byte_count = checked_byte_count(rows, 1_u64, "Compact recursive Bulk UInt8 lane")
-        budget.ensure_wire_bytes(byte_count.to_u64)
-        bytes = ledger.capture_bulk_body(callback, byte_count)
-        mark.capture_lane(role, bytes)
-      when BinaryDataType::TAG_ARRAY
-        size_role = "#{role_name}.sizes"
-        callback = site.callback_name_for(size_role)
-        byte_count = checked_byte_count(rows, 8_u64, "Compact recursive Bulk Array size lane")
-        budget.ensure_wire_bytes(byte_count.to_u64)
-        budget.ensure_future_nodes(rows)
-        budget.ensure_future_elements(rows)
-        bytes = ledger.capture_mixed_array_size_lane(callback, byte_count)
-        sizes = decode_uint64_lane(bytes, rows, "Compact recursive Bulk Array size lane", budget)
-        mark.capture_lane(size_role, bytes)
-        child_rows = checked_child_rows(sizes, "Compact recursive Bulk Array child occurrence count")
-        capture_bulk_type!(type.child_at(0), "#{role_name}.elements", child_rows, site, mark, ledger, budget)
-      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
-        type.child_count.times do |index|
-          capture_bulk_type!(type.child_at(index), "#{role_name}.field.#{index}", rows, site, mark, ledger, budget)
-        end
-      else
-        raise CorruptPartError.new("Compact recursive Bulk role capture encountered an unsupported type")
-      end
-      nil
+      CompactRecursiveJsonStaticBulkGrammar.capture!(
+        type,
+        role_name,
+        rows,
+        site,
+        mark,
+        ledger,
+        @limits,
+        budget,
+      )
     end
 
     private def checked_child_rows(sizes : Array(UInt64), label : String) : UInt64

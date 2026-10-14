@@ -16,7 +16,7 @@ module CrystalClick
       end
     end
 
-    @profile : BinaryBulkProfile
+    getter profile : BinaryBulkProfile
     @names : Hash(String, String)
     @prefix_sizes : Hash(String, Int32)
     @context : PhysicalStreamPlanContext

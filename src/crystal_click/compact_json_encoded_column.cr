@@ -559,7 +559,7 @@ module CrystalClick
         site.type,
         granules,
         budget,
-        BinaryBulkProfile.single_stream,
+        site.physical_plan.profile,
       )
       unless streams.mark_count == 1 && streams.role_count == site.role_count
         raise UnsupportedFormatError.new("Compact JSON opaque Bulk callback roster differs from its physical plan")

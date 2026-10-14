@@ -1,6 +1,41 @@
 # CrystalClick project status
 
-Active frontier: W280 bounded recursive Compact Array/Tuple/JSON traversal is
+Active frontier: W281 prefix-free static Bulk parity inside recursive Compact
+Array/Tuple/JSON is VERIFIED / root adversary ROBUST within the finite
+static-owner/native interoperability scope (2026-10-14), over W280
+`b8beb088a81c16a47aa32f4814c171d5e709ca7c`. Reuse the existing BinaryBulk
+codecs for fixed-width leaves, Bool/String/empty Tuple and recursive
+Array/Nested/Nullable/Tuple/Map BASIC, with admitted transparent Custom and
+SimpleAggregateFunction storage children. Carry S0/S1 through ordered callbacks
+and grammar-derived String0 extents; shared storage-schema admission transfers
+trial budgets only on success. Nothing's local Bulk sentinel is not a native
+MergeTree schema-admission claim.
+
+DEBUG and actual RELEASE each pass 618 examples on the exact 113 affected
+paths; RELEASE runs six disjoint serial guarded executables. The filtered
+self-contained W263 case passes separately in both modes. Fresh native
+DEBUG/RELEASE matrices each pass four stock + four generated cells, 73 recorded
+invocations, ATTACH/CHECK and exact full/middle/last/EOF values: S0/S1 x
+MRK3/MRK4, plain/MAP0/bucket-one/BASIC/Object-v3. ROOT raw audits bind 365
+invocation sidecars per mode and reject eight real-capture negative controls;
+fifteen seeded auditor controls pass. Independent bounded literal/mark
+spot-checks complement the fixture-model-coupled auditor, not a complete
+JSON/frame/CityHash decoder. See the
+[W281 evidence](../.landmark/evidence/compact-static-bulk-w281.json) and
+[frontier](COMPACT_PART_WRITER_FRONTIER.md).
+
+Compact reader/writer already exist; this slice is not all-type/layout parity.
+LowCardinality/Variant/Dynamic/JSON/QBit/AggregateFunction and Map WITH_BUCKETS
+need their own stateful or context-bound obligations inside the new opaque
+owner; existing support elsewhere remains unchanged. Static root and typed
+Object carrier admission are separate gates. Next: remaining type/layout
+owners, Compact MV output and projection-child composition, then measured
+memory/performance. MV can consume Compact through the typed facade, but its
+output writer and projection children remain Wide-only. Full goal ACTIVE;
+<=10% slowdown unmeasured. Protected W263 specs unchanged; local atomic commit,
+no push.
+
+Previously qualified frontier: W280 bounded recursive Compact Array/Tuple/JSON traversal is
 VERIFIED / root adversary ROBUST within the declared serialization/native
 scope (2026-10-14), over W279 `9667d75842e1cbf7feae3ce8372776843f5740b8`.
 It reuses Object and BinaryBulk codecs rather than adding topology-specific
@@ -24,7 +59,7 @@ The Compact reader/writer already exist. The typed facade composes same-schema
 Wide/Compact parts; its Compact backend opens one physical part at a time.
 Writing remains create-only whole-part with sorted UInt64 keys. Compact may
 feed an offline MV transform, but MV output and projection child readers remain
-Wide-only. Next: supported static-leaf parity through the generic Bulk owner,
+Wide-only. At W280, the next step was static-leaf parity through the generic Bulk owner,
 remaining public carriers/layouts, then Compact MV/projections, then memory/
 performance. The <=10% slowdown objective is unmeasured; full goal ACTIVE.
 Protected W263 specs remain unchanged. Local atomic commit only, no push. See the

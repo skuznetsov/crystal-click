@@ -152,6 +152,41 @@ module CrystalClick
       capture_exact(callback_name, byte_count).bytes
     end
 
+    # Parse one variable-width static Bulk body callback against a borrowed
+    # snapshot. Cursor/event state is advanced only after the grammar has
+    # returned a valid extent; mrk4 additionally requires that extent to be
+    # the complete named callback.
+    def with_bulk_body_grammar_extent(
+      callback_name : String,
+      &block : Bytes -> Tuple(T, Int32)
+    ) : Tuple(T, Capture) forall T
+      ensure_phase!(Phase::Bodies, "recursive Compact Bulk body grammar")
+      borrowed = if @mode.mrk4?
+                   shard = shard_for_event(callback_name)
+                   size = shard.logical_end - shard.logical_start
+                   if size < 0 || size > Int32::MAX
+                     raise CorruptPartError.new("recursive Compact Bulk callback exceeds its supported byte domain")
+                   end
+                   shard.bytes
+                 else
+                   @cursor.remaining_slice
+                 end
+
+      value, consumed = yield borrowed
+      unless consumed >= 0 && consumed <= borrowed.size
+        raise CorruptPartError.new("recursive Compact Bulk grammar consumed outside its parent callback")
+      end
+      if @mode.mrk4? && consumed != borrowed.size
+        raise CorruptPartError.new("recursive Compact Bulk grammar did not consume its exact named callback")
+      end
+
+      # capture_exact is the first cursor/event mutation in this path. The
+      # callback order and exact mrk4 extent remain authenticated by the
+      # existing parent-ledger machinery.
+      capture = capture_exact(callback_name, consumed)
+      {value, capture}
+    end
+
     def finish_array_sizes! : Nil
       ensure_phase!(Phase::ArraySizes, "recursive Compact body traversal")
       unless @expected_size_lanes >= 0 && @captured_size_lanes == @expected_size_lanes
