@@ -526,6 +526,10 @@ module CrystalClick
       uint8_sites.each { |site| uint8_bytes[site.key] = Array(Bytes).new(@mark_count) }
       bulk_values = Hash(String, Array(Array(BinaryValue))).new(initial_capacity: bulk_sites.size)
       bulk_sites.each { |site| bulk_values[site.key] = Array(Array(BinaryValue)).new(@mark_count) }
+      prefix_capture_site_count = 0_u64
+      bulk_sites.each do |site|
+        prefix_capture_site_count = checked_add(prefix_capture_site_count, 1_u64) if site.prefix_role_count > 0
+      end
       array_sizes = Hash(String, Array(Array(UInt64))).new(initial_capacity: array_sites.size)
       array_sites.each { |site| array_sizes[site.key] = Array(Array(UInt64)).new(@mark_count) }
       array_parent_rows = Hash(String, Array(UInt64)).new(initial_capacity: array_sites.size)
@@ -540,60 +544,28 @@ module CrystalClick
         ledger = CompactRecursiveJsonParentMarkLedger.new(context, @column_name, granule, budget)
         captures = Hash(String, PrefixCapture).new(initial_capacity: json_sites.size)
         prefixes = Hash(String, Array(String)).new(initial_capacity: json_sites.size)
-
-        json_sites.each do |site|
-          source = ledger.site_source(site.key)
-          observed_offsets = Hash(String, Int32).new
-          stats_observer = ->(name : String, offset : Int32) do
-            if previous = observed_offsets[name]?
-              unless previous == offset
-                raise CorruptPartError.new("Compact recursive JSON statistics offset changed within one prefix")
-              end
-            else
-              observed_offsets[String.new(name.to_slice)] = offset
-            end
-            nil
-          end
-          nested_context = ObjectSharedNestedSerializationContext.for_read(0_u64, @ordinary_profile)
-          prefix = ObjectDocumentCallbackPrefixReader.read_static_json_prefix(
-            source,
-            site.descriptor,
-            site.descriptor_depth,
-            site.physical_prefix,
-            site.callback_prefix,
-            site.array_level,
-            nested_context,
-            budget,
-            true,
-            stats_observer,
-          )
-          physical_plan = ObjectDocumentPhysicalPlan.from_escaped_prefix(
-            site.physical_prefix,
-            prefix.plan,
-            @ordinary_profile,
-            BinaryBulkProfile.single_stream,
-            @limits,
-            site.array_level,
-            typed_descriptor_root_depth: prefix.typed_descriptor_root_depth,
-            inferred_actual_root_depth: prefix.inferred_actual_root_depth,
-            root_dynamic_json_budget: budget,
-          )
-          prefix.bind_physical_plan!(physical_plan)
-          unless prefix.plan.root_dynamic_json_object_leaf_plans(budget).empty?
-            raise UnsupportedFormatError.new("Compact recursive root-Dynamic JSON sites are outside this capture slice")
-          end
-          schedule = CompactJsonObjectRoleSchedule.build(prefix, physical_plan, @ordinary_profile, budget)
-          prefixes[site.key] = schedule.prefix_events.map { |_owner, _canonical, callback| String.new(callback.to_slice) }
-          source.begin_body_capture!
-          captures[site.key] = PrefixCapture.new(
-            site,
-            prefix,
-            physical_plan,
-            schedule,
-            source,
-            observed_offsets,
+        mark_bulk_captures = nil.as(Hash(String, CompactRecursiveJsonBulkMark)?)
+        if prefix_capture_site_count > 0_u64
+          owner_nodes = checked_add(prefix_capture_site_count, 1_u64)
+          owner_elements = checked_multiply(prefix_capture_site_count, 2_u64)
+          budget.ensure_future_nodes(owner_nodes)
+          budget.ensure_future_elements(owner_elements)
+          budget.charge_node
+          prefix_capture_site_count.times { budget.charge_node }
+          budget.charge_elements(owner_elements)
+          mark_bulk_captures = Hash(String, CompactRecursiveJsonBulkMark).new(
+            initial_capacity: prefix_capture_site_count.to_i,
           )
         end
+        capture_prefix_traversal(
+          @schema,
+          "root",
+          captures,
+          prefixes,
+          mark_bulk_captures,
+          ledger,
+          budget,
+        )
 
         ledger.finish_prefixes!
         expected_size_lanes = array_sites.size.to_u64
@@ -618,6 +590,7 @@ module CrystalClick
           mark_sizes,
           mark_parent_rows,
           mark_bulk_streams,
+          mark_bulk_captures,
           ledger,
           budget,
         )
@@ -821,6 +794,106 @@ module CrystalClick
       nil
     end
 
+    private def capture_prefix_traversal(
+      schema : StorageColumnSchema,
+      key : String,
+      captures : Hash(String, PrefixCapture),
+      prefixes : Hash(String, Array(String)),
+      mark_bulk_captures : Hash(String, CompactRecursiveJsonBulkMark)?,
+      ledger : CompactRecursiveJsonParentMarkLedger,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      if schema.object?
+        plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
+        site = plan.json_site(key)
+        source = ledger.site_source(site.key)
+        observed_offsets = Hash(String, Int32).new
+        stats_observer = ->(name : String, offset : Int32) do
+          if previous = observed_offsets[name]?
+            unless previous == offset
+              raise CorruptPartError.new("Compact recursive JSON statistics offset changed within one prefix")
+            end
+          else
+            observed_offsets[String.new(name.to_slice)] = offset
+          end
+          nil
+        end
+        nested_context = ObjectSharedNestedSerializationContext.for_read(0_u64, @ordinary_profile)
+        prefix = ObjectDocumentCallbackPrefixReader.read_static_json_prefix(
+          source,
+          site.descriptor,
+          site.descriptor_depth,
+          site.physical_prefix,
+          site.callback_prefix,
+          site.array_level,
+          nested_context,
+          budget,
+          true,
+          stats_observer,
+        )
+        physical_plan = ObjectDocumentPhysicalPlan.from_escaped_prefix(
+          site.physical_prefix,
+          prefix.plan,
+          @ordinary_profile,
+          BinaryBulkProfile.single_stream,
+          @limits,
+          site.array_level,
+          typed_descriptor_root_depth: prefix.typed_descriptor_root_depth,
+          inferred_actual_root_depth: prefix.inferred_actual_root_depth,
+          root_dynamic_json_budget: budget,
+        )
+        prefix.bind_physical_plan!(physical_plan)
+        unless prefix.plan.root_dynamic_json_object_leaf_plans(budget).empty?
+          raise UnsupportedFormatError.new("Compact recursive root-Dynamic JSON sites are outside this capture slice")
+        end
+        schedule = CompactJsonObjectRoleSchedule.build(prefix, physical_plan, @ordinary_profile, budget)
+        prefixes[site.key] = schedule.prefix_events.map { |_owner, _canonical, callback| String.new(callback.to_slice) }
+        source.begin_body_capture!
+        captures[site.key] = PrefixCapture.new(
+          site,
+          prefix,
+          physical_plan,
+          schedule,
+          source,
+          observed_offsets,
+        )
+      elsif schema.bulk?
+        plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
+        unless schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+          site = plan.bulk_site(key)
+          if site.prefix_role_count > 0
+            mark = CompactRecursiveJsonBulkMark.open(site, budget)
+            CompactRecursiveJsonStaticBulkGrammar.capture_prefixes!(
+              site.type,
+              "root",
+              site,
+              mark,
+              ledger,
+              budget,
+            )
+            captures_by_key = mark_bulk_captures ||
+                              raise(CorruptPartError.new("recursive Compact Bulk prefix captures were not preflighted"))
+            captures_by_key[key] = mark
+          end
+        end
+      elsif schema.array?
+        capture_prefix_traversal(
+          schema.child_at(0), array_child_key(key), captures, prefixes,
+          mark_bulk_captures, ledger, budget,
+        )
+      elsif schema.tuple?
+        schema.child_count.times do |index|
+          capture_prefix_traversal(
+            schema.child_at(index), tuple_child_key(key, index), captures, prefixes,
+            mark_bulk_captures, ledger, budget,
+          )
+        end
+      else
+        raise UnsupportedFormatError.new("Compact recursive JSON schema contains an unsupported prefix node")
+      end
+      nil
+    end
+
     private def capture_body_traversal(
       schema : StorageColumnSchema,
       key : String,
@@ -832,6 +905,7 @@ module CrystalClick
       mark_sizes : Hash(String, Array(UInt64)),
       mark_parent_rows : Hash(String, UInt64),
       mark_bulk_streams : Hash(String, BinaryBulkStreams),
+      mark_bulk_captures : Hash(String, CompactRecursiveJsonBulkMark)?,
       ledger : CompactRecursiveJsonParentMarkLedger,
       budget : BinaryCodecBudget,
     ) : Nil
@@ -869,7 +943,16 @@ module CrystalClick
           uint8_bytes[key] << owned
         else
           site = plan.bulk_site(key)
-          mark_bulk_streams[key] = capture_bulk_site_streams(site, rows, ledger, budget)
+          if site.prefix_role_count > 0
+            captures_by_key = mark_bulk_captures ||
+                              raise(CorruptPartError.new("recursive Compact Bulk prefix captures are missing"))
+            mark = captures_by_key.delete(key) ||
+                   raise(CorruptPartError.new("recursive Compact Bulk prefix capture is missing for its body site"))
+            capture_bulk_type!(site.type, "root", rows, site, mark, ledger, budget)
+            mark_bulk_streams[key] = mark.build_streams(budget)
+          else
+            mark_bulk_streams[key] = capture_bulk_site_streams(site, rows, ledger, budget)
+          end
         end
       elsif schema.array?
         plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
@@ -896,6 +979,7 @@ module CrystalClick
           mark_sizes,
           mark_parent_rows,
           mark_bulk_streams,
+          mark_bulk_captures,
           ledger,
           budget,
         )
@@ -912,6 +996,7 @@ module CrystalClick
             mark_sizes,
             mark_parent_rows,
             mark_bulk_streams,
+            mark_bulk_captures,
             ledger,
             budget,
           )
@@ -1845,6 +1930,10 @@ module CrystalClick
         register_physical_callback_pair!(canonical_by_callback, seen_canonical, site.callback_name, site.callback_name)
       end
       bulk_sites.each do |site|
+        site.prefix_role_count.times do |index|
+          callback = site.prefix_callback_name_at(index)
+          register_physical_callback_pair!(canonical_by_callback, seen_canonical, callback, callback)
+        end
         site.each_role do |role|
           callback = site.callback_name_for(role.name)
           register_physical_callback_pair!(canonical_by_callback, seen_canonical, callback, callback)

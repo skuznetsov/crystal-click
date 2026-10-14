@@ -182,6 +182,19 @@ module CrystalClick
       prefixes = Hash(String, Array(String)).new(initial_capacity: sites.size)
       body_pairs_by_site = Hash(String, Array(CallbackPair)).new(initial_capacity: sites.size)
       seen_callback_names = Set(String).new
+      prefix_callback_count = 0_u64
+      bulk_sites.each do |site|
+        prefix_callback_count = checked_add(prefix_callback_count, site.prefix_role_count.to_u64)
+      end
+      prefix_metadata = nil.as(Hash(String, Tuple(String, Int32))?)
+      if prefix_callback_count > 0_u64
+        budget.ensure_future_nodes(prefix_callback_count + 1_u64)
+        budget.ensure_future_elements(checked_multiply(prefix_callback_count, 2_u64))
+        budget.charge_node
+        prefix_callback_count.times { budget.charge_node }
+        budget.charge_elements(checked_multiply(prefix_callback_count, 2_u64))
+        prefix_metadata = Hash(String, Tuple(String, Int32)).new(initial_capacity: prefix_callback_count.to_i)
+      end
 
       physical_context = PhysicalStreamPlanContext.new(limits)
       sites.each do |site|
@@ -289,6 +302,18 @@ module CrystalClick
           end
           seen_callback_names << callback_name
         end
+        site.prefix_role_count.times do |prefix_index|
+          prefix_role = site.prefix_role_at(prefix_index)
+          role = site.role_at(prefix_role.role_index).name
+          callback_name = prefix_role.callback_name
+          metadata = prefix_metadata ||
+                     raise(UnsupportedFormatError.new("Compact JSON prefix callback metadata was not preflighted"))
+          if seen_callback_names.includes?(callback_name) || metadata.has_key?(callback_name)
+            raise UnsupportedFormatError.new("Compact JSON callback schedule repeats a state-prefix callback")
+          end
+          seen_callback_names << callback_name
+          metadata[callback_name] = {role, 8}
+        end
       end
 
       ordered_names = @schema_plan.expected_event_names(prefixes, body_pairs_by_site)
@@ -338,6 +363,10 @@ module CrystalClick
           callback_name = site.callback_name_for(role.name)
           register_physical_pair!(canonical_by_callback, seen_canonical, callback_name, callback_name)
         end
+        site.prefix_role_count.times do |index|
+          callback_name = site.prefix_callback_name_at(index)
+          register_physical_pair!(canonical_by_callback, seen_canonical, callback_name, callback_name)
+        end
       end
       unless canonical_by_callback.size == expected_count
         raise UnsupportedFormatError.new("Compact JSON physical callback projection is not a complete roster")
@@ -355,7 +384,16 @@ module CrystalClick
 
       @callback_events = Array(CompactBinaryBulkCallback).new(ordered_names.size)
       ordered_names.each do |name|
-        @callback_events << CompactBinaryBulkCallback.new(name, name, 0)
+        if metadata = prefix_metadata
+          if prefix = metadata[name]?
+            role, prefix_size = prefix
+            @callback_events << CompactBinaryBulkCallback.new(name, role, prefix_size)
+          else
+            @callback_events << CompactBinaryBulkCallback.new(name, name, 0)
+          end
+        else
+          @callback_events << CompactBinaryBulkCallback.new(name, name, 0)
+        end
       end
       nil
     end

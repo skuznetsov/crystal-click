@@ -344,6 +344,14 @@ module CrystalClick
       String.new(name.to_slice)
     end
 
+    # Read the retained physical basename length without allocating the
+    # detached String returned by #stream_name_for. Owners that need to
+    # preflight derived callback names can census their exact size first.
+    def stream_name_bytesize_for(role : String) : Int32
+      name = @names[role]? || raise(KeyError.new("binary bulk role not found: #{role.inspect}"))
+      name.bytesize
+    end
+
     # Dictionary prefix ownership follows the admitted recursive role plan;
     # file basenames and suffixes are deliberately not used to infer it.
     def prefix_size_for(role : String) : Int32

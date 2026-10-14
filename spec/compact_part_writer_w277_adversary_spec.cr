@@ -252,7 +252,7 @@ describe "W277 propagated String1 Compact context adversaries" do
     end
   end
 
-  it "admits prefix-free static leaves but rejects stateful Bulk islands under String1" do
+  it "admits static leaves and recursive LowCardinality under String1" do
     json_type = CompactPartWriterW269Fixture.json_type
     supported = CrystalClick::StorageColumnSchema.parse(
       "Array(Tuple(#{json_type.name}, UInt8))",
@@ -260,15 +260,16 @@ describe "W277 propagated String1 Compact context adversaries" do
     static_string = CrystalClick::StorageColumnSchema.parse(
       "Array(Tuple(#{json_type.name}, String))",
     )
-    unsupported = CrystalClick::StorageColumnSchema.parse(
+    recursive_low_cardinality = CrystalClick::StorageColumnSchema.parse(
       "Array(Tuple(#{json_type.name}, LowCardinality(String)))",
     )
     CrystalClick::CompactRecursiveJsonSchemaPlan.admitted_schema?(supported).should be_true
     CrystalClick::CompactRecursiveJsonSchemaPlan.admitted_schema?(static_string).should be_true
-    CrystalClick::CompactRecursiveJsonSchemaPlan.admitted_schema?(unsupported).should be_false
+    CrystalClick::CompactRecursiveJsonSchemaPlan.admitted_schema?(recursive_low_cardinality).should be_true
 
-    # W281 supersedes the former UInt8-only boundary, not the stateful owner
-    # guard. Exercise both at the String1-bound input boundary before staging.
+    # W282 admits this narrow recursive LowCardinality owner without
+    # widening unrelated stateful guards. Exercise both String1 inputs before
+    # staging.
     sized = CrystalClick::BinaryBulkProfile.with_size_stream
     context = CompactPartWriterW277Fixture.columns(:map)[2].json_input(sized).json_context
     CrystalClick::CompactJsonColumnInput.new(
@@ -278,18 +279,13 @@ describe "W277 propagated String1 Compact context adversaries" do
       context,
       profile: sized,
     ).profile.should eq(sized)
-    expect_raises(
-      CrystalClick::UnsupportedFormatError,
-      "Compact JSON schema is outside the admitted static-site subset",
-    ) do
-      CrystalClick::CompactJsonColumnInput.new(
-        "outer_low_cardinality_leaf",
-        unsupported,
-        [] of Array(CrystalClick::StorageColumnValue),
-        context,
-        profile: sized,
-      )
-    end
+    CrystalClick::CompactJsonColumnInput.new(
+      "outer_low_cardinality_leaf",
+      recursive_low_cardinality,
+      [] of Array(CrystalClick::StorageColumnValue),
+      context,
+      profile: sized,
+    ).profile.should eq(sized)
   end
 
   it "retains the root Dynamic JSON-actual owner refusal under String1" do

@@ -1,5 +1,100 @@
 # Compact part writer frontier
 
+## Stateful LowCardinality Bulk bridge — W282
+
+Status: VERIFIED / ROOT adversary ROBUST within the finite declared LC-owner
+and pinned native interoperability scope (2026-10-14), over W281
+`818f00b47e7cbb9c9e57cce532a46e940581d545`. The full types/MV/projection goal
+remains ACTIVE. This is one physical-composition boundary, not all-type/layout
+closure or a performance result.
+
+Compact reader/writer already exist. Reuse BinaryBulkEncoder/Decoder and
+AdditionalKeysOnly per parent mark, not a second LC value codec. W281's opaque
+Bulk visitor assumed prefix-free children, while LC requires state prefixes.
+W282 composes existing LC scalar/Nullable-scalar children beneath ordinary
+static Array/Nested/Tuple/Map BASIC wrappers inside JSON-free Bulk islands
+within recursive Compact JSON. The public Storage parser, typed Object-path
+carriers and root typed-batch admission remain separate, unchanged owners.
+
+Compile the complete schema-DFS prefix schedule, interleaving JSON and LC
+prefixes in serializer order, before visiting bodies. Every syntactic LC site
+has an eight-byte V1 prefix even when Array occurrences are zero. Bodies use
+inherited Q/C rather than parent P; AdditionalKeysOnly has empty dictionary
+body callbacks and self-contained index records with UPDATE and no GLOBAL.
+LC String dictionary scalars retain S0 under surrounding ordinary S1.
+Exact index extents reconstruct the existing decoder's prefix offset.
+Complete-parent authentication still precedes child value publication.
+
+Extract one bounded stateless LC index-record grammar shared with the old
+Compact normalizer. Borrowed MRK3 grammar views are read-only for safe Bytes
+APIs and commit only the consumed extent; MRK4 rejects trailing shard bytes.
+Preflight holder/reference dimensions before charging or proportional
+allocation, prepay raw parent bytes once, and account detached ownership at
+packaging. Exact/one-below budget tests are owner-local, not a full-operation
+exact-budget, allocator-peak or RSS guarantee. Unsafe pointer writes are outside
+the read-only claim; the MRK3 body wrapper shares the conversion but has no
+dedicated safe-write retry example.
+
+Observed DoD: DEBUG and actual RELEASE each pass 652 examples with zero
+failures/errors/pending over the same exact 117 paths: the W281 113-path roster
+plus W282 entry/adversary and the two affected W262 normalizer consumers.
+DEBUG uses nine disjoint serial guarded cohorts; RELEASE uses four, including
+the unchanged 21-path type union. Focused 49 examples overlap this roster and
+are not additional coverage. One separately filtered self-contained W263
+admission example passes in each mode; unavailable old raw fixtures and the
+full suite are not qualified. All 20 owned Crystal files pass format checking;
+three Ruby instruments pass syntax checks.
+
+Fresh native DEBUG and actual RELEASE matrices each pass four stock plus four
+generated cells, 72 completed invocations: MRK3/MRK4 x ordinary String S0/S1,
+plain marks, BASIC Variant/Map, Object v3, MAP0/bucket one, eight rows/four data
+marks plus EOF. They include LC inside a recursive JSON column, zero/nonzero/
+zero occurrence domains, an always-empty lane, Nullable defaults, NUL/invalid
+UTF-8 and UInt16 values. Native CHECK, byte-preserving ATTACH, physical reopen
+and exact full/middle/last/EOF reads pass. Additional outer-Array local coverage
+is MRK3/MRK4 S0 only; no new compressed-mark or complete layout cross product.
+
+ROOT audits both full captures and independently checks 32 literal stock/
+attached output windows per mode. Bounded raw MRK4 LC checks per mode confirm
+144 V1 prefixes, 144 empty dictionary bodies, 84 zero-Q empty indexes and 60
+positive-Q nonempty indexes. Six actual-capture in-memory mutations are rejected
+per mode without modifying files; sixteen Ruby-only seeded instrumentation
+controls pass. The auditor shares its Ruby fixture model. Independent checks
+are not a general JSON/frame/CityHash decoder or semantic-ID proof.
+
+The first completed DEBUG audit exposed native target data_path stdout's
+trailing directory separator. A narrow auditor/seed repair binds the exact
+canonical path plus one separator and rejects a slashless counterexample.
+Production, helper, fixture and matrix were unchanged. Earlier memory-guard
+stops remain non-passes; interrupted roots are preserved. The 50-percent
+free-memory guard and compiler memory limit were not relaxed.
+
+Native roots:
+`/private/tmp/crystal-click-w282-native-debug.yd86Oz` and
+`/private/tmp/crystal-click-w282-native-release.B3i9cf`.
+CH source pin `ed30948f095ecb70679986d7d60e27ad770ae27a` and runtime
+26.10.1.1201/build `d9bcb5ab007f0f6299f7f973f2642245bab3d028` are distinct,
+not latest/same-build. Exact commands, helper/runtime hashes and observations
+are indexed in [W282 evidence](../.landmark/evidence/compact-low-cardinality-bulk-w282.json).
+The packet is an evidence index, not proof by field presence.
+
+Source scope: 23 owned code/spec/instrument files, seal
+`1509602dae553db3e1d39f53f55f0a669c5dabe4a19bed36bb8c671f98c8e430`;
+659-file src/support census; exact 117-path roster seal
+`310ed9719ea972400af6998f8fbedd82393a9c4b18ad157ba8458741e8ea13b0`.
+The three protected user W263 specs remain unchanged. Refresh qualification on
+owned source/spec/compiler/instrument/source/runtime pin drift, admission
+widening or capture loss/mutation. Rollback only the coherent W282 local
+commit; do not discard unrelated/protected work. No remote push.
+
+Still rejected by this opaque owner: Variant, Dynamic/JSON, Geometry's hidden
+Variant, QBit, AggregateFunction extents, Map WITH_BUCKETS, global/cross-mark
+LC dictionaries and new Object layouts. Existing separate-owner support is
+unchanged. Next: owner-specific composition and public admission/typed-carrier
+closure; Compact MV output format selection and projection child write/read
+dispatch; then measured memory/performance. MV input can already consume
+Compact through the typed facade. The <=10-percent slowdown target is unmeasured.
+
 ## Prefix-free static Bulk parity inside recursive JSON — W281
 
 Status: VERIFIED / root adversary ROBUST within the finite static-owner and

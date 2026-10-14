@@ -152,10 +152,45 @@ module CrystalClick
       capture_exact(callback_name, byte_count).bytes
     end
 
-    # Parse one variable-width static Bulk body callback against a borrowed
-    # snapshot. Cursor/event state is advanced only after the grammar has
-    # returned a valid extent; mrk4 additionally requires that extent to be
-    # the complete named callback.
+    # Parse one state prefix against a read-only borrowed callback snapshot.
+    # The parent cursor/event ledger advances only after version and
+    # exact-extent checks have succeeded, including for mrk3's shared tape.
+    def with_bulk_prefix_grammar_extent(
+      callback_name : String,
+      &block : Bytes -> Tuple(T, Int32)
+    ) : Tuple(T, Capture) forall T
+      ensure_phase!(Phase::Prefixes, "recursive Compact Bulk state prefix")
+      borrowed = if @mode.mrk4?
+                   shard = shard_for_event(callback_name)
+                   size = shard.logical_end - shard.logical_start
+                   if size < 0 || size > Int32::MAX
+                     raise CorruptPartError.new("recursive Compact Bulk prefix exceeds its supported byte domain")
+                   end
+                   bytes = @cursor.pending_event_slice(callback_name)
+                   unless bytes.size.to_i64 == size
+                     raise CorruptPartError.new("recursive Compact Bulk prefix differs from its authenticated shard extent")
+                   end
+                   bytes
+                 else
+                   remaining = @cursor.remaining_slice
+                   Bytes.new(remaining.to_unsafe, remaining.size, read_only: true)
+                 end
+
+      value, consumed = yield borrowed
+      unless consumed >= 0 && consumed <= borrowed.size
+        raise CorruptPartError.new("recursive Compact Bulk prefix parser consumed outside its parent callback")
+      end
+      if @mode.mrk4? && consumed != borrowed.size
+        raise CorruptPartError.new("recursive Compact Bulk prefix parser did not consume its exact named callback")
+      end
+      capture = capture_exact(callback_name, consumed)
+      {value, capture}
+    end
+
+    # Parse one variable-width static Bulk body callback against a read-only
+    # borrowed snapshot. Cursor/event state is advanced only after the grammar
+    # has returned a valid extent; mrk4 additionally requires that extent to
+    # be the complete named callback.
     def with_bulk_body_grammar_extent(
       callback_name : String,
       &block : Bytes -> Tuple(T, Int32)
@@ -167,9 +202,14 @@ module CrystalClick
                    if size < 0 || size > Int32::MAX
                      raise CorruptPartError.new("recursive Compact Bulk callback exceeds its supported byte domain")
                    end
-                   shard.bytes
+                   bytes = @cursor.pending_event_slice(callback_name)
+                   unless bytes.size.to_i64 == size
+                     raise CorruptPartError.new("recursive Compact Bulk callback differs from its authenticated shard extent")
+                   end
+                   bytes
                  else
-                   @cursor.remaining_slice
+                   remaining = @cursor.remaining_slice
+                   Bytes.new(remaining.to_unsafe, remaining.size, read_only: true)
                  end
 
       value, consumed = yield borrowed
@@ -414,7 +454,7 @@ module CrystalClick
       end
       capture = if @mode.mrk4?
                   shard = shard_for_event(callback_name)
-                  unless shard.bytes.size == byte_count
+                  unless shard.logical_end - shard.logical_start == byte_count.to_i64
                     raise CorruptPartError.new("recursive Compact named callback has the wrong byte extent")
                   end
                   @cursor.begin_event(callback_name)

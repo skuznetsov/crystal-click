@@ -689,9 +689,15 @@ module CrystalClick
         cursor.finish_event
         index_role = "#{role}.indexes"
         cursor.begin_event(body_name(index_role, physical))
-        start = cursor.position
-        scan_low_cardinality_index(type.child_at(0), count, cursor)
-        index_bytes = cursor.consumed_slice(start)
+        _extent, index_bytes = cursor.with_transactional_borrowed_prefix do |bytes|
+          consumed = BinaryLowCardinalityAdditionalIndexGrammar.parse_extent(
+            type.child_at(0),
+            count,
+            bytes,
+            @limits,
+          )
+          {consumed, consumed}
+        end
         cursor.finish_event
         append_lane(lanes, index_role, index_bytes, budget, workspace_observer, physical_workspace_bytes, mark_count)
       when BinaryDataType::TAG_VARIANT, BinaryDataType::TAG_DYNAMIC
@@ -791,63 +797,6 @@ module CrystalClick
       bytes = cursor.read_exact(size.to_i32)
       cursor.finish_event
       bytes
-    end
-
-    private def scan_low_cardinality_index(
-      child_type : BinaryDataType,
-      expected_rows : UInt64,
-      cursor : CompactBinaryBulkGranuleCursor,
-    ) : Nil
-      return nil if expected_rows == 0_u64
-
-      flags = cursor.read_u64
-      if (flags & ~BinaryLowCardinalityStorageStreams::ALLOWED_MASK) != 0_u64 ||
-         (flags & BinaryLowCardinalityStorageStreams::GLOBAL_BIT) != 0_u64
-        raise UnsupportedFormatError.new("unsupported Compact LowCardinality index flags")
-      end
-      unless (flags & BinaryLowCardinalityStorageStreams::ADDITIONAL_BIT) != 0_u64 &&
-             (flags & BinaryLowCardinalityStorageStreams::UPDATE_BIT) != 0_u64
-        raise UnsupportedFormatError.new("Compact LowCardinality index record is not self-contained")
-      end
-      width = BinaryLowCardinalityStorageStreams.width_for_code(flags & 0x3_u64)
-      key_count = cursor.read_u64
-      if key_count == 0_u64 || key_count > @limits.max_elements.to_u64 ||
-         key_count > Int32::MAX.to_u64
-        raise CorruptPartError.new("Compact LowCardinality additional-key count is outside its bound")
-      end
-      _, scalar_type = BinaryLowCardinalityStorageStreams.unwrap(child_type)
-      key_count.times { skip_low_cardinality_scalar(scalar_type, cursor) }
-      row_count = cursor.read_u64
-      unless row_count == expected_rows
-        raise CorruptPartError.new("Compact LowCardinality index row count differs from its occurrence count")
-      end
-      id_bytes = multiply_checked(row_count, width.to_u64)
-      if id_bytes > Int32::MAX.to_u64
-        raise CorruptPartError.new("Compact LowCardinality index IDs exceed the in-memory domain")
-      end
-      cursor.read_exact(id_bytes.to_i32)
-      nil
-    end
-
-    private def skip_low_cardinality_scalar(type : BinaryDataType, cursor : CompactBinaryBulkGranuleCursor) : Nil
-      case type.tag
-      when BinaryDataType::TAG_STRING
-        length = cursor.read_var_uint
-        if length > @limits.max_bytes.to_u64 || length > Int32::MAX.to_u64
-          raise CorruptPartError.new("Compact LowCardinality String key exceeds its bounded domain")
-        end
-        cursor.read_exact(length.to_i32)
-      when BinaryDataType::TAG_BOOL
-        value = cursor.read_exact(1)[0]
-        if value > 1_u8
-          raise CorruptPartError.new("Compact LowCardinality Bool key is not zero or one")
-        end
-      else
-        width = type.fixed_width ||
-                raise(UnsupportedFormatError.new("unsupported Compact LowCardinality dictionary scalar"))
-        cursor.read_exact(width)
-      end
-      nil
     end
 
     private def read_variant_tape_body(

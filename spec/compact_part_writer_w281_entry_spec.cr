@@ -126,11 +126,18 @@ describe "W281 generic recursive Compact JSON Bulk entry" do
     w281_write_and_read_fixture(true)
   end
 
-  it "keeps stateful, JSON-bearing, Geometry, QBit, and AggregateFunction Bulk types outside the slice" do
+  it "keeps other stateful, JSON-bearing, Geometry, QBit, and AggregateFunction Bulk types outside the slice" do
     uint8 = CrystalClick::BinaryDataType.primitive("UInt8")
     string = CrystalClick::BinaryDataType.primitive("String")
+    low_cardinality = CrystalClick::BinaryDataType.low_cardinality(uint8)
+    CrystalClick::CompactRecursiveJsonBulkSite.admitted_type?(
+      low_cardinality,
+      2,
+      CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS,
+    ).should be_true
+    CrystalClick::CompactRecursiveJsonColumnReader.admitted_schema?(w281_guard_schema(low_cardinality)).should be_true
+
     guarded = [
-      {"LowCardinality", CrystalClick::BinaryDataType.low_cardinality(uint8)},
       {"Variant", CrystalClick::BinaryDataType.variant([uint8, string] of CrystalClick::BinaryDataType)},
       {"Dynamic", CrystalClick::BinaryDataType.dynamic},
       {"Geometry", CrystalClick::BinaryDataType.custom("Geometry")},

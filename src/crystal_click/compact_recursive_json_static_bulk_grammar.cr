@@ -1,10 +1,11 @@
 module CrystalClick
-  # Stateless prefix-free Bulk role and body grammar shared by recursive
-  # Compact JSON sites. The census allocates nothing; the DFS materializer and
-  # data-dependent capture run only after their owners have preflighted bounds.
+  # Bounded recursive Bulk role, state-prefix, and body grammar shared by
+  # recursive Compact JSON sites. LowCardinality owns only its existing
+  # per-mark AdditionalKeysOnly prefix/index form. The census allocates
+  # nothing; materialization and data-dependent capture follow owner preflight.
   class CompactRecursiveJsonStaticBulkGrammar
     def self.admitted_type?(type : BinaryDataType, depth : Int32, limits : BinaryCodecLimits) : Bool
-      BinaryPrefixFreeStaticTypeAdmission.admitted?(type, depth, limits)
+      CompactRecursiveJsonBulkAdmission.admitted?(type, depth, limits)
     end
 
     def self.measure_role_count(type : BinaryDataType, profile : BinaryBulkProfile) : UInt64
@@ -13,6 +14,8 @@ module CrystalClick
         measure_role_count(type.child_at(0), profile)
       when BinaryDataType::TAG_STRING
         profile.with_size_stream? ? 2_u64 : 1_u64
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        2_u64
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED,
            BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_MAP
         own = 1_u64
@@ -45,6 +48,8 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         bytes = checked_add(prefix_bytes, 5_u64)                                                  # .data
         profile.with_size_stream? ? checked_add(bytes, checked_add(prefix_bytes, 13_u64)) : bytes # .string_sizes
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        checked_add(checked_add(prefix_bytes, 11_u64), checked_add(prefix_bytes, 8_u64)) # .dictionary + .indexes
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         own = checked_add(prefix_bytes, 6_u64)                                                                 # .sizes
         checked_add(own, measure_role_name_bytes(type.child_at(0), profile, checked_add(prefix_bytes, 9_u64))) # .elements
@@ -125,6 +130,19 @@ module CrystalClick
         else
           capture_string0!(role_name, rows, site, mark, ledger, limits, budget)
         end
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        dictionary_role = "#{role_name}.dictionary"
+        dictionary = ledger.capture_bulk_body(site.callback_name_for(dictionary_role), 0)
+        mark.capture_lane(dictionary_role, dictionary)
+        index_role = "#{role_name}.indexes"
+        extent, _capture = ledger.with_bulk_body_grammar_extent(site.callback_name_for(index_role)) do |bytes|
+          consumed = BinaryLowCardinalityAdditionalIndexGrammar.parse_extent(
+            type.child_at(0), rows, bytes, limits,
+          )
+          budget.ensure_wire_bytes(consumed.to_u64)
+          {bytes[0, consumed], consumed}
+        end
+        mark.capture_lane(index_role, extent)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         size_role = "#{role_name}.sizes"
         callback = site.callback_name_for(size_role)
@@ -170,8 +188,48 @@ module CrystalClick
       when BinaryDataType::TAG_NOTHING
         capture_fixed_role!("#{role_name}.data", rows, 1_u64, site, mark, ledger, budget)
       else
-        width = type.fixed_width || raise(CorruptPartError.new("Compact recursive Bulk grammar reached a non-prefix-free leaf"))
+        width = type.fixed_width || raise(CorruptPartError.new("Compact recursive Bulk grammar reached an unsupported leaf"))
         capture_fixed_role!("#{role_name}.data", rows, width.to_u64, site, mark, ledger, budget)
+      end
+      nil
+    end
+
+    def self.capture_prefixes!(
+      type : BinaryDataType,
+      role_name : String,
+      site : CompactRecursiveJsonBulkSite,
+      mark : CompactRecursiveJsonBulkMark,
+      ledger : CompactRecursiveJsonParentMarkLedger,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      case type.tag
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        role = "#{role_name}.dictionary"
+        callback = site.prefix_callback_name_for(role)
+        prefix, _capture = ledger.with_bulk_prefix_grammar_extent(callback) do |bytes|
+          if bytes.size < 8
+            raise CorruptPartError.new("Compact LowCardinality dictionary prefix is truncated")
+          end
+          prefix = bytes[0, 8]
+          version = 0_u64
+          8.times { |index| version |= prefix[index].to_u64 << (index * 8) }
+          unless version == BinaryLowCardinalityStorageStreams::VERSION
+            raise UnsupportedFormatError.new("unsupported Compact LowCardinality state-prefix version")
+          end
+          # The parent ledger already charged this borrowed physical input.
+          # Its eventual detached prefix copy is charged by mark packaging.
+          {prefix, 8}
+        end
+        mark.capture_dictionary_prefix!(role, prefix)
+      when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
+        capture_prefixes!(type.child_at(0), "#{role_name}.elements", site, mark, ledger, budget)
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
+        type.child_count.times do |index|
+          capture_prefixes!(type.child_at(index), "#{role_name}.field.#{index}", site, mark, ledger, budget)
+        end
+      when BinaryDataType::TAG_MAP
+        capture_prefixes!(type.child_at(0), "#{role_name}.elements.field.0", site, mark, ledger, budget)
+        capture_prefixes!(type.child_at(1), "#{role_name}.elements.field.1", site, mark, ledger, budget)
       end
       nil
     end
@@ -190,6 +248,9 @@ module CrystalClick
           output << CompactRecursiveJsonBulkSite::Role.new("#{path}.string_sizes", false)
         end
         output << CompactRecursiveJsonBulkSite::Role.new("#{path}.data", false)
+      when BinaryDataType::TAG_LOW_CARDINALITY
+        output << CompactRecursiveJsonBulkSite::Role.new("#{path}.dictionary", false)
+        output << CompactRecursiveJsonBulkSite::Role.new("#{path}.indexes", false)
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         output << CompactRecursiveJsonBulkSite::Role.new("#{path}.sizes", true)
         append_roles(type.child_at(0), "#{path}.elements", profile, output)

@@ -113,7 +113,7 @@ module CrystalClick
       return false unless schema.bulk?
       type = schema.bulk_type
       !type.contains_json? && !type.contains_dynamic? &&
-        BinaryPrefixFreeStaticTypeAdmission.admitted?(type, depth, limits)
+        CompactRecursiveJsonBulkAdmission.admitted?(type, depth, limits)
     rescue ex : ArgumentError | UnsupportedFormatError
       false
     end
@@ -371,11 +371,7 @@ module CrystalClick
       schedules : Hash(String, CompactJsonObjectRoleSchedule),
     ) : Array(String)
       names = Array(String).new
-      @json_sites.each do |site|
-        callbacks = prefixes[site.key]? ||
-                    raise(CorruptPartError.new("recursive Compact Object prefix schedule is missing"))
-        callbacks.each { |name| names << String.new(name.to_slice) }
-      end
+      append_prefix_names(@schema, "root", names, prefixes)
       append_body_names(@schema, "root", names, schedules)
       names
     end
@@ -388,11 +384,7 @@ module CrystalClick
       body_pairs : Hash(String, Array(ObjectDocumentInlineCallbackOrder::CallbackPair)),
     ) : Array(String)
       names = Array(String).new
-      @json_sites.each do |site|
-        callbacks = prefixes[site.key]? ||
-                    raise(CorruptPartError.new("recursive Compact Object prefix schedule is missing"))
-        callbacks.each { |name| names << String.new(name.to_slice) }
-      end
+      append_prefix_names(@schema, "root", names, prefixes)
       append_body_names(@schema, "root", names, body_pairs)
       names
     end
@@ -460,8 +452,8 @@ module CrystalClick
       elsif schema.bulk?
         type = schema.bulk_type
         unless !type.contains_json? && !type.contains_dynamic? &&
-               BinaryPrefixFreeStaticTypeAdmission.admitted?(type, descriptor_depth, @limits)
-          raise UnsupportedFormatError.new("recursive Compact opaque Bulk subtree is outside the prefix-free static grammar")
+               CompactRecursiveJsonBulkAdmission.admitted?(type, descriptor_depth, @limits)
+          raise UnsupportedFormatError.new("recursive Compact opaque Bulk subtree is outside the bounded static grammar")
         end
         bulk_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
           type,
@@ -571,6 +563,33 @@ module CrystalClick
       elsif schema.tuple?
         schema.child_count.times do |index|
           append_body_names(schema.child_at(index), tuple_child_key(key, index), output, schedules)
+        end
+      end
+      nil
+    end
+
+    private def append_prefix_names(
+      schema : StorageColumnSchema,
+      key : String,
+      output : Array(String),
+      prefixes : Hash(String, Array(String)),
+    ) : Nil
+      if schema.object?
+        callbacks = prefixes[key]? ||
+                    raise(CorruptPartError.new("recursive Compact Object prefix schedule is missing"))
+        callbacks.each { |name| output << String.new(name.to_slice) }
+      elsif schema.bulk?
+        unless schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+          site = bulk_site(key)
+          site.prefix_role_count.times do |index|
+            output << String.new(site.prefix_callback_name_at(index).to_slice)
+          end
+        end
+      elsif schema.array?
+        append_prefix_names(schema.child_at(0), array_child_key(key), output, prefixes)
+      elsif schema.tuple?
+        schema.child_count.times do |index|
+          append_prefix_names(schema.child_at(index), tuple_child_key(key, index), output, prefixes)
         end
       end
       nil

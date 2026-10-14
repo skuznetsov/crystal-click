@@ -1,7 +1,8 @@
 module CrystalClick
-  # One opaque, stateless JSON-free recursive Bulk subtree owned by a
-  # Compact recursive JSON schema plan. Logical role order is the serializer
-  # DFS order, not BinaryBulkPhysicalPlan's set-oriented role roster.
+  # One opaque JSON-free recursive Bulk subtree owned by a Compact recursive
+  # JSON schema plan. LowCardinality dictionary roles may carry a narrow
+  # per-mark state prefix; logical role order remains serializer DFS rather
+  # than BinaryBulkPhysicalPlan's set-oriented role roster.
   class CompactRecursiveJsonBulkSite
     struct Role
       getter name : String
@@ -9,6 +10,14 @@ module CrystalClick
 
       def initialize(name : String, @size_lane : Bool)
         @name = String.new(name.to_slice)
+      end
+    end
+
+    struct PrefixRole
+      getter role_index : Int32
+      getter callback_name : String
+
+      def initialize(@role_index : Int32, @callback_name : String)
       end
     end
 
@@ -20,6 +29,7 @@ module CrystalClick
     getter physical_plan : BinaryBulkPhysicalPlan
 
     @roles : Array(Role)
+    @prefix_roles : Array(PrefixRole)?
     @size_lane_count : Int32
 
     def initialize(
@@ -33,7 +43,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
     )
       unless self.class.admitted_type?(@type, @descriptor_depth, limits)
-        raise UnsupportedFormatError.new("recursive Compact Bulk site is outside the prefix-free static grammar")
+        raise UnsupportedFormatError.new("recursive Compact Bulk site is outside the admitted static grammar")
       end
       @key = String.new(key.to_slice)
       @physical_prefix = String.new(physical_prefix.to_slice)
@@ -54,6 +64,36 @@ module CrystalClick
       @roles = CompactRecursiveJsonStaticBulkGrammar.ordered_roles(@type, @physical_plan.profile)
       unless @roles.size == @physical_plan.stream_count
         raise UnsupportedFormatError.new("recursive Compact Bulk role DFS differs from its physical plan")
+      end
+      prefix_count = 0_u64
+      prefix_name_bytes = 0_u64
+      @roles.each do |role|
+        prefix_size = @physical_plan.prefix_size_for(role.name)
+        next if prefix_size == 0
+        unless prefix_size == 8 && role.name.ends_with?(".dictionary")
+          raise UnsupportedFormatError.new("recursive Compact Bulk state prefix is outside the LowCardinality slice")
+        end
+        prefix_count = checked_add(prefix_count, 1_u64)
+        callback_bytes = checked_add(@physical_plan.stream_name_bytesize_for(role.name).to_u64, 7_u64)
+        prefix_name_bytes = checked_add(prefix_name_bytes, checked_add(callback_bytes, 1_u64))
+      end
+      if prefix_count == 0_u64
+        @prefix_roles = nil
+      else
+        budget.ensure_future_nodes(prefix_count + 1_u64)
+        budget.ensure_future_elements(prefix_count)
+        budget.ensure_wire_bytes(prefix_name_bytes)
+        budget.charge_node
+        prefix_count.times { budget.charge_node }
+        budget.charge_elements(prefix_count)
+        budget.charge_wire_bytes(prefix_name_bytes)
+        prefixes = Array(PrefixRole).new(prefix_count.to_i)
+        @roles.each_with_index do |role, index|
+          next if @physical_plan.prefix_size_for(role.name) == 0
+          callback = PhysicalStreamName.append_literal(@physical_plan.stream_name_for(role.name), "_prefix")
+          prefixes << PrefixRole.new(index, callback)
+        end
+        @prefix_roles = prefixes
       end
       @size_lane_count = CompactRecursiveJsonStaticBulkGrammar.size_lane_count(@type).to_i32
       @roles.each do |role|
@@ -97,6 +137,33 @@ module CrystalClick
       @roles[index]
     end
 
+    def prefix_role_count : Int32
+      @prefix_roles.try(&.size) || 0
+    end
+
+    def prefix_role_at(index : Int) : PrefixRole
+      prefixes = @prefix_roles || raise(CorruptPartError.new("recursive Compact Bulk site has no state-prefix roster"))
+      prefixes[index]
+    end
+
+    def prefix_role_index(role_name : String) : Int32?
+      prefixes = @prefix_roles || return nil
+      prefixes.each_with_index do |prefix, index|
+        return index if @roles[prefix.role_index].name == role_name
+      end
+      nil
+    end
+
+    def prefix_callback_name_for(role_name : String) : String
+      index = prefix_role_index(role_name) ||
+              raise(CorruptPartError.new("recursive Compact Bulk role has no state-prefix callback"))
+      prefix_role_at(index).callback_name
+    end
+
+    def prefix_callback_name_at(index : Int) : String
+      prefix_role_at(index).callback_name
+    end
+
     def callback_name_for(role_name : String) : String
       @physical_plan.stream_name_for(role_name)
     end
@@ -108,6 +175,11 @@ module CrystalClick
       bytes = checked_add(bytes, instance_sizeof(Array(Role)).to_u64)
       bytes = checked_add(bytes, checked_multiply(@roles.size.to_u64, sizeof(Role).to_u64))
       @roles.each { |role| bytes = checked_add(bytes, string_owner_bytes(role.name)) }
+      if prefixes = @prefix_roles
+        bytes = checked_add(bytes, instance_sizeof(Array(PrefixRole)).to_u64)
+        bytes = checked_add(bytes, checked_multiply(prefixes.size.to_u64, sizeof(PrefixRole).to_u64))
+        prefixes.each { |prefix| bytes = checked_add(bytes, string_owner_bytes(prefix.callback_name)) }
+      end
       checked_add(bytes, instance_sizeof(BinaryDataType).to_u64)
     end
 

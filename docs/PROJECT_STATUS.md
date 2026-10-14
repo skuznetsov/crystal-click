@@ -1,6 +1,38 @@
 # CrystalClick project status
 
-Active frontier: W281 prefix-free static Bulk parity inside recursive Compact
++Active frontier: W282 recursive Compact LowCardinality Bulk composition is
+VERIFIED / ROOT adversary ROBUST within its finite declared LC-owner and pinned
+native interoperability scope (2026-10-14), over W281
+`818f00b47e7cbb9c9e57cce532a46e940581d545`. Reuse existing BinaryBulk codecs
+for LC scalar/Nullable-scalar leaves beneath static Array/Nested/Tuple/Map BASIC
+inside JSON-free Bulk islands within recursive Compact JSON. Compile the whole
+JSON/LC prefix phase before bodies; retain LC V1 prefixes at zero occurrences,
+inherited Q/C, exact extents and complete-parent authentication. Share the bounded
+LC record grammar with the old Compact normalizer; preflight logical ownership
+and use transactional read-only grammar views.
+
+DEBUG and actual RELEASE each pass 652 examples / the same exact 117 affected
+paths, plus one separately filtered W263 admission example. Fresh native
+DEBUG/RELEASE matrices each pass four stock plus four generated cells and 72
+recorded invocations, CHECK/ATTACH/reopen and full/middle/last/EOF values across
+MRK3/MRK4 x ordinary S0/S1. ROOT full raw audits pass, independent literal/LC
+extent checks agree, six actual-capture mutations per mode are rejected, and
+sixteen Ruby-only instrument seeds pass. These are finite compatibility
+witnesses, not the full suite or a general independent JSON/frame decoder.
+See [W282 evidence](../.landmark/evidence/compact-low-cardinality-bulk-w282.json)
+and [frontier](COMPACT_PART_WRITER_FRONTIER.md) for exact commands, pins and scope.
+
+Compact reader/writer already exist; the remaining work is not a second serde.
+This LC owner does not widen all public Storage/Object/root typed-batch gates,
+stateful opaque Variant/Dynamic/JSON/QBit/AggregateFunction or Map WITH_BUCKETS,
+or all mark/layout combinations. Existing separate-owner support is unchanged.
+Next: owner-specific compatibility/admission closure, Compact MV output and
+projection-child write/read integration, then memory/performance. MV input may
+already read Compact; MV output and projection children remain Wide-only.
+Full goal ACTIVE; <=10% slowdown unmeasured. Protected W263 specs unchanged;
+one local atomic feature commit, no remote push.
+
+Previously qualified frontier: W281 prefix-free static Bulk parity inside recursive Compact
 Array/Tuple/JSON is VERIFIED / root adversary ROBUST within the finite
 static-owner/native interoperability scope (2026-10-14), over W280
 `b8beb088a81c16a47aa32f4814c171d5e709ca7c`. Reuse the existing BinaryBulk

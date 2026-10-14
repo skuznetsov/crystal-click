@@ -6,10 +6,13 @@ module CrystalClick
   class CompactRecursiveJsonBulkMark
     @site : CompactRecursiveJsonBulkSite
     @lanes : Array(Bytes)
+    @dictionary_prefixes : Array(Bytes?)?
     @built : Bool
 
     private def initialize(@site : CompactRecursiveJsonBulkSite, role_count : Int32)
       @lanes = Array(Bytes).new(role_count)
+      prefix_count = @site.prefix_role_count
+      @dictionary_prefixes = prefix_count > 0 ? Array(Bytes?).new(prefix_count) : nil
       @built = false
     end
 
@@ -20,12 +23,43 @@ module CrystalClick
       if role_count < 0
         raise CorruptPartError.new("Compact recursive Bulk role count is negative")
       end
-      budget.ensure_future_nodes(2_u64)
-      budget.ensure_future_elements(role_count.to_u64)
-      budget.charge_node
-      budget.charge_node
-      budget.charge_elements(role_count.to_u64) if role_count > 0
+      prefix_count = site.prefix_role_count
+      owner_nodes = 2_u64
+      owner_elements = role_count.to_u64
+      if prefix_count > 0
+        owner_nodes += 1_u64
+        owner_elements += prefix_count.to_u64
+      end
+      # Preflight all holder and reference ownership together. A failure in
+      # the LC-only allowance must not leave the base mark charges committed.
+      budget.ensure_future_nodes(owner_nodes)
+      budget.ensure_future_elements(owner_elements)
+      owner_nodes.times { budget.charge_node }
+      budget.charge_elements(owner_elements) if owner_elements > 0_u64
       new(site, role_count)
+    end
+
+    # Prefix bytes remain borrowed from the authenticated parent mark until
+    # detached BinaryBulkStream packaging. No intermediate concatenated lane
+    # or copied prefix owner is created here.
+    def capture_dictionary_prefix!(role : String, bytes : Bytes) : Nil
+      if @built
+        raise CorruptPartError.new("Compact recursive Bulk mark was already packaged")
+      end
+      prefixes = @dictionary_prefixes ||
+                 raise(CorruptPartError.new("Compact recursive Bulk mark has no dictionary-prefix owner"))
+      if prefixes.size >= @site.prefix_role_count
+        raise CorruptPartError.new("Compact recursive Bulk prefix capture exceeded its frozen schema roster")
+      end
+      expected = @site.prefix_role_at(prefixes.size)
+      unless @site.role_at(expected.role_index).name == role
+        raise CorruptPartError.new("Compact recursive Bulk prefix capture differs from its frozen schema DFS")
+      end
+      unless bytes.size == 8
+        raise CorruptPartError.new("Compact recursive Bulk dictionary prefix has the wrong extent")
+      end
+      prefixes << bytes
+      nil
     end
 
     # Keep the captured lanes bound to the site serializer's DFS roster. These
@@ -55,10 +89,20 @@ module CrystalClick
       unless @lanes.size == @site.role_count
         raise CorruptPartError.new("Compact recursive Bulk role capture differs from its frozen serializer DFS")
       end
+      prefixes = @dictionary_prefixes
+      unless (prefixes.try(&.size) || 0) == @site.prefix_role_count
+        raise CorruptPartError.new("Compact recursive Bulk prefix capture differs from its frozen schema DFS")
+      end
 
       owned_lane_bytes = 0_u64
       @lanes.each do |bytes|
         owned_lane_bytes = checked_add(owned_lane_bytes, bytes.size.to_u64)
+      end
+      if prefixes
+        prefixes.each do |bytes|
+          prefix = bytes || raise(CorruptPartError.new("Compact recursive Bulk dictionary prefix is missing"))
+          owned_lane_bytes = checked_add(owned_lane_bytes, prefix.size.to_u64)
+        end
       end
       one_roster_key_bytes = 0_u64
       @site.each_role do |role|
@@ -83,8 +127,16 @@ module CrystalClick
         if streams.has_key?(source_key)
           raise CorruptPartError.new("Compact recursive Bulk serializer repeated a physical role")
         end
-        end_offset = bytes.size.to_u64
-        streams[source_key] = BinaryBulkStream.new(bytes, [0_u64, end_offset])
+        if prefix_index = @site.prefix_role_index(role)
+          unless bytes.empty?
+            raise CorruptPartError.new("Compact recursive Bulk LowCardinality dictionary body is not empty")
+          end
+          prefix = dictionary_prefix_at(prefix_index)
+          streams[source_key] = BinaryBulkStream.new(prefix, [8_u64, 8_u64])
+        else
+          end_offset = bytes.size.to_u64
+          streams[source_key] = BinaryBulkStream.new(bytes, [0_u64, end_offset])
+        end
       end
       BinaryBulkStreams.new(1, streams)
     end
@@ -135,6 +187,13 @@ module CrystalClick
         raise CorruptPartError.new("Compact recursive Bulk lane-byte sum overflows UInt64")
       end
       left + right
+    end
+
+    private def dictionary_prefix_at(index : Int32) : Bytes
+      prefixes = @dictionary_prefixes ||
+                 raise(CorruptPartError.new("Compact recursive Bulk mark has no dictionary-prefix owner"))
+      prefixes[index]? ||
+        raise(CorruptPartError.new("Compact recursive Bulk LowCardinality dictionary prefix is missing"))
     end
   end
 end

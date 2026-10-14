@@ -555,14 +555,35 @@ module CrystalClick
       budget.charge_elements(1_u64)
       granules = Array(Array(BinaryValue)).new(1)
       granules << values
-      streams = BinaryBulkCodec.encode_with_budget(
+      streams = BinaryBulkEncoder.encode(
         site.type,
         granules,
         budget,
         site.physical_plan.profile,
+        low_cardinality_policy: BinaryLowCardinalityStoragePolicy::AdditionalKeysOnly,
       )
       unless streams.mark_count == 1 && streams.role_count == site.role_count
         raise UnsupportedFormatError.new("Compact JSON opaque Bulk callback roster differs from its physical plan")
+      end
+      site.prefix_role_count.times do |prefix_index|
+        prefix_role = site.prefix_role_at(prefix_index)
+        role = site.role_at(prefix_role.role_index).name
+        unless streams.has_role?(role)
+          raise UnsupportedFormatError.new("Compact JSON opaque Bulk encoder omitted a stateful physical role")
+        end
+        stream = streams.stream(role)
+        unless stream.offset_at(0) == 8_u64 && stream.offset_at(1) == 8_u64 && stream.byte_size == 8
+          raise UnsupportedFormatError.new("Compact JSON opaque Bulk dictionary prefix lane has an unexpected extent")
+        end
+        prefix = stream.borrowed_slice(0_u64, 8_u64)
+        budget.ensure_future_nodes(1_u64)
+        budget.ensure_future_elements(8_u64)
+        budget.ensure_wire_bytes(8_u64)
+        budget.charge_node
+        budget.charge_elements(8_u64)
+        budget.charge_wire_bytes(8_u64)
+        detached = Bytes.new(8) { |index| prefix[index] }
+        append_fragment!(prefix_role.callback_name, detached, mark_index, filled)
       end
       site.each_role do |role|
         unless streams.has_role?(role.name)

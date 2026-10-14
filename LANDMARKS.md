@@ -1,5 +1,43 @@
 # Crystal Click landmarks
 
++## Stateful LowCardinality Bulk composition in recursive Compact JSON — W282
+
+- VERIFIED / ROOT adversary ROBUST within finite declared LC-owner and pinned
+  native interoperability scope (2026-10-14), over W281
+  `818f00b47e7cbb9c9e57cce532a46e940581d545`. Reuse BinaryBulk codecs and
+  AdditionalKeysOnly per parent mark; compile schema-DFS JSON/LC prefixes
+  before bodies, including LC V1 at zero occurrences. Bodies retain inherited
+  Q/C and exact MRK3/MRK4 extents, LC dictionaries use S0 under ordinary S1,
+  and complete-parent authentication precedes publication. One bounded LC
+  index-record grammar also serves the old Compact normalizer.
+- DEBUG and actual RELEASE each pass 652 examples on the same exact 117 paths
+  (nine/four disjoint guarded cohorts), plus one separately filtered W263
+  admission example per mode. Fresh native matrices (`62ddd5`, `7dce2e`)
+  each pass four stock plus four generated cells / 72 invocations across
+  MRK3/MRK4 x ordinary S0/S1, with CHECK/ATTACH/reopen and exact
+  full/middle/last/EOF values. No full-suite/all-layout claim.
+- ROOT raw audits (`99cfe7`, `ac0a9a`/`d1ed43`) and independent checks
+  confirm 32 literal stock/attached windows plus 144 LC V1 prefixes, 144 empty
+  dictionary bodies, 84 zero-Q empty indexes and 60 positive-Q nonempty indexes
+  per mode. Six actual-capture mutations are rejected per mode; sixteen
+  Ruby-only seeded controls pass. Auditor/model coupling remains; bounded raw
+  checks are not a complete JSON/frame/CityHash decoder.
+- Safe borrowed grammar views are read-only; holder/reference bounds preflight
+  before allocation/charge, raw parent bytes are prepaid once, detached
+  packaging is accounted. Owner-local budget and safe-write retry checks do
+  not establish full-operation exact limits or RSS/allocator peaks. Unsafe
+  pointer writes remain outside the claim. Earlier memory guard stops are
+  non-passes; guards were unchanged. A native trailing-directory-separator
+  auditor repair did not change production/helper/fixture/matrix source.
+- Preserve 23 owned hashes, the 659-file src/support census, exact 117-path
+  roster and three protected user W263 specs. Refresh on owned source/spec/
+  compiler/instrument/source/runtime drift, admission widening or capture loss/
+  mutation. Remaining: owner-specific stateful/layout and public admission
+  composition, Compact MV output and projection children, then memory/
+  performance. Full goal ACTIVE; <=10% slowdown unmeasured. Local atomic commit,
+  no remote push. See [W282 evidence](.landmark/evidence/compact-low-cardinality-bulk-w282.json)
+  and [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md).
+
 ## Prefix-free static Bulk parity in recursive Compact JSON — W281
 
 - VERIFIED / root adversary ROBUST within finite static-owner and native
