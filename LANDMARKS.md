@@ -1,6 +1,6 @@
 # Crystal Click landmarks
 
-+## Stateful LowCardinality Bulk composition in recursive Compact JSON — W282
+## Stateful LowCardinality Bulk composition in recursive Compact JSON — W282
 
 - VERIFIED / ROOT adversary ROBUST within finite declared LC-owner and pinned
   native interoperability scope (2026-10-14), over W281

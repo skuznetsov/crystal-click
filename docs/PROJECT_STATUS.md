@@ -1,6 +1,6 @@
 # CrystalClick project status
 
-+Active frontier: W282 recursive Compact LowCardinality Bulk composition is
+Active frontier: W282 recursive Compact LowCardinality Bulk composition is
 VERIFIED / ROOT adversary ROBUST within its finite declared LC-owner and pinned
 native interoperability scope (2026-10-14), over W281
 `818f00b47e7cbb9c9e57cce532a46e940581d545`. Reuse existing BinaryBulk codecs
