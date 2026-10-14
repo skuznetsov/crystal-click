@@ -79,13 +79,19 @@ are indexed in [W282 evidence](../.landmark/evidence/compact-low-cardinality-bul
 The packet is an evidence index, not proof by field presence.
 
 Source scope: 23 owned code/spec/instrument files, seal
-`1509602dae553db3e1d39f53f55f0a669c5dabe4a19bed36bb8c671f98c8e430`;
+`8d37ca6ee4d2d26d4e6bab68a5923a1c5ff2929bcc8f1b792debb065279fdfa5`;
 659-file src/support census; exact 117-path roster seal
 `310ed9719ea972400af6998f8fbedd82393a9c4b18ad157ba8458741e8ea13b0`.
+Feature commit `a096b49` is followed by an EOF-only auditor cleanup: exactly one
+blank line removed, identical Ruby AST, fresh syntax/16 seeds/both raw audits
+pass. Crystal/helper/matrix/fixture/roster bytes remain unchanged. Optional
+post-cleanup actual-mutant repeats were memory-guard refused, not new passes;
+the original six-per-mode actual mutations retain their explicit source lineage.
 The three protected user W263 specs remain unchanged. Refresh qualification on
 owned source/spec/compiler/instrument/source/runtime pin drift, admission
 widening or capture loss/mutation. Rollback only the coherent W282 local
-commit; do not discard unrelated/protected work. No remote push.
+commit after its EOF-only follow-up; do not discard unrelated/protected work.
+No remote push.
 
 Still rejected by this opaque owner: Variant, Dynamic/JSON, Geometry's hidden
 Variant, QBit, AggregateFunction extents, Map WITH_BUCKETS, global/cross-mark

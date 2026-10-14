@@ -16,16 +16,16 @@
     "tier": "CAUTION",
     "strongest_failure": "Self-roundtrip agrees while mixed JSON/LC prefix order, zero-occurrence callbacks, inherited Q/C or dictionary framing differs from native ClickHouse.",
     "guard": "Stock-first and bidirectional native matrix plus malformed-prefix/index, transactional read-only borrow, zero-domain, profile, ordering and logical-budget falsifiers.",
-    "rollback": "Revert only the coherent W282 local commit; preserve protected/unrelated work. No remote push."
+    "rollback": "Revert the EOF-only follow-up first, then W282 feature a096b4965290cb8efbc0d2dc615291160a5aa299; preserve protected/unrelated work. No remote push or history rewrite."
   },
   "source_state": {
     "owned": {
       "count": 23,
-      "digest": "1509602dae553db3e1d39f53f55f0a669c5dabe4a19bed36bb8c671f98c8e430",
+      "digest": "8d37ca6ee4d2d26d4e6bab68a5923a1c5ff2929bcc8f1b792debb065279fdfa5",
       "files": {
         "scripts/compact_low_cardinality_bulk_w282_helper.cr": "5ccd14bb4ab74fb5fa419a17aa550e80c21b8181dad9258b098d93faad08a072",
         "scripts/probe_compact_low_cardinality_bulk_w282_matrix.rb": "e2f4e4c28be9bc7fd5a0efcbd80ad4dcd1fb77028c40353bdbe8459ad537a266",
-        "scripts/verify_compact_low_cardinality_bulk_w282_capture.rb": "e614401898cc531b955440c17c5eb47c3761a3fa2f07c314a4878c7bbe1086c2",
+        "scripts/verify_compact_low_cardinality_bulk_w282_capture.rb": "c50712bee20283d549bebb77c042a60906a5a93f8d90f22c01d953cd5013a40d",
         "scripts/verify_compact_low_cardinality_bulk_w282_instrumentation.rb": "ac0b25dd4ee7685921ca91fbbc6f6ad5b9067623efa998f2ba78b89cb259adbb",
         "spec/compact_part_writer_w277_adversary_spec.cr": "df7e410c591583d4d3b2c0bebf915ef7d5570d7e811ad39f804a94d738c2f58a",
         "spec/compact_part_writer_w281_entry_spec.cr": "4063a76e2fb8e2095cac2ec0dd1ce4dbc0e014afeb14628427b28f619f99cb1c",
@@ -251,7 +251,7 @@
     },
     "ruby_syntax": {
       "command": "COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w282-root.DT0iGW/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 60 1024 -e 'require \"open3\"; ARGV.each { |p| out, err, status = Open3.capture3(\"/usr/bin/ruby\", \"-c\", p); raise \"#{p}: #{out}#{err}\" unless status.success? && out == \"Syntax OK\\n\" && err.empty?; puts \"#{p}: Syntax OK\" }' scripts/probe_compact_low_cardinality_bulk_w282_matrix.rb scripts/verify_compact_low_cardinality_bulk_w282_instrumentation.rb scripts/verify_compact_low_cardinality_bulk_w282_capture.rb",
-      "chunk": "f168c0",
+      "chunk": "4ff656",
       "exit_code": 0,
       "files": 3
     },
@@ -313,7 +313,7 @@
     },
     "instrumentation": {
       "command": "COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w282-root.DT0iGW/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 1024 scripts/verify_compact_low_cardinality_bulk_w282_instrumentation.rb",
-      "chunk": "3bfd50",
+      "chunk": "6c0641",
       "exit_code": 0,
       "seed_controls": 16,
       "boundary": "Ruby-only positive/negative evidence instrumentation seeds; not library compatibility."
@@ -324,6 +324,41 @@
       "exit_code": 0,
       "path": "/private/tmp/crystal-click-w282-root.DT0iGW/compact-low-cardinality-bulk-w282-release",
       "sha256": "37aea2c1962d21c461c8b6827b2d6f2533ff262f2d259e0ff06d5e1d150d6d00"
+    },
+    "eof_only_followup": {
+      "index_validation": {
+        "chunk": "44fc4e",
+        "exit_code": 0,
+        "boundary": "Post-EOF metadata consistency only; unchanged Crystal/roster/census/helper/native pins and exact three-path follow-up scope. Not substantive proof."
+      },
+      "parent_commit": "a096b4965290cb8efbc0d2dc615291160a5aa299",
+      "reason": "Staged diff-check found a new blank line at EOF; that warning was not gated before the feature commit. Preserve history and remove exactly one blank line in an isolated follow-up.",
+      "old_owned_digest": "1509602dae553db3e1d39f53f55f0a669c5dabe4a19bed36bb8c671f98c8e430",
+      "new_owned_digest": "8d37ca6ee4d2d26d4e6bab68a5923a1c5ff2929bcc8f1b792debb065279fdfa5",
+      "changed_source": "scripts/verify_compact_low_cardinality_bulk_w282_capture.rb",
+      "old_sha256": "e614401898cc531b955440c17c5eb47c3761a3fa2f07c314a4878c7bbe1086c2",
+      "new_sha256": "c50712bee20283d549bebb77c042a60906a5a93f8d90f22c01d953cd5013a40d",
+      "equivalence": {
+        "command": "COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w282-root.DT0iGW/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 60 1024 -e 'require '\\''ripper'\\''; require '\\''digest'\\''; require '\\''open3'\\''\npath='\\''scripts/verify_compact_low_cardinality_bulk_w282_capture.rb'\\''\nold,err,status=Open3.capture3('\\''git'\\'','\\''show'\\'','\\''a096b4965290cb8efbc0d2dc615291160a5aa299:'\\''+path)\nraise err unless status.success?\nold=old.b\nnow=File.binread(path)\nraise '\\''not exactly one trailing newline removed'\\'' unless old==now+\"\\n\" && now.end_with?(\"\\n\") && !now.end_with?(\"\\n\\n\")\na=Ripper.sexp(old.force_encoding(Encoding::UTF_8)); b=Ripper.sexp(now.force_encoding(Encoding::UTF_8))\nraise '\\''Ruby AST changed/invalid'\\'' unless a && a==b\nputs \"W282 auditor EOF-only cleanup: identical Ruby AST; sha256=#{Digest::SHA256.hexdigest(now)}\"\n'",
+        "chunk": "39e157",
+        "exit_code": 0,
+        "observed": "Exactly one trailing newline removed; identical parsed Ruby AST."
+      },
+      "refreshed": "Three Ruby syntax checks, sixteen instrument seeds, and both complete raw-capture audits pass at the new auditor hash. All Crystal/helper/matrix/fixture/roster/census bytes are unchanged, so their existing executions are retained rather than recompiled.",
+      "capture_inventory_boundary": "The full matrix records probe, fixture and helper source pins, not the capture auditor; the complete raw captures are unchanged and both are re-audited.",
+      "additional_mutant_refresh": {
+        "status": "guard_refused_non_pass",
+        "chunks": [
+          "ad6bed",
+          "4f9f6f"
+        ],
+        "meaning": "Optional post-EOF actual-capture mutant repeats were refused by the unchanged 50-percent memory guard. Earlier six-per-mode actual mutations remain indexed at the pre-EOF auditor; fresh sixteen seeded controls and positive raw audits pass. No new actual-mutant repeat is claimed."
+      },
+      "metadata_retry": {
+        "first_chunk": "5d41e9",
+        "outcome": "Guard refusal, not a pass; later guarded fresh owned seal succeeded."
+      },
+      "boundary": "No library semantic change, new type/layout admission, native payload change or performance claim."
     }
   },
   "dod": {
@@ -778,8 +813,9 @@
         "helper_sha256": "85be546e4b25b4bc5a0ea6dad2bc9da7f3f98b018d5245aaab0a8fa1ea05294f",
         "audit": {
           "command": "COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w282-root.DT0iGW/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 1024 scripts/verify_compact_low_cardinality_bulk_w282_capture.rb --full-matrix --evidence-root /private/tmp/crystal-click-w282-native-debug.yd86Oz",
-          "chunk": "99cfe7",
-          "exit_code": 0
+          "chunk": "24a062",
+          "exit_code": 0,
+          "prior_qualification_chunk": "99cfe7"
         },
         "root_literals": {
           "command": "COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w282-root.DT0iGW/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 60 1024 -e 'require '\\''json'\\''; require '\\''digest'\\''\nroot = ARGV.fetch(0)\nexpected = ['\\''1|A[]|101|M[]|E[]|N[]'\\'','\\''2|A[]|102|M[]|E[]|N[]'\\'','\\''3|A[6100,V6e00;00ff8041,N]|103|M[6d00=0a00;00ff8041=0b00]|E[]|N[6e00=ffff]'\\'','\\''4|A[78,V]|104|M[6b=0c00]|E[]|N[626164=0000;7461696c=2a00]'\\'','\\''5|A[]|105|M[]|E[]|N[]'\\'','\\''6|A[]|106|M[]|E[]|N[]'\\'','\\''7|A[656e64,V6c617374]|107|M[61=0400]|E[]|N[=0700]'\\'','\\''8|A[,N;00ff8041,V7a00]|108|M[62=0500;63=0600]|E[]|N[66696e616c00=0800]'\\'']\npin = \"__W280_PIN__\\t26.10.1.1201\\td9bcb5ab007f0f6299f7f973f2642245bab3d028\"\nchecks = 0\n%w[mrk3 mrk4].product(%w[s0 s1], %w[stock attached]).each do |mark,profile,origin|\n  {'\\''full'\\'' => (0...8).to_a, '\\''middle'\\'' => (2...6).to_a, '\\''last'\\'' => (6...8).to_a, '\\''eof'\\'' => []}.each do |window,indexes|\n    label = \"stock_bulk_#{mark}_#{profile}#{origin == '\\''stock'\\'' ? '\\'''\\'' : '\\''_attached'\\''}_values_#{window}\"\n    record = JSON.parse(File.binread(File.join(root,'\\''invocations'\\'',label+'\\''.json'\\'')))\n    raw = File.binread(File.join(root,'\\''invocations'\\'',label+'\\''.stdout'\\''))\n    raise \"record not successful #{label}\" unless record.values_at('\\''exit'\\'','\\''signal'\\'','\\''timed_out'\\'') == [0,nil,false]\n    raise \"raw digest drift #{label}\" unless Digest::SHA256.hexdigest(raw) == record.fetch('\\''stdout_sha256'\\'') && raw.bytesize == record.fetch('\\''stdout_bytes'\\'')\n    lines = raw.split(\"\\n\",-1); raise \"not terminated #{label}\" unless lines.pop == '\\'''\\''\n    raise \"pin drift #{label}\" unless lines.shift == pin\n    observed = lines.map { |line| line.split(\"\\t\",-1) }\n    if window == '\\''eof'\\''\n      raise \"eof mismatch #{label}\" unless observed.size == 1 && observed.first.size == 2 && observed.first.last == '\\''0'\\''\n    else\n      raise \"value mismatch #{label}\" unless observed.all? { |r| r.size == 3 } && observed.map { |r| [r[1],r[2]] } == indexes.map { |i| [(i+1).to_s,expected.fetch(i)] }\n    end\n    checks += 1\n  end\nend\nputs \"ROOT independent full-matrix literal/raw stdout check: #{checks} stock+attached windows; all exact; no probe/helper fixture imports\"\n' '/private/tmp/crystal-click-w282-native-debug.yd86Oz'",
@@ -816,10 +852,14 @@
         "audit": {
           "command": "COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w282-root.DT0iGW/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 1024 scripts/verify_compact_low_cardinality_bulk_w282_capture.rb --full-matrix --evidence-root '/private/tmp/crystal-click-w282-native-release.B3i9cf'",
           "chunks": [
+            "a5cabf",
+            "15a99f"
+          ],
+          "exit_code": 0,
+          "prior_qualification_chunks": [
             "ac0a9a",
             "d1ed43"
-          ],
-          "exit_code": 0
+          ]
         },
         "root_literals": {
           "command": "COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w282-root.DT0iGW/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 60 1024 -e 'require '\\''json'\\''; require '\\''digest'\\''\nroot = ARGV.fetch(0)\nexpected = ['\\''1|A[]|101|M[]|E[]|N[]'\\'','\\''2|A[]|102|M[]|E[]|N[]'\\'','\\''3|A[6100,V6e00;00ff8041,N]|103|M[6d00=0a00;00ff8041=0b00]|E[]|N[6e00=ffff]'\\'','\\''4|A[78,V]|104|M[6b=0c00]|E[]|N[626164=0000;7461696c=2a00]'\\'','\\''5|A[]|105|M[]|E[]|N[]'\\'','\\''6|A[]|106|M[]|E[]|N[]'\\'','\\''7|A[656e64,V6c617374]|107|M[61=0400]|E[]|N[=0700]'\\'','\\''8|A[,N;00ff8041,V7a00]|108|M[62=0500;63=0600]|E[]|N[66696e616c00=0800]'\\'']\npin = \"__W280_PIN__\\t26.10.1.1201\\td9bcb5ab007f0f6299f7f973f2642245bab3d028\"\nchecks = 0\n%w[mrk3 mrk4].product(%w[s0 s1], %w[stock attached]).each do |mark,profile,origin|\n  {'\\''full'\\'' => (0...8).to_a, '\\''middle'\\'' => (2...6).to_a, '\\''last'\\'' => (6...8).to_a, '\\''eof'\\'' => []}.each do |window,indexes|\n    label = \"stock_bulk_#{mark}_#{profile}#{origin == '\\''stock'\\'' ? '\\'''\\'' : '\\''_attached'\\''}_values_#{window}\"\n    record = JSON.parse(File.binread(File.join(root,'\\''invocations'\\'',label+'\\''.json'\\'')))\n    raw = File.binread(File.join(root,'\\''invocations'\\'',label+'\\''.stdout'\\''))\n    raise \"record not successful #{label}\" unless record.values_at('\\''exit'\\'','\\''signal'\\'','\\''timed_out'\\'') == [0,nil,false]\n    raise \"raw digest drift #{label}\" unless Digest::SHA256.hexdigest(raw) == record.fetch('\\''stdout_sha256'\\'') && raw.bytesize == record.fetch('\\''stdout_bytes'\\'')\n    lines = raw.split(\"\\n\",-1); raise \"not terminated #{label}\" unless lines.pop == '\\'''\\''\n    raise \"pin drift #{label}\" unless lines.shift == pin\n    observed = lines.map { |line| line.split(\"\\t\",-1) }\n    if window == '\\''eof'\\''\n      raise \"eof mismatch #{label}\" unless observed.size == 1 && observed.first.size == 2 && observed.first.last == '\\''0'\\''\n    else\n      raise \"value mismatch #{label}\" unless observed.all? { |r| r.size == 3 } && observed.map { |r| [r[1],r[2]] } == indexes.map { |i| [(i+1).to_s,expected.fetch(i)] }\n    end\n    checks += 1\n  end\nend\nputs \"ROOT independent full-matrix literal/raw stdout check: #{checks} stock+attached windows; all exact; no probe/helper fixture imports\"\n' '/private/tmp/crystal-click-w282-native-release.B3i9cf'",
@@ -857,7 +897,7 @@
     "return_pointer": "docs/COMPACT_PART_WRITER_FRONTIER.md; docs/PROJECT_STATUS.md",
     "next_signal": "Inventory and stock-first falsifier for the next owner-specific stateful opaque Bulk layout (Variant is a candidate), plus explicit public admission/typed-carrier closure. Do not infer arbitrary nesting from value-codec availability.",
     "then": "Compact MV output format selection and Compact projection child writing/reader dispatch, then measured memory/performance. No <=10% result yet.",
-    "authority": "Existing types/storage/MV/projection work is in scope; ROOT runs serial guarded verification/Git, Luna owns heavy source work. Preserve protected specs, unrelated processes and the 50% memory guard. No remote push.",
+    "authority": "Existing types/storage/MV/projection work is in scope; ROOT runs serial guarded verification/Git, Luna owns heavy source work. Preserve protected specs, unrelated processes and the 50% memory guard. No remote push. Follow-up is EOF-only; existing substantive qualification is retained with the explicit source lineage above.",
     "decay": "Refresh on owned source/spec/compiler/instrument/source/runtime pin drift, admission widening, or raw capture loss/mutation."
   }
 }

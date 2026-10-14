@@ -1471,4 +1471,3 @@ if $PROGRAM_NAME == __FILE__
   exit(VerifyCompactLowCardinalityBulkW282Capture::Auditor.new(
     options[:evidence_root], mode: options[:mode]).run ? 0 : 1)
 end
-
