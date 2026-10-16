@@ -34,6 +34,7 @@ module ProbeCompactRecursiveArraysW280
   # inputs. These intentionally do not inherit W279's older defaults.
   BINARY = '/private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped'.freeze
   BINARY_SHA256 = 'bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2'.freeze
+  BINARY_BYTES = 746_226_224
   VERSION = '26.10.1.1201'.freeze
   BUILD = 'd9bcb5ab007f0f6299f7f973f2642245bab3d028'.freeze
   SOURCE_ROOT = '/private/tmp/clickhouse-w254-upstream.AqeqyC'.freeze
@@ -95,8 +96,7 @@ module ProbeCompactRecursiveArraysW280
   class Probe < W279::Probe
     def initialize(binary:, source_root:, evidence_root:)
       @binary = send(:validate_executable, binary, 'pinned ClickHouse runtime')
-      @source_root = File.expand_path(source_root)
-      fail!('source root differs from the separately pinned upstream checkout') unless @source_root == SOURCE_ROOT
+      @source_root = send(:validate_source_root, source_root)
       @root = send(:validate_root, evidence_root)
       @token = Digest::SHA256.hexdigest(@root)[0, 8]
       @invocations = []
@@ -144,6 +144,12 @@ module ProbeCompactRecursiveArraysW280
       raise Failure, "W280: #{message}"
     end
 
+    def validate_source_root(path)
+      expanded = File.expand_path(path)
+      fail!('source root differs from the separately pinned upstream checkout') unless expanded == SOURCE_ROOT
+      expanded
+    end
+
     def validate_literals!
       fail!('main and array-control literals must each contain eight rows and four two-row marks') unless
         MAIN_ROWS.size == ROW_COUNT && CONTROL_ROWS.size == ROW_COUNT &&
@@ -165,8 +171,7 @@ module ProbeCompactRecursiveArraysW280
       %w[invocations stores source-inventories raw-records parts].each do |name|
         Dir.mkdir(File.join(@root, name), 0o700)
       end
-      @binary_sha_before = sha(@binary)
-      fail!('ClickHouse executable differs from its W280 runtime SHA-256') unless @binary_sha_before == BINARY_SHA256
+      capture_runtime_pin!(:before)
       revision, stderr, status = Open3.capture3('git', '-C', @source_root, 'rev-parse', 'HEAD')
       fail!("pinned upstream revision check failed: #{stderr.strip}") unless status.success? && revision.strip == SOURCE_REVISION
       @source_revision_before = revision.strip
@@ -181,8 +186,7 @@ module ProbeCompactRecursiveArraysW280
     end
 
     def validate_pins!
-      @binary_sha_after = sha(@binary)
-      fail!('ClickHouse executable changed during capture') unless @binary_sha_after == BINARY_SHA256
+      capture_runtime_pin!(:after)
       revision, stderr, status = Open3.capture3('git', '-C', @source_root, 'rev-parse', 'HEAD')
       fail!("pinned upstream revision recheck failed: #{stderr.strip}") unless status.success?
       @source_revision_after = revision.strip
@@ -195,6 +199,36 @@ module ProbeCompactRecursiveArraysW280
       fail!('pinned upstream source bytes changed during capture') unless @upstream_hashes_after == @upstream_hashes_before
       @probe_hashes_after = @probe_hashes_before.keys.to_h { |path| [path, sha(path)] }
       fail!('W280 or inherited probe source changed during capture') unless @probe_hashes_after == @probe_hashes_before
+    end
+
+    def runtime_pin
+      {sha256: BINARY_SHA256, bytes: BINARY_BYTES, version: VERSION, build: BUILD}.freeze
+    end
+
+    def validate_runtime_binary!(phase)
+      pin = runtime_pin
+      fail!("ClickHouse executable is missing, non-regular, or symlinked at #{phase}") unless
+        File.file?(@binary) && !File.symlink?(@binary) && File.executable?(@binary)
+      bytes = File.size(@binary)
+      fail!("ClickHouse executable byte size differs from its #{phase} runtime pin") unless bytes == pin.fetch(:bytes)
+      digest = sha(@binary)
+      fail!("ClickHouse executable SHA-256 differs from its #{phase} runtime pin") unless digest == pin.fetch(:sha256)
+      {sha256: digest, bytes: bytes}
+    rescue Errno::ENOENT, Errno::EACCES, Errno::ELOOP => error
+      fail!("ClickHouse executable is unavailable at #{phase}: #{error.message}")
+    end
+
+    def capture_runtime_pin!(boundary)
+      phase = {before: 'before capture', after: 'after capture'}.fetch(boundary)
+      measured = validate_runtime_binary!(phase)
+      if boundary == :before
+        @binary_sha_before = measured.fetch(:sha256)
+        @binary_bytes_before = measured.fetch(:bytes)
+      else
+        @binary_sha_after = measured.fetch(:sha256)
+        @binary_bytes_after = measured.fetch(:bytes)
+      end
+      measured
     end
 
     def sha(path)
@@ -317,9 +351,11 @@ module ProbeCompactRecursiveArraysW280
     def register_process!(label, argv, input, store, encoding)
       fail!("duplicate or unsafe process label #{label.inspect}") unless
         label.match?(/\A[a-z0-9_.-]+\z/) && !@expected_processes.key?(label)
+      pin = runtime_pin
       @expected_processes[label] = {
         argv: argv, stdin: input, process_kind: 'clickhouse-local', binary_path: @binary,
-        expected_sha256: BINARY_SHA256, store_path: store, stdin_encoding: encoding,
+        expected_sha256: pin.fetch(:sha256), expected_bytes: pin.fetch(:bytes),
+        store_path: store, stdin_encoding: encoding,
       }
     end
 
@@ -328,8 +364,7 @@ module ProbeCompactRecursiveArraysW280
       argv = [@binary, 'local', '--path', store, '--session_timezone=UTC', '--max_threads=1',
               "--max_memory_usage=#{MEMORY_LIMIT}", '--multiquery']
       register_process!(label, argv, input, store, 'sql')
-      @runner.send(:run_process, label, argv, input, 'clickhouse-local', expected_sha: BINARY_SHA256,
-                   binary_path: @binary, store: store)
+      run_pinned_process!(label, argv, input, store)
     end
 
     def execute_rowbinary!(label, store, table, kind)
@@ -339,8 +374,7 @@ module ProbeCompactRecursiveArraysW280
       argv = [@binary, 'local', '--path', store, '--session_timezone=UTC', '--max_threads=1',
               "--max_memory_usage=#{MEMORY_LIMIT}", '--input_format_binary_read_json_as_string=0', '--query', query]
       register_process!(label, argv, input, store, 'rowbinary')
-      result = @runner.send(:run_process, label, argv, input, 'clickhouse-local', expected_sha: BINARY_SHA256,
-                            binary_path: @binary, store: store)
+      result = run_pinned_process!(label, argv, input, store)
       send(:rename_binary_stdin_sidecar!, label)
       result[:literal_input] = {
         schema_kind: kind, row_count: input_rows.size,
@@ -352,6 +386,19 @@ module ProbeCompactRecursiveArraysW280
         query: query,
       }
       result
+    end
+
+    def run_pinned_process!(label, argv, input, store)
+      pin = runtime_pin
+      before_bytes = File.size(@binary)
+      fail!("#{label} runtime byte size differs before native invocation") unless before_bytes == pin.fetch(:bytes)
+      result = @runner.send(:run_process, label, argv, input, 'clickhouse-local',
+        expected_sha: pin.fetch(:sha256), binary_path: @binary, store: store)
+      after_bytes = File.size(@binary)
+      fail!("#{label} runtime byte size changed during native invocation") unless after_bytes == pin.fetch(:bytes)
+      result
+    rescue Errno::ENOENT, Errno::EACCES, Errno::ELOOP => error
+      fail!("#{label} runtime unavailable at native invocation boundary: #{error.message}")
     end
 
     def literal_rows(kind)
@@ -571,7 +618,8 @@ module ProbeCompactRecursiveArraysW280
       fail!("#{label} stdout is not newline-terminated UTF-8") unless text.valid_encoding? && text.end_with?("\n")
       lines = text.lines.map(&:chomp)
       pins = lines.select { |line| line.start_with?("__W280_PIN__\t") }
-      expected = "__W280_PIN__\t#{VERSION}\t#{BUILD}"
+      pin = runtime_pin
+      expected = "__W280_PIN__\t#{pin.fetch(:version)}\t#{pin.fetch(:build)}"
       fail!("#{label} runtime version/build pin differs: #{pins.inspect}") unless pins == [expected]
       lines.reject { |line| line == expected }
     end
@@ -611,8 +659,10 @@ module ProbeCompactRecursiveArraysW280
           record.fetch(:stderr_bytes) == stderr.bytesize && record.fetch(:stderr_sha256) == Digest::SHA256.hexdigest(stderr)
         fail!("#{label} process binary identity differs") unless
           record.fetch(:process_kind) == expected.fetch(:process_kind) && record.fetch(:binary_path) == @binary &&
-          record.fetch(:expected_binary_sha256) == BINARY_SHA256 && record.fetch(:binary_sha_before) == BINARY_SHA256 &&
-          record.fetch(:binary_sha_after) == BINARY_SHA256 && record.fetch(:store_path) == expected.fetch(:store_path)
+          record.fetch(:expected_binary_sha256) == expected.fetch(:expected_sha256) &&
+          record.fetch(:binary_sha_before) == expected.fetch(:expected_sha256) &&
+          record.fetch(:binary_sha_after) == expected.fetch(:expected_sha256) &&
+          record.fetch(:store_path) == expected.fetch(:store_path)
         saved = JSON.parse(File.binread(File.join(base, record_name)))
         fail!("#{label} persisted process record differs") unless saved == JSON.parse(JSON.generate(record))
       end
@@ -622,6 +672,7 @@ module ProbeCompactRecursiveArraysW280
     end
 
     def build_summary
+      pin = runtime_pin
       main = @cases.values.select { |entry| entry[:schema_kind] == 'main' }
       controls = @cases.values.select { |entry| entry[:schema_kind] == ARRAY_CASE }
       main_create_rejections = main.select { |entry| entry[:status] == 'create_server_exception' }
@@ -642,8 +693,8 @@ module ProbeCompactRecursiveArraysW280
       {
         format: FORMAT, status: status,
         execution_scope: 'Stock clickhouse-local only; no Crystal binary, helper, fixture, or production code is invoked.',
-        runtime_pin: {binary: @binary, sha256_expected: BINARY_SHA256, sha256_before: @binary_sha_before,
-                      sha256_after: @binary_sha_after, version: VERSION, build: BUILD},
+        runtime_pin: {binary: @binary, sha256_expected: pin.fetch(:sha256), sha256_before: @binary_sha_before,
+                      sha256_after: @binary_sha_after, version: pin.fetch(:version), build: pin.fetch(:build)},
         source_pin: {root: @source_root, revision_expected: SOURCE_REVISION,
                      revision_before: @source_revision_before,
                      revision_after: @source_revision_after, source_sha256_before: @upstream_hashes_before,
@@ -669,10 +720,11 @@ module ProbeCompactRecursiveArraysW280
     end
 
     def render_summary(summary)
+      pin = runtime_pin
       lines = [
         '# W280 Compact recursive Array(JSON) stock probe', '',
         "Status: `#{summary.fetch(:status)}`",
-        "Runtime: `#{VERSION}` build `#{BUILD}` SHA-256 `#{BINARY_SHA256}`.",
+        "Runtime: `#{pin.fetch(:version)}` build `#{pin.fetch(:build)}` SHA-256 `#{pin.fetch(:sha256)}`.",
         "Source: `#{SOURCE_REVISION}` at `#{SOURCE_ROOT}` (separate pin).",
         'The main case alternates populated left and right arrays over eight rows; JSON literals distinguish a missing state path, present null, and present empty String. Both main schema and one-Array positive control are attempted in plain S0/MAP0 under MRK3 and MRK4.',
       ]
@@ -685,9 +737,11 @@ module ProbeCompactRecursiveArraysW280
 
     def persist_inconclusive(error)
       return unless @root && File.directory?(File.join(@root, 'invocations'))
+      pin = runtime_pin
       report = {
         format: FORMAT, status: 'inconclusive', fatal_error: @fatal_error,
-        error_class: error.class.name, runtime_pin: {binary: @binary, expected_sha256: BINARY_SHA256},
+        error_class: error.class.name,
+        runtime_pin: {binary: @binary, expected_sha256: pin.fetch(:sha256), expected_bytes: pin.fetch(:bytes)},
         source_pin: {root: @source_root, expected_revision: SOURCE_REVISION},
         cases: @cases, invocations: @invocations, evidence_root: @root,
       }

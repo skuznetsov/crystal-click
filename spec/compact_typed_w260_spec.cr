@@ -534,9 +534,9 @@ describe CrystalClick::CompactBinaryBulkNormalizer do
       reader.logical_read_bytes.should be < child_count.to_u64
 
       # An empty-array control measures the same fixed-role normalizer overhead
-      # without recursive Variant occurrences. Match the discriminator adapter
-      # preflight by its Q-dependent workspace delta, then choose a cap between
-      # the empty and large controls before expanded tags can be allocated.
+      # without recursive Variant occurrences. Align the corresponding
+      # discriminator expansion preflight by observation sequence, then choose
+      # a cap between Q=0 and Q-sized preallocation before tags can be allocated.
       w260_write_workspace_part(empty_root, 0)
       empty_reader = CrystalClick::CompactBinaryBulkColumnReader.open(empty_root, "payload", type)
       empty_observed = [] of UInt64
@@ -547,37 +547,38 @@ describe CrystalClick::CompactBinaryBulkNormalizer do
       empty_marks[0][0].elements.should be_empty
       empty_observed.size.should eq(observed.size)
       empty_observed[0].should eq(empty_reader.logical_read_bytes)
+      physical_base = observed[1]
+      empty_base = empty_observed[1]
 
       discriminator_preflight_indices = [] of Int32
-      (0...(observed.size - 1)).each do |index|
-        previous = observed[index]
-        current = observed[index + 1]
-        if current >= previous && current - previous == child_count.to_u64 + 16_u64
-          discriminator_preflight_indices << (index + 1).to_i32
+      (2...observed.size).each do |index|
+        observed[index].should be >= physical_base
+        empty_observed[index].should be >= empty_base
+        large_relative = observed[index] - physical_base
+        empty_relative = empty_observed[index] - empty_base
+        if large_relative >= empty_relative && large_relative - empty_relative == child_count.to_u64
+          discriminator_preflight_indices << index.to_i32
         end
       end
       discriminator_preflight_indices.size.should eq(1)
       discriminator_preflight_index = discriminator_preflight_indices[0]
       discriminator_preflight = observed[discriminator_preflight_index]
 
-      # The empty control has two legitimate +16 observations: the adapter's
-      # Q=0 tag/offset preflight and the following two-arm Variant count array.
-      # Align by source sequence with the unique Q+16 event above rather than
-      # selecting an ambiguous delta or relying on a fixed observer ordinal.
+      # The matching empty-control event is the same source-sequence phase:
+      # Compact Variant preflight charges only its Q-byte normalized tag lane.
+      # The subsequent two-arm count-array observer has fixed +16 bytes, while
+      # later lane ownership includes the expanded tag bytes and has a larger
+      # delta. This exact Q differential therefore identifies pre-allocation.
       discriminator_preflight_index.should be > 0
       empty_preflight_index = discriminator_preflight_index
-      empty_observed[empty_preflight_index].should be >= empty_observed[empty_preflight_index - 1]
-      (empty_observed[empty_preflight_index] - empty_observed[empty_preflight_index - 1]).should eq(16_u64)
 
-      physical_base = observed[1]
-      empty_base = empty_observed[1]
       discriminator_preflight.should be >= physical_base
       empty_preflight = empty_observed[empty_preflight_index]
       empty_preflight.should be >= empty_base
       empty_preflight_relative = empty_preflight - empty_base
       large_preflight_relative = discriminator_preflight - physical_base
       large_preflight_relative.should be >= empty_preflight_relative
-      (large_preflight_relative - empty_preflight_relative).should be >= child_count.to_u64
+      (large_preflight_relative - empty_preflight_relative).should eq(child_count.to_u64)
       max_workspace = physical_base + empty_preflight_relative + (child_count / 2).to_u64
       observed[0...discriminator_preflight_index].max.should be <= max_workspace
       discriminator_preflight.should be > max_workspace

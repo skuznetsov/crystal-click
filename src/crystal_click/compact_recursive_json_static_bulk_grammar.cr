@@ -1,8 +1,9 @@
 module CrystalClick
   # Bounded recursive Bulk role, state-prefix, and body grammar shared by
-  # recursive Compact JSON sites. LowCardinality owns only its existing
-  # per-mark AdditionalKeysOnly prefix/index form. The census allocates
-  # nothing; materialization and data-dependent capture follow owner preflight.
+  # recursive Compact JSON sites. LowCardinality and Variant retain their
+  # distinct state-prefix/body contracts while sharing one schema DFS. The
+  # census allocates nothing; materialization and data-dependent capture
+  # follow owner preflight.
   class CompactRecursiveJsonStaticBulkGrammar
     def self.admitted_type?(type : BinaryDataType, depth : Int32, limits : BinaryCodecLimits) : Bool
       CompactRecursiveJsonBulkAdmission.admitted?(type, depth, limits)
@@ -16,6 +17,12 @@ module CrystalClick
         profile.with_size_stream? ? 2_u64 : 1_u64
       when BinaryDataType::TAG_LOW_CARDINALITY
         2_u64
+      when BinaryDataType::TAG_VARIANT
+        roles = 1_u64 # .discriminators
+        type.child_count.times do |index|
+          roles = checked_add(roles, measure_role_count(type.child_at(index), profile))
+        end
+        roles
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED,
            BinaryDataType::TAG_NULLABLE, BinaryDataType::TAG_MAP
         own = 1_u64
@@ -50,6 +57,13 @@ module CrystalClick
         profile.with_size_stream? ? checked_add(bytes, checked_add(prefix_bytes, 13_u64)) : bytes # .string_sizes
       when BinaryDataType::TAG_LOW_CARDINALITY
         checked_add(checked_add(prefix_bytes, 11_u64), checked_add(prefix_bytes, 8_u64)) # .dictionary + .indexes
+      when BinaryDataType::TAG_VARIANT
+        bytes = checked_add(prefix_bytes, 15_u64) # .discriminators
+        type.child_count.times do |index|
+          arm_prefix = checked_add(prefix_bytes, checked_add(5_u64, decimal_digits(index.to_u64))) # .arm.N
+          bytes = checked_add(bytes, measure_role_name_bytes(type.child_at(index), profile, arm_prefix))
+        end
+        bytes
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         own = checked_add(prefix_bytes, 6_u64)                                                                 # .sizes
         checked_add(own, measure_role_name_bytes(type.child_at(0), profile, checked_add(prefix_bytes, 9_u64))) # .elements
@@ -86,7 +100,8 @@ module CrystalClick
         size_lane_count(type.child_at(0))
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         checked_add(1_u64, size_lane_count(type.child_at(0)))
-      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE, BinaryDataType::TAG_MAP
+      when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE,
+           BinaryDataType::TAG_MAP, BinaryDataType::TAG_VARIANT
         total = 0_u64
         type.child_count.times do |index|
           total = checked_add(total, size_lane_count(type.child_at(index)))
@@ -143,6 +158,56 @@ module CrystalClick
           {bytes[0, consumed], consumed}
         end
         mark.capture_lane(index_role, extent)
+      when BinaryDataType::TAG_VARIANT
+        discriminator_role = "#{role_name}.discriminators"
+        mode_prefix = mark.state_prefix_for_role(
+          discriminator_role,
+          CompactRecursiveJsonBulkSite::StatePrefixKind::VariantDiscriminatorMode,
+        )
+        mode = BinaryBulkDiscriminatorFramingAdapter.validate_header(
+          discriminator_role,
+          mode_prefix,
+          BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES,
+        )
+        captured, _capture = ledger.with_bulk_body_grammar_extent(site.callback_name_for(discriminator_role)) do |bytes|
+          tags, consumed = BinaryBulkDiscriminatorFramingAdapter.read_mark_body(
+            discriminator_role,
+            mode,
+            bytes,
+            rows,
+            budget,
+            ledger.mode.mrk4?,
+          )
+          arm_count = type.child_count
+          budget.ensure_future_nodes(1_u64)
+          budget.ensure_future_elements(arm_count.to_u64)
+          budget.charge_node
+          budget.charge_elements(arm_count.to_u64) if arm_count > 0
+          counts = Array(UInt64).new(arm_count, 0_u64)
+          tags.each do |tag|
+            next if tag == 0xff_u8
+            index = tag.to_i
+            if index >= arm_count
+              raise CorruptPartError.new("Compact Variant discriminator is outside its arm roster")
+            end
+            counts[index] += 1_u64
+          end
+          { {tags, counts}, consumed }
+        end
+        tags, arm_rows = captured
+        mark.capture_lane(discriminator_role, tags)
+        type.child_count.times do |index|
+          capture!(
+            type.child_at(index),
+            "#{role_name}.arm.#{index}",
+            arm_rows[index],
+            site,
+            mark,
+            ledger,
+            limits,
+            budget,
+          )
+        end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         size_role = "#{role_name}.sizes"
         callback = site.callback_name_for(size_role)
@@ -220,7 +285,36 @@ module CrystalClick
           # Its eventual detached prefix copy is charged by mark packaging.
           {prefix, 8}
         end
-        mark.capture_dictionary_prefix!(role, prefix)
+        mark.capture_state_prefix!(
+          role,
+          CompactRecursiveJsonBulkSite::StatePrefixKind::LowCardinalityDictionaryV1,
+          prefix,
+        )
+      when BinaryDataType::TAG_VARIANT
+        role = "#{role_name}.discriminators"
+        callback = site.prefix_callback_name_for(role)
+        prefix, _capture = ledger.with_bulk_prefix_grammar_extent(callback) do |bytes|
+          mode = BinaryBulkDiscriminatorFramingAdapter.validate_header(
+            role,
+            bytes,
+            BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES,
+          )
+          # Mode is returned by validation; the parent prefix holder borrows
+          # these exact eight bytes until the mark's body grammar is complete.
+          unless mode == DynamicDiscriminatorBodyValidator::BASIC_MODE ||
+                 mode == DynamicDiscriminatorBodyValidator::COMPACT_MODE
+            raise CorruptPartError.new("unknown Compact Variant discriminator mode")
+          end
+          {Bytes.new(bytes.to_unsafe, 8, read_only: true), 8}
+        end
+        mark.capture_state_prefix!(
+          role,
+          CompactRecursiveJsonBulkSite::StatePrefixKind::VariantDiscriminatorMode,
+          prefix,
+        )
+        type.child_count.times do |index|
+          capture_prefixes!(type.child_at(index), "#{role_name}.arm.#{index}", site, mark, ledger, budget)
+        end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         capture_prefixes!(type.child_at(0), "#{role_name}.elements", site, mark, ledger, budget)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
@@ -251,6 +345,11 @@ module CrystalClick
       when BinaryDataType::TAG_LOW_CARDINALITY
         output << CompactRecursiveJsonBulkSite::Role.new("#{path}.dictionary", false)
         output << CompactRecursiveJsonBulkSite::Role.new("#{path}.indexes", false)
+      when BinaryDataType::TAG_VARIANT
+        output << CompactRecursiveJsonBulkSite::Role.new("#{path}.discriminators", false)
+        type.child_count.times do |index|
+          append_roles(type.child_at(index), "#{path}.arm.#{index}", profile, output)
+        end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
         output << CompactRecursiveJsonBulkSite::Role.new("#{path}.sizes", true)
         append_roles(type.child_at(0), "#{path}.elements", profile, output)

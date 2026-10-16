@@ -565,6 +565,37 @@ module CrystalClick
       unless streams.mark_count == 1 && streams.role_count == site.role_count
         raise UnsupportedFormatError.new("Compact JSON opaque Bulk callback roster differs from its physical plan")
       end
+
+      variant_prefix_count = 0_u64
+      site.prefix_role_count.times do |prefix_index|
+        prefix_role = site.prefix_role_at(prefix_index)
+        if prefix_role.kind == CompactRecursiveJsonBulkSite::StatePrefixKind::VariantDiscriminatorMode
+          variant_prefix_count = checked_add(variant_prefix_count, 1_u64)
+        end
+      end
+      variant_lanes = [] of Tuple(String, BinaryBulkStream, UInt64)
+      if variant_prefix_count > 0_u64
+        budget.ensure_future_nodes(1_u64)
+        budget.ensure_future_elements(variant_prefix_count)
+        budget.charge_node
+        budget.charge_elements(variant_prefix_count)
+        variant_lanes = Array(Tuple(String, BinaryBulkStream, UInt64)).new(variant_prefix_count.to_i)
+        variant_mode = @plan.variant_discriminator_mode.wire_value
+        site.prefix_role_count.times do |prefix_index|
+          prefix_role = site.prefix_role_at(prefix_index)
+          next unless prefix_role.kind == CompactRecursiveJsonBulkSite::StatePrefixKind::VariantDiscriminatorMode
+          role = site.role_at(prefix_role.role_index).name
+          unless streams.has_role?(role)
+            raise UnsupportedFormatError.new("Compact JSON opaque Bulk encoder omitted a Variant discriminator role")
+          end
+          variant_lanes << {role, streams.stream(role), variant_mode}
+        end
+        unless variant_lanes.size.to_u64 == variant_prefix_count
+          raise UnsupportedFormatError.new("Compact JSON Variant framing roster changed after planning")
+        end
+        BinaryBulkDiscriminatorFramingAdapter.preflight_write(variant_lanes, budget)
+      end
+
       site.prefix_role_count.times do |prefix_index|
         prefix_role = site.prefix_role_at(prefix_index)
         role = site.role_at(prefix_role.role_index).name
@@ -572,24 +603,51 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact JSON opaque Bulk encoder omitted a stateful physical role")
         end
         stream = streams.stream(role)
-        unless stream.offset_at(0) == 8_u64 && stream.offset_at(1) == 8_u64 && stream.byte_size == 8
-          raise UnsupportedFormatError.new("Compact JSON opaque Bulk dictionary prefix lane has an unexpected extent")
+        case prefix_role.kind
+        when CompactRecursiveJsonBulkSite::StatePrefixKind::LowCardinalityDictionaryV1
+          unless stream.offset_at(0) == 8_u64 && stream.offset_at(1) == 8_u64 && stream.byte_size == 8
+            raise UnsupportedFormatError.new("Compact JSON opaque Bulk dictionary prefix lane has an unexpected extent")
+          end
+          prefix = stream.borrowed_slice(0_u64, 8_u64)
+          budget.ensure_future_nodes(1_u64)
+          budget.ensure_future_elements(8_u64)
+          budget.ensure_wire_bytes(8_u64)
+          budget.charge_node
+          budget.charge_elements(8_u64)
+          budget.charge_wire_bytes(8_u64)
+          detached = Bytes.new(8) { |index| prefix[index] }
+          append_fragment!(prefix_role.callback_name, detached, mark_index, filled)
+        when CompactRecursiveJsonBulkSite::StatePrefixKind::VariantDiscriminatorMode
+          lane = variant_lanes.find { |candidate| candidate[0] == role } ||
+                 raise(UnsupportedFormatError.new("Compact JSON Variant framing lane is missing from its preflight roster"))
+          physical, offsets, physical_prefix = BinaryBulkDiscriminatorFramingAdapter.write_lane(
+            lane[0], lane[1], lane[2],
+          )
+          unless physical_prefix == BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES &&
+                 offsets.size == 2 && offsets[0] == physical_prefix.to_u64 &&
+                 offsets[1] == physical.size.to_u64
+            raise UnsupportedFormatError.new("Compact JSON Variant physical lane has an unexpected one-mark extent")
+          end
+          prefix_bytes = Bytes.new(physical.to_unsafe, physical_prefix, read_only: true)
+          body_size = physical.size - physical_prefix
+          body_bytes = Bytes.new(physical.to_unsafe + physical_prefix, body_size, read_only: true)
+          append_fragment!(prefix_role.callback_name, prefix_bytes, mark_index, filled)
+          append_fragment!(site.callback_name_for(role), body_bytes, mark_index, filled)
         end
-        prefix = stream.borrowed_slice(0_u64, 8_u64)
-        budget.ensure_future_nodes(1_u64)
-        budget.ensure_future_elements(8_u64)
-        budget.ensure_wire_bytes(8_u64)
-        budget.charge_node
-        budget.charge_elements(8_u64)
-        budget.charge_wire_bytes(8_u64)
-        detached = Bytes.new(8) { |index| prefix[index] }
-        append_fragment!(prefix_role.callback_name, detached, mark_index, filled)
       end
       site.each_role do |role|
         unless streams.has_role?(role.name)
           raise UnsupportedFormatError.new("Compact JSON opaque Bulk encoder omitted a physical role")
         end
         stream = streams.stream(role.name)
+        if prefix_index = site.prefix_role_index(role.name)
+          prefix_role = site.prefix_role_at(prefix_index)
+          if prefix_role.kind == CompactRecursiveJsonBulkSite::StatePrefixKind::VariantDiscriminatorMode
+            # The adapter emitted both the schema-DFS mode prefix and this
+            # physical body callback from one validated mark lane above.
+            next
+          end
+        end
         first = stream.offset_at(0)
         last = stream.offset_at(1)
         if last < first

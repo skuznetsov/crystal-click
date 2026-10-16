@@ -1,5 +1,533 @@
 # Compact part writer frontier
 
+## Recursive Variant Bulk composition — W283
+
+Status: VERIFIED / ROOT adversary ROBUST within the finite declared owner and
+pinned native interoperability scope (2026-10-16), over
+`1da498c397cc7e1341b9964b43e07771736ecab4`. Current-toolchain DEBUG and actual
+RELEASE each pass 682 examples on the exact 122-path affected roster, plus one
+separately filtered admission example per mode. Fresh bounded native matrices,
+audits and adversarial controls pass in both modes. This is the last qualified
+frontier, not all-type/layout parity, full-suite qualification, Compact MV /
+projection-child integration or the <=10-percent slowdown target. The full
+objective remains ACTIVE; memory/performance remains deferred.
+
+### Historical design and SSD recovery checkpoints
+
+The following design amendments and observations retain their original
+checkpoint status. The current return pointer below supersedes then-open gates;
+it does not convert interrupted/refused runs into passes or restore missing
+historical captures.
+
+SSD recovery amendment (2026-10-16, CAUTION): the old `/private/tmp` source,
+runtime, helpers and W283 stock/DEBUG/partial-RELEASE capture roots are absent
+on current inspection (`7fba4d`). Their earlier results below are historical
+observations, not currently re-auditable raw evidence. The unchanged guarded
+no-op now passes at 77-percent system free memory (`2aeb9b`); that is not a
+native or compiler pass and does not establish sustained resource headroom.
+The installed toolchain has also changed to Crystal 1.22.0 / LLVM 23.1.3
+(`b91155`); the old Crystal 1.21.0 compiler is not installed (`b155aa`). Record
+fresh builds as new-toolchain evidence, not reproduction of the old helper
+hashes. Refresh affected Crystal regressions before a current-toolchain
+qualification claim, even when their source seals remain identical.
+
+The user-selected `/opt/mldata_ssd` resolves to `/Volumes/Nata's Data/MLData`,
+on a separate writable volume with about 1.3 TiB free (`aeba25`, `e2e1ca`).
+New build/cache/native data must stay in an owned task subtree there, with no
+internal-disk fallback when the SSD is absent. The current subtree is
+`/opt/mldata_ssd/cache/crystal-click-w283.PDWAiK` (`a80093`). Preserve only the
+inputs/captures needed for qualification; remove superseded download/expansion
+and compiler scratch once its remaining consumer is complete. The shared
+resource guard remains unchanged, including its tiny auto-cleaned stdio files.
+
+Admit a harness-only location change before further execution: W283 may use
+the approved SSD alias and its canonical direct-child evidence roots. Reject
+nonempty roots for a new probe, descendant symlinks/escapes, unrelated bases,
+and a missing or internal-disk replacement of the selected SSD. Audits may
+read nonempty completed roots, but must enforce the same location and
+summary-root identity. Keep historical `/private/tmp` behavior unchanged for
+older runners. A minimal overridable source-location hook may be added to
+W280 with its old strict default; only W283 may opt into the SSD policy.
+Location is not content identity: retain the exact source commit, source
+hashes and native runtime hash/version/build, with no latest-version substitute.
+Do not copy the inherited runner or mutate its global pin constants.
+
+Falsifiers/DoD for the location change: observe a Ruby-only expected-success
+SSD-root RED before implementation, then accept an empty owned SSD child and
+reject symlink/escape, nonempty, unrelated-base and missing-volume controls.
+Check legacy runner rejection of a relocated source and the unchanged exact
+source/runtime identity guards. Rebuild both helpers from frozen Crystal
+inputs, run the corrected filtered W263 actual RELEASE admission case, and
+obtain fresh full DEBUG and RELEASE native matrices, raw audits, bounded
+independent literal/discriminator checks and six actual-capture mutants per
+mode. A passing seeded audit without a pristine full capture is insufficient.
+No production serde/admission widening is admitted by this amendment. Rollback
+is only the harness-location changes and this amendment; preserve the coherent
+W283 implementation and protected W263 files. Reseal new harness inputs after
+execution; do not overwrite historical input seals as if they were new passes.
+
+Earlier recovery signals: ROOT independently matched all 28 checked-out source
+files to their pinned Git blobs and verified the original expanded runtime
+size/hash (`c7b47b`). The W283 SSD path-policy verifier, 12-case Ruby auditor
+self-test, literal invariants, syntax checks and preserved legacy root rejection
+pass (`82be37`, `446c81`, `c1de6e`, `afc5f2`); these are not native captures.
+The corrected filtered W263 actual RELEASE admission example passes on Crystal
+1.22 (`c7b141`), without claiming any capture-dependent W263 example.
+Both helpers build on the current toolchain; ROOT rechecked their binary and
+raw build-log hashes (`50caaa`). DEBUG/RELEASE build exits are zero, with
+7.60/36.57-second wall times and 1,572,864,000/2,150,334,464-byte maximum RSS.
+This proves compilation only. The exact 122-path DEBUG/RELEASE regression
+refresh stopped at its first guard kill: DEBUG cohorts 1-3 pass 245 examples;
+cohort 4 has no completed summary after system free memory crossed 49 percent
+(`4143c2`). No later DEBUG or RELEASE cohort ran. ROOT rechecked raw log hashes
+and the SSD report (`656732`); do not call this a 682-example mode pass or infer
+workload causality from a system-wide measurement. Runtime strip pin
+reproduction and fresh native qualification remain open: the expanded input
+matches, but neither current stripped output matches the historical pin.
+
+Earlier recovery checkpoint (2026-10-16): after a new
+76-percent sample (`bb9e0f`), the one-shot LLVM23 basename experiment reached
+the unchanged guard, which refused at 36 percent before LLVM launched
+(exit 75). ROOT checked the retained 852-byte SSD run log and its SHA-256
+(`ae64ea`). No output binary or identifier result exists; the agent reports
+unchanged expanded-input hashes before and after. The basename hypothesis
+remains untested: output signatures encode the leaf and W112 records a
+directly expanded pinned executable under leaf `clickhouse`, but that does not
+establish reproduction. Do not retry on another isolated memory sample, change
+the tool and basename simultaneously, or substitute a new pin. Further heavy
+execution needs a genuinely changed resource window and a fresh bounded
+dispatch under the same guard. Remaining DEBUG cohorts, all RELEASE cohorts
+and both fresh native matrices still need their declared checks. The redundant
+LLVM22-named diagnostic file was removed after its last consumer, reclaiming
+746,226,224 bytes (`b7b661`, `315450`); the expanded original, LLVM23 comparison
+output, source, helpers and raw regression logs remain.
+
+Subsequent discriminator (2026-10-16): a guarded 30-second passive control
+completed in 30.45 seconds at a 78-percent preflight (`7e763c`, raw log
+`1cdd81`). This justified one bounded same-tool strip, not a sustained native
+window. LLVM23 with output leaf exactly `clickhouse` then exited zero in
+5.27 seconds, maximum RSS 2,325,626,880 bytes. ROOT checked its output hash,
+size and embedded identifier (`98dfc7`): 746,226,208 bytes,
+`e31ec2fddb0bdd3fab88a8aed3cc3cfd5eb384c86963a53fe21f61f1f594d6c4`,
+identifier `clickhouse`. It is 16 bytes shorter than the historical pin and
+does not match it. The basename hypothesis is refuted for that exact
+tool/input/flags; no native qualification follows. The source-defined upload
+hook at runtime build `d9bcb5ab007f0f6299f7f973f2642245bab3d028`
+publishes the stripped sibling to a mutable branch key, whereas the declared
+commit-addressed ARM Darwin artifact is the full carrier. The inspected CI
+definitions do not establish a historical stripped-artifact URL; this is not
+a claim that no other archive exists.
+
+Runtime recovery amendment (2026-10-16, user-authorized, CAUTION,
+design-sealed): new W283 captures may use only the authenticated official
+full executable of the same version/build instead of trying to reproduce a
+local strip. Exact new runtime pin: 919,123,095 bytes,
+`5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae`,
+ClickHouse `26.10.1.1201`, build
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Its carrier URL, size/hash
+and expansion are recorded in the SSD recovery report. Keep source revision
+`ed30948f095ecb70679986d7d60e27ad770ae27a` and all 28 source pins unchanged.
+Historical stripped pins, commands and observations remain historical; do not
+relabel them as full-runtime passes. This changes the test oracle artifact,
+not library admission, values, layouts, native version/build or resource limits.
+
+Bounded plan and falsifiers for this amendment:
+
+- Freeze canonical harness bytes until the running serial affected-regression
+  batch finishes or stops and records its final seal. Preparation and an
+  expected-success RED may use an isolated SSD copy meanwhile.
+- Inventory runtime-pin consumers in
+  `probe_compact_recursive_arrays_w280.rb`, the W281/W282/W283 matrix family,
+  `verify_compact_variant_bulk_w283_capture.rb`,
+  `verify_compact_variant_bulk_w283_paths.rb` and
+  `verify_compact_variant_bulk_w283_instrumentation.rb`. Use a minimal private
+  runtime-pin accessor with the unchanged W280 default; only W283 overrides it.
+  Do not reassign inherited constants, accept an arbitrary CLI/env hash, copy
+  the inherited runner, or relax the auditor to trust summary-declared pins.
+- Before the implementation, observe a Ruby-only RED for W283 selecting the
+  exact full-runtime pin. Then require selection and propagation through
+  pre/post byte checks, native invocation expectations/records and summaries.
+  The independently fixed W283 auditor must reject the old/mismatched hash,
+  forged runtime metadata, version/build mismatch and post-capture mutation.
+  Verify inherited W280/W281/W282 still select the original stripped pin.
+- DoD: Ruby syntax checks of each changed script;
+  `ruby scripts/verify_compact_variant_bulk_w283_paths.rb`;
+  the existing W283 auditor self-test and instrumentation seed controls;
+  and independently checked new pin propagation. Expect all focused controls
+  to pass and all seeded wrong-pin cases to reject. The strongest failure is
+  split-brain pinning between execution and audit; compare both against literal
+  hashes, not only a shared accessor or model agreement.
+- After the regression worker releases the heavy slot, authenticate current
+  runtime bytes and guarded version/build, then run fresh full native DEBUG
+  and RELEASE matrices in separate empty SSD roots. Require the existing raw
+  audit, independent literal/discriminator checks and six actual-capture
+  mutants per mode before W283 qualification. The outer 50-percent/12288-MiB
+  guard and serial execution remain unchanged; stop on its first event.
+- Rollback only the runtime accessor/W283 pin changes and this amendment;
+  preserve the location amendment, coherent W283 serde, protected W263 files
+  and all historical input seals. Reseal the new harness separately. No W283
+  commit until the feature DoD, and no remote push.
+
+Regression recovery timeline: the resumed batch stopped at its first failing
+DEBUG cohort. Nine cohorts pass 431 examples including the 245 reused sealed
+examples; `types_3b` ran 24 examples with one path-string assertion failure
+at `projection_specialized_consumers_w217_spec.cr:227`. The immediately prior
+value assertion passed. Expected `/opt/mldata_ssd/...` differs from the
+catalog's canonical `/Volumes/Nata's Data/MLData/...` spelling. ROOT checked
+the report and all three failed-cohort command/raw-log hashes (`fa4e9e`).
+The bounded repeat with canonical SSD `TMPDIR`/cache paths stopped before
+`run_safe`: memory snapshots were 40 then 58 percent free; the single recovery
+sample did not justify launch. It is `RESOURCE_DEFERRED`, not a guard exit or
+test result, and does not resolve the alias-path hypothesis. ROOT checked the
+prepared command and report hashes (`a0b74b`). No production/spec edits or
+workload occurred; the final 20-input seal was unchanged, so the canonical
+harness freeze was released for the scoped full-pin amendment. Its Ruby-only
+controls subsequently passed ROOT's independent selection GREEN, runtime-pin,
+path and instrumentation checks (`72ba78`, `691152`, `b09cbd`, `6e6c5f`).
+The new 21-input seal is
+`3afb2f65a1eedca426e1e2abfcd0d38c42b55a6c83f47929b1868047ff1a9532`
+(`e80ccc`); all 14 original Crystal inputs and protected files are unchanged.
+The accessor-defining W280 source is now included in W283 capture lineage.
+W283's narrow invocation-auditor override retains W282's checks but uses an
+independent full literal for native records and the helper-specific pin for
+helper records; method-parity and wrong-pin controls pass. ROBUST within that
+Ruby-only boundary, not a native compatibility verdict.
+A later 30.69-second guarded passive control passed at 81-percent preflight
+(`67929f`). The canonical SSD-path repeat then passed all 24 examples in
+19.70 seconds, maximum RSS 3,614,081,024 bytes, at 80-percent preflight.
+ROOT checked the report/command/raw logs (`fe8b28`); no production/spec edit
+was needed. Total scoped current-toolchain DEBUG progress at that checkpoint
+was 455 examples,
+retaining the earlier runs' provenance. The next dispatch aborted in a logging
+wrapper before guard/Crystal launch; no test or resource event occurred. ROOT's
+nonempty-output falsifier exposed an output-pipe defect in its proposed v1
+replacement (`445f87`), before it was used for any real cohort. The direct-argv
+`Process.spawn` v2 passes ROOT's actual stdout/stderr, exit7, signal143 and
+existing-log nontruncation checks (`d4b766`); prior logs/artifacts are preserved.
+The remaining DEBUG cohorts then passed 163, 49 and 15 examples, completing
+the scoped 682-example / 122-path DEBUG roster across its recorded invocations.
+The first RELEASE cohort stopped at the unchanged guard's 50-percent
+system-free-memory threshold (82-percent preflight, 16.15 seconds, maximum RSS
+2,574,467,072 bytes). Its stdout is empty: zero completed RELEASE examples,
+`RESOURCE_DEFERRED`, not a library test failure. No later cohort or retry ran.
+ROOT independently read and hashed the raw logs and resealed the 21 inputs,
+14 Crystal inputs, 122-path roster, 660-file census, protected files and guard
+(`436cef`, `0d9a73`, `b3f1ce`, `5ec695`). Canonical inputs remain frozen.
+The next read-only system-memory sample was 39 percent (`490465`); there is
+no active heavy execution grant. The reviewed SSD auth/native bundle remains
+unlaunched (`c4b9cc`), with the approved full-runtime hash rechecked (`b1f8b1`).
+A suitable guarded resource window and a fresh bounded grant are required;
+one favorable instantaneous sample, a guard change or a blind retry is not
+sufficient. Guarded authentication and both native modes remain open, as do
+all 13 current-toolchain RELEASE cohorts. No W283 commit or push.
+The subsequent single passive/auth grant is now exhausted: after a
+69-percent read-only sample, the 30-second passive control passed at
+76-percent guard preflight (exit zero, 30.63 seconds real, 4,341,760-byte maximum
+RSS), but the exact auth command was guard-refused before ClickHouse launch
+at 39 percent (exit 75, 0.01 seconds, 2,211,840-byte wrapper maximum RSS).
+The SQL version/build line is absent and the auth/native roots remain empty.
+ROOT read both raw logs and checked their hashes plus the unchanged full
+runtime (`5aa658`, `a7713d`, `1ba53f`). No retry or matrix followed. A passive
+pass does not guarantee the following workload's admission or native success;
+the guard remains unchanged and authentication remains open.
+The subsequent fixed five-sample diagnostic observed 78 percent at every
+scheduled offset and matched PATH/absolute `memory_pressure` output; it does
+not explain the earlier pressure drop. A new single guarded full-runtime auth
+attempt then passed with the exact version/build line (78-percent preflight,
+exit zero, 0.74 seconds, 155,877,376-byte maximum RSS). ROOT checked the raw
+logs (`ee6eeb`), auth report (`0d42a4`, `ac113d`) and unchanged input seals
+(`1286bd`). Runtime/source authentication is now established at those pins;
+native compatibility is not. The subsequent DEBUG matrix passes all 8 stock
+and 8 generated cells / 144 invocations, and its full-matrix capture audit
+passes. Instrumentation exited 1 on a raw-record identity/argv comparison
+during actual-capture mutation setup, after its Ruby controls and pristine
+capture audit passed. The serial sequence stopped there: literal/raw checks,
+RELEASE native checks and compilers were not launched. This is a harness
+diagnostic, not a guard event or an established serde defect. ROOT checked the
+report and raw logs; the capture is preserved for read-only diagnosis.
+See the SSD report/evidence packet for counts;
+the first interrupted batch above is retained as a separate historical event.
+
+Problem: the recursive JSON-free Bulk owner already reuses BinaryBulk codecs,
+but its admission, ordered-role census, prefix capture and packaging only
+compose prefix-free values and LC dictionary prefixes. Separate static Compact
+Variant framing already supports BASIC and COMPACT. Reuse that framing inside
+the recursive JSON owner rather than introduce another Variant value codec.
+
+Implemented surface, pending final qualification: existing admitted Variant
+descriptors below the existing
+Array/Nested/Tuple/Map BASIC wrappers in JSON-free Bulk islands of a recursive
+JSON column. Recurse through supported Variant arms and preserve existing
+nominal/core child policies, including LC children where those policies admit
+them. Both discriminator modes are required; do not silently reduce this to
+BASIC or to a root Variant fixture. The public recursive JSON reader's
+admission intentionally expands with its schema plan. The shared prefix-free
+codec still rejects Variant; Storage parsing and other Object/root typed
+carrier gates are separate owners, not interchangeable admission claims.
+
+Design laws:
+
+- Share BinaryBulk value encoding/decoding and discriminator framing. A small
+  shared extent grammar may be extracted where needed; do not copy independent
+  BASIC/COMPACT parsers into the recursive reader.
+- Enumerate roles and prefixes in serializer/type DFS order, not sorted role
+  names. Distinguish LC dictionary prefixes from Variant discriminator prefixes
+  in one bounded site descriptor. Compile the entire JSON/LC/Variant prefix
+  phase before bodies, retaining every syntactic prefix at zero occurrences.
+- Physical Variant prefixes contain the selected UInt64 mode. Normalized Bulk
+  discriminator streams remain prefix-free byte-per-occurrence tags; LC keeps
+  its existing V1 dictionary prefix and AdditionalKeysOnly per-parent-mark
+  policy. Never confuse these two packaging contracts.
+- Carry inherited occurrence count Q through Array/Map and derive each Variant
+  arm count from validated non-NULL tags. NULL contributes no arm value; an
+  empty selected Array is not NULL. Visit every arm callback even at count zero.
+- Validate exact MRK4 shards and only the grammar-derived MRK3 consumed suffix.
+  Failed grammar validation must not advance the parent cursor. Complete-parent
+  authentication remains a prerequisite to publishing child values.
+- Preflight proportional prefix, tag/count and packaging ownership on the
+  shared budgets before allocation. Raw authenticated input is prepaid once;
+  detached/expanded owners are charged separately. Logical budget bounds are
+  not allocator-peak, RSS or performance claims.
+
+Rejected/non-goals: new Dynamic/JSON inside opaque Bulk, QBit and function-defined
+AggregateFunction extents, Map WITH_BUCKETS, global/cross-mark LC dictionaries,
+new Object layouts, arbitrary key writers, append, Compact MV output or
+projection children, and memory/performance work. Existing separate-owner
+capabilities remain unchanged; these are not global unsupported-type claims.
+
+CAUTION: persistent callback order and state framing. Rollback is the coherent
+W283 feature diff/commit only; preserve unrelated and protected W263 work.
+Implementation may start only after an expected-success local RED and native
+stock admission of the exact mixed JSON/Variant/LC declaration in both modes.
+If stock admission fails, retain the failure and reassess the declaration or
+true compatibility boundary; a root Variant substitute is not the same test.
+
+DoD/falsifiers: DEBUG and actual RELEASE entry/adversary tests plus the affected
+W282/type/normalizer consumers; stock-first bidirectional pinned native matrix
+of BASIC/COMPACT x MRK3/MRK4 x S0/S1 (plain marks, Object V3, MAP0/bucket one),
+CHECK/ATTACH/reopen and literal full/middle/last/EOF windows. Exercise zero-Q,
+positive-Q all-NULL, empty selected arrays, mixed arms, late values and LC/JSON
+prefix interleaving. Reject invalid modes/tags, malformed/truncated COMPACT
+frames, inherited-count mismatches, missing/extra callbacks and trailing MRK4
+bytes; test exact/one-below new ownership budgets and failed MRK3 retry.
+Qualify the native audit with seeded defects and independently check captured
+values/representative raw discriminators. Seal exact commands, pins, affected
+roster and residuals only after execution; no full-suite claim by implication.
+
+Execution anchors: the pre-implementation expected-success entry probe was
+RED (2026-10-14):
+three examples compile; the public parser/type control passes, admission returns
+false and writing rejects at `CompactPartColumn.json`. The guarded stock probe
+then passed all eight BASIC/COMPACT x MRK3/MRK4 x S0/S1 cells with 64 native
+invocations, healthy CHECK and exact full/middle/last/EOF windows at
+`/private/tmp/crystal-click-w283-native-stock.HtmXiU`. ROOT inspected the captured
+Compact/MRK4/S1 settings and the eight-cell results. This is native admission
+for the exact declaration, not generated-part or reader/writer qualification.
+The implementation updates the five Bulk admission/site/mark/grammar/encoder owners
+and one shared Variant mark grammar with its normalizer consumer. Keep test
+ownership in `compact_part_writer_w283_{entry,adversary}_spec.cr` and its support
+fixture; native helper/matrix/capture-auditor ownership is separate. ROOT runs
+serial guarded DEBUG and actual RELEASE probes, then audits the source diff,
+cross-owner regressions and native captures before an atomic feature commit.
+
+Continuation checkpoint (2026-10-14): the first full DEBUG helper/native matrix
+passes all eight stock and eight generated cells, 144 completed invocations
+(`42fe2a`), with exact public-reader/native windows and CHECK/ATTACH/reopen at
+`/private/tmp/crystal-click-w283-native-debug.qS9hmK`. The full raw-capture audit
+passes (`b63fd6` / `212331`) after repairing strict profile extraction for exact
+`_generated` and `_attached` cell labels; malformed labels remain rejected.
+The helper SHA-256 is
+`5b586a126dcf420dfb6fd7467d8af6e2dbf7e928c6321d8e8486f54cab4d8d81`.
+This is one finite DEBUG witness, not final W283 qualification.
+
+The repaired seven-path focused DEBUG cohort passes 56 examples (`b3a41c`).
+The first full 64-path Compact cohort ran 327 examples and found one stale
+workspace-observer assertion in `compact_typed_w260_spec.cr:507` (`8ebc21`):
+the old adapter's temporary offsets were removed, so the expansion preflight
+now charges Q tag bytes, not Q+16 bytes. The test now aligns the positive-Q
+and Q=0 controls and still requires the cap to abort at the unique Q-byte
+preallocation observation. Its targeted guarded DEBUG rerun now passes one
+example (`edeeb6`).
+
+An earlier targeted rerun was stopped by the unchanged 50-percent free-memory guard
+at 45 percent (`a7f541`); an independent literal-capture check was refused at
+33 percent (`93c203`). Earlier guard stops (`767c44`, `b33bfb`, `780d6e`) are
+also non-passes, not waived checks. Formatting of all 13 affected Crystal
+paths passes (`edb6fb`), and `git diff --check` passes (`9aafc5`). No unrelated
+processes were terminated; the guard has not been relaxed.
+
+The instrumentation script now also accepts `--evidence-root ROOT`: first
+audit the pristine full matrix, then reject six in-memory mutations of case
+membership, observed reader profile, generated last-window signature, MRK4
+mark length, ATTACH inventory claim and raw-record stdout seal. ROOT reviewed
+the source paths and intended diagnostics. Guarded syntax checks now pass for
+all three Ruby scripts (`b4ad95`, `5f99fe`, `666734`); the instrumentation run
+passes its pristine full matrix and all six actual-capture mutations
+(`6991fc` / `f2bcdf`). ROOT's independent checks pass 64 literal stock/attached
+windows (`bbc8d8`) and 192 raw Variant prefixes and exact discriminator bodies
+(`71243a`): 36 zero-Q, 60 uniform and 96 mixed bodies. These bounded raw
+checks are not a complete independent JSON/frame decoder.
+
+The subsequent 64-path affected DEBUG Compact rerun was guard-killed during
+compilation at 36-percent system free memory (`bec8c5`); a 16-path split was
+also killed at 34 percent (`7aae67`). Neither is an executed test failure or
+a passing cohort. A one-file timed control passes two W277 entry examples
+(`cc8e50`) with 1,627,553,792-byte maximum RSS. The exact 16-path group later
+passes 95 examples (`ca8a39`) with 4,000,481,280-byte maximum RSS. This resolves
+that rerun, not the cause of system-wide pressure. Do not infer a production
+fix, blame unrelated processes or weaken the guard.
+
+The exact 122-path affected roster now passes 682 examples with zero
+failures/errors/pending in DEBUG and actual RELEASE, using 13 disjoint serial
+guarded cohorts per mode. It is the W282 117-path roster plus W283 entry and
+adversary and three shared-discriminator consumers, with no historical drops.
+The largest observed RELEASE compiler cohort has 10,001,530,880-byte maximum
+RSS; these outer guard measurements are not reader performance benchmarks.
+
+The separately filtered W263 admission example originally failed on its stale
+negative `Tuple(JSON, Variant(String, UInt8))` expectation (`43db5e`). That
+spelling belongs to the recursive JSON owner intentionally extended by W283,
+not the shared prefix-free codec. The corrected example admits it and still
+requires `BinaryPrefixFreeStaticTypeAdmission` to reject Variant; Dynamic and
+JSON-inside-Variant/opaque Dynamic negatives remain. Its guarded DEBUG run
+passes one example (`e84a1f`). No production gate was weakened for this test.
+The three protected untracked W263 specs remain unchanged; historical
+capture-dependent W263 examples are not claimed executed.
+
+Final formatting of all 14 owned Crystal paths passes (`1398d4`). The actual
+RELEASE helper build passes (`da025e`), SHA-256
+`826b341206fa34f13632e5585b038455f157c7790f5c94cf049bc70f85211362`.
+Two required RELEASE checks remain unqualified: the corrected filtered W263
+run was guard-killed at 50-percent system free memory before test execution
+(`f4a926`); the full native RELEASE matrix was guard-killed at 46 percent
+(`3e3fe5`). The latter's partial root
+`/private/tmp/crystal-click-w283-native-release.PiBN9Y` has no `summary.json`
+and must not be reused as an empty evidence root. Neither stop is waived or
+converted into a pass. No unrelated processes were inspected or terminated.
+
+A later fresh native RELEASE retry was refused by the same preflight at
+35-percent system free memory before any child launched (`c4fede`). Its root
+`/private/tmp/crystal-click-w283-native-release.MqbV4H` remained empty
+(`460911`). Two preceding 74/75-percent samples did not establish a stable
+execution window. This adds no native compatibility result; the guard and
+frozen production/helper/fixture inputs remain unchanged.
+
+The next bounded retry passed preflight at 74 percent but was guard-killed at
+46 percent after the guard reported about 17 seconds (`32ca63`). Its separate
+root `/private/tmp/crystal-click-w283-native-release.xhYrQt` has 26 completed
+ClickHouse invocation records and no summary (`7c2b00`); this is not a full
+matrix or a RELEASE interoperability pass. The 17 execution inputs, exact
+122-path roster, 660-path source/support census and three protected files
+still match their recorded seals (`311208`). Stop heavy retries in this
+execution window; do not mistake brief 73/74-percent samples for sustained
+headroom or use either partial native root as an empty root.
+
+The source-only resource investigation confirms that the matrix runs native
+cells serially and waits for each Open3 child (`aec276`). Its output-drain
+threads are not parallel native cells. The unchanged guard checks system-wide
+free memory before sampling the guarded process tree's RSS (`243435`); the
+kill message alone cannot attribute the pressure or establish native peak RSS.
+The interrupted roots stopped at different scheduled operations, not one
+repeatable failing invocation. All completed records remain successful.
+
+At the historical block audit (2026-10-14), guarded `/usr/bin/true` was itself
+preflight-refused at 35-percent system free memory before any child launched
+(`8e29ea`). No native resource diagnostic was launched. At that checkpoint the
+same execution blocker had recurred across at least three consecutive goal
+turns; all ROOT execution handles were terminal and retained subagents reported
+completed. The resulting blocked status was historical, not a current
+blocked-audit count after SSD recovery resumed. Resume needed a suitable
+execution window under the unchanged guard or a user-directed environment
+change, not another blind full retry. Production, tests, native instruments
+and guard stayed frozen.
+
+Instrumentation recovery amendment (2026-10-16, CAUTION): ROOT independently
+reproduced the missing initialization (`d589e5`). The pristine auditor calls
+`pins!`; fresh mutation auditors omitted it, reconstructing `nil` for the
+binary and `argv[0]`. The first raw record agrees with its summary/sidecar.
+Admit only an instrumentation-file lifecycle regression followed by adding
+`pins!` between `summary_contract!` and `topology!`, matching `Auditor#run`.
+Keep the auditor, strict full pin, captures and production inputs unchanged;
+do not replace pin validation with copied instance state. The falsifier is a
+recording lifecycle test that fails before the fix and detects a missing or
+misordered pin step. DoD: focused RED/GREEN, Ruby syntax, independent ROOT
+sensitivity check, then a separately admitted read-only actual-capture run
+with all six mutants rejecting at their intended diagnostics. Rollback is the
+instrumentation-only diff against SHA-256
+`3735b01f0ee5497de4e103c21c39388aac2dc7ae8d5adf564317017adad50a59`.
+The instrumentation is not among the capture's 12 matrix-source pins
+(`b196eb`), so this correction does not require regenerating the native
+matrix. Focused RED/GREEN and syntax pass; ROOT independently ran the full
+pure checker and a missing-pin helper mutation, checking class restoration on
+both failure and success (`a9b9a6`, `e23407`). The new 21-input seal is
+`e685469c592ad1d1198e2356f6925de00c69bcc85c703371bfa188a7106ce102`
+(`469ad5`); original Crystal/protected/guard bytes remain unchanged. The
+separately admitted DEBUG actual-capture followup passes all six intended
+mutation controls, 64 literal windows and 192 MRK4 prefix/body checks, without
+regenerating or changing the capture. ROOT read and hashed the raw logs
+(`9e9653`, `cd7d3e`, `078ce3`, `823b16`, `1d129d`, `2f906f`, `febb60`).
+The followup report SHA-256 is
+`b8af18c33599604049eefa9b1b7d71602f32500eb6d5bb18a462e19313346c6d`.
+
+### Current qualification and return pointer — 2026-10-16
+
+W283 is qualified only for the declared recursive-JSON Bulk owner. Per-path
+eight-byte Variant prefixes precede bodies, including Q=0; BASIC/COMPACT bodies
+inherit the correct site/arm occurrence counts. MRK3 consumption preserves
+following siblings and MRK4 extents are exact. Complete-parent authentication
+precedes publication; existing codecs remain the value serializer.
+
+Crystal 1.22.0 / LLVM 23.1.3 DEBUG and actual RELEASE each cover the exact
+682-example / 122-path roster across recorded sealed invocations, not one
+monolithic run. One separately filtered W263 admission example per mode and
+the current 14-path format check pass. ROOT checked the full RELEASE saved-argv /
+raw-log index, raw final-check logs and unchanged execution/pin seals.
+Both native modes pass 8 stock/public-read plus 8 generated cells / 144
+invocations, CHECK, byte-preserving ATTACH/reopen and literal full/middle/last/
+EOF reads. Each has six actual-capture mutants, 64 independent literal windows
+and 192 bounded MRK4 prefix/body checks (36 zero-Q, 60 uniform, 96 mixed).
+The finite basis is eight rows / four data marks, Variant BASIC/COMPACT x plain
+MRK3/MRK4 x ordinary S0/S1, Object V3/shared MAP0 and Map BASIC. Mixed Variant
+modes across sibling paths, arbitrary layouts and a general independent
+JSON/frame/checksum decoder are not qualified. Producer self-consistency is
+not an independent oracle; separate auditor literals and raw checks provide
+the tested counterweight. Same-lineage Luna review is correlated; ROOT also
+inspected the decisive production/oracle paths and execution evidence.
+
+The user-authorized official full runtime remains exactly pinned to the same
+`26.10.1.1201` build, with successful guarded SQL identity. New W283 captures
+do not overwrite historical stripped pins/results or legacy defaults. The
+21-input seal is
+`e685469c592ad1d1198e2356f6925de00c69bcc85c703371bfa188a7106ce102`;
+14 original Crystal inputs, 122-path roster, 660-file src/support census and
+three protected W263 specs remain unchanged. Source/runtime/helper/guard pins
+are retained with raw evidence on the selected SSD. All execution grants and
+consumers are released; only rebuildable compiler cache/tmp were removed
+(265,067,337 logical bytes). Preserve source Git, runtime, helpers, captures,
+raw logs and reports. Recreate canonical SSD scratch directories before any
+future admitted launch; never fall back to the internal disk.
+
+Historical refusals/failures remain non-passes; passing runs do not guarantee
+sustained compiler headroom or attribute earlier host pressure. Refresh the
+dependent qualification on source/spec/fixture/helper/instrument/toolchain/
+runtime/guard drift, admission widening or capture loss/change. The curated
+[W283 evidence](../.landmark/evidence/compact-variant-bulk-w283.json) binds exact
+commands, source seals, current reports and historical attempts. The feature is
+bound to its containing atomic local commit; no remote push is authorized.
+
+Next candidate after W283 qualification (PROPOSED, not admitted): the exact
+W257 `Array(Tuple(JSON, Dynamic))` schema and values. The schema represents it,
+but the recursive Compact JSON owner rejects Dynamic at admission. Reuse
+`CompactDynamicBulkPrefixTraversal`, `CompactDynamicCallbackPlan` and existing
+BinaryBulk codecs with a Dynamic context keyed by recursive schema path,
+separate from Object contexts. Preserve the parent's all-prefixes-before-bodies
+schedule, inherited site Q and selected-arm counts; DynamicStructure prefixes
+are variable length, not the fixed eight-byte LC/Variant descriptor. The next
+falsifier is an expected-success public Compact write/read of that exact
+fixture, followed by stock Compact admission and generated ATTACH/CHECK with
+literal values, including zero-occurrence and active-arm marks. Existing W257
+Wide evidence does not qualify the proposed Compact composition.
+
 ## Stateful LowCardinality Bulk bridge — W282
 
 Status: VERIFIED / ROOT adversary ROBUST within the finite declared LC-owner

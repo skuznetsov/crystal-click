@@ -207,6 +207,68 @@ module CrystalClick
       {expanded, normalized_offsets, 0_i32}
     end
 
+    # Normalizes one per-mark Variant body and reports the exact physical
+    # extent consumed from its callback/tape. BASIC tags are a read-only view;
+    # COMPACT tags are expanded into an owned byte-per-row lane before the
+    # caller commits the enclosing callback transaction. MRK3 callers pass
+    # `require_exact: false` so the following sibling remains available to
+    # the parent ledger; MRK4's named-shard owner requires exact consumption.
+    def self.read_mark_body(
+      role : String,
+      mode : UInt64,
+      body : Bytes,
+      expected_rows : UInt64,
+      budget : BinaryCodecBudget,
+      require_exact : Bool = true,
+    ) : Tuple(Bytes, Int32)
+      if budget.writing?
+        raise ArgumentError.new("typed Variant mark-body read requires a reading budget")
+      end
+      validate_role!(role, false)
+      if expected_rows > Int32::MAX.to_u64
+        raise CorruptPartError.new("typed Variant mark rows exceed the supported domain")
+      end
+      unless mode == DynamicDiscriminatorBodyValidator::BASIC_MODE ||
+             mode == DynamicDiscriminatorBodyValidator::COMPACT_MODE
+        raise CorruptPartError.new("unknown typed Variant discriminator mode")
+      end
+
+      if mode == DynamicDiscriminatorBodyValidator::BASIC_MODE
+        extent = expected_rows.to_i32
+        if body.size < extent || (require_exact && body.size != extent)
+          raise CorruptPartError.new("typed Variant BASIC body extent does not match its mark rows")
+        end
+        return {Bytes.new(body.to_unsafe, extent, read_only: true), extent}
+      end
+
+      if expected_rows == 0_u64
+        if require_exact && !body.empty?
+          raise CorruptPartError.new("empty typed Variant COMPACT body contains bytes")
+        end
+        return {Bytes.new(0), 0}
+      end
+
+      rows, format, tag_offset, frame_end = DynamicDiscriminatorBodyValidator.inspect_frame(body)
+      unless rows == expected_rows
+        raise CorruptPartError.new("typed Variant COMPACT row count differs from its inherited occurrence count")
+      end
+      if require_exact && frame_end != body.size
+        raise CorruptPartError.new("typed Variant COMPACT frame has trailing bytes")
+      end
+
+      # The normalized discriminator lane is an owned BinaryBulk byte lane.
+      # Reserve it before allocation; the parent cursor has already charged
+      # the raw physical input exactly once.
+      budget.ensure_wire_bytes(expected_rows)
+      budget.charge_wire_bytes(expected_rows)
+      expanded = Bytes.new(expected_rows.to_i32)
+      expanded_end = expand_interval(body[0, frame_end], expanded, 0_i32)
+      unless expanded_end == expected_rows.to_i32
+        raise CorruptPartError.new("typed Variant COMPACT expansion disagrees with its validated frame")
+      end
+      {expanded, frame_end}
+    end
+
     private def self.validate_role!(role : String, writing : Bool) : Nil
       return nil if role.ends_with?(".discriminators")
       if writing

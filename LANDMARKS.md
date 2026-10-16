@@ -1,5 +1,53 @@
 # Crystal Click landmarks
 
+## Recursive Compact Variant Bulk composition — W283
+
+- VERIFIED / ROOT adversary ROBUST within the finite declared owner and pinned
+  native interoperability scope (2026-10-16), over W282
+  `1da498c397cc7e1341b9964b43e07771736ecab4`. Reuse BinaryBulk codecs; bind
+  Variant BASIC/COMPACT mode prefixes by schema path before bodies, including
+  zero occurrences. Preserve inherited site/arm Q, exact MRK3/MRK4 consumption,
+  transactional read-only grammar views and complete-parent authentication.
+- Current Crystal 1.22.0 / LLVM 23.1.3 DEBUG and actual RELEASE each pass
+  682 examples / the exact same 122 affected paths across sealed runs, plus
+  one separately filtered W263 admission example per mode. The 14-path format
+  check passes. ROOT independently checked raw final logs and the complete
+  RELEASE saved-argv/log index (`2863ef`); not full-suite qualification.
+- Fresh native DEBUG/RELEASE each pass 8 stock/public-read plus 8 generated
+  cells / 144 invocations, healthy CHECK and byte-preserving ATTACH/reopen with
+  literal full/middle/last/EOF values. Per mode: six actual-capture mutants,
+  64 independent literal windows and 192 bounded MRK4 prefix/body checks
+  (36 zero-Q / 60 uniform / 96 mixed). Finite basis: eight rows / four marks,
+  Variant BASIC/COMPACT x plain MRK3/MRK4 x ordinary S0/S1, Object V3/shared
+  MAP0 and Map BASIC. No mixed-path-mode or general decoder/checksum claim.
+- User approved the official full executable of the same CH `26.10.1.1201`
+  build as new W283 oracle (SHA-256
+  `5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae`).
+  Historical stripped pins/results and legacy defaults remain separate.
+  Source pin remains `ed30948f095ecb70679986d7d60e27ad770ae27a`; it is
+  separately pinned, not the runtime build revision. The 21-input seal is
+  `e685469c592ad1d1198e2356f6925de00c69bcc85c703371bfa188a7106ce102`;
+  14 original Crystal inputs, 122-path roster, 660-file src/support census and
+  three protected user W263 specs remain unchanged.
+- All bulk data stays on `/opt/mldata_ssd/`. After explicit consumer release,
+  ROOT removed only compiler cache/tmp (265,067,337 logical bytes, rebuildable;
+  `163d49`, `a69a97`). Preserve source Git/runtime/helpers/native captures/raw
+  logs/reports; recreate canonical scratch before a future admitted launch.
+  Refresh on source/spec/fixture/helper/instrument/toolchain/runtime/guard
+  drift, admission widening or capture loss/change. Producer self-consistency
+  and same-lineage model review are not independent evidence; ROOT checked
+  decisive source, separate literal/raw witnesses and execution records.
+- Next frontier PROPOSED, not admitted: exact W257 `Array(Tuple(JSON, Dynamic))`
+  Compact write/read. First require an expected-success failing public probe;
+  reuse Dynamic structure traversal with per-path contexts and variable-length
+  prefix callbacks, preserving all-prefixes-before-bodies and inherited Q.
+  Wide evidence does not qualify this Compact composition. Then reassess type /
+  owner/layout gaps and Compact MV output/projection children. Full goal ACTIVE;
+  memory/performance deferred and <=10% slowdown unmeasured. This packet's
+  containing atomic local commit is the feature binding; no push. See
+  [W283 evidence](.landmark/evidence/compact-variant-bulk-w283.json) and
+  [frontier](docs/COMPACT_PART_WRITER_FRONTIER.md).
+
 ## Stateful LowCardinality Bulk composition in recursive Compact JSON — W282
 
 - VERIFIED / ROOT adversary ROBUST within finite declared LC-owner and pinned

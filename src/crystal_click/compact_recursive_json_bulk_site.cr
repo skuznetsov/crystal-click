@@ -1,9 +1,14 @@
 module CrystalClick
   # One opaque JSON-free recursive Bulk subtree owned by a Compact recursive
-  # JSON schema plan. LowCardinality dictionary roles may carry a narrow
-  # per-mark state prefix; logical role order remains serializer DFS rather
-  # than BinaryBulkPhysicalPlan's set-oriented role roster.
+  # JSON schema plan. LowCardinality dictionaries and Variant discriminators
+  # carry distinct per-mark state prefixes; logical role order remains
+  # serializer DFS rather than BinaryBulkPhysicalPlan's set-oriented roster.
   class CompactRecursiveJsonBulkSite
+    enum StatePrefixKind
+      LowCardinalityDictionaryV1
+      VariantDiscriminatorMode
+    end
+
     struct Role
       getter name : String
       getter size_lane : Bool
@@ -16,8 +21,9 @@ module CrystalClick
     struct PrefixRole
       getter role_index : Int32
       getter callback_name : String
+      getter kind : StatePrefixKind
 
-      def initialize(@role_index : Int32, @callback_name : String)
+      def initialize(@role_index : Int32, @callback_name : String, @kind : StatePrefixKind)
       end
     end
 
@@ -70,9 +76,10 @@ module CrystalClick
       @roles.each do |role|
         prefix_size = @physical_plan.prefix_size_for(role.name)
         next if prefix_size == 0
-        unless prefix_size == 8 && role.name.ends_with?(".dictionary")
-          raise UnsupportedFormatError.new("recursive Compact Bulk state prefix is outside the LowCardinality slice")
+        unless prefix_size == 8
+          raise UnsupportedFormatError.new("recursive Compact Bulk state prefix is not eight bytes")
         end
+        kind = state_prefix_kind_for(role.name)
         prefix_count = checked_add(prefix_count, 1_u64)
         callback_bytes = checked_add(@physical_plan.stream_name_bytesize_for(role.name).to_u64, 7_u64)
         prefix_name_bytes = checked_add(prefix_name_bytes, checked_add(callback_bytes, 1_u64))
@@ -91,7 +98,7 @@ module CrystalClick
         @roles.each_with_index do |role, index|
           next if @physical_plan.prefix_size_for(role.name) == 0
           callback = PhysicalStreamName.append_literal(@physical_plan.stream_name_for(role.name), "_prefix")
-          prefixes << PrefixRole.new(index, callback)
+          prefixes << PrefixRole.new(index, callback, state_prefix_kind_for(role.name))
         end
         @prefix_roles = prefixes
       end
@@ -154,6 +161,12 @@ module CrystalClick
       nil
     end
 
+    def state_prefix_kind_for_role(role_name : String) : StatePrefixKind
+      index = prefix_role_index(role_name) ||
+              raise(CorruptPartError.new("recursive Compact Bulk role has no state-prefix descriptor"))
+      prefix_role_at(index).kind
+    end
+
     def prefix_callback_name_for(role_name : String) : String
       index = prefix_role_index(role_name) ||
               raise(CorruptPartError.new("recursive Compact Bulk role has no state-prefix callback"))
@@ -185,6 +198,16 @@ module CrystalClick
 
     private def string_owner_bytes(value : String) : UInt64
       checked_add(instance_sizeof(String).to_u64, value.bytesize.to_u64 + 1_u64)
+    end
+
+    private def state_prefix_kind_for(role_name : String) : StatePrefixKind
+      if role_name.ends_with?(".dictionary")
+        StatePrefixKind::LowCardinalityDictionaryV1
+      elsif role_name.ends_with?(".discriminators")
+        StatePrefixKind::VariantDiscriminatorMode
+      else
+        raise UnsupportedFormatError.new("recursive Compact Bulk state prefix is outside the admitted LC/Variant roles")
+      end
     end
 
     private def checked_add(left : UInt64, right : UInt64) : UInt64

@@ -137,8 +137,15 @@ describe "W281 generic recursive Compact JSON Bulk entry" do
     ).should be_true
     CrystalClick::CompactRecursiveJsonColumnReader.admitted_schema?(w281_guard_schema(low_cardinality)).should be_true
 
+    variant = CrystalClick::BinaryDataType.variant([uint8, string] of CrystalClick::BinaryDataType)
+    CrystalClick::CompactRecursiveJsonBulkSite.admitted_type?(
+      variant,
+      2,
+      CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS,
+    ).should be_true
+    CrystalClick::CompactRecursiveJsonColumnReader.admitted_schema?(w281_guard_schema(variant)).should be_true
+
     guarded = [
-      {"Variant", CrystalClick::BinaryDataType.variant([uint8, string] of CrystalClick::BinaryDataType)},
       {"Dynamic", CrystalClick::BinaryDataType.dynamic},
       {"Geometry", CrystalClick::BinaryDataType.custom("Geometry")},
       {"QBit", CrystalClick::BinaryDataType.qbit(CrystalClick::QBitType.new("Int8", 8_u64))},

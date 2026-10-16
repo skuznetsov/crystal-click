@@ -25,14 +25,21 @@ describe "W263 recursive/public Compact JSON adversaries" do
       CrystalClick::StorageColumnSchema.parse("Tuple(Array(JSON), Array(JSON))"),
       CrystalClick::StorageColumnSchema.parse("Tuple(JSON, UInt8)"),
       CrystalClick::StorageColumnSchema.parse("Array(Tuple(UInt8, JSON))"),
+      # W283 expands the recursive JSON owner only; this JSON-free Variant
+      # Bulk sibling remains outside the shared prefix-free admission gate.
+      CrystalClick::StorageColumnSchema.parse("Tuple(JSON, Variant(String, UInt8))"),
     ]
     admitted.each do |schema|
       CrystalClick::CompactRecursiveJsonColumnReader.admitted_schema?(schema).should be_true
     end
 
+    variant = CrystalClick::BinaryRecursiveDataTypeNameReader.parse_canonical(
+      "Variant(String, UInt8)",
+    ).not_nil!
+    CrystalClick::BinaryPrefixFreeStaticTypeAdmission.admitted?(variant).should be_false
+
     rejected = [
       "Tuple(JSON, Dynamic(max_types=8))",
-      "Tuple(JSON, Variant(String, UInt8))",
     ]
     rejected.each do |declaration|
       schema = CrystalClick::StorageColumnSchema.parse(declaration)
