@@ -1,4 +1,9 @@
 name: crystal-click
 version: 0.1.0
+description: Crystal library for reading and writing ClickHouse data parts and offline catalogs.
 crystal: ">= 1.21.0"
 license: MIT
+repository: https://github.com/skuznetsov/crystal-click
+libraries:
+  libzstd: "*"
+  libc: "*"
