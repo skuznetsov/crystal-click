@@ -313,4 +313,4 @@ before publishing it.
 
 ## License
 
-The [shard manifest](shard.yml) declares MIT.
+`crystal-click` is licensed under the [Apache License 2.0](LICENSE).
