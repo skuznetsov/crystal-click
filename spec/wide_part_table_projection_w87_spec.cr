@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 
 private def w87_write_parent_part(path : String, key : UInt64) : String
   FileUtils.mkdir_p(File.dirname(path))
@@ -29,6 +30,8 @@ private def w87_write_projection_part(
     labels.to_unsafe.to_slice(labels.size),
     rows_per_mark: rows_per_mark
   )
+  ProjectionChecksumFixture.rebind!(parent_part, "by_tag")
+  child
 end
 
 describe "W87 typed projection table reader" do
@@ -89,6 +92,8 @@ describe "W87 typed projection table reader" do
       w87_write_parent_part(parent_a, 1_u64)
       w87_write_parent_part(parent_b, 2_u64)
       w87_write_projection_part(parent_a, [10_u64], ["a"])
+      w87_write_projection_part(parent_b, [20_u64], ["b"])
+      FileUtils.rm_rf(File.join(parent_b, "by_tag.proj"))
 
       callbacks = 0
       expect_raises(CrystalClick::InvalidPartError) do
@@ -115,6 +120,8 @@ describe "W87 typed projection table reader" do
       w87_write_parent_part(parent_a, 1_u64)
       w87_write_parent_part(parent_b, 2_u64)
       child_a = w87_write_projection_part(parent_a, [10_u64], ["a"])
+      w87_write_projection_part(parent_b, [20_u64], ["b"])
+      FileUtils.rm_rf(File.join(parent_b, "by_tag.proj"))
       File.symlink(child_a, File.join(parent_b, "by_tag.proj"))
 
       expect_raises(CrystalClick::InvalidPartError) do
@@ -189,6 +196,7 @@ describe "W87 typed projection table reader" do
         values.to_unsafe.to_slice(values.size),
         rows_per_mark: 1
       )
+      ProjectionChecksumFixture.rebind!(distinct_b, "by_tag")
 
       expect_raises(CrystalClick::CorruptPartError) do
         CrystalClick::WidePartTable.open_selected_projection_typed(

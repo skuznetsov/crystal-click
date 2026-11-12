@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 require "file_utils"
 
 private def w219_write_u64(bytes : Bytes, offset : Int, value : UInt64) : Nil
@@ -186,6 +187,7 @@ private def w219_write_grouped_count_child(
     rows_per_mark: rows_per_mark,
   )
   w219_rebind_to_stock_names!(path, key_name, count_name, counts.size)
+  ProjectionChecksumFixture.rebind!(parent, projection_name)
   path
 end
 
@@ -370,6 +372,7 @@ describe "W219 AggregateFunction(count) ClickHouse physical-name binding" do
       child = w219_write_grouped_count_child(parent, "by_count_bad_axis")
       key_name = "intDiv(pk, 2)"
       w219_rewrite_key_mark_rows!(child, key_name, [1_u64, 2_u64])
+      ProjectionChecksumFixture.rebind!(parent, "by_count_bad_axis")
 
       callbacks = 0
       expect_raises(CrystalClick::CorruptPartError) do

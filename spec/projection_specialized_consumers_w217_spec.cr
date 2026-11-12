@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 
 private def w217_parent(root : String, name : String, keys : Slice(UInt64) = Slice[1_u64]) : String
   path = File.join(root, name)
@@ -39,6 +40,10 @@ private def w217_write_object_part(
     path, "pk", keys, "payload", schema, w217_object_plan(schema), granules,
     rows_per_mark: 2,
   )
+  if File.basename(path).ends_with?(".proj")
+    ProjectionChecksumFixture.rebind!(File.dirname(path), File.basename(path))
+  end
+  path
 end
 
 private def w217_array_schema : CrystalClick::ObjectDocumentSchema
@@ -256,6 +261,8 @@ describe "W217 specialized projection child consumers" do
       CrystalClick::WidePartWriter.write_uint64_array_object_pair(
         File.join(parent_b, "by_array.proj"), "pk", Slice[201_u64], "a", schema, plan,
         [[[] of CrystalClick::ObjectDocument] of Array(CrystalClick::ObjectDocument)], rows_per_mark: 2)
+      ProjectionChecksumFixture.rebind!(parent_a, "by_array")
+      ProjectionChecksumFixture.rebind!(parent_b, "by_array")
 
       table = CrystalClick::WidePartTable.open_selected_projection_typed([parent_a, parent_b], "by_array", ["a"])
       table.total_row_count.should eq(4_u64)
@@ -291,6 +298,8 @@ describe "W217 specialized projection child consumers" do
       CrystalClick::WidePartWriter.write_uint64_recursive_pair(
         File.join(parent_b, "by_recursive.proj"), "pk", Slice[201_u64], "payload", schema, plans,
         [b_values] of Array(CrystalClick::StorageColumnValue), rows_per_mark: 2)
+      ProjectionChecksumFixture.rebind!(parent_a, "by_recursive")
+      ProjectionChecksumFixture.rebind!(parent_b, "by_recursive")
 
       table = CrystalClick::WidePartTable.open_selected_projection_typed([parent_a, parent_b], "by_recursive", ["payload"])
       observed = [] of Tuple(UInt64, UInt8)
@@ -328,6 +337,8 @@ describe "W217 specialized projection child consumers" do
       CrystalClick::WidePartWriter.write_uint64_dynamic_bulk_part(
         File.join(parent_b, "by_dynamic.proj"), "pk", Slice[201_u64], "payload", dynamic,
         structures, [[root_rows[3]]] of Array(CrystalClick::BinaryValue), rows_per_mark: 2)
+      ProjectionChecksumFixture.rebind!(parent_a, "by_dynamic")
+      ProjectionChecksumFixture.rebind!(parent_b, "by_dynamic")
       root_table = CrystalClick::WidePartTable.open_selected_projection_typed([parent_a, parent_b], "by_dynamic", ["payload"])
       root_values = [] of Bytes
       root_paths = [] of String
@@ -354,6 +365,8 @@ describe "W217 specialized projection child consumers" do
       CrystalClick::WidePartWriter.write_uint64_dynamic_bulk_part(
         File.join(parent_b, "by_array_dynamic.proj"), "pk", Slice[121_u64], "wrapped", array_type,
         array_structures, [[wrapped[3]]] of Array(CrystalClick::BinaryValue), rows_per_mark: 2)
+      ProjectionChecksumFixture.rebind!(parent_a, "by_array_dynamic")
+      ProjectionChecksumFixture.rebind!(parent_b, "by_array_dynamic")
       wrapped_table = CrystalClick::WidePartTable.open_selected_projection_typed([parent_a, parent_b], "by_array_dynamic", ["wrapped"])
       wrapped_values = [] of Bytes
       wrapped_paths = [] of String
@@ -384,6 +397,8 @@ describe "W217 specialized projection child consumers" do
       CrystalClick::WidePartWriter.write_uint64_aggregate_count_pair(
         File.join(parent_b, "by_count.proj"), "pk", Slice[201_u64], "c", type,
         values[3..3].to_unsafe.to_slice(1), rows_per_mark: 1)
+      ProjectionChecksumFixture.rebind!(parent_a, "by_count")
+      ProjectionChecksumFixture.rebind!(parent_b, "by_count")
 
       table = CrystalClick::WidePartTable.open_selected_projection_typed([parent_a, parent_b], "by_count", ["c"])
       table.columns.should eq(["c"])
@@ -412,6 +427,12 @@ describe "W217 specialized projection child consumers" do
       tag_path = File.join(parent_a, "by_tag.proj")
       CrystalClick::WidePartWriter.write_uint64_string_pair(
         tag_path, "tag", Slice[10_u64], "label", Slice["only-a"], rows_per_mark: 1)
+      ProjectionChecksumFixture.rebind!(parent_a, "by_tag")
+      missing_tag = File.join(parent_b, "by_tag.proj")
+      CrystalClick::WidePartWriter.write_uint64_string_pair(
+        missing_tag, "tag", Slice[20_u64], "label", Slice["only-b"], rows_per_mark: 1)
+      ProjectionChecksumFixture.rebind!(parent_b, "by_tag")
+      FileUtils.rm_rf(missing_tag)
       callbacks = 0
       expect_raises(CrystalClick::InvalidPartError) do
         table = CrystalClick::WidePartTable.open_selected_projection_typed([parent_a, parent_b], "by_tag", ["tag"])
@@ -441,6 +462,7 @@ describe "W217 specialized projection child consumers" do
         child = File.join(parent_a, "#{projection_name}.proj")
         CrystalClick::WidePartWriter.write_uint64_aggregate_count_pair(
           child, "pk", Slice[101_u64], "c", count_type, count_values, rows_per_mark: 1)
+        ProjectionChecksumFixture.rebind!(parent_a, projection_name)
         File.write(File.join(child, "columns.txt"), bad_columns)
         callbacks = 0
         expect_raises(CrystalClick::UnsupportedFormatError) do
@@ -464,6 +486,7 @@ describe "W217 specialized projection child consumers" do
           ],
           rows_per_mark: 2,
         )
+        ProjectionChecksumFixture.rebind!(parent_a, projection_name)
         w217_rewrite_count_key_mark_rows!(child, key_mark_rows)
         callbacks = 0
         expect_raises(CrystalClick::CorruptPartError) do
@@ -481,6 +504,8 @@ describe "W217 specialized projection child consumers" do
       CrystalClick::WidePartWriter.write_uint64_aggregate_count_pair(
         identity_child_b, "id", Slice[201_u64], "c", count_type,
         Slice[CrystalClick::BinaryValue.aggregate_count_state(count_type, 8_u64)], rows_per_mark: 1)
+      ProjectionChecksumFixture.rebind!(parent_a, "by_count_identity")
+      ProjectionChecksumFixture.rebind!(parent_b, "by_count_identity")
       callbacks = 0
       expect_raises(CrystalClick::CorruptPartError, "AggregateFunction(count) UInt64 sibling name differs across parts") do
         table = CrystalClick::WidePartTable.open_selected_projection_typed(
@@ -499,6 +524,7 @@ describe "W217 specialized projection child consumers" do
       ].each do |projection_name, schedule, parent, keys, json_values|
         child = File.join(parent, "#{projection_name}.proj")
         w217_write_dynamic_json_part(child, keys, json_values)
+        ProjectionChecksumFixture.rebind!(parent, projection_name)
         table = CrystalClick::WidePartTable.open_selected_projection_typed([parent], projection_name, ["payload"])
         w217_truncate_dynamic_json_structure!(child)
         callbacks = 0

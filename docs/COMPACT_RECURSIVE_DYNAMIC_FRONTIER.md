@@ -430,7 +430,9 @@ input digests and retry logs are indexed in the
 
 ## Full-objective boundary
 
-Remaining type/layout products, Compact MV output and projection children
-have separate admission and native verification work. Memory and performance
-work follows compatibility. The <=10-percent stock-reader slowdown target
-remains unmeasured.
+W286 qualifies bounded Compact MV output under the
+[transform profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-target-publication-w286).
+Additional type/layout products, general MV targets and Compact projection
+children have separate admission and native verification work. Memory and
+performance work follows compatibility. The <=10-percent stock-reader
+slowdown target remains unmeasured.

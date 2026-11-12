@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 require "file_utils"
 require "./support/simple_aggregate_w170_types"
 
@@ -144,6 +145,7 @@ private def w170_runtime_create_catalog(
   FileUtils.cp_r(part, parent_part)
   if projection_part
     FileUtils.cp_r(projection_part, File.join(parent_part, "by_rollup.proj"))
+    ProjectionChecksumFixture.rebind!(parent_part, "by_rollup")
   end
   nil
 end

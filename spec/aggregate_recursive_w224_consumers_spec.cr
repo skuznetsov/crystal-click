@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 require "file_utils"
 
 private def w224c_type(source : String) : CrystalClick::BinaryDataType
@@ -264,6 +265,7 @@ describe "W224 recursive AggregateFunction public consumers" do
       w224c_write_part(part, base_type, base_rows)
       child = File.join(part, "selected.proj")
       w224c_write_part(child, projection_type, projection_rows)
+      ProjectionChecksumFixture.rebind!(part, "selected")
 
       selected = CrystalClick::WidePartTable.open_selected_projection_typed(
         [part], "selected", ["v"]

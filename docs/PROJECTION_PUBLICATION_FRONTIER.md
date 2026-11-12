@@ -1,4 +1,53 @@
-# Precomputed projection publication frontier (W256)
+# Physical projection reads and publication
+
+## Projection checksum binding on read (W287)
+
+The public Wide projection factory and its offline full and window scans
+bind every selected child manifest to the
+parent's exact `<name>.proj` checksum entry before exposing any rows. The
+parent and child use their own `checksums.txt`. The entry is uncompressed.
+Its size is the checked sum of child entry sizes. Its hash is ClickHouse's
+zero-key SipHash-128 over byte-sorted names and recorded physical hashes.
+Writer publication and reader preflight share that calculation.
+
+The reader requires regular manifest files and retains its child file and
+schema checks. Missing or mismatched summaries, malformed manifests, and
+unsafe child paths fail before callbacks, including children outside a
+requested window or at EOF. This check covers the two manifests in a
+quiescent offline catalog. Payload validation follows the selected reader's
+existing policy. Writer validation retains its generated-file roster.
+
+The separate shallow ClickHouse reference at `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`
+uses the same checksum law in `MergeTreeDataPartChecksum.cpp:99-105,333-361`
+and writes the summary in `MergedBlockOutputStream.cpp:233-239`. Native
+`checkDataPart.cpp:399-438,514-515` recursively verifies the actual payloads.
+
+At baseline `e4de421`, the selected reader accepted a locally valid
+replacement child with the same physical size and failed the rejection test.
+The patched reader rejects it before callbacks. Tests also cover a valid
+binding, missing, compressed and wrong-size entries, nonregular parent
+manifests, and a later parent with a missing summary on full and EOF scans.
+
+DEBUG and RELEASE each pass 153 examples across 21 affected spec files.
+The aggregate cohort uses fresh native Count and SimpleAggregateFunction
+fixtures. The Count projection example checks literal states and parent
+identity through the offline reader.
+
+Both Crystal build modes read a stock Wide parent and its projection on
+ClickHouse 26.10.1.1201. A library-generated Wide parent with a different
+child mark grid passes native ATTACH, CHECK, literal RowBinary reads and a
+forced plan that names the projection as its read source. Independent
+capture checks compare all 40 generated files against the attached files
+in each mode. ATTACH adds `invalidated_system_columns.txt`. Replacing the
+stock child with the native-accepted library child in a copy fails before
+output or destination publication.
+
+Revert the feature commit to roll back this read admission change. The
+[W287 evidence](../.landmark/evidence/projection-checksum-binding-w287.json)
+records the guarded commands, spec counts, source and runtime pins, and
+native capture checks.
+
+## Wide publication qualification (W256)
 
 Status: VERIFIED / root adversary ROBUST within the finite W256 target.
 Current frontier: caller-precomputed, non-nested Wide projection children are
@@ -43,9 +92,8 @@ Admitted surface:
   the parent and all children. Bound projection count, names and total checksum
   roster; reject duplicate names, unsafe paths, symlinks and collisions.
 - Keep plain-file selected-entry validation size-only. The staged writer uses
-  explicit `.proj` child-summary validation; directory inode size is never a
-  proxy. Existing public selected-projection reads still do not authenticate
-  the parent's `.proj` entry; that reader-integrity seam remains open.
+  explicit `.proj` child-summary validation. W287 extends that summary check
+  to public selected-projection reads.
 
 Rejected / non-guarantees:
 
@@ -108,12 +156,10 @@ negative pass. No production source change was needed for that diagnostic.
 
 ## Next local track
 
-Authenticate the selected child's summary against the parent checksum entry
-using the existing writer's summary rules. Exercise rejection of a replaced
-child that passes its own checks. Add Compact child reads and publication
-through the existing typed part owners. Each child has its own physical
-format and row/mark grid. Verify that a child failure prevents publication
-of the parent and that native ClickHouse can use the complete projection.
+Add Compact child reads and publication through the existing typed part
+owners. Each child has its own physical format and row/mark grid. Verify
+that a child failure prevents publication of the parent and that native
+ClickHouse can use the complete projection.
 Caller-run MV transforms and their target layouts are tracked in the
 [transform frontier](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
 

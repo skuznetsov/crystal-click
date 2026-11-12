@@ -1,5 +1,6 @@
 require "./spec_helper"
 require "file_utils"
+require "./support/projection_checksum_fixture"
 
 W229_DATABASE_UUID  = "22900000-0000-4000-8000-000000000001"
 W229_PARENT_FIXTURE = File.expand_path("../test/fixtures/public/wide_two_uint64/part", __DIR__)
@@ -58,6 +59,7 @@ private def w229_write_projection_child(parent_path : String, rows_per_mark : In
     counts.to_unsafe.to_slice(counts.size),
     rows_per_mark: rows_per_mark
   )
+  ProjectionChecksumFixture.rebind!(parent_path, W229_PROJECTION)
   child_path
 end
 
@@ -255,7 +257,8 @@ describe "W229 offline projection typed row windows" do
     begin
       table_path = w229_write_table(root, database_path, "events", w229_uuid(13))
       w229_add_parent_part(table_path, "all_1_1_0", child_rows_per_mark: 1)
-      w229_add_parent_part(table_path, "all_2_2_0")
+      missing_parent = w229_add_parent_part(table_path, "all_2_2_0", child_rows_per_mark: 1)
+      FileUtils.rm_rf(File.join(missing_parent, "#{W229_PROJECTION}.proj"))
       table = CrystalClick::OfflineCatalog.open(root).table("lab", "events")
 
       table.responds_to?(:scan_projection_typed_window).should be_true
@@ -283,7 +286,8 @@ describe "W229 offline projection typed row windows" do
     begin
       table_path = w229_write_table(root, database_path, "events", w229_uuid(14))
       parent_a = w229_add_parent_part(table_path, "all_1_1_0", child_rows_per_mark: 1)
-      parent_b = w229_add_parent_part(table_path, "all_2_2_0")
+      parent_b = w229_add_parent_part(table_path, "all_2_2_0", child_rows_per_mark: 1)
+      FileUtils.rm_rf(File.join(parent_b, "#{W229_PROJECTION}.proj"))
       File.symlink(
         File.join(parent_a, "#{W229_PROJECTION}.proj"),
         File.join(parent_b, "#{W229_PROJECTION}.proj")

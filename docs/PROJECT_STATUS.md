@@ -2,6 +2,17 @@
 
 ## Current qualification
 
+W287 checks a selected Wide projection's manifest against the parent
+part before full and window scans. A locally valid same-size replacement
+with different recorded hashes fails before callbacks. Both Crystal build
+modes read a stock Wide projection and pass ATTACH, CHECK, literal readback,
+and forced projection selection for the library-generated Wide pair on
+ClickHouse 26.10.1.1201. See the
+[projection checksum profile](PROJECTION_PUBLICATION_FRONTIER.md#projection-checksum-binding-on-read-w287)
+and [evidence](../.landmark/evidence/projection-checksum-binding-w287.json).
+
+### W286 Compact materialized-view output
+
 W286 adds Compact target publication to the caller-run MV transform. In a
 supported unpartitioned MergeTree target with one ascending UInt64 key, the
 callback can filter and rekey one source part and publish schema-bound output
@@ -48,8 +59,7 @@ S0/S1 and V3 statistics matrix. See the
 
 ## Remaining work
 
-1. **Projections.** Verify the parent `checksums.txt` entry when reading a
-   selected `.proj` child. Add Compact child reads and publication with an
+1. **Projections.** Add Compact child reads and publication with an
    independent child mark grid and atomic parent publication. See the
    [projection publication frontier](PROJECTION_PUBLICATION_FRONTIER.md).
 2. **Type and layout compatibility.** Pair reader and writer admission for
@@ -4660,7 +4670,8 @@ source/runtime identities and executed evidence.
    DataTypeFunction.h}` in the pinned source checkout. Ordinary type aliases
    likewise do not automatically introduce new wire families.
 3. **MV/projection coverage.** Offline declaration metadata and explicit reads
-   of fully covered physical Wide projection child parts are available. The
+   of supported physical Wide projection child parts are available. W287 binds
+   selected children to the parent checksum manifest before yielding rows. The
    persisted MV materializer is one explicit-TO identity projection over
    unpartitioned `k UInt64, v String`. W256 adds atomic publication of caller-
    precomputed, non-nested Wide projection children through existing column
@@ -4669,10 +4680,11 @@ source/runtime identities and executed evidence.
    publication of detached columns bound to an exact target DDL roster. The
    scan must complete under the one-shot protocol; callbacks cannot reenter or
    hide failures. This is not SQL query execution, SELECT equivalence, provenance,
-   trigger/freshness propagation or source-byte immutability. General keys and
-   partitions, transform-produced projections, parent `.proj` reader
-   authentication, remaining layouts/types and automatic materialization remain
-   open.
+   trigger/freshness propagation or source-byte immutability. W286 adds Compact
+   detached output for an ordinary unpartitioned target with one ascending
+   UInt64 key. General keys and partitions, transform-produced projections,
+   Compact projection children, remaining layouts/types and automatic
+   materialization remain open.
 4. **General table writing.** The detached-part writers and small
    `EmbeddedMergeTreeTable` are not an arbitrary-schema, arbitrary-partition
    MergeTree writer with compound keys and a server lifecycle.
@@ -4680,7 +4692,10 @@ source/runtime identities and executed evidence.
    large. Individual new owners have separate files, but the overall refactor
    is unfinished. File count alone does not prove lower coupling.
 
-## Next implementation order
+## Detailed implementation backlog
+
+See [Remaining work](#remaining-work) for the current order. This section
+retains the implementation checkpoints and responsibility boundaries.
 
 1. Continue behavior-preserving decomposition. Shared VarUInt/checksums,
    primary index and staging/publication have separate owners; the new Object
@@ -4691,7 +4706,7 @@ source/runtime identities and executed evidence.
    generic signatures, retained ownership and limits. The remaining facade
    was 6,911 lines at W167; at W171 reader/writer/table facade sizes were
    16,221/25,676/7,175 lines.
-   The current table extraction leaves reader/writer/table facades at
+   That table extraction left reader/writer/table facades at
    16,357/25,781/4,930 lines and a separate 2,051-line Batch. These are sizes,
    not a coupling or performance certificate. The next proposed Batch seam
    is compositional row-handle storage, preserving the injected Tuple store
@@ -4822,40 +4837,24 @@ source/runtime identities and executed evidence.
    distinct source laws and native witnesses, not a generic opaque-blob fallback.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
-   W256 qualifies precomputed projection publication; W257 now qualifies a
-   selected one-part scan, caller-run batch transformation and exact target-
-   schema-bound detached publication, reusing the existing typed column owners.
-   Failed callbacks, incomplete/reentrant scans and wrong target schemas must
-   not publish. Next are general key/partition derivation, transform-produced
-   projection children, and composable output appenders. This remains a
-   caller-run physical operation, not SQL execution, provenance or freshness.
+   W256 qualifies precomputed Wide projection publication. W257 and W286
+   qualify one-part caller-run transformations into schema-bound detached
+   Wide and Compact targets. W287 checks selected Wide projection manifests.
+   The next steps are Compact projection children, general key and partition
+   derivation, transform-produced projections, and bounded output appenders.
 4. Only then reopen memory/performance work. No current claim of stock-reader
    speed parity or a quantified percentage of complete ClickHouse support.
 
 ## Source reference
 
-The current bounded comparison checkout is
-`/private/tmp/clickhouse-w254-upstream.AqeqyC`, revision
-`ed30948f095ecb70679986d7d60e27ad770ae27a` (2026-10-10), rechecked clean and
-shallow after the official depth-1 sparse fetch. W254 compares selected
-Object/MAP/statistics/settings owners; W255 compares bitwise dispatch/state and
-the wide-number parser; W256 compares projection checksum/hash envelopes,
-Array metadata/substream laws and the actual projection read-plan witness,
-not every upstream change. This is not a continuing
-upstream freshness claim or the identity of the executed runtime build.
-[CLICKHOUSE_SOURCE_REFERENCE.md](CLICKHOUSE_SOURCE_REFERENCE.md) records
-the previous snapshots, six-directory comparison and earlier identities. In that prior
-October 5 inventory, root independently
-hash-checks 24 decisive JSON/Dynamic/QBit/Count/descriptor owners against
-`29e0e201`; all are content-identical. Aggregate state-version propagation and
-`uniq` v1 are separate changed consumers, not newly qualified library types.
-This is not an audit of every upstream change. Unchanged serializers do not
-imply unchanged framing, settings,
-metadata or lifecycle behavior. This is
-source evidence only: no executable from this checkout has been built or
-qualified. Source identity and the separately pinned executable oracle must
-not be conflated. Type families persisting across releases also does not
-imply immutable binary descriptors or physical layouts.
+W286 and W287 compare the relevant MergeTree paths against the pinned shallow
+revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
+uses the separately pinned official full executable of ClickHouse
+`26.10.1.1201`. The feature evidence records both identities.
+
+[ClickHouse source reference](CLICKHOUSE_SOURCE_REFERENCE.md) records earlier
+snapshots and the bounded comparisons for types, metadata, and serialization.
+Refresh source and native evidence for any layout or runtime changes.
 
 This summary becomes stale when source admission, facade dispatch, the tested
 runtime/profile or the architecture boundary changes. Refresh it from the

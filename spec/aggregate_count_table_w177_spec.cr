@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 
 private class W177CountTableGuardFixtures
   def self.with_pair(stock_root : String, label : String, & : String, Array(String) ->)
@@ -261,6 +262,7 @@ describe "W177 Count table admission guards" do
     it "reads Count payload from a projection child with parent identity" do
       W177CountTableGuardFixtures.with_pair(stock_root, "none") do |_root, parts|
         FileUtils.cp_r(File.join(stock_root, "part-none"), File.join(parts[0], "p.proj"))
+        ProjectionChecksumFixture.rebind!(parts[0], "p")
         type = CrystalClick::BinaryDataType.aggregate_count
         parent_table = CrystalClick::WidePartTable.open_selected_typed([parts[0]], ["c"])
         projection_table = CrystalClick::WidePartTable.open_selected_projection_typed([parts[0]], "p", ["c"])

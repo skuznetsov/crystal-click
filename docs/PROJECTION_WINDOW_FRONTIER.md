@@ -7,6 +7,10 @@ Context: quiescent offline Atomic catalogs and explicitly selected Wide child
 parts. The overall types/MV/projection objective remains active; performance
 work is deferred.
 
+W287 also verifies each selected child manifest against the parent manifest
+before full or window scans. See the
+[projection checksum profile](PROJECTION_PUBLICATION_FRONTIER.md#projection-checksum-binding-on-read-w287).
+
 ## Boundary and reason
 
 `OfflineTable#scan_projection_typed` already reads explicitly declared

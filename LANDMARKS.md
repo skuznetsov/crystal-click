@@ -1,5 +1,18 @@
 # Crystal Click landmarks
 
+## Selected Wide projection checksum binding — W287
+
+- Full and window scans bind every selected Wide child manifest to the
+  parent's uncompressed `<name>.proj` entry before callbacks. The writer and
+  reader share the checked physical size and ClickHouse SipHash-128 summary.
+- The old reader yields a valid same-size replacement. The new reader
+  rejects it. Both Crystal build modes read stock Wide projections and pass
+  native ATTACH, CHECK, literal reads and forced selection for library parts.
+  See the [W287 evidence](.landmark/evidence/projection-checksum-binding-w287.json).
+- Next, route Compact projection children through the existing part readers
+  with independent child marks, then support atomic publication. See the
+  [remaining work](docs/PROJECT_STATUS.md#remaining-work).
+
 ## Compact caller-run materialized-view targets — W286
 
 - `OfflineCatalog#transform_materialized_view_part` can publish a detached
@@ -8,10 +21,6 @@
 - Both Crystal build modes pass the four native MRK3/MRK4 and String S0/S1
   profiles through ATTACH, CHECK, exact RowBinary comparison and reopen.
   See the [W286 evidence](.landmark/evidence/materialized-view-compact-transform-w286.json).
-- Start projection work with the parent `.proj` summary check and a child
-  replacement probe, then admit Compact projection reads and publication.
-  Continue pairing type and layout coverage before memory and throughput work.
-  See the [remaining work](docs/PROJECT_STATUS.md#remaining-work).
 
 ## Recursive Compact Dynamic public reads — W285
 

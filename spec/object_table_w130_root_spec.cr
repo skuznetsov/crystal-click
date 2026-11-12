@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 
 private def with_w130_root(&)
   root = File.tempname("crystal-click-w130-root-")
@@ -229,6 +230,7 @@ describe "W130 independently authored Object table contract" do
     with_w130_root do |root|
       parent = w130_root_write(File.join(root, "all_1_1_0"))
       w130_root_write(File.join(parent, "by_payload.proj"), Slice[100_u64, 101_u64, 102_u64])
+      ProjectionChecksumFixture.rebind!(parent, "by_payload")
       table = CrystalClick::WidePartTable.open_selected_projection_typed([parent], "by_payload", ["pk", "payload"])
       table.total_row_count.should eq(3_u64)
       table.part_mark_row_counts.should eq([[2_u64, 1_u64]])

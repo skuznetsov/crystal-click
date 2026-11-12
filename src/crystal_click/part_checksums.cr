@@ -34,9 +34,13 @@ module CrystalClick
 
     def self.open(part_path : String) : PartChecksums
       checksum_path = File.join(part_path, "checksums.txt")
-      raise CorruptPartError.new("checksums.txt must not be a symbolic link") if File.symlink?(checksum_path)
+      info = File.info(checksum_path, follow_symlinks: false)
+      if info.type.symlink?
+        raise CorruptPartError.new("checksums.txt must not be a symbolic link")
+      end
+      raise CorruptPartError.new("checksums.txt is not a regular file") unless info.type.file?
 
-      size = File.size(checksum_path)
+      size = info.size
       raise CorruptPartError.new("checksums.txt exceeds limit") if size > MAX_CHECKSUM_FILE_BYTES
       new(File.read(checksum_path).to_slice)
     rescue ex : IO::Error

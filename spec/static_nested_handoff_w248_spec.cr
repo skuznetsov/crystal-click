@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 require "file_utils"
 require "digest/sha256"
 require "../scripts/support/static_nested_handoff_w248_fixture"
@@ -284,6 +285,7 @@ describe "W248 recursive static nominal Nested handoff" do
       projection_name = "nested_projection"
       projection_part = File.join(part, "#{projection_name}.proj")
       StaticNestedHandoffW248Fixture.write_projection_part(projection_part, "single")
+      ProjectionChecksumFixture.rebind!(part, projection_name)
       projected_offline = w248_offline_table(
         part,
         projections: [CrystalClick::OfflineProjection.new(

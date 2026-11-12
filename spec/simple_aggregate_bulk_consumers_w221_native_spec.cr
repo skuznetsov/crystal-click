@@ -1,5 +1,6 @@
 require "./spec_helper"
 require "file_utils"
+require "./support/projection_checksum_fixture"
 
 private def w221_offline_nullable_uint64_aggregate_type : CrystalClick::BinaryDataType
   function = CrystalClick::BinarySimpleAggregateType::Function::AnyLastRespectNulls
@@ -296,6 +297,7 @@ if fixture_root = ENV["W221_PART_ROOT"]?
           w221_offline_profile_part_path(fixture_root, "anyLast_respect_nulls_string_inner_nullable_single_stream"),
           child_path
         )
+        ProjectionChecksumFixture.rebind!(parent_path, "selected")
 
         source = "SimpleAggregateFunction(anyLast_respect_nulls, Nullable(String))"
         type = w221_offline_aggregate_type(source)

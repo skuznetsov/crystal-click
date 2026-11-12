@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 
 private def w177_offline_count_catalog_table(
   root : String,
@@ -182,16 +183,20 @@ describe "W177 offline AggregateFunction(count) consumers" do
       end
     end
 
-    it "refuses physical Count projection payloads before offline callbacks" do
+    it "reads physical Count projection states through the offline catalog" do
       columns = "`pk` UInt64,\n`c` AggregateFunction(count),\nPROJECTION p (SELECT pk, c ORDER BY pk)"
       with_w177_offline_count_table(stock_root, "none", columns) do |table|
         parent = table.part_candidates.first.path
         FileUtils.cp_r(File.join(stock_root, "part-none"), File.join(parent, "p.proj"))
-        callbacks = 0
-        expect_raises(CrystalClick::UnsupportedFormatError) do
-          table.scan_projection_typed("p", ["c"]) { |_batch| callbacks += 1 }
+        ProjectionChecksumFixture.rebind!(parent, "p")
+        count_type = CrystalClick::BinaryDataType.aggregate_count
+        states = [] of UInt64
+        table.scan_projection_typed("p", ["c"]) do |batch|
+          batch.part_path.should eq(parent)
+          batch.column_names.should eq(["c"])
+          batch.aggregate_count_states_for("c", count_type).each { |state| states << state.count_state }
         end
-        callbacks.should eq(0)
+        states.should eq([0_u64, 127_u64, 128_u64, 16_384_u64, UInt64::MAX])
       end
     end
   end

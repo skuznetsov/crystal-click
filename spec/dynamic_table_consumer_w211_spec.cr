@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 require "file_utils"
 
 private alias W211DynamicFixture = NamedTuple(
@@ -851,6 +852,7 @@ describe "W211 Dynamic projection child reader" do
       fixture = w211_dynamic_fixture("root_dynamic")
       projection = File.join(parent, "by_dynamic.proj")
       w211_write_fixture(projection, fixture, CrystalClick::BinaryBulkProfile.single_stream)
+      ProjectionChecksumFixture.rebind!(parent, "by_dynamic")
 
       table = CrystalClick::WidePartTable.open_selected_projection_typed(
         [parent], "by_dynamic", ["pk", "payload"]

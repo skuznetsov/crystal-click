@@ -1,5 +1,6 @@
 require "./spec_helper"
 require "file_utils"
+require "./support/projection_checksum_fixture"
 
 W87_DATABASE_UUID = "f87a0000-7b7f-4e2f-9e44-dc13a87b8701"
 W87_FIXTURE       = File.expand_path("../test/fixtures/public/wide_two_uint64/part", __DIR__)
@@ -49,6 +50,7 @@ private def w87_add_parent_part(table_path : String, name : String, projection :
   FileUtils.cp_r(W87_FIXTURE, part_path)
   if projection
     FileUtils.cp_r(W87_FIXTURE, File.join(part_path, "#{W87_PROJECTION}.proj"))
+    ProjectionChecksumFixture.rebind!(part_path, W87_PROJECTION)
   end
   part_path
 end

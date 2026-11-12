@@ -221,8 +221,10 @@ caller chooses when to recompute and attach it. See the [MV metadata profile](do
 and [transform profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
 
 `OfflineTable#projections` exposes declared projection metadata. For a table
-with a physical projection `p` containing a `UInt64` column `pk`, call
-`scan_projection_typed_window` with the projection name and row range.
+with a physical Wide projection `p` containing a `UInt64` column `pk`, call
+`scan_projection_typed_window` with the projection name and row range. The
+reader matches each selected child's checksum manifest to its parent part
+before yielding rows.
 
 ```crystal
 table.scan_projection_typed_window("p", ["pk"], 0_u64, 64) do |batch|

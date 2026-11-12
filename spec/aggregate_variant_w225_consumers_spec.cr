@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 require "file_utils"
 
 private def w225c_u64_bytes(value : UInt64) : Bytes
@@ -328,6 +329,7 @@ describe "W225 generic AggregateFunction Variant public consumers" do
       w225c_write_part(part, base_type, base_rows, CrystalClick::BinaryBulkProfile.single_stream)
       child = File.join(part, "selected.proj")
       w225c_write_part(child, child_type, child_rows, CrystalClick::BinaryBulkProfile.single_stream)
+      ProjectionChecksumFixture.rebind!(part, "selected")
 
       info = CrystalClick::MergeTreePartInfo.parse("all_1_1_0").not_nil!
       candidate = CrystalClick::OfflinePartCandidate.new("all_1_1_0", part, info, 5_u64)

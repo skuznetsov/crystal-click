@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 require "file_utils"
 
 private def w223c_type : CrystalClick::BinaryDataType
@@ -151,6 +152,7 @@ describe "W223 AggregateFunction root consumers" do
       w223c_write_part(parent_part, type, parent_states).should eq(parent_part)
       projection_path = File.join(parent_part, "selected.proj")
       w223c_write_part(projection_path, type, projection_states).should eq(projection_path)
+      ProjectionChecksumFixture.rebind!(parent_part, "selected")
 
       table = CrystalClick::WidePartTable.open_selected_projection_typed(
         [parent_part],

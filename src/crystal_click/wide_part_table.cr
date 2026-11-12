@@ -4733,6 +4733,21 @@ module CrystalClick
         current_column_types = Array(String).new(@columns.size)
         current_column_sources = Array({String, String, String}).new(@columns.size)
         checksums = PartChecksums.open(path)
+        if selected_projection_name = projection_name
+          parent_entry_name = "#{selected_projection_name}.proj"
+          parent_checksums = PartChecksums.open(parent_path)
+          parent_entry = parent_checksums.entry(parent_entry_name)
+          raise CorruptPartError.new("parent projection checksum entry is missing") unless parent_entry
+          unless !parent_entry.compressed && parent_entry.uncompressed_size.nil?
+            raise CorruptPartError.new("projection checksum entry has an invalid shape")
+          end
+
+          summary = ProjectionChecksumSummary.new(checksums)
+          unless parent_entry.physical_size == summary.total_size_on_disk &&
+                 parent_entry.file_hash == summary.total_checksum
+            raise CorruptPartError.new("selected projection child checksum does not match parent manifest")
+          end
+        end
 
         @columns.each do |column|
           object_declaration = nil.as(String?)

@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "./support/projection_checksum_fixture"
 require "file_utils"
 require "../scripts/support/static_binary_bulk_table_w247_fixture"
 
@@ -457,6 +458,7 @@ describe "W247 generic static BinaryBulk table handoff" do
         StaticBinaryBulkTableW247Fixture.write_part(part, profile_name)
         child = File.join(part, "by_shape.proj")
         StaticBinaryBulkTableW247Fixture.write_part(child, profile_name)
+        ProjectionChecksumFixture.rebind!(part, "by_shape")
 
         table = CrystalClick::WidePartTable.open_selected_projection_typed(
           [part], "by_shape", [StaticBinaryBulkTableW247Fixture::VARIANT_COLUMN]
@@ -485,6 +487,7 @@ describe "W247 generic static BinaryBulk table handoff" do
         StaticBinaryBulkTableW247Fixture.write_part(part, profile_name)
         child = File.join(part, "by_shape.proj")
         StaticBinaryBulkTableW247Fixture.write_projection_part(child, profile_name)
+        ProjectionChecksumFixture.rebind!(part, "by_shape")
 
         table = w247_offline_table(
           part,
