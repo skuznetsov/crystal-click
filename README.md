@@ -213,9 +213,11 @@ part identities within a partition.
 The offline catalog exposes persisted materialized-view targets and SELECT
 text. In an exclusively owned offline copy, `materialize_view_part` handles
 the qualified identity SELECT shape. `transform_materialized_view_part`
-uses a caller-supplied Crystal transformation. Both take one source part and
-publish a detached part under the declared target. The caller chooses when to
-recompute and attach it. See the [MV metadata profile](docs/MATERIALIZED_VIEW_METADATA_FRONTIER.md)
+uses a caller-supplied Crystal transformation and writes Wide output by
+default. Pass `mark_format:` and return a `CompactPartTransformOutput` to
+write Compact output for the supported target schema. Both operations take
+one source part and publish a detached part under the declared target. The
+caller chooses when to recompute and attach it. See the [MV metadata profile](docs/MATERIALIZED_VIEW_METADATA_FRONTIER.md)
 and [transform profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
 
 `OfflineTable#projections` exposes declared projection metadata. For a table
@@ -312,6 +314,8 @@ before publishing it.
 - [ClickHouse format references](docs/CLICKHOUSE_REFERENCE.md) and
   [source references](docs/CLICKHOUSE_SOURCE_REFERENCE.md) record upstream
   format anchors.
+- [Project status](docs/PROJECT_STATUS.md) tracks current qualification and
+  remaining compatibility work.
 - [Performance backlog](docs/PERFORMANCE_BACKLOG.md) records measurements
   and deferred optimization work.
 

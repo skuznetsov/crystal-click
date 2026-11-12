@@ -1,0 +1,51 @@
+{
+  "format": "crystal_click_materialized_view_compact_transform_w286_evidence_v1",
+  "date": "2026-11-12",
+  "baseline_revision": "08f5f50b9f61b057f1eabed96e9fcab0f79968ce",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the tested catalog, target schema, and native layout profiles",
+    "scope": "One resolved source part, one complete caller-run Crystal scan, and one schema-bound detached Compact part for an ordinary unpartitioned MergeTree target with a single ascending UInt64 key. The existing catalog Wide overload retains its signature and behavior.",
+    "outside_scope": "Persisted SQL evaluation, general keys and partitions, projection children, concurrent catalog mutation, and performance. The native matrix uses plain marks. Compressed MRK4 and Compact source parts have local spec coverage in this slice."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "A callback can complete and return a valid Compact writer roster that is incompatible with the target, or skip normal full-scan return and leave an output behind.",
+    "checks": [
+      "Reject writer-valid rosters with the wrong name, type, or order. Require the exact binding error and unchanged catalog after a complete callback in both native runs.",
+      "Reject incomplete scans, nonlocal exits after the final batch, metadata drift, destination collisions, and unsupported nominal types without a newly published part.",
+      "Independently encode expected RowBinary rows, inspect the actual target format and mark counts, compare generated and attached file bytes, and reject a one-byte change in a copied part."
+    ],
+    "rollback": "Revert the feature commit as a unit. Catalog transforms publish only into detached under exclusive ownership."
+  },
+  "verification": {
+    "toolchain": "Crystal 1.22.1, LLVM 23.1.4, aarch64-apple-darwin25.6.0",
+    "baseline_debug": "The new mark_format keyword fails to compile on the baseline. The Wide control passes 11 examples, including nonlocal exit after completing the scan.",
+    "debug": {"focused": 22, "wide_regression": 41, "compact_regression": 23, "failures": 0, "errors": 0, "pending": 0},
+    "release": {"focused": 22, "wide_regression": 41, "compact_regression": 23, "failures": 0, "errors": 0, "pending": 0},
+    "spec_paths_per_mode": 17,
+    "release_flags": ["--release", "--no-debug"],
+    "native": {
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "full_executable_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "reference_source_revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "reference_source_scope": "Separate shallow source checkout. MergeTreeData.cpp uses withPartFormatFromDisk during ATTACH. MergeTreeDataWriter.cpp chooses projection child formats independently.",
+      "profiles_per_mode": ["MRK3/S0", "MRK3/S1", "MRK4/S0", "MRK4/S1"],
+      "invocations_per_mode": {"clickhouse": 13, "helper": 5},
+      "exact_target_rowbinary_reads_per_mode": 8,
+      "exact_source_rowbinary_reads_per_mode": 2,
+      "generated_files_per_mode": 38,
+      "generated_bytes_per_mode": 9303,
+      "physical_observations": "Stock Wide source has six rows. Each generated Compact part contains four rows and two data marks plus the terminal mark. ATTACH and reopen preserve all 38 generated files. The stock control retains both Wide and Compact formats in the same table after reopen.",
+      "diagnostics": "The first native attempt stopped at root JSON fixture construction. The second reached ATTACH and CHECK in all four profiles before the audit failed on trailing slashes in data_paths. The final runs use the corrected fixture and canonical path comparison."
+    },
+    "independent_check": "The report binds the exact guarded argv and raw log digests, input seals, build and runtime identities, and independent literal/native byte audit to the working tree over the baseline.",
+    "report": {
+      "path": "/opt/mldata_ssd/cache/crystal-click-w286.wil6skpd/root-verification.json",
+      "bytes": 10448,
+      "sha256": "a5a714124bde733bc411a2299f66678eb67eea1809b72b241ef7ae43332154e5"
+    }
+  },
+  "refresh_when": "Rerun the declared spec cohorts and the two-mode native matrix after admission, scan lifecycle, schema binding, writer, fixture, harness, toolchain, or oracle drift. Restore or regenerate missing captures before using their evidence. Compiler scratch and generated helpers can be rebuilt from the recorded commands."
+}

@@ -18,6 +18,7 @@ module CrystalClick
       variant_discriminator_mode : CompactVariantDiscriminatorMode,
       compress_marks : Bool = false,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      schema_binding : PartSchemaBinding? = nil,
     ) : String
       validate_mark_format!(mark_format)
       variant_discriminator_mode.wire_value
@@ -92,6 +93,7 @@ module CrystalClick
         compress_marks,
         profile,
       )
+      schema_binding.try { |binding| binding.validate_compact!(metadata.schema_columns) }
       files = case write_plan
               when CompactStaticWritePlan
                 static_backend_columns = static_columns(backend_columns)

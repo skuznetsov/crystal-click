@@ -1,5 +1,52 @@
 # Caller-run materialized-view transform frontier
 
+## Compact target publication (W286)
+
+One callback over one catalog-resolved part
+can request Compact publication by supplying `mark_format:` to
+`OfflineCatalog#transform_materialized_view_part` and returning a detached
+`CompactPartTransformOutput`. The existing Wide call retains its signature
+and behavior. Both layouts use the same one-shot scan, identity revalidation,
+destination checks, and exact ordered target schema contract. Compact output
+uses existing Compact column owners, mark/profile options, codec and transport
+limits, and staged readback. Match the writer's canonical key/value roster to
+the persisted target before data-stream encoding and directory staging.
+
+The target remains an unpartitioned ordinary MergeTree with one ascending
+UInt64 key, plain columns, and matching index granularity. The Compact route
+admits the existing known settings shape with nonnegative paired Wide format
+thresholds. Thresholds govern ordinary insert format selection. The requested
+mark format determines the detached output. Unknown settings, including an
+explicit fixed-granularity override, are refused along with unresolved identities
+and schema mismatches. A declaration-only preflight checks the target's
+Compact owner before the callback. The writer checks the supplied value
+owners, context rosters, and layout under its existing physical limits.
+
+### Qualification
+
+The baseline `08f5f50` rejects `mark_format:` at compile time. The prior
+Wide call passes its control, including a nonlocal exit after a full scan.
+DEBUG and RELEASE each pass 86 examples across 17 spec files. The new path
+covers Wide and Compact sources, both mark formats,
+compressed MRK4, and exact output values after filtering and rekeying.
+Incomplete scans, nonlocal exits, schema drift, mismatched output rosters,
+and occupied destinations leave no new detached part.
+
+In both Crystal build modes, ClickHouse 26.10.1.1201 accepts four generated
+parts across plain MRK3/MRK4 and String S0/S1. Each callback takes six rows
+from a stock Wide part and produces four rows in two data granules. The
+schema includes root Dynamic, root JSON, and `Array(Tuple(JSON, Dynamic))`.
+ATTACH, CHECK, and reopening preserve exact values and generated file bytes.
+The stock control also attaches a Compact part beside a preexisting Wide
+part. The hostile review checks the ordered schema refusal after a full
+callback, the no-publication contract, and a byte change in a copied part.
+See the [qualification evidence](../.landmark/evidence/materialized-view-compact-transform-w286.json).
+
+Revert the atomic slice for rollback. Persisted SQL execution, projections,
+general keys and partitions, and performance remain outside this slice.
+
+## Wide target publication (W257)
+
 Document status: admitted W257; VERIFIED / root adversary ROBUST within the
 bounded caller-run transform target (2026-10-10).
 Current frontier: one catalog-bound source part, one complete Crystal callback
@@ -283,10 +330,9 @@ Owner-specific bounded appenders, general keys/partitions, transform-to-projecti
 publication, projection-parent manifest authentication on read, other aggregate
 state grammars and remaining physical context/layout handoffs remain open.
 Existing nested Object Compact-like callback tapes and coordinate contexts are
-reusable; their bridge into top-level part framing is not a missing recursive
-codec for each type product. No new Compact part capability is admitted here.
-The full types/MV/projections/performance goal remains ACTIVE; memory/performance
-is deferred and no speed-parity claim follows from these gates.
+reusable for bridging the remaining type products into top-level part framing.
+The full types, MV, projections, and performance goal remains active. Memory
+and throughput work follow storage compatibility.
 
 Refresh after relevant admission/input/schema/owner/publisher/profile/fixture/
 helper/compiler/native runtime changes or capture loss. Existing temporary

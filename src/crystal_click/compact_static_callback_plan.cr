@@ -13,6 +13,26 @@ module CrystalClick
     @dictionary_prefix_roles : Array(String)
     @variant_discriminator_roles : Array(String)
 
+    # Validate only the nominal static declaration owner. Catalog preflight
+    # uses this before invoking caller code; value grids and physical callback
+    # schedules remain owned by the eventual write plan.
+    def self.validate_declaration!(type : BinaryDataType, limits : BinaryCodecLimits) : Nil
+      if type.contains_dynamic?
+        raise UnsupportedFormatError.new("Compact static writer does not admit Dynamic state")
+      end
+      if type.contains_json?
+        raise UnsupportedFormatError.new("Compact static writer does not admit JSON state")
+      end
+      unless BinaryValueTypedBatchAdapter.admitted?(type)
+        raise UnsupportedFormatError.new("Compact selected type has no established typed batch carrier")
+      end
+
+      # Keep nominal and context-owned serializers behind their existing
+      # declaration owners instead of inferring support from a rendered name.
+      StaticBinaryBulkColumnDeclaration.new(type, limits)
+      nil
+    end
+
     def initialize(
       input : CompactStaticColumnInput,
       limits : BinaryCodecLimits,
@@ -30,19 +50,7 @@ module CrystalClick
       unless input.map_basic?
         raise UnsupportedFormatError.new("Compact static writer requires BASIC Map serialization")
       end
-      if @type.contains_dynamic?
-        raise UnsupportedFormatError.new("Compact static writer does not admit Dynamic state")
-      end
-      if @type.contains_json?
-        raise UnsupportedFormatError.new("Compact static writer does not admit JSON state")
-      end
-      unless BinaryValueTypedBatchAdapter.admitted?(@type)
-        raise UnsupportedFormatError.new("Compact selected type has no established typed batch carrier")
-      end
-
-      # Keep nominal and context-owned serializers behind their existing
-      # declaration owners instead of inferring support from a rendered name.
-      StaticBinaryBulkColumnDeclaration.new(@type, limits)
+      self.class.validate_declaration!(@type, limits)
 
       physical = BinaryBulkPhysicalPlan.new(@type, @column_name, @profile, limits)
       normalizer = CompactBinaryBulkNormalizer.new(@type, @column_name, @profile, limits)

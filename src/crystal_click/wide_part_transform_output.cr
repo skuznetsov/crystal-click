@@ -16,6 +16,10 @@ module CrystalClick
       @keys.dup
     end
 
+    def empty? : Bool
+      @keys.empty?
+    end
+
     def columns : Array(WidePartColumn)
       @columns.dup
     end

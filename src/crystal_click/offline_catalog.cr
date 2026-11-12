@@ -415,6 +415,108 @@ module CrystalClick
       shared_target_chunk_rows : Int32 = 1,
       &callback : OfflinePartTransformInput -> WidePartTransformOutput
     ) : String
+      operation, destination, schema_binding = prepare_materialized_view_part_transform(
+        database,
+        view_name,
+        source_part_name,
+        source_columns,
+        output_part_name,
+        rows_per_mark,
+        batch_rows,
+        false,
+      )
+      transform_validate_frame_bytes!(frame_bytes, transport_limits, false)
+      output = operation.execute { |transform_input| yield transform_input }
+
+      keys = output.keys
+      columns = output.columns
+      WidePartWriter.write_uint64_columns(
+        destination,
+        schema_binding.key_name,
+        keys.to_unsafe.to_slice(keys.size),
+        columns,
+        rows_per_mark,
+        profile,
+        shared_profile,
+        mode,
+        frame_bytes,
+        metadata_version,
+        limits,
+        transport_limits,
+        shared_json_policy,
+        shared_target_chunk_rows,
+        [] of WidePartProjection,
+        WidePartSchemaBinding.new(schema_binding),
+      )
+    end
+
+    # Run one caller-owned transformation over the same catalog-resolved
+    # source lifecycle, publishing the detached Compact owner output selected
+    # by the required mark format.
+    def transform_materialized_view_part(
+      database : String,
+      view_name : String,
+      source_part_name : String,
+      source_columns : Array(String),
+      output_part_name : String,
+      *,
+      mark_format : CompactMarkFormat,
+      rows_per_mark : Int32 = 8192,
+      batch_rows : Int32 = WidePartTable::DEFAULT_BATCH_ROWS,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      frame_bytes : Int = 4096,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      reader_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      variant_discriminator_mode : CompactVariantDiscriminatorMode = CompactVariantDiscriminatorMode::Compact,
+      compress_marks : Bool = false,
+      &callback : OfflinePartTransformInput -> CompactPartTransformOutput
+    ) : String
+      operation, destination, schema_binding = prepare_materialized_view_part_transform(
+        database,
+        view_name,
+        source_part_name,
+        source_columns,
+        output_part_name,
+        rows_per_mark,
+        batch_rows,
+        true,
+        limits,
+      )
+      transform_validate_frame_bytes!(frame_bytes, transport_limits, true)
+      output = operation.execute { |transform_input| yield transform_input }
+
+      keys = output.keys
+      columns = output.columns
+      CompactPartWriter.write_uint64_columns(
+        destination,
+        schema_binding.key_name,
+        keys.to_unsafe.to_slice(keys.size),
+        columns,
+        rows_per_mark,
+        frame_bytes,
+        limits,
+        transport_limits,
+        reader_limits,
+        mark_format,
+        variant_discriminator_mode,
+        compress_marks,
+        profile,
+        schema_binding: schema_binding,
+      )
+    end
+
+    private def prepare_materialized_view_part_transform(
+      database : String,
+      view_name : String,
+      source_part_name : String,
+      source_columns : Array(String),
+      output_part_name : String,
+      rows_per_mark : Int32,
+      batch_rows : Int32,
+      compact_output : Bool,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+    ) : Tuple(OfflineMaterializedViewPartTransform, String, PartSchemaBinding)
       if rows_per_mark <= 0 || rows_per_mark > WidePartWriter::MAX_ROWS_PER_MARK
         raise BoundsError.new("rows_per_mark is out of range")
       end
@@ -450,7 +552,9 @@ module CrystalClick
       target_ddl = target.metadata_ddl || raise(UnsupportedFormatError.new("transform target DDL is unavailable"))
       view_ddl = view.metadata_ddl || raise(UnsupportedFormatError.new("MATERIALIZED VIEW DDL is unavailable"))
 
-      schema_binding = transform_target_schema_binding(target, rows_per_mark)
+      schema_binding = transform_target_schema_binding(
+        target, rows_per_mark, compact_output, limits
+      )
       destination, output_info = transform_validate_destination!(target, output_part_name)
       target.resolved_scan_parts
       target.part_candidates.each do |candidate|
@@ -470,22 +574,6 @@ module CrystalClick
         source_reader.column_types,
         source_candidate.row_count,
         batch_rows
-      )
-      operation = OfflineMaterializedViewPartTransform.new(
-        input,
-        destination,
-        schema_binding,
-        schema_binding.key_name,
-        rows_per_mark,
-        profile,
-        shared_profile,
-        mode,
-        frame_bytes,
-        metadata_version,
-        limits,
-        transport_limits,
-        shared_json_policy,
-        shared_target_chunk_rows
       )
 
       revalidate = -> do
@@ -507,7 +595,9 @@ module CrystalClick
           raise InvalidPartError.new("MATERIALIZED VIEW target identity changed during transform callback")
         end
         current_target.resolved_scan_parts
-        current_binding = transform_target_schema_binding(current_target, rows_per_mark)
+        current_binding = transform_target_schema_binding(
+          current_target, rows_per_mark, compact_output, limits
+        )
         unless current_binding.columns == schema_binding.columns
           raise InvalidPartError.new("MATERIALIZED VIEW target schema changed during transform callback")
         end
@@ -534,24 +624,45 @@ module CrystalClick
         end
       end
 
-      operation.execute(revalidate) { |transform_input| yield transform_input }
+      operation = OfflineMaterializedViewPartTransform.new(input, revalidate)
+      {operation, destination, schema_binding}
     end
 
-    private def transform_target_schema_binding(target : OfflineTable, rows_per_mark : Int32) : WidePartSchemaBinding
+    private def transform_validate_frame_bytes!(frame_bytes : Int, transport_limits : CompressedStreamLimits, compact_output : Bool) : Nil
+      if compact_output
+        unless frame_bytes > 0 && frame_bytes <= Int32::MAX
+          raise ArgumentError.new("Compact frame size is outside the writer limit")
+        end
+      elsif frame_bytes <= 0 || frame_bytes > Int32::MAX ||
+            frame_bytes > transport_limits.max_frame_decompressed_bytes
+        raise ArgumentError.new("frame size is outside the compressed transport limit")
+      end
+      nil
+    end
+
+    private def transform_target_schema_binding(
+      target : OfflineTable,
+      rows_per_mark : Int32,
+      compact_output : Bool,
+      limits : BinaryCodecLimits,
+    ) : PartSchemaBinding
       unless target.kind == :table && target.engine == "MergeTree"
         raise UnsupportedFormatError.new("transform target must be an ordinary MergeTree table")
       end
       raise UnsupportedFormatError.new("transform target cannot declare projections") unless target.projections.empty?
 
       columns = target.columns
-      unless columns.size >= 2 && columns.size <= WidePart::MAX_METADATA_COLUMNS
+      maximum_columns = compact_output ? WidePartTable::MAX_COLUMNS : WidePart::MAX_METADATA_COLUMNS
+      unless columns.size >= 2 && columns.size <= maximum_columns
         raise UnsupportedFormatError.new("transform target must have a bounded key and value schema")
       end
       columns.each do |column|
         unless !column.alias_column && column.key_candidate_column
           raise UnsupportedFormatError.new("transform target columns must be plain unmodified columns")
         end
-        unless transform_output_type_supported?(column.type)
+        if compact_output
+          CompactPartWriter.validate_target_declaration!(column.type, limits)
+        elsif !transform_output_type_supported?(column.type)
           raise UnsupportedFormatError.new("transform target column type has no admitted Wide writer owner")
         end
       end
@@ -590,32 +701,33 @@ module CrystalClick
       end
 
       if settings = clauses.not_nil!.find { |keyword, _content| keyword == "SETTINGS" }
-        unless transform_supported_settings?(settings[1], rows_per_mark)
-          raise UnsupportedFormatError.new("transform target SETTINGS are outside the admitted Wide layout subset")
+        unless transform_supported_settings?(settings[1], rows_per_mark, compact_output)
+          output_format = compact_output ? "Compact" : "Wide"
+          raise UnsupportedFormatError.new("transform target SETTINGS are outside the admitted #{output_format} layout subset")
         end
       elsif rows_per_mark != 8192
         raise UnsupportedFormatError.new("transform rows_per_mark must match the default target index_granularity of 8192")
       end
 
       binding_columns = columns.map { |column| {column.name, column.type} }
-      WidePartSchemaBinding.new(key.name, binding_columns)
+      PartSchemaBinding.new(key.name, binding_columns, compact_output ? "Compact" : "Wide")
     end
 
-    private def transform_supported_settings?(content : String, rows_per_mark : Int32) : Bool
-      settings = Hash(String, Int64).new
+    private def transform_supported_settings?(content : String, rows_per_mark : Int32, compact_output : Bool) : Bool
+      settings = Hash(String, UInt64).new
       content.split(',').each do |entry|
         match = /\A\s*(index_granularity|min_rows_for_wide_part|min_bytes_for_wide_part)\s*=\s*([0-9]+)\s*\z/i.match(entry)
         return false unless match
         name = match[1].downcase
         return false if settings.has_key?(name)
-        value = match[2].to_i64?
+        value = match[2].to_u64?
         return false unless value
         settings[name] = value.not_nil!
       end
 
       return false if settings.empty?
       if granularity = settings["index_granularity"]?
-        return false unless granularity == rows_per_mark.to_i64
+        return false unless granularity == rows_per_mark.to_u64
       else
         return false unless rows_per_mark == 8192
       end
@@ -623,7 +735,9 @@ module CrystalClick
       has_min_rows = settings.has_key?("min_rows_for_wide_part")
       has_min_bytes = settings.has_key?("min_bytes_for_wide_part")
       return false if has_min_rows != has_min_bytes
-      return false if has_min_rows && (settings["min_rows_for_wide_part"] != 0 || settings["min_bytes_for_wide_part"] != 0)
+      if has_min_rows && !compact_output
+        return false if settings["min_rows_for_wide_part"] != 0_u64 || settings["min_bytes_for_wide_part"] != 0_u64
+      end
 
       true
     end

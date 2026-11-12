@@ -2,6 +2,17 @@
 
 ## Current qualification
 
+W286 adds Compact target publication to the caller-run MV transform. In a
+supported unpartitioned MergeTree target with one ascending UInt64 key, the
+callback can filter and rekey one source part and publish schema-bound output
+to `detached`. With ClickHouse 26.10.1.1201, both Crystal build modes passed
+ATTACH, CHECK, exact RowBinary comparison and reopen for four generated parts
+each across plain MRK3/MRK4 and String S0/S1. See the
+[transform profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-target-publication-w286)
+and [evidence](../.landmark/evidence/materialized-view-compact-transform-w286.json).
+
+### W285 public Compact reads
+
 W285 exposes the W284 recursive `Array(Tuple(JSON, Dynamic))` profile
 through `TypedPartTable` and `catalog[db][table][column].values`. The public
 admission delegates to the recursive reader for canonical mixed declarations.
@@ -35,10 +46,30 @@ S0/S1 and V3 statistics matrix. See the
 [W284 frontier](COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md) and
 [evidence](../.landmark/evidence/compact-recursive-dynamic-w284.json).
 
-Remaining type and layout products, Compact MV output and Compact projection
-children still need implementation and native verification. Projection reads
-also need parent `.proj` summary validation. Memory and throughput optimization
-follows compatibility. The <=10% slowdown target remains unmeasured.
+## Remaining work
+
+1. **Projections.** Verify the parent `checksums.txt` entry when reading a
+   selected `.proj` child. Add Compact child reads and publication with an
+   independent child mark grid and atomic parent publication. See the
+   [projection publication frontier](PROJECTION_PUBLICATION_FRONTIER.md).
+2. **Type and layout compatibility.** Pair reader and writer admission for
+   remaining physical profiles of JSON/Object and legal recursive products
+   involving Dynamic, Variant, LowCardinality, and Nested. Extend nominal
+   types into the remaining layouts and cover additional serialized aggregate
+   states. Qualify each admitted profile against native ClickHouse. See
+   the [Compact recursive frontier](COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md)
+   and the [compatibility detail below](#important-remaining-boundaries).
+3. **Materialized views.** Extend the bounded transform to additional keys
+   and partitions, bounded output appenders, and projection children computed
+   by the same caller. See the [transform frontier](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
+4. **Module boundaries.** Continue moving staged validation, physical stream
+   binding, and granule orchestration into focused owners with stable public
+   APIs. See the [modularization frontier](MODULARIZATION_FRONTIER.md).
+5. **Memory and throughput.** After type, MV, and projection compatibility,
+   establish comparable Crystal and ClickHouse measurements for the same data,
+   operation, and validation policy. Then measure allocation, peak memory, and
+   throughput changes against the baseline. The target of at most 10% slowdown
+   remains unmeasured. See the [performance backlog](PERFORMANCE_BACKLOG.md).
 
 ## Previous qualification
 

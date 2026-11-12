@@ -1,5 +1,18 @@
 # Crystal Click landmarks
 
+## Compact caller-run materialized-view targets — W286
+
+- `OfflineCatalog#transform_materialized_view_part` can publish a detached
+  Compact part for the admitted unpartitioned UInt64-key target. It shares
+  one-shot scan, catalog revalidation, and ordered schema binding with Wide.
+- Both Crystal build modes pass the four native MRK3/MRK4 and String S0/S1
+  profiles through ATTACH, CHECK, exact RowBinary comparison and reopen.
+  See the [W286 evidence](.landmark/evidence/materialized-view-compact-transform-w286.json).
+- Start projection work with the parent `.proj` summary check and a child
+  replacement probe, then admit Compact projection reads and publication.
+  Continue pairing type and layout coverage before memory and throughput work.
+  See the [remaining work](docs/PROJECT_STATUS.md#remaining-work).
+
 ## Recursive Compact Dynamic public reads — W285
 
 - VERIFIED with a ROBUST hostile review for the tested public Compact MRK3
@@ -32,7 +45,7 @@
   for the sealed source, commands, runtime, captures and refresh conditions.
 - W285 qualifies `TypedPartTable` and catalog column `.values` for the
   selected-read fixture. Historical Dynamic statistics, remaining type/layout
-  products, Compact MV output and projection children need their own checks.
+  products, and projection children need their own checks.
   Compatibility still precedes memory and throughput work. See the
   [W284 frontier](docs/COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md).
 

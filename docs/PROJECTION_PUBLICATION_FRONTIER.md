@@ -108,15 +108,14 @@ negative pass. No production source change was needed for that diagnostic.
 
 ## Next local track
 
-Keep type/layout qualification and the selected-reader parent-summary integrity
-seam explicit. The next MV execution slice should scan one selected source part
-through existing DDL/type preflight, invoke a caller-owned Crystal transform,
-and publish schema-bound detached output only after successful completion.
-Filtering and recomputed output keys must be observable; wrong target schema
-or a callback failure after partial processing must leave no destination.
-This is proposed, not implemented, and cannot certify SQL equivalence,
-provenance, freshness or trigger semantics. Broad facade decomposition and the
-full goal remain IN_PROGRESS/ACTIVE; memory/performance stay deferred.
+Authenticate the selected child's summary against the parent checksum entry
+using the existing writer's summary rules. Exercise rejection of a replaced
+child that passes its own checks. Add Compact child reads and publication
+through the existing typed part owners. Each child has its own physical
+format and row/mark grid. Verify that a child failure prevents publication
+of the parent and that native ClickHouse can use the complete projection.
+Caller-run MV transforms and their target layouts are tracked in the
+[transform frontier](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
 
 ## Plan, guards and rollback
 
