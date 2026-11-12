@@ -95,6 +95,8 @@ module CrystalClick
     @site_bindings : Hash(String, SiteBinding)
     @structure_sources : Hash(String, StructureSource)
     @body_callbacks : Hash(String, String)
+    @dynamic_site_plans : Array(CompactDynamicCallbackPlan)
+    @dynamic_callback_locations : Hash(String, Tuple(Int32, Int32))
     @callback_events : Array(CompactBinaryBulkCallback)
     @physical_callback_names : Array(String)
 
@@ -141,23 +143,30 @@ module CrystalClick
       array_site_count = @schema_plan.array_site_count
       uint8_site_count = @schema_plan.uint8_site_count
       bulk_site_count = @schema_plan.bulk_site_count
+      dynamic_site_count = @schema_plan.dynamic_bulk_site_count
       site_slots = checked_add(
         checked_add(json_site_count.to_u64, array_site_count.to_u64),
-        checked_add(uint8_site_count.to_u64, bulk_site_count.to_u64),
+        checked_add(
+          checked_add(uint8_site_count.to_u64, bulk_site_count.to_u64),
+          dynamic_site_count.to_u64,
+        ),
       )
       unless json_site_count > 0
         raise UnsupportedFormatError.new("Compact JSON callback plan has an inconsistent schema-site roster")
       end
-      budget.ensure_future_nodes(3_u64)
+      site_array_nodes = dynamic_site_count > 0 ? 4_u64 : 3_u64
+      budget.ensure_future_nodes(site_array_nodes)
       budget.ensure_future_elements(site_slots)
-      3.times { budget.charge_node }
+      site_array_nodes.times { budget.charge_node }
       budget.charge_elements(site_slots) if site_slots > 0_u64
       sites = @schema_plan.json_sites
       array_sites = @schema_plan.array_sites
       uint8_sites = @schema_plan.uint8_sites
       bulk_sites = @schema_plan.bulk_sites
+      dynamic_sites = @schema_plan.dynamic_bulk_sites
       unless sites.size == json_site_count && array_sites.size == array_site_count &&
-             uint8_sites.size == uint8_site_count && bulk_sites.size == bulk_site_count
+             uint8_sites.size == uint8_site_count && bulk_sites.size == bulk_site_count &&
+             dynamic_sites.size == dynamic_site_count
         raise UnsupportedFormatError.new("Compact JSON schema-site roster changed after planning")
       end
       object_schemas = Hash(String, ObjectDocumentSchema).new(initial_capacity: sites.size)
@@ -282,6 +291,105 @@ module CrystalClick
         end
       end
 
+      dynamic_site_nodes = dynamic_site_count.to_u64
+      if dynamic_site_nodes > 0_u64
+        budget.ensure_future_nodes(dynamic_site_nodes + 1_u64)
+        budget.ensure_future_elements(dynamic_site_nodes)
+        (dynamic_site_nodes + 1_u64).times { budget.charge_node }
+        budget.charge_elements(dynamic_site_nodes)
+      end
+      @dynamic_site_plans = Array(CompactDynamicCallbackPlan).new(dynamic_site_count)
+      dynamic_sites.each do |site|
+        context = input.recursive_dynamic_context.site_context_for(site.key)
+        @dynamic_site_plans << CompactDynamicCallbackPlan.for_recursive_json_site(
+          site,
+          @column_name,
+          context,
+          @profile,
+          limits,
+          budget,
+          @variant_discriminator_mode,
+        )
+      end
+      unless @dynamic_site_plans.size == dynamic_site_count
+        raise UnsupportedFormatError.new("Compact recursive Dynamic callback subplans differ from their schema roster")
+      end
+
+      if dynamic_site_count > 0
+        scratch_nodes = 2_u64
+        scratch_elements = checked_multiply(dynamic_site_count.to_u64, 2_u64)
+        budget.ensure_future_nodes(scratch_nodes)
+        budget.ensure_future_elements(scratch_elements)
+        scratch_nodes.times { budget.charge_node }
+        budget.charge_elements(scratch_elements)
+      end
+      dynamic_prefix_counts = Array(UInt64).new(dynamic_site_count, 0_u64)
+      dynamic_body_counts = Array(UInt64).new(dynamic_site_count, 0_u64)
+      dynamic_event_count = 0_u64
+      dynamic_prefix_count = 0_u64
+      dynamic_body_count = 0_u64
+      @dynamic_site_plans.each_with_index do |dynamic_plan, site_index|
+        dynamic_plan.each_callback_event do |event|
+          dynamic_event_count = checked_add(dynamic_event_count, 1_u64)
+          if dynamic_plan.structure_site_for_callback(event.name) ||
+             dynamic_plan.prefix_role_for_callback(event.name)
+            dynamic_prefix_counts[site_index] = checked_add(dynamic_prefix_counts[site_index], 1_u64)
+            dynamic_prefix_count = checked_add(dynamic_prefix_count, 1_u64)
+          elsif dynamic_plan.body_role_for_callback(event.name)
+            dynamic_body_counts[site_index] = checked_add(dynamic_body_counts[site_index], 1_u64)
+            dynamic_body_count = checked_add(dynamic_body_count, 1_u64)
+          else
+            raise UnsupportedFormatError.new("recursive Compact Dynamic callback has no sealed prefix or body role")
+          end
+        end
+      end
+
+      if dynamic_site_count > 0
+        dynamic_container_nodes = checked_add(
+          3_u64,
+          checked_multiply(dynamic_site_count.to_u64, 2_u64),
+        ) # prefix/body maps, callback locator map, and one prefix/body array per site
+        dynamic_container_elements = checked_add(
+          checked_multiply(dynamic_site_count.to_u64, 2_u64),
+          checked_add(dynamic_event_count, checked_add(dynamic_prefix_count, dynamic_body_count)),
+        )
+        budget.ensure_future_nodes(dynamic_container_nodes)
+        budget.ensure_future_elements(dynamic_container_elements)
+        dynamic_container_nodes.times { budget.charge_node }
+        budget.charge_elements(dynamic_container_elements) if dynamic_container_elements > 0_u64
+      end
+      dynamic_prefixes = Hash(String, Array(String)).new(initial_capacity: dynamic_site_count)
+      dynamic_bodies = Hash(String, Array(String)).new(initial_capacity: dynamic_site_count)
+      @dynamic_callback_locations = Hash(String, Tuple(Int32, Int32)).new
+      @dynamic_site_plans.each_with_index do |dynamic_plan, site_index|
+        site = dynamic_sites[site_index]
+        prefix_names = Array(String).new(dynamic_prefix_counts[site_index].to_i)
+        body_names = Array(String).new(dynamic_body_counts[site_index].to_i)
+        callback_index = 0
+        dynamic_plan.each_callback_event do |event|
+          if @dynamic_callback_locations.has_key?(event.name) || !seen_callback_names.add?(event.name)
+            raise UnsupportedFormatError.new("Compact JSON callback schedule repeats a recursive Dynamic callback")
+          end
+          @dynamic_callback_locations[event.name] = {site_index.to_i32, callback_index.to_i32}
+          if dynamic_plan.structure_site_for_callback(event.name) ||
+             dynamic_plan.prefix_role_for_callback(event.name)
+            prefix_names << event.name
+          else
+            body_names << event.name
+          end
+          callback_index += 1
+        end
+        unless prefix_names.size.to_u64 == dynamic_prefix_counts[site_index] &&
+               body_names.size.to_u64 == dynamic_body_counts[site_index]
+          raise UnsupportedFormatError.new("recursive Compact Dynamic callback phase roster changed after planning")
+        end
+        dynamic_prefixes[site.key] = prefix_names
+        dynamic_bodies[site.key] = body_names
+      end
+      unless @dynamic_callback_locations.size.to_u64 == dynamic_event_count
+        raise UnsupportedFormatError.new("recursive Compact Dynamic callback locator is incomplete")
+      end
+
       array_sites.each do |site|
         if seen_callback_names.includes?(site.callback_name)
           raise UnsupportedFormatError.new("Compact JSON callback schedule repeats a physical callback")
@@ -316,7 +424,12 @@ module CrystalClick
         end
       end
 
-      ordered_names = @schema_plan.expected_event_names(prefixes, body_pairs_by_site)
+      ordered_names = @schema_plan.expected_event_names(
+        prefixes,
+        body_pairs_by_site,
+        dynamic_prefixes,
+        dynamic_bodies,
+      )
       seen_ordered = Set(String).new
       ordered_names.each do |name|
         unless seen_ordered.add?(name)
@@ -368,6 +481,12 @@ module CrystalClick
           register_physical_pair!(canonical_by_callback, seen_canonical, callback_name, callback_name)
         end
       end
+      dynamic_sites.each_with_index do |_site, site_index|
+        dynamic_plan = @dynamic_site_plans[site_index]
+        dynamic_plan.each_callback_event do |event|
+          register_physical_pair!(canonical_by_callback, seen_canonical, event.name, event.name)
+        end
+      end
       unless canonical_by_callback.size == expected_count
         raise UnsupportedFormatError.new("Compact JSON physical callback projection is not a complete roster")
       end
@@ -388,9 +507,23 @@ module CrystalClick
           if prefix = metadata[name]?
             role, prefix_size = prefix
             @callback_events << CompactBinaryBulkCallback.new(name, role, prefix_size)
+          elsif location = @dynamic_callback_locations[name]?
+            dynamic_site_index, dynamic_event_index = location
+            dynamic_event = @dynamic_site_plans[dynamic_site_index].callback_event_at(dynamic_event_index)
+            unless dynamic_event.name == name
+              raise UnsupportedFormatError.new("recursive Compact Dynamic callback locator changed its physical name")
+            end
+            @callback_events << dynamic_event
           else
             @callback_events << CompactBinaryBulkCallback.new(name, name, 0)
           end
+        elsif location = @dynamic_callback_locations[name]?
+          dynamic_site_index, dynamic_event_index = location
+          dynamic_event = @dynamic_site_plans[dynamic_site_index].callback_event_at(dynamic_event_index)
+          unless dynamic_event.name == name
+            raise UnsupportedFormatError.new("recursive Compact Dynamic callback locator changed its physical name")
+          end
+          @callback_events << dynamic_event
         else
           @callback_events << CompactBinaryBulkCallback.new(name, name, 0)
         end
@@ -413,6 +546,13 @@ module CrystalClick
 
     def callback_event_count : Int32
       @callback_events.size
+    end
+
+    def callback_event_at(index : Int) : CompactBinaryBulkCallback
+      if index < 0 || index >= @callback_events.size
+        raise IndexError.new("Compact JSON callback event index is outside the frozen roster")
+      end
+      @callback_events[index]
     end
 
     def callback_events : Array(CompactBinaryBulkCallback)
@@ -463,6 +603,32 @@ module CrystalClick
       @schema_plan.bulk_site_count
     end
 
+    def dynamic_bulk_sites : Array(CompactRecursiveJsonDynamicBulkSite)
+      @schema_plan.dynamic_bulk_sites
+    end
+
+    def dynamic_bulk_site_count : Int32
+      @schema_plan.dynamic_bulk_site_count
+    end
+
+    def dynamic_site_plan(index : Int) : CompactDynamicCallbackPlan
+      @dynamic_site_plans[index]
+    end
+
+    def dynamic_site_plan_for(path : String) : CompactDynamicCallbackPlan
+      index = dynamic_bulk_sites.index { |site| site.key == path } ||
+              raise(UnsupportedFormatError.new("recursive Compact Dynamic site is outside its callback plan"))
+      @dynamic_site_plans[index]
+    end
+
+    def dynamic_callback_location(name : String) : Tuple(Int32, Int32)?
+      @dynamic_callback_locations[name]?
+    end
+
+    def dynamic_callback?(name : String) : Bool
+      @dynamic_callback_locations.has_key?(name)
+    end
+
     def site_binding(path : String) : SiteBinding
       @site_bindings[path]? || raise(UnsupportedFormatError.new("Compact JSON Object site is outside its callback plan"))
     end
@@ -497,6 +663,7 @@ module CrystalClick
                           candidate.profile == @profile && candidate.map_basic?
       return false unless candidate.schema.same_tree?(@bound_input.schema)
       return false unless @json_context.same_context?(candidate.json_context)
+      return false unless @bound_input.recursive_dynamic_context.same_context?(candidate.recursive_dynamic_context)
       rows = candidate.granules
       return false unless rows.size == @bound_grid.size
       rows.each_with_index do |row, mark_index|
@@ -555,7 +722,7 @@ module CrystalClick
             end
           end
         else
-          unless BinaryValueTypedBatchAdapter.admitted?(type)
+          unless type.tag == BinaryDataType::TAG_UINT8 || BinaryValueTypedBatchAdapter.admitted?(type)
             raise UnsupportedFormatError.new("Compact JSON typed Object callback type is outside its admitted carrier profile")
           end
           StaticBinaryBulkColumnDeclaration.new(type, limits)

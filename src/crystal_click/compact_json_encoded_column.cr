@@ -17,6 +17,7 @@ module CrystalClick
       property array : Int32 = 0
       property uint8 : Int32 = 0
       property bulk : Int32 = 0
+      property dynamic : Int32 = 0
     end
 
     @plan : CompactJsonCallbackPlan
@@ -24,6 +25,7 @@ module CrystalClick
     @callback_fragments : Array(Array(Bytes))
     @callback_relocations : Array(Array(ObjectSharedInlineCallbackRelocation))?
     @structure_prefixes : Array(Tuple(Bytes, Bytes)?)
+    @dynamic_encoded_columns : Array(CompactDynamicEncodedColumn)?
     @mark_count : Int32
 
     private def initialize(plan : CompactJsonCallbackPlan, budget : BinaryCodecBudget)
@@ -34,6 +36,7 @@ module CrystalClick
       @plan = plan
       @mark_count = plan.bound_mark_count
       @callback_relocations = nil
+      @dynamic_encoded_columns = nil
       if @mark_count <= 0
         raise UnsupportedFormatError.new("Compact JSON writer requires at least one physical mark")
       end
@@ -74,23 +77,30 @@ module CrystalClick
       array_site_count = plan.array_site_count
       uint8_site_count = plan.uint8_site_count
       bulk_site_count = plan.bulk_site_count
+      dynamic_site_count = plan.dynamic_bulk_site_count
       site_slots = checked_add(
         checked_add(json_site_count.to_u64, array_site_count.to_u64),
-        checked_add(uint8_site_count.to_u64, bulk_site_count.to_u64),
+        checked_add(
+          checked_add(uint8_site_count.to_u64, bulk_site_count.to_u64),
+          dynamic_site_count.to_u64,
+        ),
       )
       unless json_site_count > 0
         raise UnsupportedFormatError.new("Compact JSON callback plan has an inconsistent schema-site roster")
       end
-      budget.ensure_future_nodes(4_u64)
+      site_array_nodes = dynamic_site_count > 0 ? 5_u64 : 4_u64
+      budget.ensure_future_nodes(site_array_nodes)
       budget.ensure_future_elements(site_slots)
-      4.times { budget.charge_node }
+      site_array_nodes.times { budget.charge_node }
       budget.charge_elements(site_slots) if site_slots > 0_u64
       json_sites = plan.json_sites
       array_sites = plan.array_sites
       uint8_sites = plan.uint8_sites
       bulk_sites = plan.bulk_sites
+      dynamic_sites = plan.dynamic_bulk_sites
       unless json_sites.size == json_site_count && array_sites.size == array_site_count &&
-             uint8_sites.size == uint8_site_count && bulk_sites.size == bulk_site_count
+             uint8_sites.size == uint8_site_count && bulk_sites.size == bulk_site_count &&
+             dynamic_sites.size == dynamic_site_count
         raise UnsupportedFormatError.new("Compact JSON schema-site roster changed after planning")
       end
 
@@ -105,21 +115,58 @@ module CrystalClick
       cursor = SiteCursor.new
       root_node = build_value_plan_node(plan.bound_schema, cursor)
       unless cursor.json == json_sites.size && cursor.array == array_sites.size &&
-             cursor.uint8 == uint8_sites.size && cursor.bulk == bulk_sites.size
+             cursor.uint8 == uint8_sites.size && cursor.bulk == bulk_sites.size &&
+             cursor.dynamic == dynamic_sites.size
         raise UnsupportedFormatError.new("Compact JSON value traversal differs from its schema-owned site roster")
       end
       prepare_structure_prefixes!(budget)
 
+      dynamic_grids = nil.as(Array(Array(Array(BinaryValue)))?)
+      if dynamic_site_count > 0
+        grid_nodes = checked_add(dynamic_site_count.to_u64, 1_u64)
+        grid_elements = checked_multiply(
+          dynamic_site_count.to_u64,
+          checked_add(@mark_count.to_u64, 1_u64),
+        )
+        owner_nodes = checked_add(dynamic_site_count.to_u64, 1_u64)
+        owner_elements = dynamic_site_count.to_u64
+        total_nodes = checked_add(grid_nodes, owner_nodes)
+        total_elements = checked_add(grid_elements, owner_elements)
+        budget.ensure_future_nodes(total_nodes)
+        budget.ensure_future_elements(total_elements)
+        total_nodes.times { budget.charge_node }
+        budget.charge_elements(total_elements)
+        @dynamic_encoded_columns = Array(CompactDynamicEncodedColumn).new(dynamic_site_count)
+        grids = Array(Array(Array(BinaryValue))).new(dynamic_site_count)
+        dynamic_site_count.times do
+          grids << Array(Array(BinaryValue)).new(@mark_count)
+        end
+        dynamic_grids = grids
+      end
+
       @mark_count.times do |mark_index|
-        json_documents, array_sizes, uint8_values, bulk_values = collect_mark_values(
+        json_documents, array_sizes, uint8_values, bulk_values, dynamic_values = collect_mark_values(
           root_node,
           json_sites.size,
           array_sites.size,
           uint8_sites.size,
           bulk_sites.size,
+          dynamic_sites.size,
           mark_index,
           budget,
         )
+        if grids = dynamic_grids
+          values_by_site = dynamic_values ||
+                           raise(UnsupportedFormatError.new("recursive Compact Dynamic value projection was not preflighted"))
+          unless values_by_site.size == dynamic_site_count && grids.size == dynamic_site_count
+            raise UnsupportedFormatError.new("recursive Compact Dynamic value projection differs from its site roster")
+          end
+          values_by_site.each_with_index do |values, site_index|
+            grids[site_index] << values
+          end
+        elsif dynamic_values
+          raise UnsupportedFormatError.new("Compact JSON Dynamic values have no preflighted grid owner")
+        end
         filled = new_filled_roster(callback_count, budget)
 
         json_sites.each_with_index do |site, site_index|
@@ -149,10 +196,53 @@ module CrystalClick
         end
 
         filled.each_with_index do |value, callback_index|
+          next if plan.dynamic_callback?(@callback_names[callback_index])
           unless value
             raise UnsupportedFormatError.new("Compact JSON encoder omitted a planned callback for one mark")
           end
         end
+      end
+
+      if dynamic_site_count > 0
+        grids = dynamic_grids ||
+                raise(UnsupportedFormatError.new("recursive Compact Dynamic value grid was not preflighted"))
+        unless grids.size == dynamic_site_count && grids.all? { |grid| grid.size == @mark_count }
+          raise UnsupportedFormatError.new("recursive Compact Dynamic value grid differs from its physical mark roster")
+        end
+        dynamic_sites.each_with_index do |_site, site_index|
+          dynamic_plan = plan.dynamic_site_plan(site_index)
+          encoded = CompactDynamicEncodedColumn.encode(dynamic_plan, grids[site_index], budget)
+          emitted_count = 0
+          encoded.each_callback_event do |event|
+            location = plan.dynamic_callback_location(event.name) ||
+                       raise(UnsupportedFormatError.new("recursive Compact Dynamic callback has no parent locator"))
+            unless location[0] == site_index &&
+                   dynamic_plan.callback_event_at(location[1]).name == event.name &&
+                   dynamic_plan.includes_callback_event?(event)
+              raise UnsupportedFormatError.new("recursive Compact Dynamic callback differs from its parent event authority")
+            end
+            callback_index = index_for_callback(event.name)
+            parent_event = plan.callback_event_at(callback_index)
+            unless parent_event.name == event.name && parent_event.role == event.role &&
+                   parent_event.prefix_size == event.prefix_size
+              raise UnsupportedFormatError.new("recursive Compact Dynamic callback metadata differs from the parent roster")
+            end
+            @mark_count.times do |mark_index|
+              @callback_fragments[callback_index][mark_index] = encoded.callback_bytes(event, mark_index)
+            end
+            emitted_count += 1
+          end
+          unless emitted_count == dynamic_plan.callback_event_count
+            raise UnsupportedFormatError.new("recursive Compact Dynamic encoder omitted a planned callback")
+          end
+          columns = @dynamic_encoded_columns ||
+                    raise(UnsupportedFormatError.new("recursive Compact Dynamic encoded owner array was not preflighted"))
+          columns << encoded
+        end
+      end
+      encoded_site_count = @dynamic_encoded_columns.try(&.size) || 0
+      unless encoded_site_count == dynamic_site_count
+        raise UnsupportedFormatError.new("recursive Compact Dynamic encoded-site roster differs from its schema plan")
       end
     end
 
@@ -236,6 +326,20 @@ module CrystalClick
         bytes = checked_add(bytes, value[1].size.to_u64)
       end
 
+      if dynamic_columns = @dynamic_encoded_columns
+        bytes = checked_add(bytes, instance_sizeof(Array(CompactDynamicEncodedColumn)).to_u64)
+        bytes = checked_add(
+          bytes,
+          checked_multiply(
+            dynamic_columns.size.to_u64,
+            sizeof(Pointer(CompactDynamicEncodedColumn)).to_u64,
+          ),
+        )
+        dynamic_columns.each do |encoded|
+          bytes = checked_add(bytes, encoded.retained_workspace_bytes)
+        end
+      end
+
       if marks = @callback_relocations
         bytes = checked_add(bytes, instance_sizeof(Array(Array(ObjectSharedInlineCallbackRelocation))).to_u64)
         bytes = checked_add(
@@ -274,7 +378,10 @@ module CrystalClick
         site_index = cursor.array
         cursor.array += 1
       elsif schema.bulk?
-        if schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+        if schema.bulk_type.tag == BinaryDataType::TAG_DYNAMIC
+          site_index = cursor.dynamic
+          cursor.dynamic += 1
+        elsif schema.bulk_type.tag == BinaryDataType::TAG_UINT8
           site_index = cursor.uint8
           cursor.uint8 += 1
         else
@@ -307,18 +414,33 @@ module CrystalClick
       array_site_count : Int32,
       uint8_site_count : Int32,
       bulk_site_count : Int32,
+      dynamic_site_count : Int32,
       mark_index : Int32,
       budget : BinaryCodecBudget,
-    ) : Tuple(Array(Array(ObjectDocument)), Array(Array(BinaryValue)), Array(Array(BinaryValue)), Array(Array(BinaryValue)))
-      budget.ensure_future_nodes(4_u64)
-      site_count = (json_site_count + array_site_count + uint8_site_count + bulk_site_count).to_u64
+    ) : Tuple(
+      Array(Array(ObjectDocument)),
+      Array(Array(BinaryValue)),
+      Array(Array(BinaryValue)),
+      Array(Array(BinaryValue)),
+      Array(Array(BinaryValue))?,
+    )
+      count_nodes = dynamic_site_count > 0 ? 5_u64 : 4_u64
+      budget.ensure_future_nodes(count_nodes)
+      site_count = checked_add(
+        checked_add(checked_add(json_site_count.to_u64, array_site_count.to_u64),
+          checked_add(uint8_site_count.to_u64, bulk_site_count.to_u64)),
+        dynamic_site_count.to_u64,
+      )
       budget.ensure_future_elements(site_count)
-      4.times { budget.charge_node }
+      count_nodes.times { budget.charge_node }
       budget.charge_elements(site_count)
       json_counts = Array(Int32).new(json_site_count, 0)
       array_counts = Array(Int32).new(array_site_count, 0)
       uint8_counts = Array(Int32).new(uint8_site_count, 0)
       bulk_counts = Array(Int32).new(bulk_site_count, 0)
+      dynamic_counts = if dynamic_site_count > 0
+                         Array(Int32).new(dynamic_site_count, 0)
+                       end
 
       row_count = @plan.bound_row_count(mark_index)
       row_count.times do |row_index|
@@ -329,6 +451,7 @@ module CrystalClick
           array_counts,
           uint8_counts,
           bulk_counts,
+          dynamic_counts,
           budget,
           1,
         )
@@ -338,10 +461,15 @@ module CrystalClick
       array_total = total_counts(array_counts)
       uint8_total = total_counts(uint8_counts)
       bulk_total = total_counts(bulk_counts)
+      dynamic_total = dynamic_counts.try { |counts| total_counts(counts) } || 0_u64
       all_sites = site_count
-      reference_slots = checked_add(checked_add(checked_add(json_total, array_total), uint8_total), bulk_total)
+      reference_slots = checked_add(
+        checked_add(checked_add(checked_add(json_total, array_total), uint8_total), bulk_total),
+        dynamic_total,
+      )
       generated_size_values = array_total
-      output_nodes = checked_add(checked_add(all_sites, generated_size_values), 4_u64)
+      output_outer_nodes = dynamic_site_count > 0 ? 5_u64 : 4_u64
+      output_nodes = checked_add(checked_add(all_sites, generated_size_values), output_outer_nodes)
       output_elements = checked_add(
         checked_add(all_sites, reference_slots),
         checked_multiply(generated_size_values, 8_u64),
@@ -362,17 +490,38 @@ module CrystalClick
       uint8_counts.each { |count| uint8_values << Array(BinaryValue).new(count) }
       bulk_values = Array(Array(BinaryValue)).new(bulk_site_count)
       bulk_counts.each { |count| bulk_values << Array(BinaryValue).new(count) }
+      dynamic_values = if counts = dynamic_counts
+                         rows = Array(Array(BinaryValue)).new(dynamic_site_count)
+                         counts.each { |count| rows << Array(BinaryValue).new(count) }
+                         rows
+                       end
 
       row_count.times do |row_index|
-        fill_value!(root, @plan.bound_value_at(mark_index, row_index), json_documents, array_sizes, uint8_values, bulk_values)
+        fill_value!(
+          root,
+          @plan.bound_value_at(mark_index, row_index),
+          json_documents,
+          array_sizes,
+          uint8_values,
+          bulk_values,
+          dynamic_values,
+        )
+      end
+      dynamic_counts_match = true
+      if values = dynamic_values
+        counts = dynamic_counts ||
+                 raise(UnsupportedFormatError.new("Compact JSON Dynamic occurrence counters were dropped after planning"))
+        dynamic_counts_match = values.size == counts.size &&
+                               values.each_with_index.all? { |row, index| row.size == counts[index] }
       end
       unless json_documents.each_with_index.all? { |values, index| values.size == json_counts[index] } &&
              array_sizes.each_with_index.all? { |values, index| values.size == array_counts[index] } &&
              uint8_values.each_with_index.all? { |values, index| values.size == uint8_counts[index] } &&
-             bulk_values.each_with_index.all? { |values, index| values.size == bulk_counts[index] }
+             bulk_values.each_with_index.all? { |values, index| values.size == bulk_counts[index] } &&
+             dynamic_counts_match
         raise UnsupportedFormatError.new("Compact JSON value grid changed during bounded projection")
       end
-      {json_documents, array_sizes, uint8_values, bulk_values}
+      {json_documents, array_sizes, uint8_values, bulk_values, dynamic_values}
     end
 
     private def count_value!(
@@ -382,6 +531,7 @@ module CrystalClick
       array_counts : Array(Int32),
       uint8_counts : Array(Int32),
       bulk_counts : Array(Int32),
+      dynamic_counts : Array(Int32)?,
       budget : BinaryCodecBudget,
       depth : Int32,
     ) : Nil
@@ -399,7 +549,7 @@ module CrystalClick
         increment_count!(array_counts, node.site_index)
         budget.preflight_children(value.child_count.to_u64)
         value.child_count.times do |index|
-          count_value!(node.children[0], value.child_at(index), json_counts, array_counts, uint8_counts, bulk_counts, budget, depth + 1)
+          count_value!(node.children[0], value.child_at(index), json_counts, array_counts, uint8_counts, bulk_counts, dynamic_counts, budget, depth + 1)
         end
       elsif schema.tuple?
         unless value.tuple? && value.child_count == schema.child_count
@@ -407,7 +557,7 @@ module CrystalClick
         end
         budget.preflight_children(schema.child_count.to_u64)
         schema.child_count.times do |index|
-          count_value!(node.children[index], value.child_at(index), json_counts, array_counts, uint8_counts, bulk_counts, budget, depth + 1)
+          count_value!(node.children[index], value.child_at(index), json_counts, array_counts, uint8_counts, bulk_counts, dynamic_counts, budget, depth + 1)
         end
       elsif schema.bulk?
         unless value.bulk?
@@ -419,7 +569,11 @@ module CrystalClick
         unless binary.type == schema.bulk_type
           raise UnsupportedFormatError.new("Compact JSON BinaryBulk leaf differs from its canonical declaration")
         end
-        if schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+        if schema.bulk_type.tag == BinaryDataType::TAG_DYNAMIC
+          counts = dynamic_counts ||
+                   raise(UnsupportedFormatError.new("Compact JSON Dynamic site lacks a preflighted occurrence counter"))
+          increment_count!(counts, node.site_index)
+        elsif schema.bulk_type.tag == BinaryDataType::TAG_UINT8
           increment_count!(uint8_counts, node.site_index)
         else
           increment_count!(bulk_counts, node.site_index)
@@ -437,6 +591,7 @@ module CrystalClick
       array_sizes : Array(Array(BinaryValue)),
       uint8_values : Array(Array(BinaryValue)),
       bulk_values : Array(Array(BinaryValue)),
+      dynamic_values : Array(Array(BinaryValue))?,
     ) : Nil
       schema = node.schema
       if schema.object?
@@ -444,14 +599,18 @@ module CrystalClick
       elsif schema.array?
         array_sizes[node.site_index] << BinaryValue.uint64(value.child_count.to_u64)
         value.child_count.times do |index|
-          fill_value!(node.children[0], value.child_at(index), json_documents, array_sizes, uint8_values, bulk_values)
+          fill_value!(node.children[0], value.child_at(index), json_documents, array_sizes, uint8_values, bulk_values, dynamic_values)
         end
       elsif schema.tuple?
         schema.child_count.times do |index|
-          fill_value!(node.children[index], value.child_at(index), json_documents, array_sizes, uint8_values, bulk_values)
+          fill_value!(node.children[index], value.child_at(index), json_documents, array_sizes, uint8_values, bulk_values, dynamic_values)
         end
       elsif schema.bulk?
-        if schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+        if schema.bulk_type.tag == BinaryDataType::TAG_DYNAMIC
+          values = dynamic_values ||
+                   raise(UnsupportedFormatError.new("Compact JSON Dynamic site lacks a preflighted value owner"))
+          values[node.site_index] << value.bulk_value
+        elsif schema.bulk_type.tag == BinaryDataType::TAG_UINT8
           uint8_values[node.site_index] << value.bulk_value
         else
           bulk_values[node.site_index] << value.bulk_value

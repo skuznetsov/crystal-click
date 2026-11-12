@@ -176,8 +176,8 @@ module CrystalClick
         open_budget,
         1_i32,
       ) || raise(UnsupportedFormatError.new("Compact recursive JSON declaration is not a supported recursive BinaryDataType"))
-      unless @type.contains_json? && !@type.contains_dynamic?
-        raise UnsupportedFormatError.new("Compact recursive JSON reader requires static JSON and no Dynamic subtree")
+      unless @type.contains_json?
+        raise UnsupportedFormatError.new("Compact recursive JSON reader requires a JSON-bearing recursive declaration")
       end
       @schema_declaration = String.new(@schema.declaration.to_slice)
       name_bounds = BinaryTypeNameBudget.measure(@type, open_budget)
@@ -520,12 +520,28 @@ module CrystalClick
       array_sites = plan.array_sites
       uint8_sites = plan.uint8_sites
       bulk_sites = plan.bulk_sites
+      dynamic_bulk_sites = plan.dynamic_bulk_sites
       object_marks = Hash(String, Array(PreparedObjectMark)).new(initial_capacity: json_sites.size)
       json_sites.each { |site| object_marks[site.key] = Array(PreparedObjectMark).new(@mark_count) }
       uint8_bytes = Hash(String, Array(Bytes)).new(initial_capacity: uint8_sites.size)
       uint8_sites.each { |site| uint8_bytes[site.key] = Array(Bytes).new(@mark_count) }
-      bulk_values = Hash(String, Array(Array(BinaryValue))).new(initial_capacity: bulk_sites.size)
+      bulk_values = Hash(String, Array(Array(BinaryValue))).new(
+        initial_capacity: bulk_sites.size + dynamic_bulk_sites.size,
+      )
       bulk_sites.each { |site| bulk_values[site.key] = Array(Array(BinaryValue)).new(@mark_count) }
+      dynamic_bulk_sites.each { |site| bulk_values[site.key] = Array(Array(BinaryValue)).new(@mark_count) }
+      dynamic_site_count = dynamic_bulk_sites.size.to_u64
+      dynamic_capture_plans = Hash(String, CompactRecursiveJsonDynamicBulkCapturePlan).new
+      if dynamic_site_count > 0_u64
+        owner_nodes = checked_add(dynamic_site_count, 1_u64)
+        budget.ensure_future_nodes(owner_nodes)
+        budget.ensure_future_elements(dynamic_site_count)
+        owner_nodes.times { budget.charge_node }
+        budget.charge_elements(dynamic_site_count)
+        dynamic_capture_plans = Hash(String, CompactRecursiveJsonDynamicBulkCapturePlan).new(
+          initial_capacity: dynamic_bulk_sites.size,
+        )
+      end
       prefix_capture_site_count = 0_u64
       bulk_sites.each do |site|
         prefix_capture_site_count = checked_add(prefix_capture_site_count, 1_u64) if site.prefix_role_count > 0
@@ -544,6 +560,22 @@ module CrystalClick
         ledger = CompactRecursiveJsonParentMarkLedger.new(context, @column_name, granule, budget)
         captures = Hash(String, PrefixCapture).new(initial_capacity: json_sites.size)
         prefixes = Hash(String, Array(String)).new(initial_capacity: json_sites.size)
+        dynamic_prefixes = Hash(String, Array(String)).new
+        dynamic_bodies = Hash(String, Array(String)).new
+        mark_dynamic_captures = Hash(String, CompactRecursiveJsonDynamicBulkMark).new
+        if dynamic_site_count > 0_u64
+          owner_nodes = checked_add(3_u64, checked_multiply(dynamic_site_count, 3_u64))
+          owner_elements = checked_multiply(dynamic_site_count, 3_u64)
+          budget.ensure_future_nodes(owner_nodes)
+          budget.ensure_future_elements(owner_elements)
+          owner_nodes.times { budget.charge_node }
+          budget.charge_elements(owner_elements)
+          dynamic_prefixes = Hash(String, Array(String)).new(initial_capacity: dynamic_bulk_sites.size)
+          dynamic_bodies = Hash(String, Array(String)).new(initial_capacity: dynamic_bulk_sites.size)
+          mark_dynamic_captures = Hash(String, CompactRecursiveJsonDynamicBulkMark).new(
+            initial_capacity: dynamic_bulk_sites.size,
+          )
+        end
         mark_bulk_captures = nil.as(Hash(String, CompactRecursiveJsonBulkMark)?)
         if prefix_capture_site_count > 0_u64
           owner_nodes = checked_add(prefix_capture_site_count, 1_u64)
@@ -563,6 +595,9 @@ module CrystalClick
           captures,
           prefixes,
           mark_bulk_captures,
+          dynamic_capture_plans,
+          dynamic_prefixes,
+          mark_dynamic_captures,
           ledger,
           budget,
         )
@@ -572,13 +607,20 @@ module CrystalClick
         bulk_sites.each do |site|
           expected_size_lanes = checked_add(expected_size_lanes, site.size_lane_count.to_u64)
         end
+        dynamic_bulk_sites.each do |site|
+          capture_plan = dynamic_capture_plans[site.key]? ||
+                         raise(CorruptPartError.new("recursive Compact Dynamic prefix phase omitted its prepared site"))
+          expected_size_lanes = checked_add(expected_size_lanes, capture_plan.size_lane_count.to_u64)
+        end
         if expected_size_lanes > Int32::MAX.to_u64
           raise CorruptPartError.new("Compact recursive mixed Array-size schedule exceeds Int32")
         end
         ledger.begin_mixed_body_schedule!(expected_size_lanes.to_i32)
         mark_sizes = Hash(String, Array(UInt64)).new(initial_capacity: array_sites.size)
         mark_parent_rows = Hash(String, UInt64).new(initial_capacity: array_sites.size)
-        mark_bulk_streams = Hash(String, BinaryBulkStreams).new(initial_capacity: bulk_sites.size)
+        mark_bulk_streams = Hash(String, BinaryBulkStreams).new(
+          initial_capacity: bulk_sites.size + dynamic_bulk_sites.size,
+        )
         capture_body_traversal(
           @schema,
           "root",
@@ -591,6 +633,9 @@ module CrystalClick
           mark_parent_rows,
           mark_bulk_streams,
           mark_bulk_captures,
+          dynamic_capture_plans,
+          dynamic_bodies,
+          mark_dynamic_captures,
           ledger,
           budget,
         )
@@ -606,7 +651,7 @@ module CrystalClick
         end
         schedules = Hash(String, CompactJsonObjectRoleSchedule).new(initial_capacity: captures.size)
         captures.each { |key, capture| schedules[key] = capture.schedule }
-        expected_events = plan.expected_event_names(prefixes, schedules)
+        expected_events = plan.expected_event_names(prefixes, schedules, dynamic_prefixes, dynamic_bodies)
         if frozen = frozen_events
           unless frozen == expected_events
             raise CorruptPartError.new("Compact recursive JSON callback schedule changed between parent marks")
@@ -615,7 +660,15 @@ module CrystalClick
           frozen_events = copy_strings(expected_events)
         end
         physical_events = if ledger.mode.mrk4?
-                            physical_callback_names(expected_events, schedules, array_sites, uint8_sites, bulk_sites, budget)
+                            physical_callback_names(
+                              expected_events,
+                              schedules,
+                              array_sites,
+                              uint8_sites,
+                              bulk_sites,
+                              dynamic_capture_plans,
+                              budget,
+                            )
                           else
                             expected_events
                           end
@@ -637,6 +690,10 @@ module CrystalClick
             array_sizes,
             array_parent_rows,
             mark_bulk_streams,
+            dynamic_capture_plans,
+            dynamic_prefixes,
+            dynamic_bodies,
+            mark_dynamic_captures,
           ))
           decoded = BinaryBulkCodec.decode_with_budget(
             site.type,
@@ -660,6 +717,62 @@ module CrystalClick
             array_sizes,
             array_parent_rows,
             mark_bulk_streams,
+            dynamic_capture_plans,
+            dynamic_prefixes,
+            dynamic_bodies,
+            mark_dynamic_captures,
+          ))
+        end
+        dynamic_bulk_sites.each do |site|
+          capture_plan = dynamic_capture_plans[site.key]? ||
+                         raise(CorruptPartError.new("recursive Compact Dynamic body has no prepared callback plan"))
+          streams = mark_bulk_streams[site.key]? ||
+                    raise(CorruptPartError.new("recursive Compact Dynamic site has no complete parent capture"))
+          rows = site_rows[site.key]? ||
+                 raise(CorruptPartError.new("recursive Compact Dynamic site has no inherited Q row count"))
+          observer.call(bulk_decode_workspace_bytes(
+            physical_workspace,
+            ledger,
+            object_marks,
+            uint8_bytes,
+            bulk_values,
+            array_sizes,
+            array_parent_rows,
+            mark_bulk_streams,
+            dynamic_capture_plans,
+            dynamic_prefixes,
+            dynamic_bodies,
+            mark_dynamic_captures,
+          ))
+          decoded = BinaryBulkDecoder.decode(
+            site.type,
+            streams,
+            [rows] of UInt64,
+            budget,
+            0,
+            1,
+            capture_plan.profile,
+            capture_plan.dynamic_plan,
+            nil,
+            site.descriptor_depth,
+          )
+          unless decoded.size == 1 && decoded[0].size.to_u64 == rows
+            raise CorruptPartError.new("Compact recursive Dynamic decoder returned the wrong inherited Q grid")
+          end
+          bulk_values[site.key] << decoded[0]
+          observer.call(bulk_decode_workspace_bytes(
+            physical_workspace,
+            ledger,
+            object_marks,
+            uint8_bytes,
+            bulk_values,
+            array_sizes,
+            array_parent_rows,
+            mark_bulk_streams,
+            dynamic_capture_plans,
+            dynamic_prefixes,
+            dynamic_bodies,
+            mark_dynamic_captures,
           ))
         end
         mark_bulk_streams.clear
@@ -688,6 +801,11 @@ module CrystalClick
                             active = checked_add(
                               active,
                               local_prepared_workspace_bytes(object_marks, uint8_bytes, bulk_values, array_sizes, array_parent_rows),
+                            )
+                            active = checked_add(active, dynamic_capture_plans_workspace_bytes(dynamic_capture_plans))
+                            active = checked_add(
+                              active,
+                              dynamic_mark_callback_workspace_bytes(dynamic_prefixes, dynamic_bodies, mark_dynamic_captures),
                             )
                             if current_context = typed_json_context
                               active = checked_add(active, current_context.retained_workspace_bytes)
@@ -773,7 +891,19 @@ module CrystalClick
           checked_add(retained_workspace_bytes_without_prepared, physical_workspace),
           checked_add(
             ledger_workspace,
-            local_prepared_workspace_bytes(object_marks, uint8_bytes, bulk_values, array_sizes, array_parent_rows),
+            checked_add(
+              local_prepared_workspace_bytes(
+                object_marks,
+                uint8_bytes,
+                bulk_values,
+                array_sizes,
+                array_parent_rows,
+              ),
+              checked_add(
+                dynamic_capture_plans_workspace_bytes(dynamic_capture_plans),
+                dynamic_mark_callback_workspace_bytes(dynamic_prefixes, dynamic_bodies, mark_dynamic_captures),
+              ),
+            ),
           ),
         ))
       end
@@ -800,6 +930,9 @@ module CrystalClick
       captures : Hash(String, PrefixCapture),
       prefixes : Hash(String, Array(String)),
       mark_bulk_captures : Hash(String, CompactRecursiveJsonBulkMark)?,
+      dynamic_capture_plans : Hash(String, CompactRecursiveJsonDynamicBulkCapturePlan),
+      dynamic_prefixes : Hash(String, Array(String)),
+      mark_dynamic_captures : Hash(String, CompactRecursiveJsonDynamicBulkMark),
       ledger : CompactRecursiveJsonParentMarkLedger,
       budget : BinaryCodecBudget,
     ) : Nil
@@ -857,6 +990,41 @@ module CrystalClick
           source,
           observed_offsets,
         )
+      elsif schema.bulk? && schema.bulk_type.tag == BinaryDataType::TAG_DYNAMIC
+        plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
+        site = plan.dynamic_bulk_site(key)
+        prepared = dynamic_capture_plans[site.key]?
+        structure = CompactRecursiveJsonDynamicPrefixCursor.capture_structure!(
+          site,
+          ledger,
+          @limits,
+          budget,
+          prepared,
+        )
+        capture_plan = prepared || CompactRecursiveJsonDynamicBulkCapturePlan.new(
+          site,
+          structure,
+          @ordinary_profile,
+          @limits,
+          budget,
+        )
+        unless prepared
+          dynamic_capture_plans[site.key] = capture_plan
+        end
+        mark = CompactRecursiveJsonDynamicBulkMark.new(capture_plan, budget)
+        CompactRecursiveJsonDynamicPrefixCursor.capture_mode_prefix!(capture_plan, mark, ledger)
+        capture_plan.arm_count.times do |index|
+          CompactRecursiveJsonStaticBulkGrammar.capture_prefixes!(
+            capture_plan.arm_type(index),
+            "root.arm.#{index}",
+            capture_plan,
+            mark,
+            ledger,
+            budget,
+          )
+        end
+        dynamic_prefixes[site.key] = mark.prefix_callbacks(budget)
+        mark_dynamic_captures[site.key] = mark
       elsif schema.bulk?
         plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
         unless schema.bulk_type.tag == BinaryDataType::TAG_UINT8
@@ -879,13 +1047,15 @@ module CrystalClick
       elsif schema.array?
         capture_prefix_traversal(
           schema.child_at(0), array_child_key(key), captures, prefixes,
-          mark_bulk_captures, ledger, budget,
+          mark_bulk_captures, dynamic_capture_plans, dynamic_prefixes,
+          mark_dynamic_captures, ledger, budget,
         )
       elsif schema.tuple?
         schema.child_count.times do |index|
           capture_prefix_traversal(
             schema.child_at(index), tuple_child_key(key, index), captures, prefixes,
-            mark_bulk_captures, ledger, budget,
+            mark_bulk_captures, dynamic_capture_plans, dynamic_prefixes,
+            mark_dynamic_captures, ledger, budget,
           )
         end
       else
@@ -906,6 +1076,9 @@ module CrystalClick
       mark_parent_rows : Hash(String, UInt64),
       mark_bulk_streams : Hash(String, BinaryBulkStreams),
       mark_bulk_captures : Hash(String, CompactRecursiveJsonBulkMark)?,
+      dynamic_capture_plans : Hash(String, CompactRecursiveJsonDynamicBulkCapturePlan),
+      dynamic_bodies : Hash(String, Array(String)),
+      mark_dynamic_captures : Hash(String, CompactRecursiveJsonDynamicBulkMark),
       ledger : CompactRecursiveJsonParentMarkLedger,
       budget : BinaryCodecBudget,
     ) : Nil
@@ -931,6 +1104,25 @@ module CrystalClick
         capture.schedule.finish_body_capture!(budget)
         source.validate_expected_events!(capture.schedule.event_names)
         source.finish!
+      elsif schema.bulk? && schema.bulk_type.tag == BinaryDataType::TAG_DYNAMIC
+        plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
+        site = plan.dynamic_bulk_site(key)
+        capture_plan = dynamic_capture_plans[site.key]? ||
+                       raise(CorruptPartError.new("recursive Compact Dynamic body has no prefix plan"))
+        mark = mark_dynamic_captures.delete(site.key) ||
+               raise(CorruptPartError.new("recursive Compact Dynamic body has no matching prefix capture"))
+        CompactRecursiveJsonStaticBulkGrammar.capture!(
+          site.type,
+          "root",
+          rows,
+          capture_plan,
+          mark,
+          ledger,
+          @limits,
+          budget,
+        )
+        dynamic_bodies[site.key] = mark.body_callbacks(budget)
+        mark_bulk_streams[site.key] = mark.build_streams(budget)
       elsif schema.bulk?
         plan = @plan || raise(CorruptPartError.new("Compact recursive schema plan is missing"))
         if schema.bulk_type.tag == BinaryDataType::TAG_UINT8
@@ -980,6 +1172,9 @@ module CrystalClick
           mark_parent_rows,
           mark_bulk_streams,
           mark_bulk_captures,
+          dynamic_capture_plans,
+          dynamic_bodies,
+          mark_dynamic_captures,
           ledger,
           budget,
         )
@@ -997,6 +1192,9 @@ module CrystalClick
             mark_parent_rows,
             mark_bulk_streams,
             mark_bulk_captures,
+            dynamic_capture_plans,
+            dynamic_bodies,
+            mark_dynamic_captures,
             ledger,
             budget,
           )
@@ -1069,10 +1267,13 @@ module CrystalClick
       object_sites = plan.json_sites
       uint8_sites = plan.uint8_sites
       bulk_sites = plan.bulk_sites
+      dynamic_bulk_sites = plan.dynamic_bulk_sites
       mark_count.times do |selection_index|
         mark = first_mark + selection_index
         object_rows = Hash(String, Array(ObjectDocument)).new(initial_capacity: object_sites.size)
-        bulk_rows = Hash(String, Array(BinaryValue)).new(initial_capacity: object_sites.size + uint8_sites.size + bulk_sites.size)
+        bulk_rows = Hash(String, Array(BinaryValue)).new(
+          initial_capacity: object_sites.size + uint8_sites.size + bulk_sites.size + dynamic_bulk_sites.size,
+        )
         object_sites.each do |site|
           site_marks = state.object_marks[site.key]? ||
                        raise(CorruptPartError.new("Compact recursive Object site has no prepared mark grid"))
@@ -1155,6 +1356,19 @@ module CrystalClick
                    raise(CorruptPartError.new("Compact recursive Bulk site has no value rows for this mark"))
           unless values.size.to_u64 == rows
             raise(CorruptPartError.new("Compact recursive Bulk values differ from their inherited Q grid"))
+          end
+          bulk_rows[site.key] = values
+          observe_partial_decode_workspace!(observer, first_mark, output, object_rows, bulk_rows, state)
+        end
+
+        dynamic_bulk_sites.each do |site|
+          rows = occurrence_rows(@schema, "root", mark, @mark_row_counts[mark], site.key, state)
+          site_marks = state.bulk_values[site.key]? ||
+                       raise(CorruptPartError.new("Compact recursive Dynamic site has no decoded mark grid"))
+          values = site_marks[mark]? ||
+                   raise(CorruptPartError.new("Compact recursive Dynamic site has no value rows for this mark"))
+          unless values.size.to_u64 == rows
+            raise(CorruptPartError.new("Compact recursive Dynamic values differ from their inherited Q grid"))
           end
           bulk_rows[site.key] = values
           observe_partial_decode_workspace!(observer, first_mark, output, object_rows, bulk_rows, state)
@@ -1732,6 +1946,40 @@ module CrystalClick
       bytes
     end
 
+    private def dynamic_capture_plans_workspace_bytes(
+      plans : Hash(String, CompactRecursiveJsonDynamicBulkCapturePlan),
+    ) : UInt64
+      return 0_u64 if plans.empty?
+      bytes = instance_sizeof(Hash(String, CompactRecursiveJsonDynamicBulkCapturePlan)).to_u64
+      plans.each do |key, capture_plan|
+        bytes = checked_add(bytes, string_owner_bytes(key))
+        bytes = checked_add(bytes, capture_plan.retained_workspace_bytes)
+      end
+      bytes
+    end
+
+    private def dynamic_mark_callback_workspace_bytes(
+      prefixes : Hash(String, Array(String)),
+      bodies : Hash(String, Array(String)),
+      pending_marks : Hash(String, CompactRecursiveJsonDynamicBulkMark),
+    ) : UInt64
+      return 0_u64 if prefixes.empty? && bodies.empty? && pending_marks.empty?
+      bytes = checked_multiply(instance_sizeof(Hash(String, Array(String))).to_u64, 2_u64)
+      bytes = checked_add(bytes, instance_sizeof(Hash(String, CompactRecursiveJsonDynamicBulkMark)).to_u64)
+      {prefixes, bodies}.each do |callbacks|
+        callbacks.each do |key, names|
+          bytes = checked_add(bytes, string_owner_bytes(key))
+          bytes = checked_add(bytes, instance_sizeof(Array(String)).to_u64)
+          bytes = checked_add(bytes, checked_multiply(names.size.to_u64, sizeof(Pointer(String)).to_u64))
+        end
+      end
+      pending_marks.each do |key, mark|
+        bytes = checked_add(bytes, string_owner_bytes(key))
+        bytes = checked_add(bytes, mark.retained_workspace_bytes)
+      end
+      bytes
+    end
+
     private def bulk_decode_workspace_bytes(
       physical_workspace : UInt64,
       ledger : CompactRecursiveJsonParentMarkLedger,
@@ -1741,6 +1989,10 @@ module CrystalClick
       array_sizes : Hash(String, Array(Array(UInt64))),
       array_parent_rows : Hash(String, Array(UInt64)),
       mark_bulk_streams : Hash(String, BinaryBulkStreams),
+      dynamic_capture_plans : Hash(String, CompactRecursiveJsonDynamicBulkCapturePlan),
+      dynamic_prefixes : Hash(String, Array(String)),
+      dynamic_bodies : Hash(String, Array(String)),
+      mark_dynamic_captures : Hash(String, CompactRecursiveJsonDynamicBulkMark),
     ) : UInt64
       bytes = retained_workspace_bytes_without_prepared
       bytes = checked_add(bytes, physical_workspace)
@@ -1752,7 +2004,9 @@ module CrystalClick
         array_sizes,
         array_parent_rows,
       ))
-      checked_add(bytes, mark_bulk_streams_workspace_bytes(mark_bulk_streams))
+      bytes = checked_add(bytes, mark_bulk_streams_workspace_bytes(mark_bulk_streams))
+      bytes = checked_add(bytes, dynamic_capture_plans_workspace_bytes(dynamic_capture_plans))
+      checked_add(bytes, dynamic_mark_callback_workspace_bytes(dynamic_prefixes, dynamic_bodies, mark_dynamic_captures))
     end
 
     # This is a logical transient-owner estimate, not RSS or allocator capacity.
@@ -1900,6 +2154,7 @@ module CrystalClick
       array_sites : Array(CompactRecursiveJsonSchemaPlan::ArraySite),
       uint8_sites : Array(CompactRecursiveJsonSchemaPlan::UInt8Site),
       bulk_sites : Array(CompactRecursiveJsonBulkSite),
+      dynamic_capture_plans : Hash(String, CompactRecursiveJsonDynamicBulkCapturePlan),
       budget : BinaryCodecBudget,
     ) : Array(String)
       count = logical_names.size.to_u64
@@ -1936,6 +2191,16 @@ module CrystalClick
         end
         site.each_role do |role|
           callback = site.callback_name_for(role.name)
+          register_physical_callback_pair!(canonical_by_callback, seen_canonical, callback, callback)
+        end
+      end
+      dynamic_capture_plans.each_value do |capture_plan|
+        capture_plan.prefix_callback_count.times do |index|
+          callback = capture_plan.prefix_callback_at(index)
+          register_physical_callback_pair!(canonical_by_callback, seen_canonical, callback, callback)
+        end
+        capture_plan.body_callback_count.times do |index|
+          callback = capture_plan.body_callback_at(index)
           register_physical_callback_pair!(canonical_by_callback, seen_canonical, callback, callback)
         end
       end

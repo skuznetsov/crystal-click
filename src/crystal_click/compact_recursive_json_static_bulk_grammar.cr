@@ -5,6 +5,12 @@ module CrystalClick
   # census allocates nothing; materialization and data-dependent capture
   # follow owner preflight.
   class CompactRecursiveJsonStaticBulkGrammar
+    # W284 composes one Dynamic-root discriminator adapter with this existing
+    # static grammar for its already-validated JSON-/Dynamic-free actual arms.
+    # Static-site admission and the eight-byte prefix descriptor remain fixed.
+    alias CaptureSite = CompactRecursiveJsonBulkSite | CompactRecursiveJsonDynamicBulkCapturePlan
+    alias CaptureMark = CompactRecursiveJsonBulkMark | CompactRecursiveJsonDynamicBulkMark
+
     def self.admitted_type?(type : BinaryDataType, depth : Int32, limits : BinaryCodecLimits) : Bool
       CompactRecursiveJsonBulkAdmission.admitted?(type, depth, limits)
     end
@@ -129,14 +135,16 @@ module CrystalClick
       type : BinaryDataType,
       role_name : String,
       rows : UInt64,
-      site : CompactRecursiveJsonBulkSite,
-      mark : CompactRecursiveJsonBulkMark,
+      site : CaptureSite,
+      mark : CaptureMark,
       ledger : CompactRecursiveJsonParentMarkLedger,
       limits : BinaryCodecLimits,
       budget : BinaryCodecBudget,
     ) : Nil
-      profile = site.physical_plan.profile
+      profile = profile_for(site)
       case type.tag
+      when BinaryDataType::TAG_DYNAMIC
+        capture_dynamic_root!(type, role_name, rows, site, mark, ledger, limits, budget)
       when BinaryDataType::TAG_CUSTOM, BinaryDataType::TAG_SIMPLE_AGGREGATE
         capture!(type.child_at(0), role_name, rows, site, mark, ledger, limits, budget)
       when BinaryDataType::TAG_STRING
@@ -262,12 +270,14 @@ module CrystalClick
     def self.capture_prefixes!(
       type : BinaryDataType,
       role_name : String,
-      site : CompactRecursiveJsonBulkSite,
-      mark : CompactRecursiveJsonBulkMark,
+      site : CaptureSite,
+      mark : CaptureMark,
       ledger : CompactRecursiveJsonParentMarkLedger,
       budget : BinaryCodecBudget,
     ) : Nil
       case type.tag
+      when BinaryDataType::TAG_DYNAMIC
+        raise UnsupportedFormatError.new("nested Dynamic actual-arm prefix discovery is outside the recursive Compact capture slice")
       when BinaryDataType::TAG_LOW_CARDINALITY
         role = "#{role_name}.dictionary"
         callback = site.prefix_callback_name_for(role)
@@ -380,8 +390,8 @@ module CrystalClick
     private def self.capture_string0!(
       role_name : String,
       rows : UInt64,
-      site : CompactRecursiveJsonBulkSite,
-      mark : CompactRecursiveJsonBulkMark,
+      site : CaptureSite,
+      mark : CaptureMark,
       ledger : CompactRecursiveJsonParentMarkLedger,
       limits : BinaryCodecLimits,
       budget : BinaryCodecBudget,
@@ -409,8 +419,8 @@ module CrystalClick
     private def self.capture_string1!(
       role_name : String,
       rows : UInt64,
-      site : CompactRecursiveJsonBulkSite,
-      mark : CompactRecursiveJsonBulkMark,
+      site : CaptureSite,
+      mark : CaptureMark,
       ledger : CompactRecursiveJsonParentMarkLedger,
       budget : BinaryCodecBudget,
     ) : Nil
@@ -431,8 +441,8 @@ module CrystalClick
       role : String,
       rows : UInt64,
       width : UInt64,
-      site : CompactRecursiveJsonBulkSite,
-      mark : CompactRecursiveJsonBulkMark,
+      site : CaptureSite,
+      mark : CaptureMark,
       ledger : CompactRecursiveJsonParentMarkLedger,
       budget : BinaryCodecBudget,
     ) : Nil
@@ -441,6 +451,84 @@ module CrystalClick
       bytes = ledger.capture_bulk_body(site.callback_name_for(role), byte_count)
       mark.capture_lane(role, bytes)
       nil
+    end
+
+    private def self.capture_dynamic_root!(
+      type : BinaryDataType,
+      role_name : String,
+      rows : UInt64,
+      site : CaptureSite,
+      mark : CaptureMark,
+      ledger : CompactRecursiveJsonParentMarkLedger,
+      limits : BinaryCodecLimits,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      dynamic_site = site.as?(CompactRecursiveJsonDynamicBulkCapturePlan) ||
+                     raise(UnsupportedFormatError.new("Dynamic is outside the admitted static recursive Bulk site"))
+      dynamic_mark = mark.as?(CompactRecursiveJsonDynamicBulkMark) ||
+                     raise(CorruptPartError.new("recursive Compact Dynamic root has no Dynamic mark owner"))
+      unless role_name == "root" && type == dynamic_site.site.type
+        raise CorruptPartError.new("recursive Compact Dynamic capture did not reach its exact direct root site")
+      end
+
+      discriminator_role = "root.discriminators"
+      mode_prefix = dynamic_mark.state_prefix_for_role(
+        discriminator_role,
+        CompactRecursiveJsonBulkSite::StatePrefixKind::VariantDiscriminatorMode,
+      )
+      mode = BinaryBulkDiscriminatorFramingAdapter.validate_header(
+        discriminator_role,
+        mode_prefix,
+        BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES,
+      )
+      captured, _capture = ledger.with_bulk_body_grammar_extent(dynamic_site.callback_name_for(discriminator_role)) do |bytes|
+        tags, consumed = BinaryBulkDiscriminatorFramingAdapter.read_mark_body(
+          discriminator_role,
+          mode,
+          bytes,
+          rows,
+          budget,
+          ledger.mode.mrk4?,
+        )
+        arm_count = dynamic_site.arm_count
+        budget.ensure_future_nodes(1_u64)
+        budget.ensure_future_elements(arm_count.to_u64)
+        budget.charge_node
+        budget.charge_elements(arm_count.to_u64) if arm_count > 0
+        counts = Array(UInt64).new(arm_count, 0_u64)
+        tags.each do |tag|
+          next if tag == 0xff_u8
+          index = tag.to_i
+          if index >= arm_count
+            raise CorruptPartError.new("recursive Compact Dynamic discriminator is outside its actual arm roster")
+          end
+          counts[index] += 1_u64
+        end
+        { {tags, counts}, consumed }
+      end
+      tags, arm_rows = captured
+      dynamic_mark.capture_lane(discriminator_role, tags)
+      dynamic_site.arm_count.times do |index|
+        capture!(
+          dynamic_site.arm_type(index),
+          "root.arm.#{index}",
+          arm_rows[index],
+          dynamic_site,
+          dynamic_mark,
+          ledger,
+          limits,
+          budget,
+        )
+      end
+      nil
+    end
+
+    private def self.profile_for(site : CompactRecursiveJsonBulkSite) : BinaryBulkProfile
+      site.physical_plan.profile
+    end
+
+    private def self.profile_for(site : CompactRecursiveJsonDynamicBulkCapturePlan) : BinaryBulkProfile
+      site.profile
     end
 
     private def self.decode_uint64_lane(bytes : Bytes, count : UInt64, label : String, budget : BinaryCodecBudget) : Array(UInt64)

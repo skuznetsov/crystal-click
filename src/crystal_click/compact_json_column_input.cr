@@ -9,6 +9,7 @@ module CrystalClick
     getter schema : StorageColumnSchema
     getter granules : Array(Array(StorageColumnValue))
     getter json_context : CompactJsonWriteContext
+    getter recursive_dynamic_context : CompactRecursiveDynamicWriteContext
 
     def initialize(
       name : String,
@@ -17,13 +18,15 @@ module CrystalClick
       @json_context : CompactJsonWriteContext,
       canonical_type : BinaryDataType? = nil,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      recursive_dynamic_context : CompactRecursiveDynamicWriteContext? = nil,
     )
       if name.empty?
         raise ArgumentError.new("Compact JSON column name must be nonempty")
       end
-      unless CompactRecursiveJsonSchemaPlan.admitted_schema?(@schema)
-        raise UnsupportedFormatError.new("Compact JSON schema is outside the admitted static-site subset")
-      end
+
+      # Preserve source-declaration errors ahead of recursive Dynamic context
+      # admission, and validate the source before classifying this schema as
+      # part of the bounded Compact slice.
       if @schema.object?
         parsed = CompactJsonColumnAdapter.schema_for_json_declaration(
           @schema.source_declaration,
@@ -35,6 +38,11 @@ module CrystalClick
       else
         @schema.validate_source_tree!(BinaryBulkCodec::DEFAULT_LIMITS)
       end
+
+      unless CompactRecursiveJsonSchemaPlan.admitted_schema?(@schema)
+        raise UnsupportedFormatError.new("Compact JSON schema is outside the admitted static-site subset")
+      end
+
       @type = if type = canonical_type
                 type_budget = BinaryCodecBudget.new(BinaryBulkCodec::DEFAULT_LIMITS, true)
                 bounds = BinaryTypeNameBudget.measure(type, type_budget)
@@ -47,9 +55,15 @@ module CrystalClick
                 BinaryRecursiveDataTypeNameReader.parse_canonical(@schema.declaration) ||
                   raise(UnsupportedFormatError.new("Compact JSON schema has no canonical BinaryDataType"))
               end
-      unless @type.contains_json? && !@type.contains_dynamic?
-        raise UnsupportedFormatError.new("Compact JSON input requires static JSON sites without Dynamic-owned JSON")
+      unless @type.contains_json?
+        raise UnsupportedFormatError.new("Compact JSON input requires a JSON-bearing descriptor")
       end
+
+      # Context snapshots can copy caller-owned site keys, so validate the
+      # already-bounded source and canonical descriptor before detaching them.
+      @recursive_dynamic_context = recursive_dynamic_context ||
+                                   CompactRecursiveDynamicWriteContext.new({} of String => CompactDynamicWriteContext)
+      @recursive_dynamic_context.validate_schema!(@schema)
 
       @name = String.new(name.to_slice)
       @profile = profile

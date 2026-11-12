@@ -344,6 +344,21 @@ module CrystalClick
       String.new(name.to_slice)
     end
 
+    # Read a bound basename's extent without returning a defensive String copy.
+    # Used by recursive callback preflight before constructing wrapper names.
+    def stream_name_byte_size_for(role : String) : UInt64
+      name = @data_names[role]? || @structure_names[role]? || @json_object_names[role]? ||
+             raise(KeyError.new("binary Dynamic physical role not found: #{role.inspect}"))
+      name.bytesize.to_u64
+    end
+
+    # Visit retained DynamicStructure basename extents without interpolating a
+    # role or materializing the detached names returned by structure_name_for.
+    def each_structure_name_byte_size(&block : UInt64 -> Nil) : Nil
+      @structure_names.each_value { |name| yield name.bytesize.to_u64 }
+      nil
+    end
+
     # Prefix metadata belongs only to data lanes; a structure role is not a
     # discriminator or a dictionary stream even though it shares the basename.
     def prefix_size_for(role : String) : Int32

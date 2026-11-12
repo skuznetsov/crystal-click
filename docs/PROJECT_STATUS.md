@@ -1,6 +1,36 @@
 # CrystalClick project status
 
-Last qualified frontier: W283 recursive Compact Variant Bulk composition,
+## Current qualification
+
+W284 qualifies a Compact recursive `Array(Tuple(JSON, Dynamic))` column
+through `CompactPartWriter` and `CompactRecursiveJsonColumnReader`. The
+Dynamic sibling has its own schema-path context and reuses BinaryBulk.
+The reader authenticates the complete parent mark schedule before decoding
+selected values.
+
+On Crystal 1.22.1 / LLVM 23.1.4, DEBUG and RELEASE each passed 22 focused
+examples and 683 affected examples. The latter cover 122 spec paths in
+13 cohorts plus one separately filtered W263 admission per mode. One W217
+projection assertion comparing the SSD alias with the canonical path passed
+after setting canonical scratch paths. The original attempt is retained.
+
+Against ClickHouse 26.10.1.1201, both build modes read eight stock parts
+and generated eight parts accepted by ATTACH and CHECK, with matching
+literal windows on read and reopen. The hostile review qualifies this
+direct reader and writer for the tested MRK3/MRK4, BASIC/COMPACT, String
+S0/S1 and V3 statistics matrix. See the
+[W284 frontier](COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md) and
+[evidence](../.landmark/evidence/compact-recursive-dynamic-w284.json).
+
+The next step is routing the same column through selected typed scans and
+`OfflineCatalog` column `.values`. Type and layout gaps, Compact MV
+output and projection children remain open. Memory and throughput
+optimization follows compatibility. The <=10% slowdown target remains
+unmeasured.
+
+## Previous qualification
+
+W283 recursive Compact Variant Bulk composition,
 VERIFIED / ROOT adversary ROBUST within the finite declared owner and native
 interoperability scope (2026-10-16), over
 `1da498c397cc7e1341b9964b43e07771736ecab4`. Variant BASIC/COMPACT prefixes and
@@ -22,15 +52,8 @@ stripped-runtime pins/results and W280/W281/W282 defaults remain separate.
 Inputs, helpers and raw evidence are retained on `/opt/mldata_ssd/`. Released
 compiler cache/tmp were removed (265,067,337 logical bytes, rebuildable);
 source Git, runtime, helpers, native captures and raw logs remain. No push.
-See the [current frontier](COMPACT_PART_WRITER_FRONTIER.md) and
+See the [W283 frontier](COMPACT_PART_WRITER_FRONTIER.md) and
 [W283 evidence](../.landmark/evidence/compact-variant-bulk-w283.json).
-
-Next is the PROPOSED, not admitted, W257 `Array(Tuple(JSON, Dynamic))` Compact
-composition probe, then remaining owner/layout gaps and Compact MV output /
-projection children. Memory/performance remains deferred; <=10% slowdown is
-unmeasured and the full objective remains ACTIVE. Reopen dependent claims on
-source/spec/fixture/helper/instrument/toolchain/runtime/guard drift or capture
-loss/change; metadata validation alone never restores a native qualification.
 
 ## Historical W283 recovery and qualification checkpoints
 

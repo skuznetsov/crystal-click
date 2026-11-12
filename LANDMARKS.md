@@ -1,5 +1,30 @@
 # Crystal Click landmarks
 
+## Recursive Compact Dynamic sibling — W284
+
+- VERIFIED with a ROBUST hostile review for the direct Compact reader and
+  writer on the tested W257 `Array(Tuple(JSON, Dynamic))` profile.
+  Dynamic contexts bind by canonical schema path and retain root-local
+  actual-arm plans. The parent ledger consumes prefixes in schema order
+  before bodies, preserves inherited occurrence counts and authenticates the
+  complete schedule before selected values are decoded.
+- Crystal 1.22.1 / LLVM 23.1.4 DEBUG and actual RELEASE each passed 22
+  focused and 683 affected examples. The W217 path comparison passed after
+  changing the SSD scratch environment to the canonical path. The original
+  attempt and first nine passing cohorts retain their raw logs.
+- ClickHouse 26.10.1.1201 accepted eight generated parts per mode after
+  ATTACH, CHECK and reopen. Each mode also read eight stock parts. Separate
+  raw checks covered MRK3/MRK4, BASIC/COMPACT, String S0/S1 and V3
+  first/later statistics. Both helper builds rejected the copied one-byte
+  MRK4 coordinate change. See the
+  [W284 evidence](.landmark/evidence/compact-recursive-dynamic-w284.json)
+  for the sealed source, commands, runtime, captures and refresh conditions.
+- Next, route the same profile through `TypedPartTable` and catalog
+  column `.values`. Historical Dynamic statistics, remaining type/layout
+  products, Compact MV output and projection children need their own checks.
+  Compatibility still precedes memory and throughput work. See the
+  [W284 frontier](docs/COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md).
+
 ## Recursive Compact Variant Bulk composition — W283
 
 - VERIFIED / ROOT adversary ROBUST within the finite declared owner and pinned

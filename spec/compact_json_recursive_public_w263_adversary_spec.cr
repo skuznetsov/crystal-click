@@ -25,6 +25,7 @@ describe "W263 recursive/public Compact JSON adversaries" do
       CrystalClick::StorageColumnSchema.parse("Tuple(Array(JSON), Array(JSON))"),
       CrystalClick::StorageColumnSchema.parse("Tuple(JSON, UInt8)"),
       CrystalClick::StorageColumnSchema.parse("Array(Tuple(UInt8, JSON))"),
+      CrystalClick::StorageColumnSchema.parse("Tuple(JSON, Dynamic(max_types=8))"),
       # W283 expands the recursive JSON owner only; this JSON-free Variant
       # Bulk sibling remains outside the shared prefix-free admission gate.
       CrystalClick::StorageColumnSchema.parse("Tuple(JSON, Variant(String, UInt8))"),
@@ -38,13 +39,16 @@ describe "W263 recursive/public Compact JSON adversaries" do
     ).not_nil!
     CrystalClick::BinaryPrefixFreeStaticTypeAdmission.admitted?(variant).should be_false
 
-    rejected = [
-      "Tuple(JSON, Dynamic(max_types=8))",
-    ]
-    rejected.each do |declaration|
-      schema = CrystalClick::StorageColumnSchema.parse(declaration)
-      CrystalClick::CompactRecursiveJsonColumnReader.admitted_schema?(schema).should be_false
-    end
+    dynamic_array = CrystalClick::BinaryDataType.array(CrystalClick::BinaryDataType.dynamic(1))
+    opaque_dynamic = CrystalClick::StorageColumnSchema.bulk(dynamic_array, dynamic_array.name)
+    rejected_dynamic_product = CrystalClick::StorageColumnSchema.tuple(
+      "Tuple(JSON, #{dynamic_array.name})",
+      false,
+      [] of String,
+      [] of String,
+      [object, opaque_dynamic] of CrystalClick::StorageColumnSchema,
+    )
+    CrystalClick::CompactRecursiveJsonColumnReader.admitted_schema?(rejected_dynamic_product).should be_false
 
     [
       "Array(Dynamic(JSON))",

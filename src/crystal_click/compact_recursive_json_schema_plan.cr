@@ -54,6 +54,7 @@ module CrystalClick
       getter array_count : UInt64
       getter uint8_count : UInt64
       getter bulk_count : UInt64
+      getter dynamic_bulk_count : UInt64
       getter bulk_role_count : UInt64
       getter bulk_role_name_bytes : UInt64
       getter node_count : UInt64
@@ -63,6 +64,7 @@ module CrystalClick
         @array_count : UInt64,
         @uint8_count : UInt64,
         @bulk_count : UInt64,
+        @dynamic_bulk_count : UInt64,
         @bulk_role_count : UInt64,
         @bulk_role_name_bytes : UInt64,
         @node_count : UInt64,
@@ -79,6 +81,7 @@ module CrystalClick
     @array_sites : Array(ArraySite)
     @uint8_sites : Array(UInt8Site)
     @bulk_sites : Array(CompactRecursiveJsonBulkSite)
+    @dynamic_bulk_sites : Array(CompactRecursiveJsonDynamicBulkSite)
     @budget : BinaryCodecBudget
 
     def self.admitted_schema?(
@@ -112,6 +115,7 @@ module CrystalClick
     private def self.admitted_bulk_schema?(schema : StorageColumnSchema, limits : BinaryCodecLimits, depth : Int32) : Bool
       return false unless schema.bulk?
       type = schema.bulk_type
+      return !type.contains_json? if type.tag == BinaryDataType::TAG_DYNAMIC
       !type.contains_json? && !type.contains_dynamic? &&
         CompactRecursiveJsonBulkAdmission.admitted?(type, depth, limits)
     rescue ex : ArgumentError | UnsupportedFormatError
@@ -123,17 +127,20 @@ module CrystalClick
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : SiteShape
       if schema.object?
-        SiteShape.new(1_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 1_u64)
+        SiteShape.new(1_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 1_u64)
       elsif schema.bulk?
         type = schema.bulk_type
         if type.tag == BinaryDataType::TAG_UINT8
-          SiteShape.new(0_u64, 0_u64, 1_u64, 0_u64, 0_u64, 0_u64, 1_u64)
+          SiteShape.new(0_u64, 0_u64, 1_u64, 0_u64, 0_u64, 0_u64, 0_u64, 1_u64)
+        elsif type.tag == BinaryDataType::TAG_DYNAMIC
+          SiteShape.new(0_u64, 0_u64, 0_u64, 0_u64, 1_u64, 0_u64, 0_u64, 1_u64)
         else
           SiteShape.new(
             0_u64,
             0_u64,
             0_u64,
             1_u64,
+            0_u64,
             CompactRecursiveJsonStaticBulkGrammar.measure_role_count(type, profile),
             CompactRecursiveJsonStaticBulkGrammar.measure_role_name_bytes(type, profile, 4_u64),
             1_u64,
@@ -146,12 +153,13 @@ module CrystalClick
           checked_measure_add(child.array_count, 1_u64),
           child.uint8_count,
           child.bulk_count,
+          child.dynamic_bulk_count,
           child.bulk_role_count,
           child.bulk_role_name_bytes,
           checked_measure_add(child.node_count, 1_u64),
         )
       elsif schema.tuple?
-        total = SiteShape.new(0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 1_u64)
+        total = SiteShape.new(0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 1_u64)
         schema.child_count.times do |index|
           child = measure_shape(schema.child_at(index), profile)
           total = SiteShape.new(
@@ -159,6 +167,7 @@ module CrystalClick
             checked_measure_add(total.array_count, child.array_count),
             checked_measure_add(total.uint8_count, child.uint8_count),
             checked_measure_add(total.bulk_count, child.bulk_count),
+            checked_measure_add(total.dynamic_bulk_count, child.dynamic_bulk_count),
             checked_measure_add(total.bulk_role_count, child.bulk_role_count),
             checked_measure_add(total.bulk_role_name_bytes, child.bulk_role_name_bytes),
             checked_measure_add(total.node_count, child.node_count),
@@ -177,8 +186,11 @@ module CrystalClick
       budget : BinaryCodecBudget,
     ) : Nil
       site_count = checked_measure_add(
-        checked_measure_add(shape.json_count, shape.array_count),
-        checked_measure_add(shape.uint8_count, shape.bulk_count),
+        checked_measure_add(
+          checked_measure_add(shape.json_count, shape.array_count),
+          checked_measure_add(shape.uint8_count, shape.bulk_count),
+        ),
+        shape.dynamic_bulk_count,
       )
       root_bytes = PhysicalStreamName.escaped_size(column_name)
       path_strings, path_bytes = measure_path_owners(schema, 4_u64, root_bytes, root_bytes, 0_u64)
@@ -187,7 +199,7 @@ module CrystalClick
 
       # Roster arrays, all site/role owners, and all retained path strings are
       # bounded before any proportional plan vectors or paths are allocated.
-      roster_nodes = checked_measure_add(site_count, 4_u64)
+      roster_nodes = checked_measure_add(site_count, 5_u64)
       role_nodes = checked_measure_add(shape.bulk_role_count, shape.bulk_count)
       nodes = checked_measure_add(checked_measure_add(roster_nodes, role_nodes), path_strings)
       elements = checked_measure_add(site_count, checked_multiply_measure(shape.bulk_role_count, 2_u64))
@@ -303,6 +315,7 @@ module CrystalClick
       @array_sites = Array(ArraySite).new(shape.array_count.to_i)
       @uint8_sites = Array(UInt8Site).new(shape.uint8_count.to_i)
       @bulk_sites = Array(CompactRecursiveJsonBulkSite).new(shape.bulk_count.to_i)
+      @dynamic_bulk_sites = Array(CompactRecursiveJsonDynamicBulkSite).new(shape.dynamic_bulk_count.to_i)
       append_sites(@schema, @root_prefix, column_name, "root", 1_i32, 0_u64, context)
       if @json_sites.empty?
         raise UnsupportedFormatError.new("recursive Compact JSON schema has no static Object site")
@@ -341,6 +354,14 @@ module CrystalClick
       @bulk_sites.size
     end
 
+    def dynamic_bulk_sites : Array(CompactRecursiveJsonDynamicBulkSite)
+      @dynamic_bulk_sites.dup
+    end
+
+    def dynamic_bulk_site_count : Int32
+      @dynamic_bulk_sites.size
+    end
+
     def json_site(key : String) : JsonSite
       @json_sites.find { |site| site.key == key } ||
         raise(CorruptPartError.new("recursive Compact JSON schema plan has no such Object site"))
@@ -361,6 +382,11 @@ module CrystalClick
         raise(CorruptPartError.new("recursive Compact JSON schema plan has no such Bulk site"))
     end
 
+    def dynamic_bulk_site(key : String) : CompactRecursiveJsonDynamicBulkSite
+      @dynamic_bulk_sites.find { |site| site.key == key } ||
+        raise(CorruptPartError.new("recursive Compact JSON schema plan has no such Dynamic Bulk site"))
+    end
+
     # Construct the complete mrk4 callback traversal from phase-owned pieces:
     # every Object prefix, then the serializer-DFS body schedule with each
     # Array size lane immediately before the body below it.
@@ -369,10 +395,13 @@ module CrystalClick
     def expected_event_names(
       prefixes : Hash(String, Array(String)),
       schedules : Hash(String, CompactJsonObjectRoleSchedule),
+      dynamic_prefixes : Hash(String, Array(String)) = {} of String => Array(String),
+      dynamic_bodies : Hash(String, Array(String)) = {} of String => Array(String),
     ) : Array(String)
+      validate_dynamic_callback_rosters!(dynamic_prefixes, dynamic_bodies)
       names = Array(String).new
-      append_prefix_names(@schema, "root", names, prefixes)
-      append_body_names(@schema, "root", names, schedules)
+      append_prefix_names(@schema, "root", names, prefixes, dynamic_prefixes)
+      append_body_names(@schema, "root", names, schedules, dynamic_bodies)
       names
     end
 
@@ -382,11 +411,32 @@ module CrystalClick
     def expected_event_names(
       prefixes : Hash(String, Array(String)),
       body_pairs : Hash(String, Array(ObjectDocumentInlineCallbackOrder::CallbackPair)),
+      dynamic_prefixes : Hash(String, Array(String)) = {} of String => Array(String),
+      dynamic_bodies : Hash(String, Array(String)) = {} of String => Array(String),
     ) : Array(String)
+      validate_dynamic_callback_rosters!(dynamic_prefixes, dynamic_bodies)
       names = Array(String).new
-      append_prefix_names(@schema, "root", names, prefixes)
-      append_body_names(@schema, "root", names, body_pairs)
+      append_prefix_names(@schema, "root", names, prefixes, dynamic_prefixes)
+      append_body_names(@schema, "root", names, body_pairs, dynamic_bodies)
       names
+    end
+
+    private def validate_dynamic_callback_rosters!(
+      dynamic_prefixes : Hash(String, Array(String)),
+      dynamic_bodies : Hash(String, Array(String)),
+    ) : Nil
+      site_count = @dynamic_bulk_sites.size
+      unless dynamic_prefixes.size == site_count && dynamic_bodies.size == site_count
+        raise CorruptPartError.new("recursive Compact Dynamic callback rosters differ from the declared sites")
+      end
+      @dynamic_bulk_sites.each do |site|
+        prefix_names = dynamic_prefixes[site.key]?
+        body_names = dynamic_bodies[site.key]?
+        unless prefix_names && !prefix_names.empty? && body_names && !body_names.empty?
+          raise CorruptPartError.new("recursive Compact Dynamic callback roster is missing a site phase")
+        end
+      end
+      nil
     end
 
     # Logical occurrence rows for every schema node in one physical mark.
@@ -430,6 +480,12 @@ module CrystalClick
       bytes = checked_add(bytes, instance_sizeof(Array(CompactRecursiveJsonBulkSite)).to_u64)
       bytes = checked_add(bytes, checked_multiply(@bulk_sites.size.to_u64, sizeof(Pointer(CompactRecursiveJsonBulkSite)).to_u64))
       @bulk_sites.each { |site| bytes = checked_add(bytes, site.retained_workspace_bytes) }
+      bytes = checked_add(bytes, instance_sizeof(Array(CompactRecursiveJsonDynamicBulkSite)).to_u64)
+      bytes = checked_add(
+        bytes,
+        checked_multiply(@dynamic_bulk_sites.size.to_u64, sizeof(CompactRecursiveJsonDynamicBulkSite).to_u64),
+      )
+      @dynamic_bulk_sites.each { |site| bytes = checked_add(bytes, site.retained_workspace_bytes) }
       bytes
     end
 
@@ -451,6 +507,19 @@ module CrystalClick
         @json_sites << JsonSite.new(key, physical_prefix, callback_prefix, descriptor, descriptor_depth, array_level)
       elsif schema.bulk?
         type = schema.bulk_type
+        if type.tag == BinaryDataType::TAG_DYNAMIC
+          unless !type.contains_json?
+            raise UnsupportedFormatError.new("recursive Compact Dynamic Bulk site contains JSON")
+          end
+          @dynamic_bulk_sites << CompactRecursiveJsonDynamicBulkSite.new(
+            key,
+            physical_prefix,
+            type,
+            descriptor_depth,
+            array_level,
+          )
+          return nil
+        end
         unless !type.contains_json? && !type.contains_dynamic? &&
                CompactRecursiveJsonBulkAdmission.admitted?(type, descriptor_depth, @limits)
           raise UnsupportedFormatError.new("recursive Compact opaque Bulk subtree is outside the bounded static grammar")
@@ -543,6 +612,7 @@ module CrystalClick
       key : String,
       output : Array(String),
       schedules : Hash(String, CompactJsonObjectRoleSchedule),
+      dynamic_bodies : Hash(String, Array(String)),
     ) : Nil
       if schema.object?
         schedule = schedules[key]? ||
@@ -552,6 +622,8 @@ module CrystalClick
         type = schema.bulk_type
         if type.tag == BinaryDataType::TAG_UINT8
           output << String.new(uint8_site(key).callback_name.to_slice)
+        elsif type.tag == BinaryDataType::TAG_DYNAMIC
+          dynamic_bodies[key].each { |name| output << String.new(name.to_slice) }
         else
           bulk_site(key).each_role do |role|
             output << String.new(bulk_site(key).callback_name_for(role.name).to_slice)
@@ -559,10 +631,10 @@ module CrystalClick
         end
       elsif schema.array?
         output << String.new(array_site(key).callback_name.to_slice)
-        append_body_names(schema.child_at(0), array_child_key(key), output, schedules)
+        append_body_names(schema.child_at(0), array_child_key(key), output, schedules, dynamic_bodies)
       elsif schema.tuple?
         schema.child_count.times do |index|
-          append_body_names(schema.child_at(index), tuple_child_key(key, index), output, schedules)
+          append_body_names(schema.child_at(index), tuple_child_key(key, index), output, schedules, dynamic_bodies)
         end
       end
       nil
@@ -573,23 +645,26 @@ module CrystalClick
       key : String,
       output : Array(String),
       prefixes : Hash(String, Array(String)),
+      dynamic_prefixes : Hash(String, Array(String)),
     ) : Nil
       if schema.object?
         callbacks = prefixes[key]? ||
                     raise(CorruptPartError.new("recursive Compact Object prefix schedule is missing"))
         callbacks.each { |name| output << String.new(name.to_slice) }
       elsif schema.bulk?
-        unless schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+        if schema.bulk_type.tag == BinaryDataType::TAG_DYNAMIC
+          dynamic_prefixes[key].each { |name| output << String.new(name.to_slice) }
+        elsif schema.bulk_type.tag != BinaryDataType::TAG_UINT8
           site = bulk_site(key)
           site.prefix_role_count.times do |index|
             output << String.new(site.prefix_callback_name_at(index).to_slice)
           end
         end
       elsif schema.array?
-        append_prefix_names(schema.child_at(0), array_child_key(key), output, prefixes)
+        append_prefix_names(schema.child_at(0), array_child_key(key), output, prefixes, dynamic_prefixes)
       elsif schema.tuple?
         schema.child_count.times do |index|
-          append_prefix_names(schema.child_at(index), tuple_child_key(key, index), output, prefixes)
+          append_prefix_names(schema.child_at(index), tuple_child_key(key, index), output, prefixes, dynamic_prefixes)
         end
       end
       nil
@@ -600,6 +675,7 @@ module CrystalClick
       key : String,
       output : Array(String),
       body_pairs : Hash(String, Array(ObjectDocumentInlineCallbackOrder::CallbackPair)),
+      dynamic_bodies : Hash(String, Array(String)),
     ) : Nil
       if schema.object?
         pairs = body_pairs[key]? ||
@@ -609,6 +685,8 @@ module CrystalClick
         type = schema.bulk_type
         if type.tag == BinaryDataType::TAG_UINT8
           output << String.new(uint8_site(key).callback_name.to_slice)
+        elsif type.tag == BinaryDataType::TAG_DYNAMIC
+          dynamic_bodies[key].each { |name| output << String.new(name.to_slice) }
         else
           bulk_site(key).each_role do |role|
             output << String.new(bulk_site(key).callback_name_for(role.name).to_slice)
@@ -616,10 +694,10 @@ module CrystalClick
         end
       elsif schema.array?
         output << String.new(array_site(key).callback_name.to_slice)
-        append_body_names(schema.child_at(0), array_child_key(key), output, body_pairs)
+        append_body_names(schema.child_at(0), array_child_key(key), output, body_pairs, dynamic_bodies)
       elsif schema.tuple?
         schema.child_count.times do |index|
-          append_body_names(schema.child_at(index), tuple_child_key(key, index), output, body_pairs)
+          append_body_names(schema.child_at(index), tuple_child_key(key, index), output, body_pairs, dynamic_bodies)
         end
       end
       nil

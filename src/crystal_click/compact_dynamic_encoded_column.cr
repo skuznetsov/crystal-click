@@ -206,6 +206,86 @@ module CrystalClick
       nil
     end
 
+    # Conservative retained-owner estimate for a Dynamic child kept alive by
+    # its enclosing Compact JSON encoded column. This includes both logical
+    # BinaryBulk lanes and adapted discriminator frames even when a parent
+    # callback fragment also borrows some of those bytes; counting both is
+    # intentional because the source lanes remain retained after adaptation.
+    def retained_workspace_bytes : UInt64
+      bytes = instance_sizeof(CompactDynamicEncodedColumn).to_u64
+
+      bytes = checked_add(bytes, instance_sizeof(Array(BinaryBulkStreams)).to_u64)
+      bytes = checked_add(
+        bytes,
+        checked_multiply(@per_mark_streams.size.to_u64, sizeof(Pointer(BinaryBulkStreams)).to_u64),
+      )
+      @per_mark_streams.each do |streams|
+        bytes = checked_add(bytes, instance_sizeof(BinaryBulkStreams).to_u64)
+        bytes = checked_add(
+          bytes,
+          hash_workspace_bytes(
+            instance_sizeof(Hash(String, BinaryBulkStream)).to_u64,
+            streams.role_count,
+            sizeof({UInt32, String, BinaryBulkStream}).to_u64,
+          ),
+        )
+        @plan.each_data_role do |role|
+          stream = streams.stream(role)
+          bytes = checked_add(bytes, string_workspace_bytes(role))
+          bytes = checked_add(bytes, instance_sizeof(BinaryBulkStream).to_u64)
+          bytes = checked_add(bytes, stream.byte_size.to_u64)
+          bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
+          bytes = checked_add(
+            bytes,
+            checked_multiply(stream.offset_count.to_u64, sizeof(UInt64).to_u64),
+          )
+        end
+      end
+
+      bytes = checked_add(bytes, instance_sizeof(AdaptedLaneGrid).to_u64)
+      bytes = checked_add(
+        bytes,
+        checked_multiply(@adapted_discriminator_lanes.size.to_u64, sizeof(Pointer(Hash(String, AdaptedLane))).to_u64),
+      )
+      @adapted_discriminator_lanes.each do |lanes|
+        bytes = checked_add(
+          bytes,
+          hash_workspace_bytes(
+            instance_sizeof(Hash(String, AdaptedLane)).to_u64,
+            lanes.size,
+            sizeof({UInt32, String, AdaptedLane}).to_u64,
+          ),
+        )
+        lanes.each do |role, lane|
+          unless @plan.discriminator_role?(role)
+            raise UnsupportedFormatError.new("Compact Dynamic retained lane roster differs from its plan")
+          end
+          lane_bytes, offsets, _mode = lane
+          bytes = checked_add(bytes, string_workspace_bytes(role))
+          bytes = checked_add(bytes, sizeof(AdaptedLane).to_u64)
+          bytes = checked_add(bytes, lane_bytes.size.to_u64)
+          bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
+          bytes = checked_add(bytes, checked_multiply(offsets.size.to_u64, sizeof(UInt64).to_u64))
+        end
+      end
+
+      bytes = checked_add(
+        bytes,
+        hash_workspace_bytes(
+          instance_sizeof(Hash(String, Tuple(Bytes, Bytes))).to_u64,
+          @structure_prefixes.size,
+          sizeof({UInt32, String, Tuple(Bytes, Bytes)}).to_u64,
+        ),
+      )
+      @structure_prefixes.each do |path, prefixes|
+        bytes = checked_add(bytes, string_workspace_bytes(path))
+        bytes = checked_add(bytes, sizeof(Tuple(Bytes, Bytes)).to_u64)
+        bytes = checked_add(bytes, prefixes[0].size.to_u64)
+        bytes = checked_add(bytes, prefixes[1].size.to_u64)
+      end
+      bytes
+    end
+
     # Returns either one structure prefix, a generated eight-byte state prefix,
     # or the selected mark's logical lane body without copying source bytes.
     def callback_bytes(callback : CompactBinaryBulkCallback, mark_index : Int32) : Bytes
@@ -266,6 +346,48 @@ module CrystalClick
 
     private def stream_for(role : String, mark_index : Int32) : BinaryBulkStream
       @per_mark_streams[mark_index].stream(role)
+    end
+
+    private def string_workspace_bytes(value : String) : UInt64
+      checked_add(instance_sizeof(String).to_u64, value.bytesize.to_u64 + 1_u64)
+    end
+
+    # Hash exposes no public backing-capacity accessor. Bound its entry buffer
+    # by the next power of two (with Crystal's minimum allocation) and reserve
+    # two UInt32 index slots per entry as a deliberately wide upper estimate.
+    private def hash_workspace_bytes(
+      hash_instance_bytes : UInt64,
+      entry_count : Int32,
+      entry_bytes : UInt64,
+    ) : UInt64
+      capacity = hash_entry_capacity_bound(entry_count)
+      index_slots = checked_multiply(capacity, 2_u64)
+      bytes = checked_add(hash_instance_bytes, checked_multiply(capacity, entry_bytes))
+      checked_add(bytes, checked_multiply(index_slots, sizeof(UInt32).to_u64))
+    end
+
+    private def hash_entry_capacity_bound(entry_count : Int32) : UInt64
+      return 0_u64 if entry_count <= 0
+
+      capacity = 8_u64
+      while capacity < entry_count.to_u64
+        capacity = checked_multiply(capacity, 2_u64)
+      end
+      capacity
+    end
+
+    private def checked_add(left : UInt64, right : UInt64) : UInt64
+      if right > UInt64::MAX - left
+        raise UnsupportedFormatError.new("Compact Dynamic retained workspace overflows UInt64")
+      end
+      left + right
+    end
+
+    private def checked_multiply(left : UInt64, right : UInt64) : UInt64
+      if left > 0_u64 && right > UInt64::MAX // left
+        raise UnsupportedFormatError.new("Compact Dynamic retained workspace overflows UInt64")
+      end
+      left * right
     end
   end
 end

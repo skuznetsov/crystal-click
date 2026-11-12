@@ -1,0 +1,387 @@
+{
+  "format": "crystal_click_compact_recursive_dynamic_w284_evidence_v1",
+  "date": "2026-11-12",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the tested direct Compact reader and writer profile",
+    "scope": "The W257 Array(Tuple(JSON, Dynamic)) declaration composes an admitted static Object leaf with a direct Dynamic V3 Bulk sibling. Existing BinaryBulk codecs share the authenticated parent schedule while each Dynamic site owns its canonical context and inherited occurrence counts.",
+    "limits": "Qualification covers the direct writer and reader, the affected cohort roster, and the pinned native matrix. Public typed scans and catalog values, legacy Dynamic statistics layouts, opaque Dynamic-bearing subtrees, nested Dynamic or JSON actual arms, Compact MV output, projection children and performance remain outside this evidence."
+  },
+  "baseline": {
+    "revision": "7c25e675a5ecab55d7205ac55e81615b6eeffd27",
+    "previous_qualification": "6e893890713d09ecdb7d7909ee9a2addf80eff75",
+    "binding": "The local feature commit containing this packet binds the exact W284-owned diff to the sealed inputs."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "Shared implementation errors can make a Crystal round trip pass despite a wrong Dynamic prefix order, inherited occurrence count or zero-occurrence discriminator.",
+    "guard": "Match independent literal windows in both native directions, inspect actual prefix bytes, exercise a copied raw mark-coordinate mutation through both public reader binaries, and challenge depth, context, occurrence and failed-prefix behavior in focused specs.",
+    "rollback": "Revert the containing feature commit as a unit and retain the prior qualification and external evidence."
+  },
+  "verification": {
+    "toolchain": {
+      "crystal": "1.22.1",
+      "llvm": "23.1.4",
+      "target": "aarch64-apple-darwin25.6.0"
+    },
+    "source_inputs": {
+      "crystal_source_files": 625,
+      "crystal_spec_files": 845,
+      "interop_harness_files": 4
+    },
+    "format": {
+      "crystal_paths_checked": 27,
+      "diff_check": "pass",
+      "interop_and_auditor_ruby_syntax": "pass",
+      "interop_self_test_cases": 17
+    },
+    "initial_probe": {
+      "expected": "The existing public writer accepts the canonical declaration.",
+      "observed": "One compiled DEBUG example raised UnsupportedFormatError at CompactPartColumn.json before writing.",
+      "artifact": "entry_red_frozen_report"
+    },
+    "focused": {
+      "debug_examples": 22,
+      "release_examples": 22,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "release_flags": [
+        "--release",
+        "--no-debug"
+      ]
+    },
+    "affected": {
+      "debug_examples": 683,
+      "release_examples": 683,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0,
+      "ordinary_spec_paths_per_mode": 122,
+      "ordinary_cohorts_per_mode": 13,
+      "filtered_spec": "spec/compact_json_recursive_public_w263_adversary_spec.cr",
+      "filtered_example": "admits the bounded recursive Object/Array/Tuple/UInt8 subset",
+      "passing_commands": 28,
+      "attempts": 29,
+      "recovery": "Initial DEBUG types_3b ran 24 examples with one W217 projection path comparison failure after its row assertion passed. Only TMPDIR and CRYSTAL_CACHE_DIR switched to the canonical path of the same SSD. The same cohort and all later rows passed. The initial log and first nine passing commands retain their lineage.",
+      "verification": "root-verify-regressions.rb checked the frozen roster, original and executed argv, unchanged guard/launcher, actual RELEASE flags, hashes and raw summaries for each command."
+    },
+    "guard": {
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+      "free_memory_percent_strictly_greater_than": 50,
+      "timeout_seconds": 600,
+      "rss_limit_mib": 12288,
+      "heavy_parallelism": 1
+    },
+    "native": {
+      "source_revision": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+      "runtime": {
+        "version": "26.10.1.1201",
+        "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+        "bytes": 919123095,
+        "sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae"
+      },
+      "helper_builds": {
+        "debug": {
+          "bytes": 12040008,
+          "sha256": "fe69d76d4536c58af729f2d2b3a73d30f150e80e5ee7129b2db1e8aa36a57f8e"
+        },
+        "release": {
+          "bytes": 4419008,
+          "sha256": "7ea3be39082ff98b20cd749770e9ff7a5d8240ecb9371f9e4c9e7faf874bfe46",
+          "flags": [
+            "--release",
+            "--no-debug"
+          ]
+        }
+      },
+      "matrix": {
+        "stock_parts_per_mode": 8,
+        "generated_parts_per_mode": 8,
+        "marks_per_part": 4,
+        "rows_per_part": 8,
+        "mark_formats": [
+          "plain MRK3",
+          "plain MRK4"
+        ],
+        "dynamic_discriminators": [
+          "BASIC",
+          "COMPACT"
+        ],
+        "string_versions": [
+          "S0",
+          "S1"
+        ],
+        "dynamic_v3_statistics_flags": [
+          1,
+          0,
+          0,
+          0
+        ]
+      },
+      "native_invocations": 48,
+      "helper_invocations": 34,
+      "success": "Each helper reads the stock windows. ClickHouse attaches, checks, reads, and checks the generated parts again on reopen. The full, middle, last and EOF windows match independent literals.",
+      "root_audit": "The bounded byte audit checks eight stock and sixteen generated parts. A separate raw-log audit checks 128 native and 128 helper literal windows, compares 320 file records, and verifies the exact two copied coordinate mutants.",
+      "mutation": {
+        "file": "data.mrk4",
+        "offset": 440,
+        "before": [
+          271,
+          11
+        ],
+        "after": [
+          271,
+          12
+        ],
+        "reader_error": "CorruptPartError",
+        "rejected_builds": [
+          "debug",
+          "release"
+        ],
+        "failure_boundary": "exact named-callback extent",
+        "original_preserved": true
+      }
+    }
+  },
+  "boundaries": {
+    "allowed_paths": [
+      ".landmark/evidence/compact-recursive-dynamic-w284.json",
+      "LANDMARKS.md",
+      "docs/COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "scripts/audit_compact_recursive_dynamic_w284_capture.rb",
+      "scripts/compact_recursive_dynamic_w284_helper.cr",
+      "scripts/support/compact_recursive_dynamic_w284_fixture.cr",
+      "scripts/verify_compact_recursive_dynamic_w284.rb",
+      "scripts/verify_compact_recursive_dynamic_w284_interop.rb",
+      "spec/compact_json_recursive_public_w263_adversary_spec.cr",
+      "spec/compact_part_writer_w281_entry_spec.cr",
+      "spec/compact_recursive_dynamic_w284_capture_adversary_spec.cr",
+      "spec/compact_recursive_dynamic_w284_context_adversary_spec.cr",
+      "spec/compact_recursive_dynamic_w284_entry_spec.cr",
+      "spec/compact_recursive_dynamic_w284_reader_adversary_spec.cr",
+      "spec/compact_recursive_dynamic_w284_writer_adversary_spec.cr",
+      "spec/support/compact_recursive_dynamic_w284_fixture.cr",
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_dynamic_bulk_physical_plan.cr",
+      "src/crystal_click/compact_dynamic_callback_plan.cr",
+      "src/crystal_click/compact_dynamic_encoded_column.cr",
+      "src/crystal_click/compact_dynamic_write_context.cr",
+      "src/crystal_click/compact_json_callback_plan.cr",
+      "src/crystal_click/compact_json_column_input.cr",
+      "src/crystal_click/compact_json_encoded_column.cr",
+      "src/crystal_click/compact_part_column.cr",
+      "src/crystal_click/compact_recursive_dynamic_write_context.cr",
+      "src/crystal_click/compact_recursive_json_column_reader.cr",
+      "src/crystal_click/compact_recursive_json_dynamic_bulk_capture_plan.cr",
+      "src/crystal_click/compact_recursive_json_dynamic_bulk_mark.cr",
+      "src/crystal_click/compact_recursive_json_dynamic_bulk_site.cr",
+      "src/crystal_click/compact_recursive_json_dynamic_prefix_cursor.cr",
+      "src/crystal_click/compact_recursive_json_schema_plan.cr",
+      "src/crystal_click/compact_recursive_json_static_bulk_grammar.cr"
+    ],
+    "changed_paths": [
+      ".landmark/evidence/compact-recursive-dynamic-w284.json",
+      "LANDMARKS.md",
+      "docs/COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "scripts/audit_compact_recursive_dynamic_w284_capture.rb",
+      "scripts/compact_recursive_dynamic_w284_helper.cr",
+      "scripts/support/compact_recursive_dynamic_w284_fixture.cr",
+      "scripts/verify_compact_recursive_dynamic_w284.rb",
+      "scripts/verify_compact_recursive_dynamic_w284_interop.rb",
+      "spec/compact_json_recursive_public_w263_adversary_spec.cr",
+      "spec/compact_part_writer_w281_entry_spec.cr",
+      "spec/compact_recursive_dynamic_w284_capture_adversary_spec.cr",
+      "spec/compact_recursive_dynamic_w284_context_adversary_spec.cr",
+      "spec/compact_recursive_dynamic_w284_entry_spec.cr",
+      "spec/compact_recursive_dynamic_w284_reader_adversary_spec.cr",
+      "spec/compact_recursive_dynamic_w284_writer_adversary_spec.cr",
+      "spec/support/compact_recursive_dynamic_w284_fixture.cr",
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_dynamic_bulk_physical_plan.cr",
+      "src/crystal_click/compact_dynamic_callback_plan.cr",
+      "src/crystal_click/compact_dynamic_encoded_column.cr",
+      "src/crystal_click/compact_dynamic_write_context.cr",
+      "src/crystal_click/compact_json_callback_plan.cr",
+      "src/crystal_click/compact_json_column_input.cr",
+      "src/crystal_click/compact_json_encoded_column.cr",
+      "src/crystal_click/compact_part_column.cr",
+      "src/crystal_click/compact_recursive_dynamic_write_context.cr",
+      "src/crystal_click/compact_recursive_json_column_reader.cr",
+      "src/crystal_click/compact_recursive_json_dynamic_bulk_capture_plan.cr",
+      "src/crystal_click/compact_recursive_json_dynamic_bulk_mark.cr",
+      "src/crystal_click/compact_recursive_json_dynamic_bulk_site.cr",
+      "src/crystal_click/compact_recursive_json_dynamic_prefix_cursor.cr",
+      "src/crystal_click/compact_recursive_json_schema_plan.cr",
+      "src/crystal_click/compact_recursive_json_static_bulk_grammar.cr"
+    ],
+    "protected_untracked_sha256": {
+      "spec/compact_json_w263_native_spec.cr": "f1a8c38033477981ebc85928660f7c297d09e85d7e00264d59fcf2f606d0e0ac",
+      "spec/compact_static_json_internal_w263_spec.cr": "497914c5acd908caef6adff695d202fd6a638e292707035dd21a0c3887607ae8",
+      "spec/compact_static_json_root_w263_adversary_spec.cr": "d3d858b157f31e7daee0d171b8d0d0d8684cd0ab0dcd505145308bddfccc0dc6"
+    }
+  },
+  "artifacts": {
+    "root": "/opt/mldata_ssd/cache/crystal-click-w284.9Nzwqc",
+    "records": {
+      "source_seal": {
+        "path": "continuation-20261111.NdK4uLDi/source-files.precheck.sha256",
+        "bytes": 74754,
+        "sha256": "53b61c97f159981f410aa539002794ad7b60dd2b067d00c69d42cbebdac2ea57"
+      },
+      "spec_seal": {
+        "path": "continuation-20261111.NdK4uLDi/spec-files.precheck.sha256",
+        "bytes": 91816,
+        "sha256": "80b1506fd007faf91aa2ac0ea4a37051c062a5d190204dd53de1e5294a67efb4"
+      },
+      "toolchain": {
+        "path": "continuation-20261111.NdK4uLDi/toolchain-and-argv.txt",
+        "bytes": 543,
+        "sha256": "fffa21fa0968d29225673a250f2f4c6b6cb4f0af868f81b9e331c0fcfa377fd3"
+      },
+      "format_argv": {
+        "path": "continuation-20261111.NdK4uLDi/argv/format-check.argv",
+        "bytes": 1969,
+        "sha256": "72ca72214ebd5a0fd9dd3e1ef5d93b8aaadae8a156c1b57a4a4c99386dc3c046"
+      },
+      "format_log": {
+        "path": "continuation-20261111.NdK4uLDi/logs/format-check.stderr",
+        "bytes": 838,
+        "sha256": "ee7e43762935305e065a178682395f156618b0bf1143ffd950322a983c6511fb"
+      },
+      "debug_focused_argv": {
+        "path": "continuation-20261111.NdK4uLDi/argv/focused-debug.argv",
+        "bytes": 907,
+        "sha256": "d1728c4f3d0df9e4ad738fcea3d3081260f813d30fea80b9fb8fa968f51180c7"
+      },
+      "debug_focused_stdout": {
+        "path": "continuation-20261111.NdK4uLDi/logs/focused-debug.stdout",
+        "bytes": 100,
+        "sha256": "42b1cb2936ec8e618556f5732a38515f20f153b620befd803ee94a401da6b645"
+      },
+      "release_focused_argv": {
+        "path": "continuation-20261111.NdK4uLDi/argv/focused-release.argv",
+        "bytes": 920,
+        "sha256": "4f59f12bd931c122326b6cdc8dcc1088ecac7bf5c1eeb5c2aa43610dd1776d55"
+      },
+      "release_focused_stdout": {
+        "path": "continuation-20261111.NdK4uLDi/logs/focused-release.stdout",
+        "bytes": 100,
+        "sha256": "46ff5152e1ed39c9bf500fb2bc80a652e284bd17958a88e82b2f99e95f9b1a9e"
+      },
+      "debug_helper_build_argv": {
+        "path": "continuation-20261112.V5pQe/argv/helper-debug-build.argv",
+        "bytes": 1030,
+        "sha256": "aa93edd9d2254a6bdbe2d646e1b7b35a38e284c847cd778cdc00fe61cd3424f9"
+      },
+      "release_helper_build_argv": {
+        "path": "continuation-20261112.V5pQe/argv/helper-release-build.argv",
+        "bytes": 1053,
+        "sha256": "fbea9ceb474c7480bc55323fc2a83956bdccb9db8b7a28edc671f5d6c13611d3"
+      },
+      "interoperability_argv": {
+        "path": "continuation-20261112.V5pQe/argv/interoperability.argv",
+        "bytes": 1484,
+        "sha256": "67ead23c38413ea84dca72d342ba2bd12d5ed8c59e4a40c87ca128b820a6f132"
+      },
+      "native_postrun_seal": {
+        "path": "continuation-20261112.V5pQe/postnative-final-seal.json",
+        "bytes": 3496,
+        "sha256": "4055e2e073f26dbfcc978d8d97589af963fae869931bbe66f43c0505b6deef35"
+      },
+      "native_report": {
+        "path": "interop-20261112.Uv6kA/w284-recursive-dynamic-interop.json",
+        "bytes": 530713,
+        "sha256": "66e53f0d342056f1822b9edb948e48de35cf29819f79df01427cfdd0e25f2c8b"
+      },
+      "raw_byte_probe": {
+        "path": "continuation-20261112.V5pQe/root-byte-probe.sh",
+        "bytes": 3365,
+        "sha256": "88529633be9de1dc9e37e49aba33d85be8d6643a75f90c06923e803700f4639f"
+      },
+      "raw_stock_byte_results": {
+        "path": "continuation-20261112.V5pQe/logs/root-stock-byte-probe.stdout",
+        "bytes": 824,
+        "sha256": "a64793e9caa1a42bb16170f42183c5ef832bdc51d5b0d0587f48a5612c1125d5"
+      },
+      "raw_generated_byte_results": {
+        "path": "continuation-20261112.V5pQe/logs/root-generated-byte-probe.stdout",
+        "bytes": 1664,
+        "sha256": "83a0b2c3090258361800a73ee5c6f75aba52074dd6e30265bd4fa82b7845a5a7"
+      },
+      "native_raw_log_check": {
+        "path": "continuation-20261112.V5pQe/root-native-raw-verify.rb",
+        "bytes": 6642,
+        "sha256": "ccbccff62fe7adf26dc5e88b2c6ed817223a117f2968f0270aba9a4afa479ef1"
+      },
+      "native_raw_log_results": {
+        "path": "continuation-20261112.V5pQe/logs/root-native-raw-verify.stdout",
+        "bytes": 123,
+        "sha256": "8464ac3c15ee541d2995b3bc5049c19a8786f75194729cfa6173abc0e2f09ab1"
+      },
+      "initial_regression_argv": {
+        "path": "reports/w284-baseline-argv-prep-v1/index.json",
+        "bytes": 25347,
+        "sha256": "140ba1b112571544f96b28626b8b5b01ef0855e86fbc468b05fabe4e83cb404c"
+      },
+      "initial_regression_results": {
+        "path": "baseline-regressions-20261112.0tye5o6g/results.json",
+        "bytes": 12721,
+        "sha256": "29f542d79d696a93560d9c5ea7fa8cffa9d8110a6628963aaed017b350fd1085"
+      },
+      "resumed_regression_argv": {
+        "path": "baseline-regressions-20261112.0tye5o6g/resume-20261112/preflight.json",
+        "bytes": 39283,
+        "sha256": "af69cebfac2d9e84d11d012f3653cc1e8dc34958411250281dc5829a05b0d1b3"
+      },
+      "resumed_regression_results": {
+        "path": "baseline-regressions-20261112.0tye5o6g/resume-20261112/resume-results.json",
+        "bytes": 19557,
+        "sha256": "d9c77ba9100a27047ff8b872d262fef15bdfb98ee8d186edaec8a5457ed668e8"
+      },
+      "combined_regression_results": {
+        "path": "baseline-regressions-20261112.0tye5o6g/final-results.json",
+        "bytes": 28140,
+        "sha256": "8d3fb407ccf9192a56758e7b011e3ab99fa520d117706cec993d4110da8187c6"
+      },
+      "regression_verifier": {
+        "path": "baseline-regressions-20261112.0tye5o6g/root-verify-regressions.rb",
+        "bytes": 7097,
+        "sha256": "016393aa34d54dd5dacaf05f20f715df48c5511c0659b5b8d0cb296485600083"
+      },
+      "regression_verifier_results": {
+        "path": "baseline-regressions-20261112.0tye5o6g/root-verify-regressions.stdout",
+        "bytes": 450,
+        "sha256": "c9f28ff0cde338c0eeedcd149da3448ead6e668ac11501e7a64ecf93a46c6536"
+      },
+      "released_scratch_cleanup": {
+        "path": "continuation-20261112.V5pQe/root-released-scratch-cleanup.json",
+        "bytes": 830,
+        "sha256": "07d5a8e76e3289effe5b615525f200de72c1f32dc4a738ce38955f43ff7633d4"
+      },
+      "regression_scratch_cleanup": {
+        "path": "baseline-regressions-20261112.0tye5o6g/resume-20261112/cleanup-evidence.json",
+        "bytes": 1717,
+        "sha256": "792823042425dde498f4fb7f4d781d2892d24e8762fa44ed9090d233e54fe8f9"
+      },
+      "entry_red_frozen_report": {
+        "path": "reports/w284-entry-red-debug.freeze.md",
+        "bytes": 5696,
+        "sha256": "fb043f385febcecdaa9cea47c69eb81311d0ea5de99aa2357d13b28f6ec671cf"
+      },
+      "offline_stock_audit": {
+        "path": "reports/compact-recursive-dynamic-w284-root-audit.json",
+        "bytes": 110531,
+        "sha256": "19a885b02950e258396c01139f8d07969226d7319e41aa11eb9119659c8a220d"
+      }
+    }
+  },
+  "review": {
+    "independent_evidence": "ROOT read the changed parser, cursor and public writer boundaries, verified the actual build and guard inputs, checked raw literal values and file inventories, and separately inspected bytes with the bounded auditor. The Luna review shares model lineage.",
+    "provenance_limit": "The byte audit reuses the auditor's parsers. The helper's declared mode fields do not independently observe physical encoding; the byte checks provide that evidence.",
+    "refresh": "Rerun affected focused, cohort and native checks if the admitted grammar, source/specs, harness, compiler, pinned runtime, fixture bytes or source caller policy changes."
+  },
+  "next": "Route the qualified profile through typed scans and catalog column values. Finish type/layout parity, Compact MV output and projection children before memory and throughput optimization. The <=10% slowdown target remains to measure."
+}

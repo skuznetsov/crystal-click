@@ -11,6 +11,7 @@ module CrystalClick
     @json_schema : StorageColumnSchema?
     @json_granules : Array(Array(StorageColumnValue))?
     @json_context : CompactJsonWriteContext?
+    @recursive_dynamic_context : CompactRecursiveDynamicWriteContext?
 
     private def initialize(
       @name : String,
@@ -20,6 +21,7 @@ module CrystalClick
       @json_schema : StorageColumnSchema? = nil,
       @json_granules : Array(Array(StorageColumnValue))? = nil,
       @json_context : CompactJsonWriteContext? = nil,
+      @recursive_dynamic_context : CompactRecursiveDynamicWriteContext? = nil,
     )
     end
 
@@ -59,17 +61,19 @@ module CrystalClick
       schema : StorageColumnSchema,
       granules : Array(Array(StorageColumnValue)),
       json_context : CompactJsonWriteContext,
+      dynamic_contexts : Hash(String, CompactDynamicWriteContext) = {} of String => CompactDynamicWriteContext,
     ) : CompactPartColumn
       unless CompactRecursiveJsonSchemaPlan.admitted_schema?(schema)
         raise UnsupportedFormatError.new("Compact JSON column schema is outside the admitted static-site subset")
       end
       type = BinaryRecursiveDataTypeNameReader.parse_canonical(schema.declaration) ||
              raise UnsupportedFormatError.new("Compact JSON column requires a canonical JSON-bearing descriptor")
+      recursive_dynamic_context = CompactRecursiveDynamicWriteContext.new(schema, dynamic_contexts)
       owned_granules = Array(Array(StorageColumnValue)).new(granules.size)
       granules.each { |rows| owned_granules << rows.dup }
       new(
         String.new(name.to_slice), type, [] of Array(BinaryValue), nil,
-        schema, owned_granules, json_context,
+        schema, owned_granules, json_context, recursive_dynamic_context,
       )
     end
 
@@ -105,9 +109,14 @@ module CrystalClick
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : CompactJsonColumnInput
       context = @json_context || raise UnsupportedFormatError.new("unbound Compact JSON input is not admitted")
+      dynamic_context = @recursive_dynamic_context ||
+                        raise UnsupportedFormatError.new("Compact JSON input has no recursive Dynamic context")
       schema = @json_schema || raise UnsupportedFormatError.new("Compact JSON input has no schema")
       granules = @json_granules || raise UnsupportedFormatError.new("Compact JSON input has no storage values")
-      CompactJsonColumnInput.new(@name, schema, granules, context, @type, profile)
+      CompactJsonColumnInput.new(
+        @name, schema, granules, context, @type, profile,
+        recursive_dynamic_context: dynamic_context,
+      )
     end
 
     def json_context? : Bool
@@ -116,7 +125,12 @@ module CrystalClick
 
     def input_workspace_bytes : UInt64
       if context = @json_context
-        checked_workspace_add(json_granule_workspace_bytes, context.retained_workspace_bytes)
+        bytes = checked_workspace_add(json_granule_workspace_bytes, context.retained_workspace_bytes)
+        if dynamic_context = @recursive_dynamic_context
+          checked_workspace_add(bytes, dynamic_context.retained_workspace_bytes)
+        else
+          bytes
+        end
       elsif context = @dynamic_context
         checked_workspace_add(dynamic_granule_workspace_bytes, context.retained_workspace_bytes)
       else

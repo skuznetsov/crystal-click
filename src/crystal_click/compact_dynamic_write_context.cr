@@ -37,6 +37,17 @@ module CrystalClick
       detached
     end
 
+    # Read-only traversal for execution-time validators that do not retain a
+    # second path map. DynamicStructure owners are immutable and may be shared.
+    def each_site_structure(&block : String, DynamicStructure -> Nil) : Nil
+      @site_structures.each { |path, structure| yield path, structure }
+      nil
+    end
+
+    def structure_at?(path : String) : DynamicStructure?
+      @site_structures[path]?
+    end
+
     def site_count : Int32
       @site_structures.size
     end
