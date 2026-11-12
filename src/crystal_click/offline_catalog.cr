@@ -1680,8 +1680,14 @@ module CrystalClick
       name = parse_projection_name(header[1])
       opening = header.end(0) - 1
       closing = matching_parenthesis(source, opening)
-      unless source.byte_slice(closing + 1, source.bytesize - closing - 1).strip.empty?
-        raise UnsupportedFormatError.new("unsupported projection declaration suffix")
+      suffix = source.byte_slice(closing + 1, source.bytesize - closing - 1).strip
+      unless suffix.empty?
+        # ClickHouse stores projection-level format and granularity overrides
+        # here. Readers use the child's physical files to resolve its layout.
+        settings = /\AWITH\s+SETTINGS\s*\((.*)\)\z/im.match(suffix)
+        unless settings && supported_simple_settings?(settings[1])
+          raise UnsupportedFormatError.new("unsupported projection declaration suffix")
+        end
       end
 
       body = source.byte_slice(opening + 1, closing - opening - 1).strip

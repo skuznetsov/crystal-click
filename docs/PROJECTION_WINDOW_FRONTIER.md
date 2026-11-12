@@ -10,6 +10,9 @@ work is deferred.
 W287 also verifies each selected child manifest against the parent manifest
 before full or window scans. See the
 [projection checksum profile](PROJECTION_PUBLICATION_FRONTIER.md#projection-checksum-binding-on-read-w287).
+W288 extends the same APIs to selected Compact children and mixed child
+formats. See the
+[Compact projection read profile](PROJECTION_PUBLICATION_FRONTIER.md#compact-and-mixed-projection-reads-w288).
 
 ## Boundary and reason
 

@@ -10,7 +10,7 @@ module CrystalClick
         columns : Array(String),
         row_limit : Int,
         row_limit_label : String,
-      ) : WidePartTable?
+      ) : (WidePartTable | TypedPartTable)?
         if projection_name.bytesize > WidePartTable::MAX_PART_NAME_BYTES - ".proj".bytesize
           raise BoundsError.new("projection child name exceeds limit")
         end
@@ -36,9 +36,18 @@ module CrystalClick
         candidates = table.resolved_scan_parts
         return nil if candidates.empty?
 
-        # Construction preflights child coverage and selected physical schemas
-        # across every resolved parent before either scan method can yield.
-        WidePartTable.open_selected_projection_typed(candidates.map(&.path), projection_name, columns)
+        parent_paths = candidates.map(&.path)
+        # Bound the selection and validate every parent/child path before the
+        # routing probe reads any child manifest.
+        selection = ProjectionChildSelection.prepare(parent_paths, projection_name)
+        # Keep the established Wide projection reader intact for the common
+        # all-Wide case. A set containing Compact marks uses TypedPartTable's
+        # existing per-part schema, grid, limit, and schedule composition.
+        if selection.contains_compact_child?
+          TypedPartTable.open_selected_projection_typed(selection, columns)
+        else
+          WidePartTable.open_selected_projection_typed(parent_paths, projection_name, columns)
+        end
       end
     end
   end

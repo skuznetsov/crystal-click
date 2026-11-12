@@ -1,5 +1,36 @@
 # Physical projection reads and publication
 
+## Compact and mixed projection reads (W288)
+
+`OfflineTable#scan_projection_typed` and `#scan_projection_typed_window`
+resolve the physical format of each selected `<name>.proj` child. A selection
+containing Compact marks composes the existing Compact and Wide typed
+readers. All-Wide selections retain the Wide table reader, including its
+cross-part checks for aggregate Count projections. Each child uses its own
+physical schema, rows and mark grid. Batches retain the parent part's name
+and path, and source offsets count rows from the selected children in order.
+
+The reader checks every child's presence, manifest binding and selected
+schema before callbacks, including short and EOF windows. It inherits the
+selected reader's format, type and payload-validation policy. The catalog
+recognizes the persisted `WITH SETTINGS (...)` suffix with simple literals
+and retains the SELECT body as the projection definition.
+
+The behavioral baseline routed a Compact child through the Wide reader and
+failed on the Wide `columns_substreams.txt` requirement. A second baseline
+rejected the projection settings suffix. The regressions exercise a Compact
+MRK4 child, mixed children in one table, differing child and parent row
+counts, a window crossing child and parent boundaries, and malformed or
+missing children that must fail before any callback.
+
+With ClickHouse 26.10.1.1201, both Crystal build modes read stock
+Compact-parent/Wide-child and Wide-parent/Compact-child tables through the
+persisted offline catalog. The tested layouts are plain Compact MRK4 and
+adaptive Wide MRK2 with UInt64 and String columns. The parent has three
+two-row granules and the projection has two three-row granules. Full scans
+and the `[2, 4)` window reproduce the literal rows and callback coordinates.
+See the [W288 evidence](../.landmark/evidence/compact-projection-reader-w288.json).
+
 ## Projection checksum binding on read (W287)
 
 The public Wide projection factory and its offline full and window scans
@@ -154,14 +185,42 @@ its bytes; the root auditor now parses a duplicate and compares the untouched
 owner. The corrected full audit, a matching-byte positive and one-byte-change
 negative pass. No production source change was needed for that diagnostic.
 
-## Next local track
+## Compact projection interoperability plan
 
-Add Compact child reads and publication through the existing typed part
-owners. Each child has its own physical format and row/mark grid. Verify
-that a child failure prevents publication of the parent and that native
-ClickHouse can use the complete projection.
-Caller-run MV transforms and their target layouts are tracked in the
-[transform frontier](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
+ClickHouse chooses the child format from its projection settings and block
+statistics (`MergeTreeDataWriter.cpp:1184-1211`, `MergeTreeData.cpp:6998-7017`
+at `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`). Loading a child discovers
+its format from disk (`IMergeTreeDataPart.cpp:1714-1746`). The child has
+its own row count, mark grid, schema and file manifest. The parent path
+and name identify each source part in callbacks.
+
+1. Admit Compact children through the existing selected Compact reader.
+   Accept the simple `WITH SETTINGS (...)` suffix emitted for projection
+   overrides. Keep the declaration's SELECT body and read the format from disk.
+   Route per child and keep the existing Wide path for all-Wide selections.
+   Check every selected parent binding, schema and child grid before
+   yielding rows on full, window and EOF calls. Bound the new route by the
+   existing per-format layout and codec admissions. Falsify the baseline
+   with a readable Compact child whose grid differs from its parent's.
+2. Accept caller-precomputed Compact children in parent publication after
+   the read gate. Reuse existing per-format writers inside one unpublished
+   directory. Require every child to pass its existing writer validation,
+   share operation budgets, and bind the final checksum summary before
+   the exclusive rename. Probe a failure after another child has staged.
+3. Run the affected specs in DEBUG and RELEASE. Read stock-authored mixed
+   pairs in both directions on the pinned ClickHouse build. Then ATTACH
+   library-written pairs on that build, require CHECK to pass, compare
+   literal parent and child RowBinary results, and verify that a forced
+   query actually reads the projection. Record both physical formats.
+
+These changes carry persistent format and admission risk. Each phase has
+its own reversible feature commit. The decisive read failures are a child
+scan using the parent's grid or a later invalid child leaking earlier rows.
+For publication they are an incomplete parent reaching the destination and
+a library-readable pair failing native validation or selection. Nested
+projections, automatic materialization and unsupported per-format
+serializations remain outside this plan. Caller-run MV transforms are
+tracked in the [transform frontier](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
 
 ## Plan, guards and rollback
 

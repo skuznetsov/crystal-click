@@ -1,5 +1,16 @@
 # Crystal Click landmarks
 
+## Compact and mixed projection reads — W288
+
+- Offline full and window projection scans resolve each child's physical
+  format and reuse the selected Wide or Compact reader. Child rows and
+  marks determine offsets. The parent path and name identify each batch.
+- Both Crystal build modes read the stock Compact MRK4 and Wide MRK2 pairs
+  on ClickHouse 26.10.1.1201. The checks cover exact full rows and windows,
+  independent granule grids, and rejection of a late child whose manifest
+  differs from the parent's recorded summary. See the
+  [W288 evidence](.landmark/evidence/compact-projection-reader-w288.json).
+
 ## Selected Wide projection checksum binding — W287
 
 - Full and window scans bind every selected Wide child manifest to the

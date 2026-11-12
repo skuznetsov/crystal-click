@@ -18,15 +18,32 @@ module CrystalClick
     @readers : Array(SelectedReader)
     @json_readers : Array(CompactJsonColumnAdapter)
     @column_reader_slots : Array(Tuple(Symbol, Int32))
-    @part_name : String
     @part_path : String
+    @emit_part_name : String
+    @emit_part_path : String
     @mark_row_counts : Array(UInt64)
 
     def self.open_selected_typed(parts : Array(String), columns : Array(String)) : CompactPartTable
       new(parts, columns)
     end
 
-    private def initialize(parts : Array(String), columns : Array(String))
+    # :nodoc:
+    # Projection children are physically stored below their parent part, but
+    # callback identity belongs to the parent. The constructor validates and
+    # binds the selected child beneath that parent before opening its columns.
+    def self.open_selected_projection_child_typed(
+      parent_path : String,
+      projection_name : String,
+      columns : Array(String),
+    ) : CompactPartTable
+      new([parent_path], columns, projection_name)
+    end
+
+    private def initialize(
+      parts : Array(String),
+      columns : Array(String),
+      projection_name : String? = nil,
+    )
       unless parts.size == 1
         raise BoundsError.new("Compact table backend requires exactly one physical part")
       end
@@ -47,7 +64,17 @@ module CrystalClick
         @columns << String.new(column.to_slice)
       end
 
-      @part_path, @part_name = validate_selected_part(parts[0])
+      if selected_projection_name = projection_name
+        parent_path, parent_name = validate_selected_part(parts[0])
+        @emit_part_name = String.new(parent_name.to_slice)
+        @emit_part_path = String.new(parent_path.to_slice)
+        @part_path = ProjectionChildSelection.projection_child_path!(parent_path, selected_projection_name)
+        child_checksums = PartChecksums.open(@part_path)
+        ProjectionChildSelection.validate_binding!(parent_path, selected_projection_name, child_checksums)
+      else
+        @part_path, @emit_part_name = validate_selected_part(parts[0])
+        @emit_part_path = @part_path
+      end
       budget = CompressedStreamBudget.read_default
       metadata = PartMetadataFileReader.new(@part_path, budget)
       physical_columns = WidePart.parse_columns_metadata(metadata.read("columns.txt"))
@@ -565,8 +592,8 @@ module CrystalClick
       type_names = @column_types.map(&.[1])
       batch = WidePartTableBatch.new(
         0_i32,
-        @part_name,
-        @part_path,
+        @emit_part_name,
+        @emit_part_path,
         mark_index,
         row_offset,
         mark_start + row_offset,

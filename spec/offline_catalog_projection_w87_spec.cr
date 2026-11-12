@@ -26,8 +26,9 @@ private def w87_write_table(
   columns : String,
   projection : Bool = true,
   projection_name : String = W87_PROJECTION,
+  projection_suffix : String = "",
 ) : String
-  projection_ddl = projection ? ",\n    PROJECTION `#{projection_name}` (SELECT left, right ORDER BY left)" : ""
+  projection_ddl = projection ? ",\n    PROJECTION `#{projection_name}` (SELECT left, right ORDER BY left)#{projection_suffix}" : ""
   ddl = <<-DDL
   ATTACH TABLE _ UUID '#{uuid}'
   (
@@ -71,6 +72,52 @@ private def w87_attach_materialized_view(database_path : String) : Nil
 end
 
 describe CrystalClick::OfflineTable do
+  it "loads a projection declaration with its own physical settings" do
+    root = File.tempname("crystal-click-offline-projection-settings")
+    database_path = w87_catalog_root(root)
+    begin
+      w87_write_table(
+        root,
+        database_path,
+        "events",
+        "f87a0000-7b7f-4e2f-9e44-dc13a87b8711",
+        "`left` UInt64,\n    `right` UInt64",
+        projection_suffix: "\n    WITH SETTINGS (\n        min_rows_for_wide_part = 7,\n        index_granularity = 3\n    )",
+      )
+      projection = CrystalClick::OfflineCatalog.open(root).table("lab", "events").projections.first
+      projection.name.should eq(W87_PROJECTION)
+      projection.definition.should eq("SELECT left, right ORDER BY left")
+    ensure
+      FileUtils.rm_rf(root)
+    end
+  end
+
+  it "rejects trailing tokens and nonliteral settings in a projection declaration" do
+    [
+      " WITH SETTINGS (index_granularity = 3) trailing",
+      " WITH SETTINGS (index_granularity = tuple(3))",
+      " WITH SETTINGS (index_granularity = 3; SELECT 1)",
+    ].each do |suffix|
+      root = File.tempname("crystal-click-offline-projection-settings-invalid")
+      database_path = w87_catalog_root(root)
+      begin
+        w87_write_table(
+          root,
+          database_path,
+          "events",
+          "f87a0000-7b7f-4e2f-9e44-dc13a87b8711",
+          "`left` UInt64,\n    `right` UInt64",
+          projection_suffix: suffix,
+        )
+        expect_raises(CrystalClick::UnsupportedFormatError) do
+          CrystalClick::OfflineCatalog.open(root).table("lab", "events")
+        end
+      ensure
+        FileUtils.rm_rf(root)
+      end
+    end
+  end
+
   it "scans a declared projection only when every resolved parent has a child" do
     root = File.tempname("crystal-click-offline-projection-w87-complete")
     database_path = w87_catalog_root(root)

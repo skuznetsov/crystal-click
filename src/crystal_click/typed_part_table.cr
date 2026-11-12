@@ -20,7 +20,22 @@ module CrystalClick
       new(parts, columns)
     end
 
-    private def initialize(parts : Array(String), columns : Array(String))
+    # :nodoc:
+    # Compose selected projection children when the child formats vary by
+    # parent. Parent paths remain the output identity; each physical child is
+    # independently dispatched to its established Wide or Compact reader.
+    def self.open_selected_projection_typed(
+      selection : ProjectionChildSelection,
+      columns : Array(String),
+    ) : TypedPartTable
+      new(selection.parent_paths, columns, selection)
+    end
+
+    private def initialize(
+      parts : Array(String),
+      columns : Array(String),
+      projection_selection : ProjectionChildSelection? = nil,
+    )
       raise BoundsError.new("no parts selected") if parts.empty?
       raise BoundsError.new("part count exceeds limit") if parts.size > WidePartTable::MAX_PARTS
       raise BoundsError.new("no columns selected") if columns.empty?
@@ -38,16 +53,15 @@ module CrystalClick
       end
 
       # Validate all names, canonical paths, duplicates and overlap identities
-      # before opening any format-specific backend.
-      selected = Array({String, String, MergeTreePartInfo}).new(parts.size)
-      seen_paths = Hash(String, Bool).new
-      parts.each do |requested_path|
-        path, name, info = validate_selected_part(requested_path)
-        raise BoundsError.new("duplicate selected part path") if seen_paths.has_key?(path)
-        seen_paths[path] = true
-        selected << {path, name, info}
-      end
-      reject_overlapping_parts(selected)
+      # before opening any format-specific backend. Projection admission passes
+      # the prepared parent/child identity set so it is not revalidated here.
+      selected = if selection = projection_selection
+                   selection.selected_parts
+                 else
+                   ProjectionChildSelection.parent_parts!(parts)
+                 end
+
+      projection_child_paths = projection_selection.try(&.child_paths)
 
       @entries = Array(TypedPartReaderEntry).new(selected.size)
       @part_mark_row_counts = Array(Array(UInt64)).new(selected.size)
@@ -57,16 +71,30 @@ module CrystalClick
       total_marks = 0_u64
       checksum_state = ChecksumVerification::SizeChecked
 
-      selected.each do |path, name, info|
+      selected.each_with_index do |selected_part, part_index|
+        path, name, info = selected_part
+        read_path = if child_paths = projection_child_paths
+                      child_paths[part_index]
+                    else
+                      path
+                    end
         dispatch_budget = CompressedStreamBudget.read_default
-        metadata = PartMetadataFileReader.new(path, dispatch_budget)
+        metadata = PartMetadataFileReader.new(read_path, dispatch_budget)
         checksums = PartChecksums.parse(
           metadata.read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice
         )
-        reader : Reader = if CompactMarkFileAdapter.routing_candidate?(path, checksums)
-          CompactPartTable.open_selected_typed([path], @columns)
+        reader : Reader = if CompactMarkFileAdapter.routing_candidate?(read_path, checksums)
+          if selection = projection_selection
+            CompactPartTable.open_selected_projection_child_typed(path, selection.projection_name, @columns)
+          else
+            CompactPartTable.open_selected_typed([path], @columns)
+          end
         else
-          WidePartTable.open_selected_typed([path], @columns)
+          if selection = projection_selection
+            WidePartTable.open_selected_projection_typed([path], selection.projection_name, @columns)
+          else
+            WidePartTable.open_selected_typed([path], @columns)
+          end
         end
         unless reader.part_count == 1
           raise CorruptPartError.new("typed part backend did not retain exactly one selected part")
@@ -250,34 +278,6 @@ module CrystalClick
 
     private def validate_batch_rows(rows : Int, label : String = "batch row count") : Nil
       raise BoundsError.new("#{label} is out of range") if rows <= 0 || rows > WidePartTable::MAX_BATCH_ROWS
-    end
-
-    private def validate_selected_part(requested_path : String) : {String, String, MergeTreePartInfo}
-      if requested_path.empty? || requested_path.bytesize > WidePartTable::MAX_PART_PATH_BYTES
-        raise BoundsError.new("part path is empty or exceeds limit")
-      end
-      path = File.expand_path(requested_path)
-      name = File.basename(path)
-      raise BoundsError.new("part name exceeds limit") if name.bytesize > WidePartTable::MAX_PART_NAME_BYTES
-      info = MergeTreePartInfo.parse(name) || raise(InvalidPartError.new("invalid selected part name: #{name}"))
-      raise UnsupportedFormatError.new("patch parts are not supported") if info.patch?
-      raise InvalidPartError.new("selected part is a symbolic link: #{name}") if File.symlink?(path)
-      raise InvalidPartError.new("selected part is not a directory: #{name}") unless Dir.exists?(path)
-      {path, name, info}
-    rescue ex : IO::Error
-      raise InvalidPartError.new(ex.message || "cannot read selected part")
-    end
-
-    private def reject_overlapping_parts(parts : Array({String, String, MergeTreePartInfo})) : Nil
-      parts.each_with_index do |left, left_index|
-        (left_index + 1...parts.size).each do |right_index|
-          right = parts[right_index]
-          if left[2].overlaps?(right[2])
-            raise InvalidPartError.new("selected parts overlap: #{left[1]} and #{right[1]}")
-          end
-        end
-      end
-      nil
     end
 
     private def detached_types(values : Array({String, String})) : Array({String, String})

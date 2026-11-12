@@ -1,0 +1,55 @@
+{
+  "format": "crystal_click_compact_projection_reader_w288_evidence_v1",
+  "date": "2026-11-12",
+  "baseline_revision": "ee5c36f5874fd8a11b3b25a68cbf48f199e32c5e",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the tested quiescent offline projection-read contract",
+    "scope": "Offline full and window scans dispatch physical Wide and Compact children through the existing readers. Each selected child has its own row and mark grid and binds to its parent manifest. Batches identify the parent part. The catalog accepts simple projection WITH SETTINGS literals.",
+    "remaining": "Atomic Compact child publication, remaining physical layouts and types, automatic projection materialization, and performance. Payload checks follow the existing selected reader's contract."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "Routing follows the parent layout or releases earlier batches before a later child fails admission.",
+    "checks": [
+      "Select mixed children with unequal parent and child grids, then verify literal full and cross-part window rows and callback coordinates.",
+      "Replace a recorded hash in a late Compact child manifest while retaining physical sizes. Require direct Compact admission, full scans, short earlier-only windows, and EOF windows to reject the binding before callbacks.",
+      "Reject missing, symbolic-link, unsupported mark, and manifest-only mark candidates. Exercise the all-Wide aggregate Count path as a regression."
+    ],
+    "rollback": "Revert the feature commit. Reader and catalog operations open existing parts without writing to them."
+  },
+  "verification": {
+    "toolchain": "Crystal 1.22.1, LLVM 23.1.4, aarch64-apple-darwin25.6.0",
+    "baseline_debug": {
+      "read": "The first Compact child is routed through Wide and fails with columns_substreams.txt is required for multi-column parts.",
+      "ddl": "A persisted projection settings suffix fails with unsupported projection declaration suffix."
+    },
+    "debug": {"checksum": 30, "selected_consumers": 68, "aggregate_consumers": 62, "compact": 26, "total": 186, "failures": 0, "errors": 0, "pending": 0},
+    "release": {"checksum": 30, "selected_consumers": 68, "aggregate_consumers": 62, "compact": 26, "total": 186, "failures": 0, "errors": 0, "pending": 0},
+    "spec_paths_per_mode": 24,
+    "release_flags": ["--release", "--no-debug"],
+    "source_input_seal": {
+      "files": 2674,
+      "sha256": "e5ab5770782bc14127529f116ebec98cd41646b875d843e6d9e4d2fa1d1eec00"
+    },
+    "native": {
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "full_executable_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "reference_source_revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "invocations": 15,
+      "pairs": ["Compact parent / Wide child", "Wide parent / Compact child"],
+      "layouts": "Plain Compact MRK4 with String single_stream and adaptive Wide MRK2 with String with_size_stream, using UInt64 and String columns.",
+      "parent_granule_rows": [2, 2, 2],
+      "child_granule_rows": [3, 3],
+      "window": [2, 4],
+      "observations": "ClickHouse created and checked the two pairs and its forced plans selected by_score. The root audit independently compared the six-row RowBinary results and physical mark filenames. Both Crystal builds opened the persisted catalog, read the same rows and window, and verified exact mark coordinates and parent identity."
+    },
+    "report": {
+      "path": "/opt/mldata_ssd/cache/crystal-click-w288.uhf5eu54/reader-root-verification.json",
+      "bytes": 8530,
+      "sha256": "8df5c93dd652c341157f0f0c2b49c39bc4f2656c262aeb17fe46e6667bf4ad21"
+    }
+  },
+  "refresh_when": "Rerun the guarded cohorts and native reader witness after changes to child routing, manifest binding, catalog projection parsing, selected-reader schedule validation, fixture, toolchain, or runtime. Rebuild helpers from the sealed inputs and recorded commands."
+}
