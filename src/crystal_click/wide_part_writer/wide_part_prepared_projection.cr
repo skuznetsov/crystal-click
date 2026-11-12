@@ -1,12 +1,17 @@
 module CrystalClick
   module WidePartWriter
+    # :nodoc:
     # Fully planned child part that can only publish beneath its unpublished
     # parent. It reuses the ordinary N-column codecs and shared operation
     # budgets; it has no nested-projection or raw-file interface.
-    private class WidePartPreparedProjection
+    class WidePartPreparedProjection < ProjectionPreparedPart
       getter entry_name : String
       getter checksum_entry_count : Int32
       getter file_count : Int32
+
+      def summary_sidecars : Array(String)
+        ProjectionPartSummary::MRK4_SIDECARS
+      end
 
       @keys : Array(UInt64)
       @rows_per_mark : Int32
@@ -99,13 +104,13 @@ module CrystalClick
         input = @input.bind_destination(child_path)
         WidePartPublisher.write(
           input, @keys.to_unsafe.to_slice(@keys.size), @metadata, encoded, @rows_per_mark,
-          @context.limits, @context.transport_limits, @context.read_transport_budget
+          @context.limits, @context.read_transport_limits, @context.read_transport_budget
         ) do |stage|
           @columns.each do |column|
             column.validate(stage, @context.read_codec_budget, @context.read_transport_budget)
           end
         end
-        WidePartProjectionSummary.record(@entry_name, child_path)
+        ProjectionPartSummary.record(@entry_name, child_path, summary_sidecars)
       end
     end
   end

@@ -133,7 +133,7 @@ module CrystalClick
         transport_budget : CompressedStreamBudget,
       ) : Nil
         reader = DynamicBulkColumnReader.open(
-          path, name, type, context.limits, context.transport_limits,
+          path, name, type, context.limits, context.read_transport_limits,
           codec_budget, transport_budget
         )
         expected_rows = parent_rows.map(&.to_u64)

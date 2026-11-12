@@ -1,5 +1,49 @@
 # Physical projection reads and publication
 
+## Compact and mixed projection publication (W289)
+
+`WidePartWriter.write_uint64_columns` and
+`CompactPartWriter.write_uint64_columns` accept `projections:` with
+`WidePartProjection.precomputed` and `CompactPartProjection.precomputed`
+inputs. Both child layouts can be present in one parent. The caller
+supplies each child's sorted UInt64 key, typed value columns and rows per
+mark, and chooses a Compact child's physical mark and serialization settings.
+Parent and child schemas, rows and granule counts are independent.
+A Wide child of a Compact parent uses the parent's BinaryBulk profile and
+frame size with default Wide-specific settings.
+
+The existing format-specific writers encode and validate the children under
+one unpublished parent directory. A shared set of codec and transport
+budgets spans the parent and children. The parent records each child's
+uncompressed `<name>.proj` checksum summary and verifies its manifest and
+physical file roster. Each child's layout determines the sidecar roster.
+One exclusive rename publishes the validated parent and all children. A
+failure before that rename removes the staging directory.
+
+The rollback test gives a Wide child and a Compact child a shared read
+budget. Each child fits with the parent in isolation. Together they exhaust
+the budget during the second child's readback and leave the destination
+and staging directories absent. The spec matrix covers both mixed pairs,
+both same-layout pairs, MRK3 and MRK4 child metadata, two different child
+formats in one parent, and duplicate names across formats.
+Debug and Release each passed 125 examples across 15 spec paths.
+
+The Debug and Release helpers each write Compact-parent/Wide-child and
+Wide-parent/Compact-child pairs. The native check uses `clickhouse local` 26.10.1.1201
+with plain Compact MRK4 and adaptive Wide MRK2, UInt64 and String, and
+independent parent `[2, 2, 2]` and child `[3, 3]` granule grids. Both
+pairs pass ATTACH and CHECK. Parent and child RowBinary results match the
+literal rows, and the forced plan names `by_score` as its read source. All
+52 original files per build retain their SHA-256 hashes after ATTACH.
+Crystal reopens both attached pairs through the persisted offline catalog
+and checks full rows, the `[2, 4)` window, and parent batch identity.
+See the [W289 evidence](../.landmark/evidence/compact-projection-publication-w289.json).
+
+Applications supply precomputed rows matching their projection DDL. Further
+layout and type products, automatic projection computation and maintenance,
+and publication of projection children by the caller-run MV transform
+remain open.
+
 ## Compact and mixed projection reads (W288)
 
 `OfflineTable#scan_projection_typed` and `#scan_projection_typed_window`
@@ -186,6 +230,8 @@ owner. The corrected full audit, a matching-byte positive and one-byte-change
 negative pass. No production source change was needed for that diagnostic.
 
 ## Compact projection interoperability plan
+
+The W288 and W289 qualifications above record the results of this plan.
 
 ClickHouse chooses the child format from its projection settings and block
 statistics (`MergeTreeDataWriter.cpp:1184-1211`, `MergeTreeData.cpp:6998-7017`

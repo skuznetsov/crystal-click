@@ -19,6 +19,8 @@ module CrystalClick
       compress_marks : Bool = false,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       schema_binding : PartSchemaBinding? = nil,
+      projections : Indexable(WidePartProjection | CompactPartProjection) = [] of WidePartProjection,
+      projection_budgets : ProjectionWriterBudgets? = nil,
     ) : String
       validate_mark_format!(mark_format)
       variant_discriminator_mode.wire_value
@@ -28,10 +30,64 @@ module CrystalClick
       validate_key_order!(keys)
       target, parent = validate_destination(destination)
 
-      write_codec_budget = BinaryCodecBudget.new(limits, true)
-      write_transport_budget = CompressedStreamBudget.new(transport_limits, true)
-      read_codec_budget = BinaryCodecBudget.new(limits, false)
-      read_transport_budget = CompressedStreamBudget.new(reader_limits, false)
+      if projections.size > WidePartWriter::MAX_PROJECTIONS
+        raise UnsupportedFormatError.new("projection count exceeds the writer limit")
+      end
+      retained_projections = Array(WidePartProjection | CompactPartProjection).new(projections.size)
+      projections.each { |projection| retained_projections << projection }
+      seen_projection_names = Set(String).new
+      retained_projections.each do |projection|
+        name = projection.name
+        unless seen_projection_names.add?(name)
+          raise ArgumentError.new("projection names must be unique")
+        end
+      end
+
+      budgets = projection_budgets || ProjectionWriterBudgets.new(
+        BinaryCodecBudget.new(limits, true),
+        CompressedStreamBudget.new(transport_limits, true),
+        BinaryCodecBudget.new(limits, false),
+        CompressedStreamBudget.new(reader_limits, false),
+      )
+      unless same_limits?(budgets.write_codec.limits, limits) &&
+             same_limits?(budgets.read_codec.limits, limits) &&
+             same_transport_limits?(budgets.write_transport.limits, transport_limits) &&
+             same_transport_limits?(budgets.read_transport.limits, reader_limits)
+        raise ArgumentError.new("shared projection budgets differ from the Compact parent limits")
+      end
+      write_codec_budget = budgets.write_codec
+      write_transport_budget = budgets.write_transport
+      read_codec_budget = budgets.read_codec
+      read_transport_budget = budgets.read_transport
+
+      prepared_projections = Array(ProjectionPreparedPart).new(retained_projections.size)
+      projection_wide_context = nil.as(WidePartWriter::WidePartOperationContext?)
+      retained_projections.each do |projection|
+        child = if projection.is_a?(WidePartProjection)
+                  context = projection_wide_context ||= WidePartWriter::WidePartOperationContext.new(
+                    projection.rows_per_mark,
+                    profile,
+                    BinaryBulkProfile.single_stream,
+                    ObjectDocumentCodec::DEFAULT_MODE,
+                    frame_bytes,
+                    0_i64,
+                    limits,
+                    transport_limits,
+                    read_transport_limits: reader_limits,
+                    projection_budgets: budgets,
+                  )
+                  WidePartWriter::WidePartPreparedProjection.prepare(target, projection, context)
+                else
+                  CompactPartPreparedProjection.prepare(target, projection, budgets)
+                end
+        prepared_projections << child
+      end
+      combined_entries = prepared_projections.sum(5_i64) do |child|
+        child.checksum_entry_count.to_i64 + 1_i64
+      end
+      if combined_entries > PartChecksums::MAX_ENTRIES.to_i64
+        raise UnsupportedFormatError.new("combined Compact projection checksum roster exceeds its limit")
+      end
 
       reserve_mark_grid!(write_transport_budget, mark_count(keys.size, rows_per_mark))
       rows_per_mark_grid = mark_rows(keys.size, rows_per_mark)
@@ -136,7 +192,7 @@ module CrystalClick
       reserve_primary_index_output!(write_transport_budget, index_record)
       count_bytes = metadata.count_text.to_slice
       serialization_bytes = metadata.serialization_text.to_slice
-      records = Array(ChecksumRecord).new(5)
+      records = Array(ChecksumRecord).new(5 + prepared_projections.size)
       records << ChecksumRecord.new(
         "data.bin",
         data_size.to_u64,
@@ -154,15 +210,12 @@ module CrystalClick
         CityHashV1.file_hash(serialization_bytes),
         false,
       )
-      checksums_size = PartWriterInfrastructure::PartChecksumsWriter.encoded_size(records)
-      if checksums_size > PartChecksums::MAX_CHECKSUM_FILE_BYTES || checksums_size > Int32::MAX
-        raise UnsupportedFormatError.new("Compact checksums envelope exceeds the reader limit")
-      end
-      reserve_checksums_output!(write_transport_budget, checksums_size)
-      checksums_bytes = PartWriterInfrastructure::PartChecksumsWriter.encode(records)
-      unless checksums_bytes.size.to_i64 == checksums_size
-        raise UnsupportedFormatError.new("Compact checksums envelope differs from its preflight")
-      end
+      prepared_projections.each(&.encode!)
+      checksums_bytes = if prepared_projections.empty?
+                          encode_checksums!(records, write_transport_budget)
+                        else
+                          nil
+                        end
 
       stage = PartWriterInfrastructure::PartDirectoryPublisher.create_stage(parent)
       begin
@@ -185,7 +238,13 @@ module CrystalClick
         File.write(File.join(stage, "serialization.json"), metadata.serialization_text)
         File.write(File.join(stage, "default_compression_codec.txt"), metadata.codec_text)
         File.write(File.join(stage, "metadata_version.txt"), metadata.metadata_version_text)
-        File.write(File.join(stage, "checksums.txt"), checksums_bytes)
+
+        prepared_projections.each do |projection|
+          records << projection.publish(stage)
+        end
+
+        final_checksums_bytes = checksums_bytes || encode_checksums!(records, write_transport_budget)
+        File.write(File.join(stage, "checksums.txt"), final_checksums_bytes)
 
         validate_staged_part!(
           stage,
@@ -194,8 +253,9 @@ module CrystalClick
           value_inputs,
           rows_per_mark_grid,
           records,
+          prepared_projections,
           mark_output,
-          checksums_bytes,
+          final_checksums_bytes,
           write_plan,
           limits,
           reader_limits,
@@ -229,6 +289,19 @@ module CrystalClick
         raise ArgumentError.new("Compact mark count is outside the reader limit")
       end
       nil
+    end
+
+    private def self.same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
+      left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
+        left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
+    end
+
+    private def self.same_transport_limits?(left : CompressedStreamLimits, right : CompressedStreamLimits) : Bool
+      left.max_file_bytes == right.max_file_bytes && left.max_mark_bytes == right.max_mark_bytes &&
+        left.max_frame_compressed_bytes == right.max_frame_compressed_bytes &&
+        left.max_frame_decompressed_bytes == right.max_frame_decompressed_bytes &&
+        left.max_records == right.max_records && left.max_decoded_bytes == right.max_decoded_bytes &&
+        left.max_result_bytes == right.max_result_bytes
     end
 
     private def self.validate_column_set!(key_name : String, columns : Array(CompactPartColumn)) : Nil
@@ -455,6 +528,22 @@ module CrystalClick
       nil
     end
 
+    private def self.encode_checksums!(
+      records : Array(ChecksumRecord),
+      budget : CompressedStreamBudget,
+    ) : Bytes
+      checksums_size = PartWriterInfrastructure::PartChecksumsWriter.encoded_size(records)
+      if checksums_size > PartChecksums::MAX_CHECKSUM_FILE_BYTES || checksums_size > Int32::MAX
+        raise UnsupportedFormatError.new("Compact checksums envelope exceeds the reader limit")
+      end
+      reserve_checksums_output!(budget, checksums_size)
+      checksums_bytes = PartWriterInfrastructure::PartChecksumsWriter.encode(records)
+      unless checksums_bytes.size.to_i64 == checksums_size
+        raise UnsupportedFormatError.new("Compact checksums envelope differs from its preflight")
+      end
+      checksums_bytes
+    end
+
     private def self.validate_staged_part!(
       stage : String,
       metadata : CompactPartMetadata,
@@ -462,6 +551,7 @@ module CrystalClick
       value_inputs : Array(CompactPartWriteInput),
       rows : Array(UInt64),
       records : Array(ChecksumRecord),
+      projections : Array(ProjectionPreparedPart),
       mark_output : CompactPhysicalMarkOutput,
       expected_checksums : Bytes,
       write_plan : CompactStaticWritePlan | CompactPartWritePlan,
@@ -470,7 +560,8 @@ module CrystalClick
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
     ) : Nil
-      unless Dir.children(stage).sort == metadata.expected_files.sort
+      expected_files = metadata.expected_files + projections.map(&.entry_name)
+      unless Dir.children(stage).sort == expected_files.sort
         raise CorruptPartError.new("staged Compact file roster differs from preflight")
       end
 
@@ -514,7 +605,13 @@ module CrystalClick
                entry.uncompressed_hash == record.uncompressed_hash
           raise CorruptPartError.new("staged Compact checksum declaration differs from preflight")
         end
-        checksums.validate_selected_entries(stage, record.name)
+        if record.name.ends_with?(".proj")
+          projection = projections.find { |child| child.entry_name == record.name } ||
+                       raise(CorruptPartError.new("staged Compact projection is missing its prepared child"))
+          ProjectionPartSummary.validate_entry!(stage, record.name, entry, projection.summary_sidecars)
+        else
+          checksums.validate_selected_entries(stage, record.name)
+        end
       end
 
       data_record = records.find { |record| record.name == "data.bin" } ||

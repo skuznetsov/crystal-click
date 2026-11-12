@@ -1,5 +1,17 @@
 # Crystal Click landmarks
 
+## Compact and mixed projection publication — W289
+
+- The Wide and Compact part writers accept caller-precomputed children of
+  either layout through `projections:`. Each child uses its own grid and
+  format-specific writer and readback. One exclusive rename publishes the
+  parent with its verified child checksum summaries.
+- Both Crystal build modes passed 125 affected examples and native ATTACH,
+  CHECK, exact reads, forced projection selection and Crystal reopen for
+  both generated mixed pairs. The late-child budget test confirms the
+  staged parent is removed on failure. See the
+  [W289 evidence](.landmark/evidence/compact-projection-publication-w289.json).
+
 ## Compact and mixed projection reads — W288
 
 - Offline full and window projection scans resolve each child's physical
@@ -20,9 +32,6 @@
   rejects it. Both Crystal build modes read stock Wide projections and pass
   native ATTACH, CHECK, literal reads and forced selection for library parts.
   See the [W287 evidence](.landmark/evidence/projection-checksum-binding-w287.json).
-- Next, route Compact projection children through the existing part readers
-  with independent child marks, then support atomic publication. See the
-  [remaining work](docs/PROJECT_STATUS.md#remaining-work).
 
 ## Compact caller-run materialized-view targets — W286
 

@@ -75,7 +75,7 @@ module CrystalClick
             context.shared_profile,
             true,
             context.limits,
-            context.transport_limits,
+            context.read_transport_limits,
             codec_budget,
             transport_budget,
           )

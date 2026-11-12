@@ -13,6 +13,7 @@ module CrystalClick
       getter metadata_version : Int64
       getter limits : BinaryCodecLimits
       getter transport_limits : CompressedStreamLimits
+      getter read_transport_limits : CompressedStreamLimits
       getter codec_budget : BinaryCodecBudget
       getter transport_budget : CompressedStreamBudget
       getter read_codec_budget : BinaryCodecBudget
@@ -33,6 +34,8 @@ module CrystalClick
         @shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
         shared_target_chunk_rows : Int32 = 1,
         shared_budgets_from : WidePartOperationContext? = nil,
+        read_transport_limits : CompressedStreamLimits? = nil,
+        projection_budgets : ProjectionWriterBudgets? = nil,
       )
         unless rows_per_mark > 0 && rows_per_mark <= WidePartWriter::MAX_ROWS_PER_MARK
           raise ArgumentError.new("rows_per_mark is outside the admitted range")
@@ -53,6 +56,7 @@ module CrystalClick
         @mode = mode
         @frame_bytes = frame_bytes.to_i32
         @shared_target_chunk_rows = shared_target_chunk_rows
+        @read_transport_limits = read_transport_limits || @transport_limits
 
         if shared = shared_budgets_from
           unless shared.profile == @profile && shared.shared_profile == @shared_profile &&
@@ -61,7 +65,8 @@ module CrystalClick
                  shared.shared_json_policy == @shared_json_policy &&
                  shared.shared_target_chunk_rows == @shared_target_chunk_rows &&
                  same_limits?(shared.limits, @limits) &&
-                 same_transport_limits?(shared.transport_limits, @transport_limits)
+                 same_transport_limits?(shared.transport_limits, @transport_limits) &&
+                 same_transport_limits?(shared.read_transport_limits, @read_transport_limits)
             raise ArgumentError.new("shared Wide operation budgets require an otherwise identical context")
           end
           @codec_budget = shared.codec_budget
@@ -69,11 +74,23 @@ module CrystalClick
           @read_codec_budget = shared.read_codec_budget
           @read_transport_budget = shared.read_transport_budget
           @name_context = shared.name_context
+        elsif budgets = projection_budgets
+          unless same_limits?(budgets.write_codec.limits, @limits) &&
+                 same_limits?(budgets.read_codec.limits, @limits) &&
+                 same_transport_limits?(budgets.write_transport.limits, @transport_limits) &&
+                 same_transport_limits?(budgets.read_transport.limits, @read_transport_limits)
+            raise ArgumentError.new("shared projection budgets differ from the Wide child limits")
+          end
+          @codec_budget = budgets.write_codec
+          @transport_budget = budgets.write_transport
+          @read_codec_budget = budgets.read_codec
+          @read_transport_budget = budgets.read_transport
+          @name_context = PhysicalStreamPlanContext.new(@limits)
         else
           @codec_budget = BinaryCodecBudget.new(@limits, true)
           @transport_budget = CompressedStreamBudget.new(@transport_limits, true)
           @read_codec_budget = BinaryCodecBudget.new(@limits, false)
-          @read_transport_budget = CompressedStreamBudget.new(@transport_limits, false)
+          @read_transport_budget = CompressedStreamBudget.new(@read_transport_limits, false)
           @name_context = PhysicalStreamPlanContext.new(@limits)
         end
       end
@@ -84,7 +101,13 @@ module CrystalClick
         WidePartOperationContext.new(
           rows_per_mark, @profile, @shared_profile, @mode, @frame_bytes,
           @metadata_version, @limits, @transport_limits, @shared_json_policy,
-          @shared_target_chunk_rows, self
+          @shared_target_chunk_rows, self, @read_transport_limits
+        )
+      end
+
+      def projection_budgets : ProjectionWriterBudgets
+        ProjectionWriterBudgets.new(
+          @codec_budget, @transport_budget, @read_codec_budget, @read_transport_budget
         )
       end
 

@@ -79,7 +79,7 @@ module CrystalClick
             part_path,
             name,
             schema,
-            context.transport_limits,
+            context.read_transport_limits,
             codec_budget,
             transport_budget,
           )

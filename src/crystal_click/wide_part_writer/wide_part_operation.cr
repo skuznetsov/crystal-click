@@ -19,13 +19,14 @@ module CrystalClick
         transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
         shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
         shared_target_chunk_rows : Int32 = 1,
-        projections : Array(WidePartProjection) = [] of WidePartProjection,
+        projections : Indexable(WidePartProjection | CompactPartProjection) = [] of WidePartProjection,
         schema_binding : WidePartSchemaBinding? = nil,
       ) : String
         if projections.size > WidePartWriter::MAX_PROJECTIONS
           raise UnsupportedFormatError.new("projection count exceeds the writer limit")
         end
-        retained_projections = projections.dup
+        retained_projections = Array(WidePartProjection | CompactPartProjection).new(projections.size)
+        projections.each { |projection| retained_projections << projection }
         context = WidePartOperationContext.new(
           rows_per_mark, profile, shared_profile, mode, frame_bytes,
           metadata_version, limits, transport_limits, shared_json_policy,
@@ -53,11 +54,15 @@ module CrystalClick
           limits, context.codec_budget
         )
 
-        prepared_projections = Array(WidePartPreparedProjection).new(retained_projections.size)
+        prepared_projections = Array(ProjectionPreparedPart).new(retained_projections.size)
         combined_entries = input.checksum_entry_count.to_i64
         combined_files = input.expected_files.size.to_i64
         retained_projections.each do |projection|
-          child = WidePartPreparedProjection.prepare(input.target, projection, context)
+          child = if projection.is_a?(WidePartProjection)
+                    WidePartPreparedProjection.prepare(input.target, projection, context)
+                  else
+                    CompactPartPreparedProjection.prepare(input.target, projection, context.projection_budgets)
+                  end
           combined_entries += child.checksum_entry_count.to_i64
           combined_files += child.file_count.to_i64
           if combined_entries > PartChecksums::MAX_ENTRIES.to_i64

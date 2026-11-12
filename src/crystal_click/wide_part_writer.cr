@@ -37,7 +37,7 @@ module CrystalClick
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       shared_json_policy : ObjectSharedAdvancedJsonWritePolicy? = nil,
       shared_target_chunk_rows : Int32 = 1,
-      projections : Array(WidePartProjection) = [] of WidePartProjection,
+      projections : Indexable(WidePartProjection | CompactPartProjection) = [] of WidePartProjection,
       schema_binding : WidePartSchemaBinding? = nil,
     ) : String
       WidePartOperation.write_uint64_columns(

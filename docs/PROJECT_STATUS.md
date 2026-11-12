@@ -2,6 +2,18 @@
 
 ## Current qualification
 
+### W289 Compact and mixed projection publication
+
+Both part writers accept caller-precomputed Wide and Compact projection
+children through `projections:`. The children keep their own schemas and
+mark grids. The writer validates each child and publishes the whole parent
+with its projection checksum entries in one rename. See the
+[projection publication profile](PROJECTION_PUBLICATION_FRONTIER.md#compact-and-mixed-projection-publication-w289).
+DEBUG and RELEASE each passed 125 examples across 15 spec paths. Both
+generated mixed pairs passed native ATTACH, CHECK, exact RowBinary reads,
+forced projection selection and Crystal reopen on ClickHouse 26.10.1.1201.
+See the [W289 evidence](../.landmark/evidence/compact-projection-publication-w289.json).
+
 ### W288 Compact projection reads
 
 The offline projection APIs read supported Compact and Wide children in one
@@ -72,8 +84,8 @@ S0/S1 and V3 statistics matrix. See the
 
 ## Remaining work
 
-1. **Projections.** Add Compact child publication with an independent child
-   mark grid and atomic parent publication. See the
+1. **Projections.** Qualify additional physical layout and type combinations
+   for both reading and writing projection children. See the
    [projection publication frontier](PROJECTION_PUBLICATION_FRONTIER.md).
 2. **Type and layout compatibility.** Pair reader and writer admission for
    remaining physical profiles of JSON/Object and legal recursive products
@@ -4686,10 +4698,10 @@ source/runtime identities and executed evidence.
    of supported physical Wide and Compact projection children are available.
    W287 and W288 bind selected children to the parent checksum manifest before
    yielding rows. The persisted MV materializer is one explicit-TO identity
-   projection over unpartitioned `k UInt64, v String`. W256 adds atomic
-   publication of caller-precomputed, non-nested Wide projection children
-   through existing column
-   owners, including the parent checksum summary. W257 adds a candidate-scoped
+   projection over unpartitioned `k UInt64, v String`. W256 and W289 qualify
+   atomic publication of caller-precomputed, non-nested Wide and Compact
+   projection children through existing column owners, including the parent
+   checksum summary. W257 adds a candidate-scoped
    typed scan of one source part, caller-run filtering/computation/rekeying and
    publication of detached columns bound to an exact target DDL roster. The
    scan must complete under the one-shot protocol; callbacks cannot reenter or
@@ -4697,8 +4709,7 @@ source/runtime identities and executed evidence.
    trigger/freshness propagation or source-byte immutability. W286 adds Compact
    detached output for an ordinary unpartitioned target with one ascending
    UInt64 key. General keys and partitions, transform-produced projections,
-   Compact child publication, remaining layouts/types and automatic
-   materialization remain open.
+   remaining layouts/types and automatic materialization remain open.
 4. **General table writing.** The detached-part writers and small
    `EmbeddedMergeTreeTable` are not an arbitrary-schema, arbitrary-partition
    MergeTree writer with compound keys and a server lifecycle.
@@ -4851,18 +4862,18 @@ retains the implementation checkpoints and responsibility boundaries.
    distinct source laws and native witnesses, not a generic opaque-blob fallback.
    For MV/projections, prioritize declaration/dependency/TO-target inspection
    and compatible projection storage, not adding a SQL functions/joins engine.
-   W256 qualifies precomputed Wide projection publication. W257 and W286
-   qualify one-part caller-run transformations into schema-bound detached
-   Wide and Compact targets. W287 and W288 check selected projection manifests
-   and qualify mixed Wide/Compact child reads.
-   The next steps are Compact child publication, general key and partition
-   derivation, transform-produced projections, and bounded output appenders.
+   W256 and W289 qualify precomputed Wide and Compact projection publication.
+   W257 and W286 qualify one-part caller-run transformations into schema-bound
+   detached Wide and Compact targets. W287 and W288 check selected projection
+   manifests and qualify mixed Wide/Compact child reads. The next steps are
+   general key and partition derivation, transform-produced projections, and
+   bounded output appenders.
 4. Only then reopen memory/performance work. No current claim of stock-reader
    speed parity or a quantified percentage of complete ClickHouse support.
 
 ## Source reference
 
-W286 and W287 compare the relevant MergeTree paths against the pinned shallow
+W286 through W289 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

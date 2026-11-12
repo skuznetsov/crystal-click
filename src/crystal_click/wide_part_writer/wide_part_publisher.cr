@@ -13,7 +13,7 @@ module CrystalClick
         limits : BinaryCodecLimits,
         transport_limits : CompressedStreamLimits,
         validation_transport_budget : CompressedStreamBudget? = nil,
-        projections : Array(WidePartPreparedProjection) = [] of WidePartPreparedProjection,
+        projections : Array(ProjectionPreparedPart) = [] of ProjectionPreparedPart,
         &validate_value : String -> Nil
       ) : String
         unless keys.size.to_u64 == input.expected_rows.sum(0_u64)
@@ -54,7 +54,10 @@ module CrystalClick
           projections.each { |projection| records << projection.publish(stage) }
           PartChecksumsWriter.write(stage, records)
 
-          validate_staged_part!(stage, input, keys, metadata, records, transport_limits, validation_transport_budget)
+          validate_staged_part!(
+            stage, input, keys, metadata, records, transport_limits,
+            validation_transport_budget, projections
+          )
           validate_value.call(stage)
           PartDirectoryPublisher.publish_exclusively(stage, input.target)
           input.target
@@ -195,6 +198,7 @@ module CrystalClick
         records : Array(ChecksumRecord),
         transport_limits : CompressedStreamLimits,
         validation_transport_budget : CompressedStreamBudget?,
+        projections : Array(ProjectionPreparedPart),
       ) : Nil
         unless Dir.children(stage).sort == input.expected_files
           raise CorruptPartError.new("staged part file roster differs from preflight")
@@ -208,7 +212,11 @@ module CrystalClick
           if record.name.ends_with?(".proj")
             entry = checksums.entry(record.name) ||
                     raise CorruptPartError.new("projection summary entry is absent from checksums.txt")
-            WidePartProjectionSummary.validate_entry!(stage, record.name, entry)
+            projection = projections.find { |child| child.entry_name == record.name } ||
+                         raise CorruptPartError.new("projection summary has no prepared child")
+            ProjectionPartSummary.validate_entry!(
+              stage, record.name, entry, projection.summary_sidecars
+            )
           else
             checksums.validate_selected_entries(stage, record.name)
           end

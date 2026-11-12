@@ -55,6 +55,7 @@ module CrystalClick
       compress_marks : Bool = false,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       schema_binding : PartSchemaBinding? = nil,
+      projections : Indexable(WidePartProjection | CompactPartProjection) = [] of WidePartProjection,
     ) : String
       CompactPartOperation.write_uint64_columns(
         destination,
@@ -71,6 +72,7 @@ module CrystalClick
         compress_marks,
         profile,
         schema_binding,
+        projections,
       )
     end
   end

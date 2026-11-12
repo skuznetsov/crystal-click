@@ -233,8 +233,11 @@ table.scan_projection_typed_window("p", ["pk"], 0_u64, 64) do |batch|
 end
 ```
 
-Compute projection rows in your application and pass them to the Wide
-writer with `WidePartProjection.precomputed`. See the
+Compute projection rows in your application and pass them as `projections:`
+to either part writer's `write_uint64_columns`. Use
+`WidePartProjection.precomputed` or `CompactPartProjection.precomputed`
+for each child. Children keep their own mark grids and are published with
+the parent in one directory rename. See the
 [projection window profile](docs/PROJECTION_WINDOW_FRONTIER.md) and
 [projection publication profile](docs/PROJECTION_PUBLICATION_FRONTIER.md).
 
