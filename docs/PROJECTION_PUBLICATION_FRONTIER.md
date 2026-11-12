@@ -44,6 +44,10 @@ layout and type products, automatic projection computation and maintenance
 remain open. The
 [caller-run MV transform](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#projection-publication-from-a-transform-w290)
 binds children to its target DDL and uses the same publication path.
+The [Count projection profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#count-projection-publication-from-a-transform-w291)
+uses this path for a Wide `AggregateFunction(count)` child of either parent
+layout. The child uses String serialization version 1 in its metadata,
+independent of the parent profile.
 
 ## Compact and mixed projection reads (W288)
 

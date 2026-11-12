@@ -76,7 +76,9 @@ module CrystalClick
                     read_transport_limits: reader_limits,
                     projection_budgets: budgets,
                   )
-                  WidePartWriter::WidePartPreparedProjection.prepare(target, projection, context)
+                  WidePartWriter::WidePartPreparedProjection.prepare(
+                    target, projection, context, parent_row_count: keys.size.to_u64
+                  )
                 else
                   CompactPartPreparedProjection.prepare(target, projection, budgets)
                 end

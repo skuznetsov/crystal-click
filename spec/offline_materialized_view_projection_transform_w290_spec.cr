@@ -639,28 +639,30 @@ describe "W290 transform projection publication" do
     end
   end
 
-  it "refuses aggregate projection DDL before callback and catches DDL drift after scanning" do
-    root = File.tempname("crystal-click-w290-unsupported-ddl-")
-    begin
-      catalog, _database_path, target_path = w290_catalog(
-        root,
-        ["PROJECTION `by_count` (SELECT score, count() AS n GROUP BY score)"],
-      )
-      callbacks = 0
-      error = expect_raises(CrystalClick::UnsupportedFormatError) do
-        catalog.transform_materialized_view_part(
-          "lab", "view", "all_1_1_0", ["k", "v"], "all_9_9_0",
-          rows_per_mark: 2, batch_rows: 2,
-        ) do |_input|
-          callbacks += 1
-          w290_wide_output([20_u64], [30_u64], ["mapped"], ["label"])
+  it "refuses unsupported aggregate projection DDL before callback and catches DDL drift after scanning" do
+    [
+      "PROJECTION `by_count` (SELECT score, sum(value) GROUP BY score)",
+      "PROJECTION `by_count` (SELECT score, count(score) GROUP BY score)",
+    ].each_with_index do |definition, index|
+      root = File.tempname("crystal-click-w290-unsupported-ddl-#{index}-")
+      begin
+        catalog, _database_path, target_path = w290_catalog(root, [definition])
+        callbacks = 0
+        error = expect_raises(CrystalClick::UnsupportedFormatError) do
+          catalog.transform_materialized_view_part(
+            "lab", "view", "all_1_1_0", ["k", "v"], "all_9_9_0",
+            rows_per_mark: 2, batch_rows: 2,
+          ) do |_input|
+            callbacks += 1
+            w290_wide_output([20_u64], [30_u64], ["mapped"], ["label"])
+          end
         end
+        w290_assert_error(error, /\Atransform count projection SELECT must contain count\(\) and optionally its group key\z/)
+        callbacks.should eq(0)
+        w290_assert_no_publication(target_path)
+      ensure
+        FileUtils.rm_rf(root)
       end
-      w290_assert_error(error, /\Atransform projection must be a simple SELECT column list ordered by its key\z/)
-      callbacks.should eq(0)
-      w290_assert_no_publication(target_path)
-    ensure
-      FileUtils.rm_rf(root)
     end
 
     root = File.tempname("crystal-click-w290-ddl-drift-")

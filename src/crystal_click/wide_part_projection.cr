@@ -8,6 +8,8 @@ module CrystalClick
     @key_name : String
     @keys : Array(UInt64)
     @columns : Array(WidePartColumn)
+    @count_values : Array(UInt64)?
+    @count_total : UInt128?
     @schema_binding : WidePartSchemaBinding?
 
     private def initialize(
@@ -16,6 +18,8 @@ module CrystalClick
       @keys : Array(UInt64),
       @columns : Array(WidePartColumn),
       @rows_per_mark : Int32,
+      @count_values : Array(UInt64)? = nil,
+      @count_total : UInt128? = nil,
       @schema_binding : WidePartSchemaBinding? = nil,
     )
     end
@@ -52,6 +56,52 @@ module CrystalClick
       )
     end
 
+    # Retains sorted distinct group keys and positive caller-computed counts
+    # for the stock `count()` AggregateFunction projection column.
+    def self.precomputed_count(
+      name : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      counts : Slice(UInt64),
+      *,
+      rows_per_mark : Int32 = 8192,
+    ) : WidePartProjection
+      validate_projection_name!(name)
+      validate_column_name!(key_name)
+      unless rows_per_mark > 0 && rows_per_mark <= WidePartWriter::MAX_ROWS_PER_MARK
+        raise ArgumentError.new("projection rows_per_mark is outside the admitted range")
+      end
+      if keys.empty? || keys.size.to_u64 > WidePart::MAX_ROWS
+        raise ArgumentError.new("a count projection requires a bounded nonempty UInt64 key stream")
+      end
+      unless counts.size == keys.size
+        raise ArgumentError.new("count projection keys and counts must have equal lengths")
+      end
+
+      retained_keys = Array(UInt64).new(keys.size)
+      retained_counts = Array(UInt64).new(counts.size)
+      # The row bound makes this exact UInt128 sum strictly smaller than 2^91.
+      total = 0_u128
+      keys.each_with_index do |key, index|
+        if index > 0 && key <= retained_keys[index - 1]
+          raise ArgumentError.new("count projection keys must be strictly increasing")
+        end
+        retained_keys << key
+        count = counts[index]
+        if count == 0_u64
+          raise ArgumentError.new("count projection values must be positive")
+        end
+        total += count.to_u128
+        retained_counts << count
+      end
+
+      new(
+        String.new(name.to_slice), String.new(key_name.to_slice),
+        retained_keys, [] of WidePartColumn, rows_per_mark,
+        retained_counts, total,
+      )
+    end
+
     # Public accessors return detached containers and strings; callers cannot
     # mutate the retained projection identity or key schedule through them.
     def name : String
@@ -68,6 +118,16 @@ module CrystalClick
 
     def columns : Array(WidePartColumn)
       @columns.dup
+    end
+
+    # :nodoc:
+    def count_total : UInt128?
+      @count_total
+    end
+
+    # :nodoc:
+    def count_values : Array(UInt64)?
+      @count_values.try(&.dup)
     end
 
     # :nodoc:
@@ -89,7 +149,8 @@ module CrystalClick
     ) : WidePartProjection
       new(
         source.@name, source.@key_name, source.@keys, source.@columns,
-        source.@rows_per_mark, WidePartSchemaBinding.new(binding),
+        source.@rows_per_mark, source.@count_values, source.@count_total,
+        WidePartSchemaBinding.new(binding),
       )
     end
 

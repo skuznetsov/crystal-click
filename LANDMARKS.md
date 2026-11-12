@@ -1,5 +1,20 @@
 # Crystal Click landmarks
 
+## Count projection publication from a materialized-view transform — W291
+
+- The callback supplies sorted UInt64 group keys and positive counts through
+  `WidePartProjection.precomputed_count`. The catalog binds the child to
+  one `GROUP BY` key and `count()` in the target DDL. The physical state
+  column is `count() AggregateFunction(count)` even when the SQL uses an alias.
+  The existing writer checks the count total against the parent row count
+  and publishes the Wide child with its Wide or Compact parent.
+- Debug and Release each passed 115 affected examples. Both native pairs
+  passed ATTACH, CHECK, exact RowBinary and forced `by_group` results on
+  ClickHouse 26.10.1.1201, followed by offline full and cross-mark window reads.
+  Refresh when changing the DDL binding, state codec, layout, or native pin.
+  See the [W291 profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#count-projection-publication-from-a-transform-w291)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w291.json).
+
 ## Projection publication from a materialized-view transform — W290
 
 - Both transform outputs accept caller-computed Wide and Compact

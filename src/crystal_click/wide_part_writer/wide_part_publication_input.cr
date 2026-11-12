@@ -73,7 +73,7 @@ module CrystalClick
         end
         expected_rows = validate_parent_rows!(keys.size, first.parent_rows, rows_per_mark)
         columns.each do |column|
-          validate_column_name!(column.column_name)
+          validate_value_column_name!(column, defer_destination_check && columns.size == 1)
           raise ArgumentError.new("key and value column names must differ") if column.column_name == key_name
           unless column.parent_rows == first.parent_rows
             raise ArgumentError.new("all value columns must use the same parent mark grid")
@@ -275,6 +275,21 @@ module CrystalClick
           raise ArgumentError.new("column name must be a bounded ASCII identifier")
         end
         nil
+      end
+
+      private def self.validate_value_column_name!(
+        column : WidePartPreparedColumn,
+        projection_child : Bool,
+      ) : Nil
+        if projection_child && column.column_name == "count()" &&
+           column.declaration == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
+          expected_stream = PhysicalStreamName.escape("count()")
+          unless column.stream_names == [expected_stream]
+            raise UnsupportedFormatError.new("count projection must use its exact one-stream physical roster")
+          end
+          return nil
+        end
+        validate_column_name!(column.column_name)
       end
 
       private def self.validate_filename!(name : String) : Nil

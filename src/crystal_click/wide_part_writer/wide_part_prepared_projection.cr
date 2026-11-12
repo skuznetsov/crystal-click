@@ -39,6 +39,8 @@ module CrystalClick
         parent_target : String,
         projection : WidePartProjection,
         parent_context : WidePartOperationContext,
+        *,
+        parent_row_count : UInt64? = nil,
       ) : WidePartPreparedProjection
         projection_name = projection.name
         entry_name = "#{projection_name}.proj"
@@ -47,13 +49,23 @@ module CrystalClick
           raise ArgumentError.new("projection child path exceeds reader limit")
         end
         key_name = projection.key_name
+        if count_total = projection.count_total
+          unless parent_row_count && count_total == parent_row_count.to_u128
+            raise UnsupportedFormatError.new("count projection counts must sum to the parent row count")
+          end
+        end
         keys = projection.keys
         rows_per_mark = projection.rows_per_mark
         context = parent_context.with_rows_per_mark(rows_per_mark)
 
         prepared_columns = Array(WidePartPreparedColumn).new
-        projection.columns.each do |column|
-          prepared_columns << column.prepare(context)
+        count_values = projection.count_values
+        if counts = count_values
+          prepared_columns << StaticWidePartColumnInput.prepare_count_projection(counts, context)
+        else
+          projection.columns.each do |column|
+            prepared_columns << column.prepare(context)
+          end
         end
         projection.schema_binding.try do |binding|
           binding.validate!(key_name, prepared_columns)
@@ -71,9 +83,13 @@ module CrystalClick
         prepared_columns.each do |column|
           metadata_columns << {column.column_name, column.declaration, column.stream_names}
         end
+        # Root AggregateFunction(count) has no String value lane, but ClickHouse
+        # parts carrying it use the normalized String serialization version 1.
+        # Keep that child metadata independent from the parent writer profile.
+        metadata_profile = count_values ? BinaryBulkProfile.with_size_stream : context.profile
         metadata = WidePartMetadata.new(
           key_name, metadata_columns, keys.to_unsafe.to_slice(keys.size), context.metadata_version,
-          context.profile, context.limits, context.codec_budget
+          metadata_profile, context.limits, context.codec_budget
         )
 
         new(

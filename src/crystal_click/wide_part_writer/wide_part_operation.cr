@@ -59,7 +59,9 @@ module CrystalClick
         combined_files = input.expected_files.size.to_i64
         retained_projections.each do |projection|
           child = if projection.is_a?(WidePartProjection)
-                    WidePartPreparedProjection.prepare(input.target, projection, context)
+                    WidePartPreparedProjection.prepare(
+                      input.target, projection, context, parent_row_count: keys.size.to_u64
+                    )
                   else
                     CompactPartPreparedProjection.prepare(input.target, projection, context.projection_budgets)
                   end

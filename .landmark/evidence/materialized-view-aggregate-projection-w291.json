@@ -1,0 +1,97 @@
+{
+  "format": "crystal_click_materialized_view_aggregate_projection_w291_evidence_v1",
+  "date": "2026-11-12",
+  "baseline_revision": "73ef49a4e13a4ce7c80005cbfc911324386bef1b",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the caller-precomputed count profile and the tested native pairs",
+    "scope": "OfflineCatalog binds one plain UInt64 GROUP BY key and count() to a Wide projection with the stock mergeable-state schema under a Wide or Compact parent. The projection has its own marks and is published with the parent.",
+    "remaining": "The callback supplies the correct count for each group in the transformed parent rows. The writer verifies sorted unique keys, positive counts and their total. More group keys, aggregate functions, and Compact aggregate children require separate qualification."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "ClickHouse selects a projection whose state schema or rows disagree with grouping the parent rows.",
+    "checks": [
+      "Reject incompatible DDL before the callback and validate the exact post-scan metadata identity and child schema.",
+      "Reject invalid key order, count cardinality, zero counts, count totals different from the parent row count, and a Compact child for a count projection.",
+      "Independently compare forced grouped queries against parent-only results and literal expected counts. Check the named projection in each forced plan and the raw count state bytes.",
+      "Verify original file digests, checksum-bound offline reopen, and a cross-mark projection window in both layouts."
+    ],
+    "rollback": "Revert the feature commit. The parent and all its children are staged and published with one directory rename."
+  },
+  "verification": {
+    "toolchain": "Crystal 1.22.1, LLVM 23.1.4, aarch64-apple-darwin25.6.0",
+    "baseline_debug": "One example reproduced the old pre-callback refusal for GROUP BY and count().",
+    "debug": {
+      "focused": 24,
+      "transform": 22,
+      "publication": 33,
+      "catalog": 36,
+      "total": 115,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "release": {
+      "focused": 24,
+      "transform": 22,
+      "publication": 33,
+      "catalog": 36,
+      "total": 115,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "spec_paths_per_mode": 15,
+    "release_flags": ["--release", "--no-debug"],
+    "production_input_seal": {
+      "files": 635,
+      "sha256": "ad44ec3755ab5dfc2bda77216be1440dfd6f19aa72d6aff80e48f5383f93a762"
+    },
+    "qualified_input_seal": {
+      "files": 3359,
+      "sha256": "9c2f00d10b863b0aa548dbee80cae185c98922fb1e86c3dcc9d1904997d742d1"
+    },
+    "native": {
+      "entry_point": "clickhouse local",
+      "runner": "scripts/verify_materialized_view_aggregate_projection_w291.rb",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "full_executable_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "reference_source_revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "invocations_per_mode": 34,
+      "helper_invocations_per_mode": 2,
+      "stock_source_rows": 133,
+      "pairs": [
+        {
+          "parent": "Compact MRK4",
+          "parent_rows": 6,
+          "parent_granule_rows": [3, 3],
+          "child": "Wide MRK2",
+          "group_counts": [[77, 3], [117, 2], [297, 1]],
+          "direct_state_rowbinary_hex": "4d0000000000000003750000000000000002290100000000000001",
+          "original_files_compared": 22
+        },
+        {
+          "parent": "Wide MRK2",
+          "parent_rows": 131,
+          "parent_granule_rows": "32 granules of four rows followed by three rows",
+          "child": "Wide MRK2",
+          "group_counts": [[77, 128], [117, 2], [297, 1]],
+          "direct_state_rowbinary_hex": "4d000000000000008001750000000000000002290100000000000001",
+          "original_files_compared": 28
+        }
+      ],
+      "child_granule_rows": [2, 1],
+      "reopen_window_start": 1,
+      "reopen_window_end_exclusive": 3,
+      "observations": "Both generated pairs pass ATTACH PART and CHECK TABLE. Parent and child RowBinary match literal expected bytes. Forced GROUP BY selects by_group and returns the same results as grouping the parent rows. All original file digests match after attach. OfflineCatalog reads both byte-identical copies and scans the child window with parent part identity."
+    },
+    "report": {
+      "path": "/opt/mldata_ssd/cache/crystal-click-w291.FLVXCggo/root-verification.json",
+      "bytes": 26762,
+      "sha256": "f90d60714e49e37531baaa0687b0eac8b8bdfeff8ca6bc30fb79360c028ca3cf"
+    }
+  },
+  "refresh_when": "Repeat both guarded spec modes and the native runner when changing projection binding, state serialization, part layout, staged readback, the toolchain, or the pinned ClickHouse executable."
+}

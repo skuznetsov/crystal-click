@@ -10,11 +10,55 @@ module CrystalClick
         granules : Array(Array(BinaryValue)),
         context : WidePartOperationContext,
       ) : WidePartPreparedColumn
+        prepare_with_profile(name, type, granules, context, context.profile, false)
+      end
+
+      def self.prepare_count_projection(
+        counts : Array(UInt64),
+        context : WidePartOperationContext,
+      ) : WidePartPreparedColumn
+        type = BinaryDataType.aggregate_count
+        rows_per_mark = context.rows_per_mark
+        if rows_per_mark.to_u64 > WideAggregateCountStoragePlan::MAX_MARK_RANGE_ROWS
+          raise ArgumentError.new("count projection rows_per_mark is outside the admitted range")
+        end
+
+        # Bound the child's mark schedule before expanding the retained UInt64
+        # inputs into nominal BinaryValue states.
+        mark_count_wide = (counts.size.to_i64 + rows_per_mark.to_i64 - 1_i64) // rows_per_mark.to_i64
+        if mark_count_wide <= 0 || mark_count_wide > WidePartWriter::MAX_MARKS
+          raise ArgumentError.new("count projection mark count is outside the writer limit")
+        end
+        mark_count = mark_count_wide.to_i32
+        granules = Array(Array(BinaryValue)).new(mark_count)
+        offset = 0
+        while offset < counts.size
+          rows = Math.min(rows_per_mark, counts.size - offset)
+          granule = Array(BinaryValue).new(rows)
+          rows.times do |row|
+            granule << BinaryValue.aggregate_count_state(type, counts[offset + row])
+          end
+          granules << granule
+          offset += rows
+        end
+        prepare_with_profile(
+          "count()", type, granules, context, BinaryBulkProfile.with_size_stream, true
+        )
+      end
+
+      private def self.prepare_with_profile(
+        name : String,
+        type : BinaryDataType,
+        granules : Array(Array(BinaryValue)),
+        context : WidePartOperationContext,
+        effective_profile : BinaryBulkProfile,
+        count_projection : Bool,
+      ) : WidePartPreparedColumn
         # Bound and materialize the descriptor before consulting any derived
         # type summaries or nominal admission owner. Descriptor construction
         # itself is immutable, but recursive name rendering remains charged.
         type_name = bounded_type_name(type, context)
-        unless context.profile.single_stream? || context.profile.with_size_stream?
+        unless effective_profile.single_stream? || effective_profile.with_size_stream?
           raise UnsupportedFormatError.new("unsupported static BinaryBulk String profile")
         end
         if type.contains_json?
@@ -31,15 +75,16 @@ module CrystalClick
            GeometryColumnType.for_type(type_name)
           raise UnsupportedFormatError.new("Geo, Point and Geometry columns require their nominal physical owners")
         end
-        declaration = admitted_declaration(type, type_name, context)
+        # The count-projection entry supplies the exact no-argument root type.
+        declaration = count_projection ? type_name : admitted_declaration(type, type_name, context)
         unless declaration == type_name
           raise UnsupportedFormatError.new("static BinaryBulk nominal declaration differs from the canonical type")
         end
-        BinaryBulkTypePlan.new(type, context.profile, nil, context.limits, true).role_count
+        BinaryBulkTypePlan.new(type, effective_profile, nil, context.limits, true).role_count
 
         parent_rows = preflight_granules!(granules, context.rows_per_mark)
         physical = BinaryBulkPhysicalPlan.new(
-          type, name, context.profile, context.limits, context.name_context
+          type, name, effective_profile, context.limits, context.name_context
         )
         streams = physical.stream_names.values.sort!
         unless streams.size > 0 && streams.size == physical.stream_names.size
@@ -48,7 +93,7 @@ module CrystalClick
         values = detach_granules(granules)
         encode = ->(rows_per_mark : Array(UInt64), codec_budget : BinaryCodecBudget, transport_budget : CompressedStreamBudget) {
           BinaryBulkColumnWriter.encode(
-            type, context.profile, physical, values, rows_per_mark,
+            type, effective_profile, physical, values, rows_per_mark,
             context.frame_bytes, context.limits, context.transport_limits,
             codec_budget, transport_budget
           )
@@ -56,7 +101,7 @@ module CrystalClick
         validate = ->(path : String, codec_budget : BinaryCodecBudget, transport_budget : CompressedStreamBudget) {
           validate_staged!(
             path, name, type, declaration, streams, parent_rows, values,
-            context, codec_budget, transport_budget
+            effective_profile, context, codec_budget, transport_budget
           )
         }
         WidePartPreparedColumn.new(
@@ -148,6 +193,7 @@ module CrystalClick
         streams : Array(String),
         parent_rows : Array(Int32),
         granules : Array(Array(BinaryValue)),
+        effective_profile : BinaryBulkProfile,
         context : WidePartOperationContext,
         codec_budget : BinaryCodecBudget,
         transport_budget : CompressedStreamBudget,
@@ -161,7 +207,7 @@ module CrystalClick
                reader.mark_count == expected_rows.size &&
                reader.schema_declaration == declaration &&
                reader.source_declaration == declaration &&
-               reader.ordinary_profile == context.profile &&
+               reader.ordinary_profile == effective_profile &&
                reader.physical_stream_names == streams &&
                reader.mark_row_counts == expected_rows
           raise CorruptPartError.new("staged static BinaryBulk declaration, roster or grid differs from input")

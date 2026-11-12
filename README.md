@@ -229,6 +229,26 @@ own mark grid. The transform binds the returned children to the target DDL
 and publishes them with the parent in `detached`. See the
 [transform projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#projection-publication-from-a-transform-w290).
 
+For `PROJECTION by_group (SELECT group_key, count() GROUP BY group_key)`,
+`group_keys` below contains the UInt64 group key of every transformed parent
+row. Count them in the callback and pass the child through the same
+`projections:` keyword for a Wide or Compact parent.
+
+```crystal
+counts = Hash(UInt64, UInt64).new(0_u64)
+group_keys.each { |key| counts[key] += 1_u64 }
+keys = counts.keys.sort!
+states = keys.map { |key| counts[key] }
+child = CrystalClick::WidePartProjection.precomputed_count(
+  "by_group", "group_key",
+  keys.to_unsafe.to_slice(keys.size), states.to_unsafe.to_slice(states.size),
+)
+```
+
+The Wide child stores one `AggregateFunction(count)` state per group. The
+writer checks that the counts add up to the parent row count. See the
+[count projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#count-projection-publication-from-a-transform-w291).
+
 `OfflineTable#projections` exposes declared projection metadata. For a table
 with a physical Wide or Compact projection `p` containing a `UInt64` column
 `pk`, call `scan_projection_typed_window` with the projection name and row

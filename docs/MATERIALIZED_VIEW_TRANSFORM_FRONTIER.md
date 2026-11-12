@@ -1,5 +1,55 @@
 # Caller-run materialized-view transform frontier
 
+## Count projection publication from a transform (W291)
+
+This profile extends `73ef49a`. A target can declare
+`PROJECTION p (SELECT group_key, count() GROUP BY group_key)` over one plain
+UInt64 column. The SELECT may omit the group key, list it before or after
+the aggregate, and give `count()` an `AS` alias with a plain ASCII identifier.
+The physical roster always starts with the key and names the state column
+`count()`. The group key can differ from the parent's key.
+
+- The callback groups the rows it supplies to the parent, sorts the distinct
+  group keys in ascending order, and returns the key and count arrays through
+  `WidePartProjection.precomputed_count`. The count values are positive and
+  their sum must equal the transformed parent row count. The caller owns the
+  correspondence between the group keys, their counts, and the parent values.
+- The catalog checks the supported DDL before invoking the callback and binds
+  the exact ordered `(group_key UInt64, count() AggregateFunction(count))`
+  schema after completing the scan and revalidating the target. Aggregate
+  children have one row per group and their own marks. A Wide count child can
+  accompany a Wide or Compact parent and can coexist with plain projections.
+  The existing writer budgets, staged readback, and checksum summary cover the
+  child before the parent is published in one directory rename.
+- The parser rejects other aggregate functions, `count` with arguments, and
+  computed or multiple group keys before the callback. Publication requires
+  matching child kinds and names, sorted unique group keys, and a valid count
+  total.
+
+This slice changes persistent part output. Revert the feature commit to roll
+back the API. The strongest failure is a valid-looking part that returns wrong
+results when ClickHouse chooses the child. The baseline rejects the stock
+DDL before the callback. Debug and Release specs must exercise the exact DDL
+binding, distinct key and count invariants, and failure without a published
+part. Against pinned ClickHouse, verify ATTACH, CHECK, literal parent rows and
+serialized count states, direct and forced grouped results, and the named
+projection in the forced plan. Reopen both parent layouts and scan the child
+on its own mark grid through the offline catalog.
+
+### Qualification
+
+Debug and Release each passed 115 examples across 15 spec files. On
+ClickHouse 26.10.1.1201, both modes transformed a stock Wide source into a
+six-row Compact MRK4 parent and a 131-row Wide MRK2 parent. Each part has a
+three-row Wide child with data granules `[2, 1]`. Both passed `ATTACH PART`
+and `CHECK TABLE`. The exact parent and child RowBinary checks include a
+count of 128 encoded as VarUInt `80 01`. The forced grouped plans selected
+`by_group` and returned the same counts as grouping the parent rows.
+`OfflineCatalog` reopened byte-identical copies of the attached parts and
+read full rows and the window `[1, 3)`, which crosses a child mark boundary.
+See the [W291 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w291.json)
+and [native witness runner](../scripts/verify_materialized_view_aggregate_projection_w291.rb).
+
 ## Projection publication from a transform (W290)
 
 This profile extends `80c890d`.
@@ -15,8 +65,8 @@ This profile extends `80c890d`.
   writer in callback order. Each declaration has one child with the parent's
   row count and an independent granule grid. The callback supplies its rows
   in child key order.
-  Aggregate projections, expressions, aliases, and general sorting keys
-  remain outside this profile.
+  Expressions, aliases, and general sorting keys remain outside the plain
+  projection profile.
 - Reject unsupported declarations before the callback. After a complete scan
   and metadata revalidation, reject missing, extra, duplicate, or mismatched
   child outputs. Match prepared child types and column order at the existing
