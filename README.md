@@ -220,6 +220,15 @@ one source part and publish a detached part under the declared target. The
 caller chooses when to recompute and attach it. See the [MV metadata profile](docs/MATERIALIZED_VIEW_METADATA_FRONTIER.md)
 and [transform profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
 
+For a target with a simple `PROJECTION p (SELECT key, value ORDER BY key)`,
+compute the projection rows from the transformed rows in the callback. Pass
+the precomputed child to `WidePartTransformOutput.new(keys, columns,
+projections: [child])` or use the same keyword with
+`CompactPartTransformOutput`. Each child may be Wide or Compact and has its
+own mark grid. The transform binds the returned children to the target DDL
+and publishes them with the parent in `detached`. See the
+[transform projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#projection-publication-from-a-transform-w290).
+
 `OfflineTable#projections` exposes declared projection metadata. For a table
 with a physical Wide or Compact projection `p` containing a `UInt64` column
 `pk`, call `scan_projection_typed_window` with the projection name and row

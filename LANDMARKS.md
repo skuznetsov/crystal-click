@@ -1,5 +1,18 @@
 # Crystal Click landmarks
 
+## Projection publication from a materialized-view transform — W290
+
+- Both transform outputs accept caller-computed Wide and Compact
+  children. The catalog derives each ordered child schema from the
+  target's plain projection declaration and binds it by name. The
+  existing writer validates and atomically publishes the parent and
+  children, each with its own mark grid.
+- Debug and Release each passed 95 affected examples, including
+  rollback after a staged child failure. Both mixed pairs passed native
+  ATTACH, CHECK, exact queries, forced selection of `by_score`, and
+  offline reopen. See the
+  [W290 evidence](.landmark/evidence/materialized-view-projection-transform-w290.json).
+
 ## Compact and mixed projection publication — W289
 
 - The Wide and Compact part writers accept caller-precomputed children of

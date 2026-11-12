@@ -8,6 +8,7 @@ module CrystalClick
     @key_name : String
     @keys : Array(UInt64)
     @columns : Array(WidePartColumn)
+    @schema_binding : WidePartSchemaBinding?
 
     private def initialize(
       @name : String,
@@ -15,6 +16,7 @@ module CrystalClick
       @keys : Array(UInt64),
       @columns : Array(WidePartColumn),
       @rows_per_mark : Int32,
+      @schema_binding : WidePartSchemaBinding? = nil,
     )
     end
 
@@ -66,6 +68,34 @@ module CrystalClick
 
     def columns : Array(WidePartColumn)
       @columns.dup
+    end
+
+    # :nodoc:
+    def row_count : UInt64
+      @keys.size.to_u64
+    end
+
+    # Internal transform bridge: binds the already-detached inputs to a
+    # catalog-derived schema without copying their keys or column owners.
+    # :nodoc:
+    def with_schema_binding(binding : PartSchemaBinding) : WidePartProjection
+      self.class.with_schema_binding(self, binding)
+    end
+
+    # :nodoc:
+    protected def self.with_schema_binding(
+      source : WidePartProjection,
+      binding : PartSchemaBinding,
+    ) : WidePartProjection
+      new(
+        source.@name, source.@key_name, source.@keys, source.@columns,
+        source.@rows_per_mark, WidePartSchemaBinding.new(binding),
+      )
+    end
+
+    # :nodoc:
+    def schema_binding : WidePartSchemaBinding?
+      @schema_binding
     end
 
     private def self.validate_projection_name!(name : String) : Nil

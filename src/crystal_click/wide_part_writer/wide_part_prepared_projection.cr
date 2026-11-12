@@ -55,6 +55,9 @@ module CrystalClick
         projection.columns.each do |column|
           prepared_columns << column.prepare(context)
         end
+        projection.schema_binding.try do |binding|
+          binding.validate!(key_name, prepared_columns)
+        end
 
         # The actual parent stage is intentionally not created during
         # preflight. bind_destination checks its concrete child path later.

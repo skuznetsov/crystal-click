@@ -1,5 +1,49 @@
 # Caller-run materialized-view transform frontier
 
+## Projection publication from a transform (W290)
+
+This profile extends `80c890d`.
+
+- Both transform output owners can carry an ordered roster of caller-computed
+  `WidePartProjection` and `CompactPartProjection` children. The existing part
+  writers own preparation, staged readback, aggregate budgets, checksum
+  summaries, and atomic publication.
+- Target DDL admission derives the expected names and exact ordered schemas
+  from simple `SELECT key, column, ... ORDER BY key` projections over plain
+  target columns. The first selected column is the ascending UInt64 key and
+  can differ from the parent key. Match children by name and pass them to the
+  writer in callback order. Each declaration has one child with the parent's
+  row count and an independent granule grid. The callback supplies its rows
+  in child key order.
+  Aggregate projections, expressions, aliases, and general sorting keys
+  remain outside this profile.
+- Reject unsupported declarations before the callback. After a complete scan
+  and metadata revalidation, reject missing, extra, duplicate, or mismatched
+  child outputs. Match prepared child types and column order at the existing
+  writer boundary. A late child failure must remove the entire staged part.
+- Revert the single feature commit to roll back. Verify the missing capability
+  against the baseline, then run the focused transform and writer regressions
+  in Debug and Release. Against pinned ClickHouse, transform stock source
+  rows into both mixed pairs. Require ATTACH, CHECK, exact parent and
+  projection rows, forced projection selection, and offline reopen.
+
+### Qualification
+
+Debug and Release each passed 95 examples across 12 spec files. The
+focused cases check exact DDL binding, callback-time DDL changes, and
+cleanup when staged child readback exceeds the shared budget.
+
+On ClickHouse 26.10.1.1201, both modes turned eight stock source rows into
+six transformed rows per part. The Compact parent with a Wide child and
+the Wide parent with a Compact child each passed ATTACH and CHECK. Both
+used parent granules of two rows and projection granules of three rows.
+Direct parent, direct projection, and forced projection queries matched
+literal RowBinary. The forced plan selected `by_score`. `OfflineCatalog`
+reopened copies of both attached parts and returned exact full rows and
+the projection window `[2, 4)` with parent part identity.
+See the [W290 evidence](../.landmark/evidence/materialized-view-projection-transform-w290.json)
+and [native witness runner](../scripts/verify_materialized_view_projection_transform_w290.rb).
+
 ## Compact target publication (W286)
 
 One callback over one catalog-resolved part
@@ -326,9 +370,9 @@ validator are absent; root uses explicit shape/path/digest checks as a fallback.
 
 ## Remaining frontier and evidence lifetime
 
-Owner-specific bounded appenders, general keys/partitions, transform-to-projection
-publication, projection-parent manifest authentication on read, other aggregate
-state grammars and remaining physical context/layout handoffs remain open.
+Owner-specific bounded appenders, general keys and partitions, additional
+projection declarations, other aggregate state grammars, and remaining
+physical context and layout handoffs remain open.
 Existing nested Object Compact-like callback tapes and coordinate contexts are
 reusable for bridging the remaining type products into top-level part framing.
 The full types, MV, projections, and performance goal remains active. Memory

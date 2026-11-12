@@ -1,0 +1,95 @@
+{
+  "format": "crystal_click_materialized_view_projection_transform_w290_evidence_v1",
+  "date": "2026-11-12",
+  "baseline_revision": "80c890dcf7e042fa326bc00762e9cc2e167ca6e3",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the admitted caller-run projection publication and tested native profile",
+    "scope": "OfflineCatalog binds exact simple projection names, keys, row counts and ordered prepared schemas to the target DDL. Both transform output owners pass caller-precomputed Wide and Compact children to the existing atomic part writers.",
+    "remaining": "Caller supplies rows ordered by each part key. Additional projection declarations, keys, partitions, layout and type products, and automatic computation and maintenance require separate qualification."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "Publish a child against the wrong target declaration or leave a partial parent when a child fails staged readback.",
+    "checks": [
+      "Match projections by exact names even when callback order differs from DDL order. Reject missing, extra, duplicate, wrong-name, wrong-key, wrong-order, wrong-type and wrong-count children after full callback scan.",
+      "Refuse aggregate projection DDL before callback and refuse post-scan metadata identity drift. Neither leaves files in detached.",
+      "Each standalone child and parent control fits the readback budget. A larger mixed roster exceeds the shared limit during child readback and removes the staging directory.",
+      "Test both mixed layouts against pinned ClickHouse with real source data and persisted DDL. Independently compare literal RowBinary, physical marks, native part identities and original file digests."
+    ],
+    "rollback": "Revert the feature commit. The writer publishes only after staged validation and deletes the stage on failure."
+  },
+  "verification": {
+    "toolchain": "Crystal 1.22.1, LLVM 23.1.4, aarch64-apple-darwin25.6.0",
+    "baseline_debug": "The projection-free transform publishes a detached part. The valid simple projection case stops before the callback with transform target cannot declare projections.",
+    "debug": {
+      "transform": 22,
+      "catalog": 36,
+      "publication": 33,
+      "focused": 4,
+      "total": 95,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "release": {
+      "transform": 22,
+      "catalog": 36,
+      "publication": 33,
+      "focused": 4,
+      "total": 95,
+      "failures": 0,
+      "errors": 0,
+      "pending": 0
+    },
+    "spec_paths_per_mode": 12,
+    "release_flags": [
+      "--release",
+      "--no-debug"
+    ],
+    "production_input_seal": {
+      "files": 1826,
+      "sha256": "3c5badd6817aaa1cfb1e73c7c0ba7973f9b35cd6c3ac941bea503fdde9f79434"
+    },
+    "qualified_input_seal": {
+      "files": 3359,
+      "sha256": "200d1c958f5ca75c5d5f7b4f2ea4e986bb78898b090a161b4f092c6abb1b89af"
+    },
+    "native": {
+      "entry_point": "clickhouse local",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "full_executable_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "reference_source_revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "invocations_per_mode": 14,
+      "helper_invocations_per_mode": 2,
+      "pairs": [
+        "Compact parent / Wide child",
+        "Wide parent / Compact child"
+      ],
+      "layouts": "Plain Compact MRK4 and adaptive Wide MRK2 with UInt64 and String. Parents and the Wide child use String with_size_stream. The Compact child uses String single_stream.",
+      "stock_source_rows": 8,
+      "output_rows_per_part": 6,
+      "parent_granule_rows": [
+        2,
+        2,
+        2
+      ],
+      "child_granule_rows": [
+        3,
+        3
+      ],
+      "reopen_window_start": 2,
+      "reopen_window_end_exclusive": 4,
+      "original_files_compared_per_mode": 52,
+      "observations": "Both generated pairs pass ATTACH PART and CHECK TABLE. Direct parent, direct projection and forced projection reads match literal RowBinary. EXPLAIN selects by_score. ClickHouse preserves all original file hashes. OfflineCatalog reopens a byte-identical copy of each native attached part and reads exact full rows and windows with parent batch identity.",
+      "release_replay": "The first Release run stopped on a run_safe setpgid diagnostic. The complete Release rerun in a fresh scratch directory passed with the same source, helper, guard, and runtime hashes."
+    },
+    "report": {
+      "path": "/opt/mldata_ssd/cache/crystal-click-w290.hcy8im4r/root-verification.json",
+      "bytes": 19855,
+      "sha256": "35bec5fb22f87524245992d05b0d7148aba753e7d55676dac714a2f5689ff4ce"
+    }
+  },
+  "refresh_when": "Rerun guarded specs and both native helper modes after changes to transform binding, projection writer/readback, codec and transport budgets, metadata grammar, the admitted layout or types, toolchain, or ClickHouse. Rebuild helpers from the recorded source and argv."
+}

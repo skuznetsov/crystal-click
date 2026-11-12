@@ -2,6 +2,17 @@
 
 ## Current qualification
 
+### W290 Projection publication from a materialized-view transform
+
+Both MV transform output owners accept caller-computed Wide and Compact
+children through `projections:`. The catalog matches each child to a plain
+projection declaration on the target. The existing writers publish the
+parent and its children together. Debug and Release each passed 95
+examples. Both mixed pairs passed ATTACH, CHECK, exact queries, forced
+projection selection, and offline reopen on ClickHouse 26.10.1.1201.
+See the [transform profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#projection-publication-from-a-transform-w290)
+and [evidence](../.landmark/evidence/materialized-view-projection-transform-w290.json).
+
 ### W289 Compact and mixed projection publication
 
 Both part writers accept caller-precomputed Wide and Compact projection
@@ -95,8 +106,8 @@ S0/S1 and V3 statistics matrix. See the
    the [Compact recursive frontier](COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md)
    and the [compatibility detail below](#important-remaining-boundaries).
 3. **Materialized views.** Extend the bounded transform to additional keys
-   and partitions, bounded output appenders, and projection children computed
-   by the same caller. See the [transform frontier](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
+   and partitions, bounded output appenders, and additional projection
+   declarations. See the [transform frontier](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md).
 4. **Module boundaries.** Continue moving staged validation, physical stream
    binding, and granule orchestration into focused owners with stable public
    APIs. See the [modularization frontier](MODULARIZATION_FRONTIER.md).
@@ -4708,8 +4719,10 @@ source/runtime identities and executed evidence.
    hide failures. This is not SQL query execution, SELECT equivalence, provenance,
    trigger/freshness propagation or source-byte immutability. W286 adds Compact
    detached output for an ordinary unpartitioned target with one ascending
-   UInt64 key. General keys and partitions, transform-produced projections,
-   remaining layouts/types and automatic materialization remain open.
+   UInt64 key. W290 binds caller-precomputed Wide and Compact projection
+   children to the transform target's plain column projection declarations.
+   General keys and partitions, additional projection declarations, remaining
+   layouts/types and automatic materialization remain open.
 4. **General table writing.** The detached-part writers and small
    `EmbeddedMergeTreeTable` are not an arbitrary-schema, arbitrary-partition
    MergeTree writer with compound keys and a server lifecycle.
@@ -4865,15 +4878,16 @@ retains the implementation checkpoints and responsibility boundaries.
    W256 and W289 qualify precomputed Wide and Compact projection publication.
    W257 and W286 qualify one-part caller-run transformations into schema-bound
    detached Wide and Compact targets. W287 and W288 check selected projection
-   manifests and qualify mixed Wide/Compact child reads. The next steps are
-   general key and partition derivation, transform-produced projections, and
-   bounded output appenders.
+   manifests and qualify mixed Wide/Compact child reads. W290 combines these
+   paths for plain projection declarations. The next steps are general key
+   and partition derivation, additional projection declarations, and bounded
+   output appenders.
 4. Only then reopen memory/performance work. No current claim of stock-reader
    speed parity or a quantified percentage of complete ClickHouse support.
 
 ## Source reference
 
-W286 through W289 compare the relevant MergeTree paths against the pinned shallow
+W286 through W290 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

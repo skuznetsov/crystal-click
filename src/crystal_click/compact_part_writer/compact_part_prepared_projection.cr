@@ -63,6 +63,7 @@ module CrystalClick
         @projection.variant_discriminator_mode,
         @projection.compress_marks,
         @projection.profile,
+        schema_binding: @projection.schema_binding,
         projections: [] of WidePartProjection,
         projection_budgets: @budgets,
       )

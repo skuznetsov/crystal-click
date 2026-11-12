@@ -10,6 +10,7 @@ require "./offline_materialized_view_query_analyzer"
 require "./offline_table"
 require "./offline_column_selection"
 require "./offline_database"
+require "./offline_transform_projection_bindings"
 
 module CrystalClick
   # Offline reader for the bounded ClickHouse 26.7 Atomic metadata layout.
@@ -415,7 +416,7 @@ module CrystalClick
       shared_target_chunk_rows : Int32 = 1,
       &callback : OfflinePartTransformInput -> WidePartTransformOutput
     ) : String
-      operation, destination, schema_binding = prepare_materialized_view_part_transform(
+      operation, destination, schema_binding, projection_bindings = prepare_materialized_view_part_transform(
         database,
         view_name,
         source_part_name,
@@ -427,6 +428,7 @@ module CrystalClick
       )
       transform_validate_frame_bytes!(frame_bytes, transport_limits, false)
       output = operation.execute { |transform_input| yield transform_input }
+      projections = projection_bindings.bind(output.projections, output.row_count)
 
       keys = output.keys
       columns = output.columns
@@ -445,7 +447,7 @@ module CrystalClick
         transport_limits,
         shared_json_policy,
         shared_target_chunk_rows,
-        [] of WidePartProjection,
+        projections,
         WidePartSchemaBinding.new(schema_binding),
       )
     end
@@ -472,7 +474,7 @@ module CrystalClick
       compress_marks : Bool = false,
       &callback : OfflinePartTransformInput -> CompactPartTransformOutput
     ) : String
-      operation, destination, schema_binding = prepare_materialized_view_part_transform(
+      operation, destination, schema_binding, projection_bindings = prepare_materialized_view_part_transform(
         database,
         view_name,
         source_part_name,
@@ -485,6 +487,7 @@ module CrystalClick
       )
       transform_validate_frame_bytes!(frame_bytes, transport_limits, true)
       output = operation.execute { |transform_input| yield transform_input }
+      projections = projection_bindings.bind(output.projections, output.row_count)
 
       keys = output.keys
       columns = output.columns
@@ -503,6 +506,7 @@ module CrystalClick
         compress_marks,
         profile,
         schema_binding: schema_binding,
+        projections: projections,
       )
     end
 
@@ -516,7 +520,12 @@ module CrystalClick
       batch_rows : Int32,
       compact_output : Bool,
       limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
-    ) : Tuple(OfflineMaterializedViewPartTransform, String, PartSchemaBinding)
+    ) : Tuple(
+      OfflineMaterializedViewPartTransform,
+      String,
+      PartSchemaBinding,
+      OfflineTransformProjectionBindings,
+    )
       if rows_per_mark <= 0 || rows_per_mark > WidePartWriter::MAX_ROWS_PER_MARK
         raise BoundsError.new("rows_per_mark is out of range")
       end
@@ -556,6 +565,7 @@ module CrystalClick
         target, rows_per_mark, compact_output, limits
       )
       destination, output_info = transform_validate_destination!(target, output_part_name)
+      projection_bindings = OfflineTransformProjectionBindings.from_target(target, destination)
       target.resolved_scan_parts
       target.part_candidates.each do |candidate|
         if candidate.info.overlaps?(output_info)
@@ -601,7 +611,6 @@ module CrystalClick
         unless current_binding.columns == schema_binding.columns
           raise InvalidPartError.new("MATERIALIZED VIEW target schema changed during transform callback")
         end
-
         current_source = table(source_database, source_name)
         unless current_source.kind == :table && current_source.engine == "MergeTree" &&
                current_source.uuid == source_uuid && current_source.metadata_ddl == source_ddl
@@ -625,7 +634,7 @@ module CrystalClick
       end
 
       operation = OfflineMaterializedViewPartTransform.new(input, revalidate)
-      {operation, destination, schema_binding}
+      {operation, destination, schema_binding, projection_bindings}
     end
 
     private def transform_validate_frame_bytes!(frame_bytes : Int, transport_limits : CompressedStreamLimits, compact_output : Bool) : Nil
@@ -649,8 +658,6 @@ module CrystalClick
       unless target.kind == :table && target.engine == "MergeTree"
         raise UnsupportedFormatError.new("transform target must be an ordinary MergeTree table")
       end
-      raise UnsupportedFormatError.new("transform target cannot declare projections") unless target.projections.empty?
-
       columns = target.columns
       maximum_columns = compact_output ? WidePartTable::MAX_COLUMNS : WidePart::MAX_METADATA_COLUMNS
       unless columns.size >= 2 && columns.size <= maximum_columns

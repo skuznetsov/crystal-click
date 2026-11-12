@@ -40,9 +40,10 @@ and checks full rows, the `[2, 4)` window, and parent batch identity.
 See the [W289 evidence](../.landmark/evidence/compact-projection-publication-w289.json).
 
 Applications supply precomputed rows matching their projection DDL. Further
-layout and type products, automatic projection computation and maintenance,
-and publication of projection children by the caller-run MV transform
-remain open.
+layout and type products, automatic projection computation and maintenance
+remain open. The
+[caller-run MV transform](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#projection-publication-from-a-transform-w290)
+binds children to its target DDL and uses the same publication path.
 
 ## Compact and mixed projection reads (W288)
 

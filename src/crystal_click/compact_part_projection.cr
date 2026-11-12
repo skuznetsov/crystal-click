@@ -14,6 +14,7 @@ module CrystalClick
     @key_name : String
     @keys : Array(UInt64)
     @columns : Array(CompactPartColumn)
+    @schema_binding : PartSchemaBinding?
 
     private def initialize(
       @name : String,
@@ -26,6 +27,7 @@ module CrystalClick
       @variant_discriminator_mode : CompactVariantDiscriminatorMode,
       @compress_marks : Bool,
       @profile : BinaryBulkProfile,
+      @schema_binding : PartSchemaBinding? = nil,
     )
     end
 
@@ -86,6 +88,36 @@ module CrystalClick
 
     def columns : Array(CompactPartColumn)
       @columns.dup
+    end
+
+    # :nodoc:
+    def row_count : UInt64
+      @keys.size.to_u64
+    end
+
+    # Internal transform bridge: binds the already-detached inputs to a
+    # catalog-derived schema without copying their keys or column owners.
+    # :nodoc:
+    def with_schema_binding(binding : PartSchemaBinding) : CompactPartProjection
+      self.class.with_schema_binding(self, binding)
+    end
+
+    # :nodoc:
+    protected def self.with_schema_binding(
+      source : CompactPartProjection,
+      binding : PartSchemaBinding,
+    ) : CompactPartProjection
+      new(
+        source.@name, source.@key_name, source.@keys, source.@columns,
+        source.@rows_per_mark, source.@frame_bytes, source.@mark_format,
+        source.@variant_discriminator_mode, source.@compress_marks, source.@profile,
+        binding,
+      )
+    end
+
+    # :nodoc:
+    def schema_binding : PartSchemaBinding?
+      @schema_binding
     end
 
     private def self.validate_projection_name!(name : String) : Nil
