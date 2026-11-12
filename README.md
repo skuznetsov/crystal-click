@@ -142,7 +142,8 @@ Useful family references include [Decimal precision](docs/DECIMAL_PRECISION_FRON
 [identifiers](docs/IDENTIFIER_TUPLE_FRONTIER.md), [temporal tuples](docs/TEMPORAL_TUPLE_FRONTIER.md),
 [recursive Tuples](docs/NESTED_TUPLE_FRONTIER.md), [Array of Tuple composition](docs/ARRAY_TUPLE_COMPOSITION_FRONTIER.md),
 [Variant binding](docs/VARIANT_PHYSICAL_BINDING_FRONTIER.md), [Dynamic table consumers](docs/DYNAMIC_TABLE_CONSUMER_FRONTIER.md),
-[JSON/Object storage](docs/JSON_GENERAL_STORAGE_FRONTIER.md), [QBit](docs/QBIT_FRONTIER.md),
+[JSON/Object storage](docs/JSON_GENERAL_STORAGE_FRONTIER.md), [recursive Compact JSON and Dynamic](docs/COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md),
+[QBit](docs/QBIT_FRONTIER.md),
 [Geo types](docs/GEO_TYPES_FRONTIER.md), [SimpleAggregateFunction](docs/SIMPLE_AGGREGATE_FRONTIER.md),
 and [AggregateFunction sum states](docs/AGGREGATE_FUNCTION_SUM_FRONTIER.md).
 

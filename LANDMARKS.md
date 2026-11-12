@@ -1,5 +1,16 @@
 # Crystal Click landmarks
 
+## Recursive Compact Dynamic public reads — W285
+
+- VERIFIED with a ROBUST hostile review for the tested public Compact MRK3
+  profile. `TypedPartTable` and catalog `.values` reuse the recursive schema
+  gate for canonical JSON and Dynamic declarations. Unsupported opaque
+  Dynamic siblings fail even when the table has no parts.
+- DEBUG and RELEASE each passed 46 cohort examples and one separately
+  filtered W263 admission example. The public tests verify literal rows,
+  Dynamic leaf limits and late-frame checksum rejection before publication.
+  See the [W285 evidence](.landmark/evidence/compact-recursive-dynamic-w285.json).
+
 ## Recursive Compact Dynamic sibling — W284
 
 - VERIFIED with a ROBUST hostile review for the direct Compact reader and
@@ -19,8 +30,8 @@
   MRK4 coordinate change. See the
   [W284 evidence](.landmark/evidence/compact-recursive-dynamic-w284.json)
   for the sealed source, commands, runtime, captures and refresh conditions.
-- Next, route the same profile through `TypedPartTable` and catalog
-  column `.values`. Historical Dynamic statistics, remaining type/layout
+- W285 qualifies `TypedPartTable` and catalog column `.values` for the
+  selected-read fixture. Historical Dynamic statistics, remaining type/layout
   products, Compact MV output and projection children need their own checks.
   Compatibility still precedes memory and throughput work. See the
   [W284 frontier](docs/COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md).

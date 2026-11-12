@@ -381,14 +381,54 @@ Remove only released regenerable scratch after checking exact ownership,
 canonical parent, device and live consumers; preserve qualified captures,
 runtime, source Git, helpers and raw evidence. No internal-disk bulk fallback.
 
-## Full-objective boundary
+## W285 public Compact reads
 
-The next expected-success probe uses the same schema and data through
-`TypedPartTable` and `catalog[db][table][column].values`. Their shared
-`CompactJsonColumnAdapter.schema_for_json_declaration` still excludes
-descriptors containing both JSON and Dynamic. Route the qualified schema to
-the existing reader and test carrier values, limits and complete-schedule
-checks at those entry points.
+Design-sealed over `a06d8a2da24d77f93be3af5817b3f6cc5b098052`.
+`TypedPartTable` and `catalog[db][table][column].values` share
+`CompactJsonColumnAdapter.schema_for_json_declaration`. Its Dynamic exclusion
+precedes the existing Compact recursive reader's schema gate.
+
+Keep exact canonical declarations and delegate mixed JSON/Dynamic admission
+to the existing reader's schema gate. Scans retain the recursive
+`StorageColumnValue` carrier. The catalog materializer retains its complete
+schedule preflight, candidate format checks and owned value limits.
+`Tuple(JSON, Array(Dynamic(max_types=1)))` remains guard-only because the
+JSON-free Array is an opaque Bulk subtree. Empty catalogs must apply the
+same declaration gate. Existing physical reader and writer policies own
+actual-arm, layout and context checks.
+
+Run `spec/compact_recursive_dynamic_w285_public_dispatch_spec.cr` against
+the W284 baseline. The direct reader and unsupported empty-table guard must
+pass while typed scan and catalog values each fail at their admission check.
+After the routing change, run the same spec in DEBUG and RELEASE with the
+W284 entry, W263 public admission and existing Compact typed read controls.
+Check literal values, row/tuple/String bounds and a complete-schedule
+negative before publishing selected rows. Revert W285 as a single change if
+the public admission or a pre-existing route regresses.
+
+The W284 baseline compiled and ran four DEBUG examples. Direct read and
+the empty-table guard passed. The typed scan and `.values` both raised
+`UnsupportedFormatError` at their public admission checks. The saved
+argv and logs are under
+`/opt/mldata_ssd/cache/crystal-click-w285.public-dispatch-20261112/`.
+
+The public route reuses the direct reader and its format checks. The verified
+public fixture is a generated MRK3 part with two marks, COMPACT discriminator
+mode, String S1, and Dynamic V3. The typed scan selects the scalar key beside
+the recursive column, and `.values` materializes the exact recursive literals.
+One-under limits reject the four-row result, the String inside Dynamic, and
+the retained child cells. The corruption test changes a payload byte in a
+compressed frame wholly within the second `trace` mark and preserves the
+first mark's physical bytes. The first-row typed window and `.values` reject
+that part with the frame checksum error before exposing a result.
+
+The hostile review verified the canonical and empty-table gates and the
+pre-callback checksum failure. DEBUG and RELEASE each passed 46 cohort
+examples and the separately filtered W263 admission example. Exact commands,
+input digests and retry logs are indexed in the
+[W285 evidence](../.landmark/evidence/compact-recursive-dynamic-w285.json).
+
+## Full-objective boundary
 
 Remaining type/layout products, Compact MV output and projection children
 have separate admission and native verification work. Memory and performance

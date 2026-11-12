@@ -2,6 +2,19 @@
 
 ## Current qualification
 
+W285 exposes the W284 recursive `Array(Tuple(JSON, Dynamic))` profile
+through `TypedPartTable` and `catalog[db][table][column].values`. The public
+admission delegates to the recursive reader for canonical mixed declarations.
+The tested Compact MRK3 part returns `StorageColumnValue` trees and aligned
+typed keys. The tests exercise catalog row, String byte and Tuple cell limits,
+an unsupported opaque Dynamic subtree on an empty table, and late-frame
+corruption before any selected batch. DEBUG and RELEASE each passed 46
+examples in the seven-spec cohort and one filtered W263 admission example.
+See the [W285 public reads](COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md#w285-public-compact-reads)
+and [evidence](../.landmark/evidence/compact-recursive-dynamic-w285.json).
+
+### W284 direct reader and writer
+
 W284 qualifies a Compact recursive `Array(Tuple(JSON, Dynamic))` column
 through `CompactPartWriter` and `CompactRecursiveJsonColumnReader`. The
 Dynamic sibling has its own schema-path context and reuses BinaryBulk.
@@ -22,11 +35,10 @@ S0/S1 and V3 statistics matrix. See the
 [W284 frontier](COMPACT_RECURSIVE_DYNAMIC_FRONTIER.md) and
 [evidence](../.landmark/evidence/compact-recursive-dynamic-w284.json).
 
-The next step is routing the same column through selected typed scans and
-`OfflineCatalog` column `.values`. Type and layout gaps, Compact MV
-output and projection children remain open. Memory and throughput
-optimization follows compatibility. The <=10% slowdown target remains
-unmeasured.
+Remaining type and layout products, Compact MV output and Compact projection
+children still need implementation and native verification. Projection reads
+also need parent `.proj` summary validation. Memory and throughput optimization
+follows compatibility. The <=10% slowdown target remains unmeasured.
 
 ## Previous qualification
 

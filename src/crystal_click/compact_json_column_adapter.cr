@@ -22,10 +22,12 @@ module CrystalClick
       end
 
       type = BinaryRecursiveDataTypeNameReader.parse_canonical(source_declaration, limits) || return nil
-      return nil unless type.contains_json? && !type.contains_dynamic?
+      return nil unless type.contains_json?
 
       schema = StorageColumnSchema.parse(source_declaration, limits)
       return nil unless schema.has_json? && schema.declaration == source_declaration
+      # Apply the recursive reader's Dynamic schema gate even for empty tables.
+      return nil if type.contains_dynamic? && !CompactRecursiveJsonColumnReader.admitted_schema?(schema, limits)
       schema
     end
 

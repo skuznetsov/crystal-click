@@ -1,7 +1,7 @@
 module CrystalClick
   class OfflineTable
-    # Owns the Compact-only .values route for the four captured JSON carrier
-    # shapes. Every candidate completes its physical schedule census before
+    # Owns the Compact-only .values route for admitted JSON schemas.
+    # Every candidate completes its physical schedule census before
     # the result is allocated; the second pass reopens one part at a time and
     # repeats the declaration, grid, profile and roster checks before decoding.
     private class CompactJsonValuesMaterializer
