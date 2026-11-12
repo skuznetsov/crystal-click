@@ -48,6 +48,7 @@ module CrystalClick
         metadata_version : Int64,
         projection_names : Array(String) = [] of String,
         defer_destination_check : Bool = false,
+        aggregate_projection : Bool = false,
       ) : WidePartPublicationInput
         ensure_supported_platform!
         validate_column_name!(key_name)
@@ -73,7 +74,7 @@ module CrystalClick
         end
         expected_rows = validate_parent_rows!(keys.size, first.parent_rows, rows_per_mark)
         columns.each do |column|
-          validate_value_column_name!(column, defer_destination_check && columns.size == 1)
+          validate_value_column_name!(column, defer_destination_check && aggregate_projection)
           raise ArgumentError.new("key and value column names must differ") if column.column_name == key_name
           unless column.parent_rows == first.parent_rows
             raise ArgumentError.new("all value columns must use the same parent mark grid")
@@ -279,15 +280,30 @@ module CrystalClick
 
       private def self.validate_value_column_name!(
         column : WidePartPreparedColumn,
-        projection_child : Bool,
+        aggregate_projection_child : Bool,
       ) : Nil
-        if projection_child && column.column_name == "count()" &&
-           column.declaration == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
-          expected_stream = PhysicalStreamName.escape("count()")
-          unless column.stream_names == [expected_stream]
-            raise UnsupportedFormatError.new("count projection must use its exact one-stream physical roster")
+        if aggregate_projection_child
+          expected_stream = PhysicalStreamName.escape(column.column_name)
+          case column.column_name
+          when "count()"
+            unless column.declaration == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
+              raise UnsupportedFormatError.new("count projection must use its exact AggregateFunction(count) type")
+            end
+            unless column.stream_names == [expected_stream]
+              raise UnsupportedFormatError.new("count projection must use its exact one-stream physical roster")
+            end
+            return nil
+          when /\Asum\([A-Za-z_][A-Za-z0-9_]*\)\z/
+            unless column.declaration == "AggregateFunction(sum, UInt64)"
+              raise UnsupportedFormatError.new("sum projection must use its exact AggregateFunction(sum, UInt64) type")
+            end
+            unless column.stream_names == [expected_stream]
+              raise UnsupportedFormatError.new("sum projection must use its exact one-stream physical roster")
+            end
+            return nil
+          else
+            raise UnsupportedFormatError.new("aggregate projection must use exact count() or sum(argument) expression names")
           end
-          return nil
         end
         validate_column_name!(column.column_name)
       end

@@ -641,9 +641,11 @@ describe "W290 transform projection publication" do
 
   it "refuses unsupported aggregate projection DDL before callback and catches DDL drift after scanning" do
     [
-      "PROJECTION `by_count` (SELECT score, sum(value) GROUP BY score)",
-      "PROJECTION `by_count` (SELECT score, count(score) GROUP BY score)",
-    ].each_with_index do |definition, index|
+      {"PROJECTION `by_count` (SELECT score, sum(value) GROUP BY score)",
+       /\Atransform sum projection requires one plain UInt64 target column\z/},
+      {"PROJECTION `by_count` (SELECT score, count(score) GROUP BY score)",
+       /\Atransform count projection SELECT must contain count\(\) and optionally its group key\z/},
+    ].each_with_index do |(definition, expected_message), index|
       root = File.tempname("crystal-click-w290-unsupported-ddl-#{index}-")
       begin
         catalog, _database_path, target_path = w290_catalog(root, [definition])
@@ -657,7 +659,7 @@ describe "W290 transform projection publication" do
             w290_wide_output([20_u64], [30_u64], ["mapped"], ["label"])
           end
         end
-        w290_assert_error(error, /\Atransform count projection SELECT must contain count\(\) and optionally its group key\z/)
+        w290_assert_error(error, expected_message)
         callbacks.should eq(0)
         w290_assert_no_publication(target_path)
       ensure

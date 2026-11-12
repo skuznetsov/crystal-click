@@ -48,6 +48,9 @@ The [Count projection profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#count-pro
 uses this path for a Wide `AggregateFunction(count)` child of either parent
 layout. The child uses String serialization version 1 in its metadata,
 independent of the parent profile.
+The [UInt64 Sum profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-sum-projection-publication-from-a-transform-w292)
+uses the same staging path for one `sum(value)` state column and an optional
+`count()` state column in the same Wide child.
 
 ## Compact and mixed projection reads (W288)
 

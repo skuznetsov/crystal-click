@@ -1,5 +1,54 @@
 # Caller-run materialized-view transform frontier
 
+## UInt64 Sum projection publication from a transform (W292)
+
+This profile extends `45b55f2`. The target can declare one plain UInt64
+`GROUP BY` key with `sum(value)` over one plain UInt64 target column,
+optionally alongside `count()`. The key may appear anywhere in the SELECT
+list or be omitted. The physical schema starts with the key and uses the
+exact ClickHouse mergeable-state column names and order. The UInt64 Sum
+state is eight little-endian bytes, with zero and wraparound valid.
+
+- The callback provides the ordered aggregate state columns and sorted
+  distinct keys for the transformed rows. Each state column has one value
+  per key, and the number of groups cannot exceed the parent row count.
+  The caller owns the correspondence between the states and the parent rows.
+  The existing Count total check applies whenever the child contains a
+  Count state.
+- A Wide aggregate child can be published under a Wide or Compact parent
+  through the existing projection staging, readback, and checksums. The
+  catalog matches the exact state roster and order to the target DDL after
+  the source scan and target identity revalidation.
+- Reject additional aggregate calls, Count arguments, non-UInt64 Sum
+  arguments, computed arguments and keys, and mismatched state owners.
+  Keep the existing Count-only and plain projection paths admitted.
+
+The highest-risk failure is a part that attaches successfully but returns
+the wrong group totals. First reproduce the pre-callback refusal on the
+baseline. Check accepted DDL and mismatched state rosters, the Count total
+guard, and full and cross-mark state reads in Debug and Release. Check
+stock ClickHouse schemas, ATTACH, CHECK, exact serialized states and
+grouped results for both parent layouts. The forced plans must name the
+projection. Revert the feature commit to roll back the API.
+
+### Qualification
+
+Debug and Release each passed 132 examples across 20 spec files. The
+Crystal specs cover Sum alone, both Sum and Count orders, exact state
+bytes, mismatched DDL, and full and cross-mark reads.
+
+On ClickHouse 26.10.1.1201, both modes transformed a five-row stock source
+into a Compact MRK4 parent with a Sum-first Wide MRK2 child and a Wide MRK2
+parent with a Count-first Wide MRK2 child. Both pairs passed `ATTACH PART`
+and `CHECK TABLE`. Each three-row child has data granules `[2, 1]`.
+Its RowBinary states match the expected bytes, including
+`UInt64::MAX + 1` wrapping to zero. The forced plans selected `by_group`
+and returned the same results as grouping the parent rows. The offline
+catalog reopened byte-identical copies of the attached parts and read both
+parents and children in full and across a mark boundary.
+See the [W292 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w292.json)
+and [native witness runner](../scripts/verify_materialized_view_aggregate_projection_w292.rb).
+
 ## Count projection publication from a transform (W291)
 
 This profile extends `73ef49a`. A target can declare

@@ -54,14 +54,27 @@ module CrystalClick
             raise UnsupportedFormatError.new("count projection counts must sum to the parent row count")
           end
         end
+        if projection.aggregate_projection?
+          unless parent_row_count && projection.row_count <= parent_row_count
+            raise UnsupportedFormatError.new("aggregate projection row count must be bounded by the parent row count")
+          end
+        end
         keys = projection.keys
         rows_per_mark = projection.rows_per_mark
         context = parent_context.with_rows_per_mark(rows_per_mark)
 
         prepared_columns = Array(WidePartPreparedColumn).new
-        count_values = projection.count_values
-        if counts = count_values
-          prepared_columns << StaticWidePartColumnInput.prepare_count_projection(counts, context)
+        aggregate_columns = projection.aggregate_columns
+        if !aggregate_columns.empty?
+          aggregate_columns.each do |aggregate|
+            if argument_name = aggregate.argument_name
+              prepared_columns << StaticWidePartColumnInput.prepare_sum_projection(
+                argument_name, aggregate.values, context
+              )
+            else
+              prepared_columns << StaticWidePartColumnInput.prepare_count_projection(aggregate.values, context)
+            end
+          end
         else
           projection.columns.each do |column|
             prepared_columns << column.prepare(context)
@@ -77,7 +90,8 @@ module CrystalClick
         input = WidePartPublicationInput.prepare(
           placeholder, key_name, keys.to_unsafe.to_slice(keys.size), prepared_columns,
           rows_per_mark, context.metadata_version,
-          defer_destination_check: true
+          defer_destination_check: true,
+          aggregate_projection: projection.aggregate_projection?
         )
         metadata_columns = Array(Tuple(String, String, Array(String))).new(prepared_columns.size)
         prepared_columns.each do |column|
@@ -86,7 +100,7 @@ module CrystalClick
         # Root AggregateFunction(count) has no String value lane, but ClickHouse
         # parts carrying it use the normalized String serialization version 1.
         # Keep that child metadata independent from the parent writer profile.
-        metadata_profile = count_values ? BinaryBulkProfile.with_size_stream : context.profile
+        metadata_profile = projection.aggregate_projection? ? BinaryBulkProfile.with_size_stream : context.profile
         metadata = WidePartMetadata.new(
           key_name, metadata_columns, keys.to_unsafe.to_slice(keys.size), context.metadata_version,
           metadata_profile, context.limits, context.codec_budget

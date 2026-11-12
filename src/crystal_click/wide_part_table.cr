@@ -4813,7 +4813,11 @@ module CrystalClick
                      elsif @numeric_mode
                        WidePart.open_numeric(path, column)
                      elsif @typed_mode
-                       WidePart.open_typed(path, column)
+                       if selected_projection_name = projection_name
+                         WidePart.open_projection_child_typed(path, column, selected_projection_name)
+                       else
+                         WidePart.open_typed(path, column)
+                       end
                      else
                        WidePart.open(path, column)
                      end

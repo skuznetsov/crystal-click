@@ -1779,6 +1779,19 @@ module CrystalClick
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
 
+    # :nodoc:
+    # Projection-only Count/Sum admission is enabled only after the table
+    # reader has validated this child's parent-manifest binding.
+    def self.open_projection_child_typed(path : String, column : String, projection_name : String) : WidePart
+      ProjectionChildSelection.validate_name!(projection_name)
+      unless File.basename(path) == "#{projection_name}.proj"
+        raise InvalidPartError.new("selected projection child name does not match its declaration")
+      end
+      new(path, column, :typed, nil, true)
+    rescue ex : IO::Error
+      raise InvalidPartError.new(ex.message || "cannot read part")
+    end
+
     # Open one explicit in-memory Nested view over ClickHouse's flattened
     # sibling Arrays. The caller supplies the group and nominal schema; no
     # dotted-name inference is added to ordinary open methods.
@@ -11592,6 +11605,7 @@ module CrystalClick
       requested_column : String?,
       mode : Symbol,
       flattened_nested_context : FlattenedNestedStoragePlan? = nil,
+      allow_projection_count_sum : Bool = false,
     )
       @path = path
       @flattened_nested_context = flattened_nested_context
@@ -11599,7 +11613,7 @@ module CrystalClick
       @checksum_verification = ChecksumVerification::Unverified
       @single_stream_string = false
       @low_cardinality_string_state = nil
-      @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, @aggregate_count_key_column_name, physical_streams = parse_metadata(requested_column, mode)
+      @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, @aggregate_count_key_column_name, physical_streams = parse_metadata(requested_column, mode, allow_projection_count_sum)
       @streams = Hash(String, PhysicalStream).new
       geometry_plan = GeometryColumnType.for_type(@column_type)
       point_plan = PointColumnType.for_type(@column_type)
@@ -11820,7 +11834,7 @@ module CrystalClick
       @element_width = stream_element_width(primary_stream)
     end
 
-    private def parse_metadata(requested_column : String?, mode : Symbol) : {String, String, String, String, Bool, UInt64, String?, Array(String)}
+    private def parse_metadata(requested_column : String?, mode : Symbol, allow_projection_count_sum : Bool = false) : {String, String, String, String, Bool, UInt64, String?, Array(String)}
       columns_text = read_metadata_file("columns.txt")
       physical_columns = PartMetadataTextParser.parse_columns(columns_text)
       columns = physical_columns
@@ -11958,7 +11972,9 @@ module CrystalClick
       elsif WidePart.supports_named_scalar_tuple_type?(column_type)
         validate_tuple_uint64_string_serialization(columns, selected, column_type, row_count)
       elsif !WideAggregateCountStoragePlan.for_type_name(column_type).nil?
-        aggregate_count_key_column_name = validate_aggregate_count_serialization_profile(columns, selected, column_type, row_count)
+        aggregate_count_key_column_name = validate_aggregate_count_serialization_profile(
+          columns, selected, column_type, row_count, allow_projection_count_sum
+        )
       elsif column_type == "Int128" || column_type == "UInt128" || column_type == "Int256" || column_type == "UInt256"
         validate_raw_integer_serialization(columns, row_count)
       elsif column_type == "Nullable(Int128)" || column_type == "Nullable(UInt128)" || column_type == "Nullable(Int256)" || column_type == "Nullable(UInt256)"
@@ -13511,6 +13527,7 @@ module CrystalClick
       count_column : String,
       count_type_name : String,
       row_count : UInt64,
+      allow_projection_count_sum : Bool,
     ) : String
       file = File.join(@path, "serialization.json")
       raise UnsupportedFormatError.new("serialization.json is required for AggregateFunction(count)") unless File.file?(file)
@@ -13520,7 +13537,9 @@ module CrystalClick
       text = File.read(file)
       raise CorruptPartError.new("serialization.json changed while reading") unless text.bytesize == size
 
-      WideAggregateCountSerializationProfile.validate!(text, part_columns, count_column, count_type_name, row_count)
+      WideAggregateCountSerializationProfile.validate!(
+        text, part_columns, count_column, count_type_name, row_count, allow_projection_count_sum
+      )
     end
 
     private def validate_nullable_raw_integer_serialization(part_columns : Array({String, String}), row_count : UInt64) : Nil

@@ -24,21 +24,24 @@ module CrystalClick
       count_column : String,
       count_type_name : String,
       row_count : UInt64,
+      allow_projection_count_sum : Bool = false,
     ) : String
       plan = WideAggregateCountStoragePlan.for_type_name(count_type_name) ||
              raise(UnsupportedFormatError.new("unsupported AggregateFunction(count) descriptor"))
-      unless part_columns.size == 2
-        raise UnsupportedFormatError.new("AggregateFunction(count) requires one UInt64 key and one state column")
-      end
-
-      matching_count = part_columns.count { |name, type| name == count_column && type == plan.type_name }
-      raise CorruptPartError.new("AggregateFunction(count) column does not match its exact part declaration") unless matching_count == 1
-      key_columns = part_columns.select { |name, _type| name != count_column }
-      unless key_columns.size == 1 && key_columns[0][1] == "UInt64" && key_columns[0][0] != count_column
-        raise UnsupportedFormatError.new("AggregateFunction(count) requires exactly one UInt64 key column")
-      end
-      key_column = key_columns[0][0]
-      raise CorruptPartError.new("AggregateFunction(count) part column names are not unique") unless part_columns.map(&.[0]).to_set.size == 2
+      key_column = if part_columns.size == 2
+                     matching_count = part_columns.count { |name, type| name == count_column && type == plan.type_name }
+                     raise CorruptPartError.new("AggregateFunction(count) column does not match its exact part declaration") unless matching_count == 1
+                     key_columns = part_columns.select { |name, _type| name != count_column }
+                     unless key_columns.size == 1 && key_columns[0][1] == "UInt64" && key_columns[0][0] != count_column
+                       raise UnsupportedFormatError.new("AggregateFunction(count) requires exactly one UInt64 key column")
+                     end
+                     raise CorruptPartError.new("AggregateFunction(count) part column names are not unique") unless part_columns.map(&.[0]).to_set.size == 2
+                     key_columns[0][0]
+                   elsif allow_projection_count_sum
+                     validate_projection_count_sum_roster!(part_columns, count_column, count_type_name)
+                   else
+                     raise UnsupportedFormatError.new("AggregateFunction(count) requires one UInt64 key and one state column")
+                   end
 
       info = JSON.parse(text).as_h
       unless info.keys.to_set == REQUIRED_FIELDS
@@ -85,6 +88,38 @@ module CrystalClick
       key_column
     rescue ex : JSON::ParseException | TypeCastError | OverflowError
       raise CorruptPartError.new("serialization.json is malformed")
+    end
+
+    private def self.validate_projection_count_sum_roster!(
+      part_columns : Array({String, String}),
+      count_column : String,
+      count_type_name : String,
+    ) : String
+      unless part_columns.size == 3 && part_columns[0][1] == "UInt64"
+        raise UnsupportedFormatError.new("projection AggregateFunction(count) requires a first UInt64 key and exactly two aggregate columns")
+      end
+      unless part_columns.map(&.[0]).to_set.size == 3
+        raise CorruptPartError.new("AggregateFunction(count) part column names are not unique")
+      end
+      unless count_column == "count()" && count_type_name == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
+        raise UnsupportedFormatError.new("projection Count and Sum requires the exact count() state")
+      end
+
+      aggregates = part_columns[1..]
+      count_columns = aggregates.select do |name, type|
+        name == "count()" && type == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
+      end
+      sum_columns = aggregates.select do |name, type|
+        type == "AggregateFunction(sum, UInt64)" && ascii_sum_column_name?(name)
+      end
+      unless count_columns.size == 1 && sum_columns.size == 1 && aggregates.size == 2
+        raise UnsupportedFormatError.new("projection AggregateFunction(count) requires one count() and one sum(UInt64) state")
+      end
+      part_columns[0][0]
+    end
+
+    private def self.ascii_sum_column_name?(name : String) : Bool
+      /\Asum\([A-Za-z_][A-Za-z0-9_]*\)\z/.matches?(name)
     end
   end
 end

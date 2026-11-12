@@ -249,6 +249,34 @@ The Wide child stores one `AggregateFunction(count)` state per group. The
 writer checks that the counts add up to the parent row count. See the
 [count projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#count-projection-publication-from-a-transform-w291).
 
+For `PROJECTION by_group (SELECT group_key, count(), sum(value) GROUP BY
+group_key)`, let `values` hold the UInt64 `value` column aligned with
+`group_keys`. Build both state columns in SELECT order and pass the child
+through the same `projections:` keyword.
+
+```crystal
+counts = Hash(UInt64, UInt64).new(0_u64)
+sums = Hash(UInt64, UInt64).new(0_u64)
+group_keys.each_with_index do |key, index|
+  counts[key] += 1_u64
+  sums[key] = sums[key] &+ values[index]
+end
+keys = counts.keys.sort!
+count_states = keys.map { |key| counts[key] }
+sum_states = keys.map { |key| sums[key] }
+child = CrystalClick::WidePartProjection.precomputed_aggregate(
+  "by_group", "group_key", keys.to_unsafe.to_slice(keys.size),
+  [
+    CrystalClick::WidePartProjectionAggregate.count(count_states.to_unsafe.to_slice(count_states.size)),
+    CrystalClick::WidePartProjectionAggregate.sum_uint64("value", sum_states.to_unsafe.to_slice(sum_states.size)),
+  ],
+)
+```
+
+`sum(value)` can also be the sole aggregate. Its state is a little-endian
+UInt64, so `&+` matches ClickHouse's wraparound. See the
+[Sum projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-sum-projection-publication-from-a-transform-w292).
+
 `OfflineTable#projections` exposes declared projection metadata. For a table
 with a physical Wide or Compact projection `p` containing a `UInt64` column
 `pk`, call `scan_projection_typed_window` with the projection name and row

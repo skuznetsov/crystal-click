@@ -1,5 +1,21 @@
 # Crystal Click landmarks
 
+## UInt64 Sum projection publication from a materialized-view transform — W292
+
+- One plain UInt64 group key admits one `sum(value)` over a plain UInt64
+  column and an optional `count()`. The callback supplies the states in
+  SELECT aggregate order through `WidePartProjection.precomputed_aggregate`.
+  The key leads the physical schema, and the Sum state is a little-endian
+  UInt64 with wraparound. A Wide child is staged and published with its
+  Wide or Compact parent.
+- Debug and Release each passed 132 affected examples. Both native pairs
+  with Count and Sum passed ATTACH, CHECK, exact states, forced
+  `by_group` reads, and offline full and cross-mark reads. Repeat these
+  checks after changes to DDL binding, state serialization, part layout,
+  or the native pin. See the
+  [W292 profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-sum-projection-publication-from-a-transform-w292)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w292.json).
+
 ## Count projection publication from a materialized-view transform — W291
 
 - The callback supplies sorted UInt64 group keys and positive counts through

@@ -8,8 +8,8 @@ module CrystalClick
     @key_name : String
     @keys : Array(UInt64)
     @columns : Array(WidePartColumn)
-    @count_values : Array(UInt64)?
     @count_total : UInt128?
+    @aggregate_columns : Array(WidePartProjectionAggregate)
     @schema_binding : WidePartSchemaBinding?
 
     private def initialize(
@@ -18,9 +18,9 @@ module CrystalClick
       @keys : Array(UInt64),
       @columns : Array(WidePartColumn),
       @rows_per_mark : Int32,
-      @count_values : Array(UInt64)? = nil,
       @count_total : UInt128? = nil,
       @schema_binding : WidePartSchemaBinding? = nil,
+      @aggregate_columns : Array(WidePartProjectionAggregate) = [] of WidePartProjectionAggregate,
     )
     end
 
@@ -78,27 +78,78 @@ module CrystalClick
         raise ArgumentError.new("count projection keys and counts must have equal lengths")
       end
 
+      count_aggregate = WidePartProjectionAggregate.count(counts)
       retained_keys = Array(UInt64).new(keys.size)
-      retained_counts = Array(UInt64).new(counts.size)
-      # The row bound makes this exact UInt128 sum strictly smaller than 2^91.
-      total = 0_u128
       keys.each_with_index do |key, index|
         if index > 0 && key <= retained_keys[index - 1]
           raise ArgumentError.new("count projection keys must be strictly increasing")
         end
         retained_keys << key
-        count = counts[index]
-        if count == 0_u64
-          raise ArgumentError.new("count projection values must be positive")
-        end
-        total += count.to_u128
-        retained_counts << count
       end
 
       new(
         String.new(name.to_slice), String.new(key_name.to_slice),
         retained_keys, [] of WidePartColumn, rows_per_mark,
-        retained_counts, total,
+        count_aggregate.count_total, nil, [count_aggregate] of WidePartProjectionAggregate,
+      )
+    end
+
+    # Retains strictly sorted distinct group keys and caller-computed Count
+    # and/or UInt64 Sum states for the corresponding aggregate groups.
+    def self.precomputed_aggregate(
+      name : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      aggregate_columns : Array(WidePartProjectionAggregate),
+      *,
+      rows_per_mark : Int32 = 8192,
+    ) : WidePartProjection
+      validate_projection_name!(name)
+      validate_column_name!(key_name)
+      unless rows_per_mark > 0 && rows_per_mark <= WidePartWriter::MAX_ROWS_PER_MARK
+        raise ArgumentError.new("projection rows_per_mark is outside the admitted range")
+      end
+      if keys.empty? || keys.size.to_u64 > WidePart::MAX_ROWS
+        raise ArgumentError.new("an aggregate projection requires a bounded nonempty UInt64 key stream")
+      end
+      unless aggregate_columns.size > 0 && aggregate_columns.size <= 2
+        raise ArgumentError.new("an aggregate projection requires one or two aggregate columns")
+      end
+
+      retained_aggregates = aggregate_columns.dup
+      retained_keys = Array(UInt64).new(keys.size)
+      previous_key = 0_u64
+      count_total : UInt128? = nil
+      seen_count = false
+      seen_sum = false
+      retained_aggregates.each do |aggregate|
+        unless aggregate.value_count == keys.size
+          raise ArgumentError.new("aggregate projection keys and values must have equal lengths")
+        end
+        if aggregate.count?
+          if seen_count
+            raise ArgumentError.new("aggregate projection count column must be unique")
+          end
+          seen_count = true
+          count_total = aggregate.count_total
+        else
+          raise ArgumentError.new("aggregate projection may contain one sum column") if seen_sum
+          seen_sum = true
+        end
+      end
+
+      keys.each_with_index do |key, index|
+        if index > 0 && key <= previous_key
+          raise ArgumentError.new("aggregate projection keys must be strictly increasing")
+        end
+        retained_keys << key
+        previous_key = key
+      end
+
+      new(
+        String.new(name.to_slice), String.new(key_name.to_slice),
+        retained_keys, [] of WidePartColumn, rows_per_mark,
+        count_total, nil, retained_aggregates,
       )
     end
 
@@ -127,7 +178,17 @@ module CrystalClick
 
     # :nodoc:
     def count_values : Array(UInt64)?
-      @count_values.try(&.dup)
+      @aggregate_columns.find(&.count?).try(&.values)
+    end
+
+    # Retains the caller-supplied aggregate order while detaching the roster.
+    def aggregate_columns : Array(WidePartProjectionAggregate)
+      @aggregate_columns.dup
+    end
+
+    # :nodoc:
+    def aggregate_projection? : Bool
+      !@aggregate_columns.empty?
     end
 
     # :nodoc:
@@ -149,8 +210,8 @@ module CrystalClick
     ) : WidePartProjection
       new(
         source.@name, source.@key_name, source.@keys, source.@columns,
-        source.@rows_per_mark, source.@count_values, source.@count_total,
-        WidePartSchemaBinding.new(binding),
+        source.@rows_per_mark, source.@count_total,
+        WidePartSchemaBinding.new(binding), source.@aggregate_columns,
       )
     end
 

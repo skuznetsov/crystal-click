@@ -3,7 +3,11 @@ module CrystalClick
   # this before invoking caller code, then binds the supplied immutable child
   # owners after the full scan and exact metadata revalidation.
   private class OfflineTransformProjectionBindings
-    private alias ProjectionSchema = NamedTuple(binding: PartSchemaBinding, aggregate_count: Bool)
+    private alias ProjectionSchema = NamedTuple(
+      binding: PartSchemaBinding,
+      aggregate: Bool,
+      aggregate_count: Bool,
+    )
 
     @schema_by_name : Hash(String, ProjectionSchema)
 
@@ -65,13 +69,21 @@ module CrystalClick
         unless projection.key_name == binding.key_name
           raise UnsupportedFormatError.new("transform projection output key does not match target schema")
         end
+        aggregate_child = projection.is_a?(WidePartProjection) && projection.aggregate_projection?
         count_child = projection.is_a?(WidePartProjection) && !projection.count_total.nil?
         if schema[:aggregate_count]
           unless count_child
             raise UnsupportedFormatError.new("transform count projection requires a Wide count child")
           end
-        else
+        elsif schema[:aggregate]
+          unless aggregate_child
+            raise UnsupportedFormatError.new("transform aggregate projection requires a Wide aggregate child")
+          end
           if count_child
+            raise UnsupportedFormatError.new("transform aggregate projection roster does not match target DDL")
+          end
+        else
+          if aggregate_child
             raise UnsupportedFormatError.new("transform plain projection requires a non-aggregate child")
           end
           unless projection.row_count == parent_rows
@@ -86,13 +98,13 @@ module CrystalClick
 
     private def parse_schema(definition : String, target_columns : Array(OfflineColumn)) : ProjectionSchema
       if grouped = /\ASELECT\s+([\s\S]+?)\s+GROUP\s+BY\s+([\s\S]+)\z/i.match(definition)
-        binding = parse_count_schema(grouped[1], grouped[2], target_columns)
-        return {binding: binding, aggregate_count: true}
+        binding, aggregate_count = parse_aggregate_schema(grouped[1], grouped[2], target_columns)
+        return {binding: binding, aggregate: true, aggregate_count: aggregate_count}
       end
 
       plain = /\ASELECT\b([\s\S]*?)\s+ORDER\s+BY\s+([\s\S]+)\z/i.match(definition)
       unless plain
-        raise UnsupportedFormatError.new("transform projection must be a simple ordered SELECT or a GROUP BY with count()")
+        raise UnsupportedFormatError.new("transform projection must be a simple ordered SELECT or an admitted aggregate GROUP BY")
       end
       selected = plain[1].split(',')
       if selected.size < 2
@@ -109,36 +121,98 @@ module CrystalClick
         raise UnsupportedFormatError.new("transform projection ORDER BY must match its first selected UInt64 key")
       end
       columns = selected_columns.map { |column| {column.name, column.type} }
-      {binding: PartSchemaBinding.new(key.name, columns, "projection"), aggregate_count: false}
+      {binding: PartSchemaBinding.new(key.name, columns, "projection"), aggregate: false, aggregate_count: false}
     end
 
-    private def parse_count_schema(select_list : String, group_key : String, target_columns : Array(OfflineColumn)) : PartSchemaBinding
+    private def parse_aggregate_schema(
+      select_list : String,
+      group_key : String,
+      target_columns : Array(OfflineColumn),
+    ) : Tuple(PartSchemaBinding, Bool)
       key = plain_target_column(group_key, target_columns)
       unless key.type == "UInt64"
-        raise UnsupportedFormatError.new("transform count projection GROUP BY requires one plain UInt64 key")
+        raise UnsupportedFormatError.new("transform aggregate projection GROUP BY requires one plain UInt64 key")
       end
 
       selected = select_list.split(',')
-      if selected.size == 2
-        key_index = selected.index { |token| parse_identifier(token) == key.name }
-        if key_index
-          selected.delete_at(key_index)
+      columns = [{key.name, key.type}] of Tuple(String, String)
+      aliases = Array(String).new
+      sum_argument = nil.as(String?)
+      count_seen = false
+      key_seen = false
+      selected.each do |raw_token|
+        token = raw_token.strip
+        if selected_key = parse_identifier(token)
+          unless selected_key == key.name && !key_seen
+            raise UnsupportedFormatError.new("transform aggregate projection SELECT must contain only its GROUP BY key and admitted aggregates")
+          end
+          key_seen = true
+          next
         end
-      end
-      unless selected.size == 1 && (count = /\Acount\s*\(\s*\)(?:\s+(?i:AS)\s+([\s\S]+))?\z/.match(selected.first.strip))
-        raise UnsupportedFormatError.new("transform count projection SELECT must contain count() and optionally its group key")
-      end
-      if alias_token = count[1]?
-        alias_name = parse_identifier(alias_token)
-        unless alias_name && alias_name != key.name && alias_name.bytesize <= WidePartWriter::MAX_COLUMN_NAME_BYTES
-          raise UnsupportedFormatError.new("transform count projection alias must be a distinct bounded ASCII identifier")
+
+        if count = /\Acount\s*\(\s*\)(?:\s+(?i:AS)\s+([\s\S]+))?\z/.match(token)
+          if count_seen
+            raise UnsupportedFormatError.new("transform aggregate projection may contain count() only once")
+          end
+          count_seen = true
+          columns << {"count()", WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME}
+          if alias_token = count[1]?
+            aliases << aggregate_alias!(alias_token, "count")
+          end
+          next
         end
+
+        if /\Acount\s*\(/.matches?(token)
+          raise UnsupportedFormatError.new("transform count projection SELECT must contain count() and optionally its group key")
+        end
+
+        if sum = /\Asum\s*\(\s*([\s\S]+?)\s*\)(?:\s+(?i:AS)\s+([\s\S]+))?\z/.match(token)
+          if sum_argument
+            raise UnsupportedFormatError.new("transform aggregate projection may contain one sum(argument) only")
+          end
+          argument_name = parse_identifier(sum[1])
+          argument = argument_name.try { |name| target_columns.find { |column| column.name == name } }
+          unless argument && !argument.alias_column && argument.key_candidate_column && argument.type == "UInt64"
+            raise UnsupportedFormatError.new("transform sum projection requires one plain UInt64 target column")
+          end
+          sum_argument = argument.name
+          columns << {"sum(#{argument.name})", "AggregateFunction(sum, UInt64)"}
+          if alias_token = sum[2]?
+            aliases << aggregate_alias!(alias_token, "sum")
+          end
+          next
+        end
+
+        raise UnsupportedFormatError.new("transform aggregate projection SELECT supports only count() and sum(argument)")
       end
 
-      # ClickHouse stores the mergeable-state header: the GROUP BY key is
-      # first and the aggregate uses its expression name, even with an alias.
-      columns = [{key.name, key.type}, {"count()", WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME}]
-      PartSchemaBinding.new(key.name, columns, "projection")
+      unless count_seen || sum_argument
+        raise UnsupportedFormatError.new("transform aggregate projection SELECT requires count() or sum(argument)")
+      end
+      validate_aggregate_aliases!(aliases, key.name, sum_argument)
+      {PartSchemaBinding.new(key.name, columns, "projection"), count_seen}
+    end
+
+    private def aggregate_alias!(token : String, function_name : String) : String
+      alias_name = parse_identifier(token)
+      unless alias_name && alias_name.bytesize <= WidePartWriter::MAX_COLUMN_NAME_BYTES
+        raise UnsupportedFormatError.new("transform #{function_name} projection alias must be a bounded ASCII identifier")
+      end
+      alias_name
+    end
+
+    private def validate_aggregate_aliases!(
+      aliases : Array(String),
+      key_name : String,
+      sum_argument : String?,
+    ) : Nil
+      seen = Set(String).new
+      aliases.each do |name|
+        unless seen.add?(name) && name != key_name && name != sum_argument
+          raise UnsupportedFormatError.new("transform aggregate projection aliases must be unique and cannot shadow the key or aggregate arguments")
+        end
+      end
+      nil
     end
 
     private def plain_target_column(token : String, target_columns : Array(OfflineColumn)) : OfflineColumn

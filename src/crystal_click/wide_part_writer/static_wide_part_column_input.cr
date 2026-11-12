@@ -23,27 +23,52 @@ module CrystalClick
           raise ArgumentError.new("count projection rows_per_mark is outside the admitted range")
         end
 
-        # Bound the child's mark schedule before expanding the retained UInt64
-        # inputs into nominal BinaryValue states.
-        mark_count_wide = (counts.size.to_i64 + rows_per_mark.to_i64 - 1_i64) // rows_per_mark.to_i64
-        if mark_count_wide <= 0 || mark_count_wide > WidePartWriter::MAX_MARKS
-          raise ArgumentError.new("count projection mark count is outside the writer limit")
-        end
-        mark_count = mark_count_wide.to_i32
-        granules = Array(Array(BinaryValue)).new(mark_count)
-        offset = 0
-        while offset < counts.size
-          rows = Math.min(rows_per_mark, counts.size - offset)
-          granule = Array(BinaryValue).new(rows)
-          rows.times do |row|
-            granule << BinaryValue.aggregate_count_state(type, counts[offset + row])
-          end
-          granules << granule
-          offset += rows
+        granules = aggregate_projection_granules(counts, rows_per_mark, "count") do |count|
+          BinaryValue.aggregate_count_state(type, count)
         end
         prepare_with_profile(
           "count()", type, granules, context, BinaryBulkProfile.with_size_stream, true
         )
+      end
+
+      def self.prepare_sum_projection(
+        argument_name : String,
+        sums : Array(UInt64),
+        context : WidePartOperationContext,
+      ) : WidePartPreparedColumn
+        type = BinaryDataType.aggregate_function("sum", BinaryDataType.primitive("UInt64"))
+        unless BinaryAggregateFunctionStatePlan.for_type(type).state_width == sizeof(UInt64)
+          raise UnsupportedFormatError.new("sum projection requires the fixed UInt64 AggregateFunction state")
+        end
+        granules = aggregate_projection_granules(sums, context.rows_per_mark, "sum") do |sum|
+          state_bytes = Bytes.new(sizeof(UInt64))
+          IO::ByteFormat::LittleEndian.encode(sum, state_bytes)
+          BinaryValue.aggregate_function_state(type, state_bytes)
+        end
+        prepare_with_profile(
+          "sum(#{argument_name})", type, granules, context, BinaryBulkProfile.with_size_stream, false
+        )
+      end
+
+      private def self.aggregate_projection_granules(
+        values : Array(UInt64),
+        rows_per_mark : Int32,
+        aggregate_name : String,
+        &encode : UInt64 -> BinaryValue
+      ) : Array(Array(BinaryValue))
+        # Bound the child grid before expanding the UInt64 inputs into states.
+        mark_count = (values.size.to_i64 + rows_per_mark.to_i64 - 1_i64) // rows_per_mark.to_i64
+        unless mark_count > 0 && mark_count <= WidePartWriter::MAX_MARKS
+          raise ArgumentError.new("#{aggregate_name} projection mark count is outside the writer limit")
+        end
+        granules = Array(Array(BinaryValue)).new(mark_count.to_i32)
+        offset = 0
+        while offset < values.size
+          rows = Math.min(rows_per_mark, values.size - offset)
+          granules << Array(BinaryValue).new(rows) { |row| yield values[offset + row] }
+          offset += rows
+        end
+        granules
       end
 
       private def self.prepare_with_profile(
