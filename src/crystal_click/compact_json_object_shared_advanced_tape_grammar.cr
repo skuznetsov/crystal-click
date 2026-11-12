@@ -22,6 +22,7 @@ module CrystalClick
     @prefix : ObjectDocumentCallbackPrefix
     @physical_plan : ObjectDocumentPhysicalPlan
     @schedule : CompactJsonObjectRoleSchedule
+    @owner_schedule : CompactJsonObjectRoleSchedule::OwnerSchedule
     @row_count : UInt64
     @nested_data_string_profile : BinaryBulkProfile
     @limits : BinaryCodecLimits
@@ -52,13 +53,21 @@ module CrystalClick
       if @budget.writing?
         raise ArgumentError.new("Compact MRK3 Advanced tape grammar requires a reading budget")
       end
-      unless @schedule.advanced
-        raise UnsupportedFormatError.new("Compact MRK3 Advanced tape grammar requires the sealed advanced role schedule")
-      end
       @prefix.validate_physical_owner!(@physical_plan)
+      owner_root = ObjectDocumentInlineCallbackOrder.canonical_root_prefix(@physical_plan)
+      @owner_schedule = @schedule.owner_for_root(owner_root)
+      unless @owner_schedule.root == owner_root &&
+             @owner_schedule.prefix.same?(@prefix) &&
+             @owner_schedule.physical_plan.same?(@physical_plan)
+        raise CorruptPartError.new("Compact MRK3 Advanced grammar differs from its exact local callback owner")
+      end
+      unless @owner_schedule.advanced
+        raise UnsupportedFormatError.new("Compact MRK3 Advanced tape grammar requires this exact owner to use an advanced layout")
+      end
 
       @shared_data_version = @prefix.plan.structures.object.shared_data_version
-      unless @shared_data_version == 2_u64 || @shared_data_version == 3_u64
+      unless @prefix.plan.structures.object.version == 4_u64 &&
+             (@shared_data_version == 2_u64 || @shared_data_version == 3_u64)
         raise UnsupportedFormatError.new("Compact MRK3 Advanced tape grammar admits SharedData v2 or v3")
       end
       unless @physical_plan.shared_bucket_count == EXPECTED_BUCKETS
@@ -147,9 +156,55 @@ module CrystalClick
     end
 
     private def validate_advanced_schedule! : Nil
+      owner_root = ObjectDocumentInlineCallbackOrder.canonical_root_prefix(@physical_plan)
+      root_owner : ObjectDocumentInlineCallbackOrder::CallbackOwner = {
+        owner_root,
+        @prefix.callback_prefix,
+        @physical_plan,
+        @prefix.plan,
+      }
+      descendants = CompactJsonCallbackOwners.for_owner(
+        @physical_plan,
+        @prefix.plan,
+        @prefix.callback_prefix,
+        @budget,
+      )
+      registry = ObjectDocumentInlineCallbackEvents.new(root_owner, descendants, @budget)
+      event_context : ObjectDocumentInlineCallbackOrder::EventScheduleContext = {registry, owner_root}
+      expected_pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
+        @physical_plan,
+        @prefix.plan,
+        @nested_data_string_profile,
+        @prefix.callback_prefix,
+        @budget,
+        true,
+        true,
+        event_context,
+        true,
+      )
+      expected_bindings = ObjectDocumentInlineCallbackOrder.advanced_body_lane_bindings(
+        @physical_plan,
+        @prefix.plan,
+        @nested_data_string_profile,
+        @budget,
+        event_context,
+        true,
+      )
+      unless expected_pairs == @owner_schedule.body_pairs &&
+             expected_bindings == @owner_schedule.body_bindings
+        raise CorruptPartError.new("Compact MRK3 Advanced owner-local callback names or role bindings differ from the canonical child plan")
+      end
+      unless @owner_schedule.body_bindings.size == @owner_schedule.body_pairs.size
+        raise CorruptPartError.new("Compact MRK3 Advanced owner-local callback bindings and names differ in length")
+      end
+
       role_index = 0_i32
       advanced_started = false
-      @schedule.body_bindings.each do |binding|
+      @owner_schedule.body_bindings.each_with_index do |binding, index|
+        pair = @owner_schedule.body_pairs[index]
+        unless binding[0] == pair[0]
+          raise CorruptPartError.new("Compact MRK3 Advanced owner-local callback name differs from its canonical role")
+        end
         _name, owner_kind, owner_path, role = binding
         if owner_kind != :advanced_bucket && owner_kind != :advanced_copy
           if advanced_started

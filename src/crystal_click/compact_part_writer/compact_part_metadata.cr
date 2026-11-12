@@ -1,10 +1,11 @@
 module CrystalClick
-  # Detached Compact metadata for one fixed String-v0/BASIC-MAP schema.
+  # Detached Compact metadata for one fixed String-v0/String-v1/BASIC-MAP schema.
   # MRK3 carries one whole-column slot per declaration; MRK4 records the exact
   # serializer callback roster in columns_substreams.txt.
   class CompactPartMetadata
-    CODEC         = CompactSerializationProfile::CODEC_LZ4
-    SERIALIZATION = "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":0},\"version\":1}"
+    CODEC                          = CompactSerializationProfile::CODEC_LZ4
+    SERIALIZATION                  = "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":0},\"version\":1}"
+    SERIALIZATION_WITH_SIZE_STREAM = "{\"columns\":[],\"propagate_types_serialization_versions_to_nested_types\":true,\"types_serialization_versions\":{\"string\":1},\"version\":1}"
 
     getter columns_text : String
     getter count_text : String
@@ -15,6 +16,7 @@ module CrystalClick
     getter schema_columns : Array({String, String})
     getter expected_files : Array(String)
     getter row_count : UInt64
+    getter profile : BinaryBulkProfile
     getter mark_format : CompactMarkFormat
     getter slot_count : Int32
     getter physical_roster_snapshot_workspace_bytes : UInt64
@@ -29,6 +31,8 @@ module CrystalClick
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
       write_plan : W,
+      compress_marks : Bool,
+      @profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) forall T, W
       unless codec_budget.writing? && same_limits?(codec_budget.limits, limits)
         raise ArgumentError.new("Compact metadata codec budget differs from its write limits")
@@ -42,6 +46,7 @@ module CrystalClick
       end
       @mark_format = write_plan.mark_format
       @slot_count = write_plan.slot_count
+      validate_profile_binding!(columns, write_plan, transport_budget)
 
       @schema_columns = Array({String, String}).new(columns.size + 1)
       key_copy = String.new(key_name.to_slice)
@@ -88,7 +93,12 @@ module CrystalClick
                                                     0_u64
                                                   end
       @count_text = @row_count.to_s
-      @serialization_text = String.new(SERIALIZATION.to_slice)
+      serialization = if @profile.with_size_stream?
+                        SERIALIZATION_WITH_SIZE_STREAM
+                      else
+                        SERIALIZATION
+                      end
+      @serialization_text = String.new(serialization.to_slice)
       @codec_text = String.new(CODEC.to_slice)
       @metadata_version_text = "0"
       if substreams_size > WidePart::MAX_METADATA_FILE_BYTES.to_u64
@@ -153,7 +163,7 @@ module CrystalClick
         "columns.txt",
         "count.txt",
         "data.bin",
-        mark_file_name,
+        CompactPhysicalMarkOutput.file_name(@mark_format, compress_marks),
         "default_compression_codec.txt",
         "metadata_version.txt",
         "primary.idx",
@@ -194,6 +204,57 @@ module CrystalClick
     private def same_limits?(left : BinaryCodecLimits, right : BinaryCodecLimits) : Bool
       left.max_depth == right.max_depth && left.max_nodes == right.max_nodes &&
         left.max_elements == right.max_elements && left.max_bytes == right.max_bytes
+    end
+
+    private def validate_profile_binding!(
+      columns : Array(T),
+      write_plan : CompactStaticWritePlan | CompactPartWritePlan,
+      budget : CompressedStreamBudget,
+    ) forall T
+      columns.each do |column|
+        unless column.profile == @profile
+          raise UnsupportedFormatError.new("Compact value input profile differs from serialization metadata")
+        end
+      end
+
+      case write_plan
+      when CompactStaticWritePlan
+        reserve_callback_plan_snapshot!(
+          budget,
+          write_plan.column_count,
+          instance_sizeof(Array(CompactStaticCallbackPlan)).to_u64,
+          sizeof(Pointer(CompactStaticCallbackPlan)).to_u64,
+        )
+        write_plan.column_plans.each do |plan|
+          unless plan.profile == @profile
+            raise UnsupportedFormatError.new("Compact callback profile differs from serialization metadata")
+          end
+        end
+      when CompactPartWritePlan
+        reserve_callback_plan_snapshot!(
+          budget,
+          write_plan.column_count,
+          instance_sizeof(Array(CompactPartCallbackPlan)).to_u64,
+          sizeof(Pointer(CompactPartCallbackPlan)).to_u64,
+        )
+        write_plan.column_plans.each do |plan|
+          unless plan.profile == @profile
+            raise UnsupportedFormatError.new("Compact callback profile differs from serialization metadata")
+          end
+        end
+      else
+        raise UnsupportedFormatError.new("unsupported Compact callback profile plan")
+      end
+    end
+
+    private def reserve_callback_plan_snapshot!(
+      budget : CompressedStreamBudget,
+      column_count : Int32,
+      array_bytes : UInt64,
+      pointer_bytes : UInt64,
+    ) : Nil
+      bytes = checked_add(array_bytes, checked_multiply(column_count.to_u64, pointer_bytes))
+      budget.reserve_result_bytes(to_i64(bytes))
     end
 
     private def line_size(name_bytes : UInt64, type_bytes : UInt64) : UInt64
@@ -272,17 +333,6 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact physical roster workspace overflows")
       end
       left * right
-    end
-
-    private def mark_file_name : String
-      case @mark_format
-      when CompactMarkFormat::Mrk3
-        "data.mrk3"
-      when CompactMarkFormat::Mrk4
-        "data.mrk4"
-      else
-        raise UnsupportedFormatError.new("unsupported Compact mark format")
-      end
     end
 
     private def checked_add(left : UInt64, right : UInt64) : UInt64

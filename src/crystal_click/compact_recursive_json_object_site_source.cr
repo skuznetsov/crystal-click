@@ -84,20 +84,46 @@ module CrystalClick
       append_capture(expected_name, capture)
     end
 
+    # Select by canonical physical identity in MRK4 while keeping the raw
+    # callback name for this site's logical traversal. MRK3 remains positional.
+    def take_physical_exact(
+      canonical_physical_name : String,
+      raw_callback_name : String,
+      size : Int32,
+    ) : Bytes
+      ensure_capture_state!
+      capture = @ledger.capture_site_physical_exact(self, canonical_physical_name, raw_callback_name, size)
+      append_capture(raw_callback_name, capture)
+    end
+
     # A Compact grammar parser may consume only its own prefix of the MRK3
     # whole-mark tape. MRK4 remains one exact named callback. The global cursor
     # commits only after the parser reports an in-range extent.
     def with_grammar_extent(expected_name : String, &block : Bytes -> Tuple(T, Int32)) : Tuple(T, Bytes) forall T
+      with_physical_grammar_extent(expected_name, expected_name) do |remaining|
+        yield remaining
+      end
+    end
+
+    def with_physical_grammar_extent(
+      canonical_physical_name : String,
+      raw_callback_name : String,
+      &block : Bytes -> Tuple(T, Int32)
+    ) : Tuple(T, Bytes) forall T
       ensure_capture_state!
       if @grammar_active
         raise CorruptPartError.new("recursive Compact JSON source rejects a re-entrant grammar parser")
       end
       @grammar_active = true
       begin
-        value, capture = @ledger.with_site_grammar_extent(self, expected_name) do |remaining|
+        value, capture = @ledger.with_site_physical_grammar_extent(
+          self,
+          canonical_physical_name,
+          raw_callback_name,
+        ) do |remaining|
           yield remaining
         end
-        bytes = append_capture(expected_name, capture)
+        bytes = append_capture(raw_callback_name, capture)
         {value, bytes}
       ensure
         @grammar_active = false
@@ -209,6 +235,7 @@ module CrystalClick
       role_bindings : Array(ObjectDocumentInlineCallbackOrder::BodyLaneBinding),
       callback_pairs : Array(ObjectDocumentInlineCallbackOrder::CallbackPair),
       budget : BinaryCodecBudget,
+      schedule : CompactJsonObjectRoleSchedule,
     ) : Nil
       validate_prepared_source_gate!(budget)
       prefix.validate_physical_owner!(physical_plan)
@@ -219,58 +246,104 @@ module CrystalClick
         raise UnsupportedFormatError.new("recursive Compact JSON source requires complete Object statistics")
       end
 
-      schedule = CompactJsonObjectRoleSchedule.build(
-        prefix,
-        physical_plan,
-        prefix.nested_context.profile,
-        budget,
-      )
-      unless schedule.body_bindings == role_bindings && schedule.body_pairs == callback_pairs
+      root_owner = schedule.validate_root_owner!(prefix, physical_plan, budget)
+      unless root_owner.body_bindings == role_bindings && root_owner.body_pairs == callback_pairs
         raise CorruptPartError.new("recursive Compact site body roles differ from the prepared Object schedule")
       end
       unless schedule.event_names == @logical_event_names &&
-             @captured.size == schedule.event_names.size
+             @captured.size == schedule.prefix_events.size + schedule.body_events.size
         raise CorruptPartError.new("recursive Compact site did not consume its exact callback schedule")
       end
 
+      schedule.each_owner do |owner|
+        unless owner.prefix.prefix_callback_count == owner.prefix_pairs.size
+          raise CorruptPartError.new("recursive Compact prefix callbacks differ from their owner-local schedule")
+        end
+        body_count = owner.prefix.body_callback_count
+        unless body_count == owner.body_pairs.size && owner.prefix.body_callback_slice_count == body_count
+          raise CorruptPartError.new("recursive Compact body callbacks differ from their owner-local schedule")
+        end
+      end
+
       event_index = 0
-      schedule.prefix_pairs.each_with_index do |pair, index|
-        parsed_name, parsed_bytes = prefix.prefix_callback_at(index, budget)
+      path_position = 0_u64
+      prefix_owner_indices = Hash(String, Int32).new(initial_capacity: schedule.owner_schedules.size)
+      schedule.owner_schedules.each_key { |root| prefix_owner_indices[root] = 0 }
+      schedule.prefix_events.each do |event|
+        owner = schedule.owner_for_root(event[0])
+        owner_index = prefix_owner_indices[event[0]]? ||
+                      raise(CorruptPartError.new("recursive Compact prefix event has no owner-local index"))
+        pair = owner.prefix_pairs[owner_index]? ||
+               raise(CorruptPartError.new("recursive Compact prefix event exceeds its owner-local schedule"))
+        parsed_name, parsed_bytes = owner.prefix.prefix_callback_at(owner_index, budget)
         captured = @captured[event_index]? ||
                    raise(CorruptPartError.new("recursive Compact JSON prefix capture is incomplete"))
-        unless pair[1] == parsed_name && captured.name == parsed_name && same_bytes?(captured.bytes, parsed_bytes)
+        finish = checked_add(path_position, parsed_bytes.size.to_u64)
+        unless pair[0] == event[1] && pair[1] == event[2] && parsed_name == event[1] &&
+               captured.name == event[2] && @logical_event_names[event_index]? == event[2] &&
+               same_bytes?(captured.bytes, parsed_bytes) && captured.path_start == path_position &&
+               captured.path_end == finish
           raise CorruptPartError.new("recursive Compact JSON prefix bytes differ from their parent source")
         end
+        @coordinate_context.validate_path_bytes!(captured.path_start, parsed_bytes, budget)
+        path_position = finish
         event_index += 1
+        prefix_owner_indices[event[0]] = owner_index + 1
       end
-      callback_pairs.each_with_index do |pair, index|
-        parsed_name, parsed_bytes = prefix.body_callback_at(index, budget)
-        slice = prefix.body_callback_slice_at(index)
+      prefix_owner_indices.each do |root, count|
+        unless count == schedule.owner_for_root(root).prefix_pairs.size
+          raise CorruptPartError.new("recursive Compact prefix owner was not consumed exactly")
+        end
+      end
+
+      body_owner_indices = Hash(String, Int32).new(initial_capacity: schedule.owner_schedules.size)
+      schedule.owner_schedules.each_key { |root| body_owner_indices[root] = 0 }
+      schedule.body_events.each do |event|
+        owner = schedule.owner_for_root(event[0])
+        owner_index = body_owner_indices[event[0]]? ||
+                      raise(CorruptPartError.new("recursive Compact body event has no owner-local index"))
+        pair = owner.body_pairs[owner_index]? ||
+               raise(CorruptPartError.new("recursive Compact body event exceeds its owner-local schedule"))
+        binding = owner.body_bindings[owner_index]? ||
+                  raise(CorruptPartError.new("recursive Compact body event has no owner-local role binding"))
+        parsed_name, parsed_bytes = owner.prefix.body_callback_at(owner_index, budget)
+        slice = owner.prefix.body_callback_slice_at(owner_index)
         captured = @captured[event_index]? ||
                    raise(CorruptPartError.new("recursive Compact JSON body capture is incomplete"))
-        unless parsed_name == pair[0] && captured.name == pair[1] &&
+        finish = checked_add(path_position, parsed_bytes.size.to_u64)
+        unless pair[0] == event[1] && pair[1] == event[2] && binding[0] == event[1] &&
+               parsed_name == event[1] && captured.name == event[2] &&
+               @logical_event_names[event_index]? == event[2] &&
                same_bytes?(captured.bytes, parsed_bytes) && same_bytes?(captured.bytes, slice.bytes) &&
-               slice.canonical_name == pair[0] && slice.callback_name == pair[1] &&
+               slice.canonical_name == event[1] && slice.callback_name == event[2] &&
                slice.context.same?(@coordinate_context) &&
-               slice.relative_start == captured.path_start && slice.relative_end == captured.path_end
+               slice.relative_start == path_position && slice.relative_end == finish &&
+               captured.path_start == path_position && captured.path_end == finish
           raise CorruptPartError.new("recursive Compact JSON body bytes or coordinates differ from their parent source")
         end
         @coordinate_context.validate_path_bytes!(captured.path_start, parsed_bytes, budget)
+        path_position = finish
         event_index += 1
+        body_owner_indices[event[0]] = owner_index + 1
       end
-      unless event_index == @captured.size &&
+      body_owner_indices.each do |root, count|
+        unless count == schedule.owner_for_root(root).body_pairs.size
+          raise CorruptPartError.new("recursive Compact body owner was not consumed exactly")
+        end
+      end
+      unless event_index == @captured.size && path_position == @coordinate_context.path_data_size.to_u64 &&
              @captured.last?.try(&.path_end) == @coordinate_context.path_data_size.to_u64
         raise CorruptPartError.new("recursive Compact site extents do not cover its captured path")
       end
 
       if schedule.advanced
         begin
-          unless prefix.body_role_bindings == schedule.body_bindings &&
-                 prefix.body_callback_pairs == schedule.body_pairs
+          unless prefix.body_role_bindings == root_owner.body_bindings &&
+                 prefix.body_callback_pairs == root_owner.body_pairs
             raise CorruptPartError.new("recursive Compact Advanced prefix retained a different body schedule")
           end
         rescue ex : ArgumentError
-          prefix.bind_body_schedule!(schedule.body_bindings, schedule.body_pairs)
+          prefix.bind_body_schedule!(root_owner.body_bindings, root_owner.body_pairs)
         end
       end
       nil

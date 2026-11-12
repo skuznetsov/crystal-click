@@ -144,7 +144,7 @@ module CrystalClick
 
       @row_count = @context.row_count
       @mark_count = @mark_row_counts.size.to_i32
-      @selected_checksum_names = @context.mode.mrk4? ? ["data.bin", "data.mrk4"] : ["data.bin", "data.mrk3"]
+      @selected_checksum_names = ["data.bin", @context.marks_name]
       @logical_read_bytes = @context.logical_bytes_for(@column_name)
       @prepared_context = nil
       @frozen_event_names = nil
@@ -327,6 +327,7 @@ module CrystalClick
       object_statistics_offsets = Array(Int32).new(@mark_count)
       dynamic_prefixes = Array(Hash(String, Bytes)).new(@mark_count)
       dynamic_statistics_offsets = Array(Hash(String, Int32)).new(@mark_count)
+      typed_json_contexts = Array(ObjectDocumentTypedDynamicJsonReadContext?).new(@mark_count)
       advanced_marks = Array(CompactStaticJsonAdvancedPreparedMark).new(@mark_count)
       advanced_layout = @advanced_layout
       typed_schema = nil.as(Hash(String, BinaryDataType)?)
@@ -338,17 +339,6 @@ module CrystalClick
         end
         site_identity = "#{@manifest.physical_prefix}:mark=#{mark_index}"
         framer = CompactJsonObjectSiteFramer.new(@context.mode, granule.shards, budget, @context, site_identity)
-        observed_dynamic_offsets = Hash(String, Int32).new
-        statistics_offset_observer = ->(name : String, offset : Int32) do
-          if previous = observed_dynamic_offsets[name]?
-            unless previous == offset
-              raise CorruptPartError.new("Compact static JSON Dynamic statistics offset changed within one prefix")
-            end
-          else
-            observed_dynamic_offsets[String.new(name.to_slice)] = offset
-          end
-          nil
-        end
         nested_context = ObjectSharedNestedSerializationContext.for_read(0_u64, @ordinary_profile)
         prefix = ObjectDocumentCallbackPrefixReader.read_static_json_prefix(
           framer,
@@ -360,7 +350,6 @@ module CrystalClick
           nested_context,
           budget,
           true,
-          statistics_offset_observer,
         )
         physical_plan = ObjectDocumentPhysicalPlan.from_escaped_prefix(
           @manifest.physical_prefix,
@@ -374,6 +363,7 @@ module CrystalClick
           root_dynamic_json_budget: budget,
         )
         prefix.bind_physical_plan!(physical_plan)
+        owner_statistics_offsets = prefix.statistics_offsets_snapshot(budget)
 
         reject_nested_static_json_sites!(prefix, budget)
         schedule = CompactJsonObjectRoleSchedule.build(prefix, physical_plan, @ordinary_profile, budget)
@@ -389,7 +379,7 @@ module CrystalClick
         else
           frozen_names = copy_strings(schedule.event_names)
         end
-        prefix.start_body_capture!
+        schedule.begin_body_capture!(budget)
         if @context.mode.mrk3?
           CompactJsonObjectMapTapeFramer.capture_body!(
             prefix,
@@ -402,13 +392,9 @@ module CrystalClick
             budget,
           )
         else
-          schedule.body_pairs.each do |canonical_name, callback_name|
-            prefix.capture_body_callback_from!(canonical_name, callback_name, budget) do
-              framer.take_physical_inline_fragment_slice(canonical_name, callback_name)
-            end
-          end
+          schedule.capture_physical_body_events!(framer, budget)
         end
-        prefix.finish_body_capture!(schedule.body_pairs.size)
+        schedule.finish_body_capture!(budget)
         if @context.mode.mrk4?
           framer.validate_expected_events!(schedule.physical_event_names(budget), schedule.event_names)
         else
@@ -416,16 +402,17 @@ module CrystalClick
         end
         framer.finish!
         unless schedule.advanced
-          framer.validate_prepared_source!(prefix, physical_plan, schedule.body_bindings, schedule.body_pairs, budget)
+          framer.validate_prepared_source!(prefix, physical_plan, schedule.body_bindings, schedule.body_pairs, budget, schedule)
         end
+        typed_json_contexts << ObjectDocumentTypedDynamicJsonReadContext.from_prefix(prefix, budget)
 
         grid = StorageOccurrenceGrid.new(
           [granule.row_count] of UInt64,
           [granule.row_count] of UInt64,
           budget,
         )
-        complete_statistics_offsets = Hash(String, Int32).new(initial_capacity: observed_dynamic_offsets.size + 1)
-        observed_dynamic_offsets.each { |name, offset| complete_statistics_offsets[name] = offset }
+        complete_statistics_offsets = Hash(String, Int32).new(initial_capacity: owner_statistics_offsets.size + 1)
+        owner_statistics_offsets.each { |name, offset| complete_statistics_offsets[name] = offset }
         object_callback_name = PhysicalStreamName.append_literal(@manifest.callback_prefix, ".object_structure")
         complete_statistics_offsets[object_callback_name] = prefix.object_structure_statistics_offset
         if schedule.advanced
@@ -442,6 +429,7 @@ module CrystalClick
                 object_statistics_offsets,
                 dynamic_prefixes,
                 dynamic_statistics_offsets,
+                typed_json_contexts,
               ))
             workspace_observer.call(checked_add(active_bytes, owner_bytes))
             nil
@@ -457,6 +445,7 @@ module CrystalClick
             @ordinary_profile,
             framer,
             owner_observer,
+            schedule,
           )
           unless mark_owner.logical_row_count == granule.row_count
             raise CorruptPartError.new("Advanced Compact prepared mark returned the wrong row count")
@@ -490,7 +479,7 @@ module CrystalClick
         retained_object_prefix, retained_dynamic_prefixes = retain_prefix_metadata(
           prefix,
           object_callback_name,
-          observed_dynamic_offsets,
+          owner_statistics_offsets,
           budget,
         )
         rows << granule.row_count
@@ -513,6 +502,7 @@ module CrystalClick
             object_statistics_offsets,
             dynamic_prefixes,
             dynamic_statistics_offsets,
+            typed_json_contexts,
           ))
         workspace_observer.call(active_bytes)
       end
@@ -537,6 +527,7 @@ module CrystalClick
         object_statistics_offsets,
         dynamic_prefixes,
         dynamic_statistics_offsets,
+        typed_json_contexts,
         2_i32,
         2_i32,
       )
@@ -559,6 +550,7 @@ module CrystalClick
           object_statistics_offsets,
           dynamic_prefixes,
           dynamic_statistics_offsets,
+          typed_json_contexts,
         ))
       workspace_observer.call(active_bytes)
 
@@ -600,9 +592,20 @@ module CrystalClick
     end
 
     private def reject_nested_static_json_sites!(prefix : ObjectDocumentCallbackPrefix, budget : BinaryCodecBudget) : Nil
-      unless prefix.plan.root_dynamic_json_object_leaf_plans(budget).empty? &&
-             prefix.plan.typed_dynamic_json_object_leaf_plans(budget).empty?
-        raise UnsupportedFormatError.new("nested JSON Object sites are outside this Compact static-root checkpoint")
+      unless prefix.plan.root_dynamic_json_object_leaf_plans(budget).empty?
+        raise UnsupportedFormatError.new("root-Dynamic JSON Object sites are outside this Compact static-root checkpoint")
+      end
+      prefix.plan.typed_dynamic_json_object_leaf_plans(budget).each do |path, bindings|
+        type = prefix.plan.typed_type_for(path)
+        structure = prefix.plan.typed_dynamic_for(path)
+        valid_bindings = bindings.all? do |key, _plan|
+          CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(
+            structure, key, budget.limits.max_depth
+          )
+        end
+        unless type.tag == BinaryDataType::TAG_DYNAMIC && valid_bindings
+          raise UnsupportedFormatError.new("Compact static-root JSON admits only direct JSON or bounded Array-chain typed-Dynamic actuals")
+        end
       end
       nil
     end
@@ -665,6 +668,7 @@ module CrystalClick
       object_statistics_offsets : Array(Int32),
       dynamic_prefixes : Array(Hash(String, Bytes)),
       dynamic_statistics_offsets : Array(Hash(String, Int32)),
+      typed_json_contexts : Array(ObjectDocumentTypedDynamicJsonReadContext?),
     ) : UInt64
       bytes = partial_stream_workspace_bytes(streams)
       bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
@@ -704,6 +708,14 @@ module CrystalClick
       dynamic_statistics_offsets.each do |entries|
         bytes = checked_add(bytes, instance_sizeof(Hash(String, Int32)).to_u64)
         entries.each_key { |name| bytes = checked_add(bytes, string_owner_bytes(name)) }
+      end
+      bytes = checked_add(bytes, instance_sizeof(Array(ObjectDocumentTypedDynamicJsonReadContext?)).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(typed_json_contexts.size.to_u64, sizeof(Pointer(ObjectDocumentTypedDynamicJsonReadContext)).to_u64))
+      typed_json_contexts.each do |context|
+        if owner = context
+          bytes = checked_add(bytes, owner.retained_workspace_bytes)
+        end
       end
       bytes
     end

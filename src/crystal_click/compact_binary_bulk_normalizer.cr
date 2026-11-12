@@ -689,9 +689,15 @@ module CrystalClick
         cursor.finish_event
         index_role = "#{role}.indexes"
         cursor.begin_event(body_name(index_role, physical))
-        start = cursor.position
-        scan_low_cardinality_index(type.child_at(0), count, cursor)
-        index_bytes = cursor.consumed_slice(start)
+        _extent, index_bytes = cursor.with_transactional_borrowed_prefix do |bytes|
+          consumed = BinaryLowCardinalityAdditionalIndexGrammar.parse_extent(
+            type.child_at(0),
+            count,
+            bytes,
+            @limits,
+          )
+          {consumed, consumed}
+        end
         cursor.finish_event
         append_lane(lanes, index_role, index_bytes, budget, workspace_observer, physical_workspace_bytes, mark_count)
       when BinaryDataType::TAG_VARIANT, BinaryDataType::TAG_DYNAMIC
@@ -699,27 +705,31 @@ module CrystalClick
         mode = variant_modes[discriminator_role]? ||
                raise(CorruptPartError.new("Compact Variant body has no matching state prefix"))
         cursor.begin_event(body_name(discriminator_role, physical))
-        body_start = cursor.position
-        if cursor_mrk4?(cursor)
-          # mrk4 gives an exact callback slice; consuming it here leaves
-          # grammar validation to the shared framing adapter below.
-          body = cursor.read_exact(cursor.remaining)
-        else
-          read_variant_tape_body(cursor, mode, count)
-          body = cursor.consumed_slice(body_start)
+        if mode == DynamicDiscriminatorBodyValidator::COMPACT_MODE
+          # The shared mark grammar allocates only the normalized Q-byte tag
+          # lane. Its input is a borrowed callback/tape view, not a synthetic
+          # header-plus-body copy or a whole parent mark.
+          observe_workspace(
+            workspace_observer,
+            physical_workspace_bytes,
+            lanes.size,
+            mark_count,
+            sum_lane_data_bytes(lanes),
+            count,
+          )
+        end
+        normalized, _physical_body = cursor.with_transactional_borrowed_prefix do |body|
+          BinaryBulkDiscriminatorFramingAdapter.read_mark_body(
+            discriminator_role,
+            mode,
+            body,
+            count,
+            budget,
+            cursor.mrk4?,
+          )
         end
         cursor.finish_event
-        tags = normalize_variant_body(
-          discriminator_role,
-          mode,
-          count,
-          body,
-          budget,
-          lanes,
-          workspace_observer,
-          physical_workspace_bytes,
-          mark_count,
-        )
+        tags = normalized
         append_lane(lanes, discriminator_role, tags, budget, workspace_observer, physical_workspace_bytes, mark_count)
         arm_count = if type.tag == BinaryDataType::TAG_DYNAMIC
                       dynamic_plan.try(&.arm_count(role)) ||
@@ -791,157 +801,6 @@ module CrystalClick
       bytes = cursor.read_exact(size.to_i32)
       cursor.finish_event
       bytes
-    end
-
-    private def scan_low_cardinality_index(
-      child_type : BinaryDataType,
-      expected_rows : UInt64,
-      cursor : CompactBinaryBulkGranuleCursor,
-    ) : Nil
-      return nil if expected_rows == 0_u64
-
-      flags = cursor.read_u64
-      if (flags & ~BinaryLowCardinalityStorageStreams::ALLOWED_MASK) != 0_u64 ||
-         (flags & BinaryLowCardinalityStorageStreams::GLOBAL_BIT) != 0_u64
-        raise UnsupportedFormatError.new("unsupported Compact LowCardinality index flags")
-      end
-      unless (flags & BinaryLowCardinalityStorageStreams::ADDITIONAL_BIT) != 0_u64 &&
-             (flags & BinaryLowCardinalityStorageStreams::UPDATE_BIT) != 0_u64
-        raise UnsupportedFormatError.new("Compact LowCardinality index record is not self-contained")
-      end
-      width = BinaryLowCardinalityStorageStreams.width_for_code(flags & 0x3_u64)
-      key_count = cursor.read_u64
-      if key_count == 0_u64 || key_count > @limits.max_elements.to_u64 ||
-         key_count > Int32::MAX.to_u64
-        raise CorruptPartError.new("Compact LowCardinality additional-key count is outside its bound")
-      end
-      _, scalar_type = BinaryLowCardinalityStorageStreams.unwrap(child_type)
-      key_count.times { skip_low_cardinality_scalar(scalar_type, cursor) }
-      row_count = cursor.read_u64
-      unless row_count == expected_rows
-        raise CorruptPartError.new("Compact LowCardinality index row count differs from its occurrence count")
-      end
-      id_bytes = multiply_checked(row_count, width.to_u64)
-      if id_bytes > Int32::MAX.to_u64
-        raise CorruptPartError.new("Compact LowCardinality index IDs exceed the in-memory domain")
-      end
-      cursor.read_exact(id_bytes.to_i32)
-      nil
-    end
-
-    private def skip_low_cardinality_scalar(type : BinaryDataType, cursor : CompactBinaryBulkGranuleCursor) : Nil
-      case type.tag
-      when BinaryDataType::TAG_STRING
-        length = cursor.read_var_uint
-        if length > @limits.max_bytes.to_u64 || length > Int32::MAX.to_u64
-          raise CorruptPartError.new("Compact LowCardinality String key exceeds its bounded domain")
-        end
-        cursor.read_exact(length.to_i32)
-      when BinaryDataType::TAG_BOOL
-        value = cursor.read_exact(1)[0]
-        if value > 1_u8
-          raise CorruptPartError.new("Compact LowCardinality Bool key is not zero or one")
-        end
-      else
-        width = type.fixed_width ||
-                raise(UnsupportedFormatError.new("unsupported Compact LowCardinality dictionary scalar"))
-        cursor.read_exact(width)
-      end
-      nil
-    end
-
-    private def read_variant_tape_body(
-      cursor : CompactBinaryBulkGranuleCursor,
-      mode : UInt64,
-      expected_rows : UInt64,
-    ) : Nil
-      if mode == DynamicDiscriminatorBodyValidator::BASIC_MODE
-        if expected_rows > Int32::MAX.to_u64
-          raise CorruptPartError.new("Compact Variant row count exceeds its supported domain")
-        end
-        cursor.read_exact(expected_rows.to_i32)
-        return nil
-      end
-      if mode != DynamicDiscriminatorBodyValidator::COMPACT_MODE
-        raise UnsupportedFormatError.new("unsupported Compact Variant discriminator mode")
-      end
-      if expected_rows == 0_u64
-        return nil
-      end
-      rows = cursor.read_var_uint
-      unless rows == expected_rows
-        raise CorruptPartError.new("Compact Variant COMPACT frame row count differs from its mark")
-      end
-      format = cursor.read_exact(1)[0]
-      case format
-      when DynamicDiscriminatorBodyValidator::COMPACT_ROW_TAGS
-        cursor.read_exact(expected_rows.to_i32)
-      when DynamicDiscriminatorBodyValidator::COMPACT_UNIFORM_TAG
-        cursor.read_exact(1)
-      else
-        raise CorruptPartError.new("unsupported Compact Variant COMPACT frame kind")
-      end
-      nil
-    end
-
-    private def normalize_variant_body(
-      role : String,
-      mode : UInt64,
-      expected_rows : UInt64,
-      body : Bytes,
-      budget : BinaryCodecBudget,
-      lanes : Hash(String, CompactBinaryBulkLaneBuilder),
-      workspace_observer : Proc(UInt64, Nil),
-      physical_workspace_bytes : UInt64,
-      mark_count : Int32,
-    ) : Bytes
-      layout = DynamicDiscriminatorBodyValidator.inspect_body(mode, body, expected_rows)
-      physical_size = body.size.to_i64 + BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES
-      if physical_size > Int32::MAX
-        raise CorruptPartError.new("Compact Variant physical body exceeds the in-memory domain")
-      end
-      observe_workspace(
-        workspace_observer,
-        physical_workspace_bytes,
-        lanes.size,
-        mark_count,
-        sum_lane_data_bytes(lanes),
-        physical_size.to_u64,
-      )
-      physical = Bytes.new(physical_size.to_i32)
-      8.times { |index| physical[index] = ((mode >> (index * 8)) & 0xff_u64).to_u8 }
-      body.each_with_index { |byte, index| physical[index + 8] = byte }
-      # The shared framing adapter allocates the expanded tag lane and its two
-      # coordinates. `expected_rows` is recursive Q, not parent P; for an
-      # Array(Variant(...)) this is the only correct upper bound.
-      adapter_workspace = checked_add(
-        physical_size.to_u64,
-        checked_add(expected_rows, 2_u64 * sizeof(UInt64).to_u64),
-      )
-      observe_workspace(
-        workspace_observer,
-        physical_workspace_bytes,
-        lanes.size,
-        mark_count,
-        sum_lane_data_bytes(lanes),
-        adapter_workspace,
-      )
-      normalized, offsets, prefix_size = BinaryBulkDiscriminatorFramingAdapter.read_lane(
-        role,
-        physical,
-        [8_u64, physical.size.to_u64],
-        BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES,
-        budget
-      )
-      unless prefix_size == 0 && offsets.size == 2 &&
-             offsets[0] == 0_u64 && offsets[1] == expected_rows
-        raise CorruptPartError.new("Compact Variant framing adapter returned an invalid mark grid")
-      end
-      expected_format, _tag_offset = layout
-      if expected_format == DynamicDiscriminatorBodyValidator::COMPACT_EMPTY && !normalized.empty?
-        raise CorruptPartError.new("empty Compact Variant mark expanded to discriminator tags")
-      end
-      normalized
     end
 
     private def append_lane(

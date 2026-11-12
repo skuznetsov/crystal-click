@@ -144,8 +144,7 @@ module CrystalClick
       @row_count = @context.row_count
       @mark_count = @mark_row_counts.size.to_i32
       @source_declaration = String.new(canonical.to_slice)
-      marks_name = @context.mode.mrk3? ? "data.mrk3" : "data.mrk4"
-      @selected_checksum_names = ["data.bin", marks_name]
+      @selected_checksum_names = ["data.bin", @context.marks_name]
       @logical_read_bytes = @context.logical_bytes_for(@column_name)
       @normalized_streams = nil
       @normalized_rows = nil

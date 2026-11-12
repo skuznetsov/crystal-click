@@ -16,7 +16,7 @@ module CrystalClick
       end
     end
 
-    @profile : BinaryBulkProfile
+    getter profile : BinaryBulkProfile
     @names : Hash(String, String)
     @prefix_sizes : Hash(String, Int32)
     @context : PhysicalStreamPlanContext
@@ -342,6 +342,14 @@ module CrystalClick
     def stream_name_for(role : String) : String
       name = @names[role]? || raise(KeyError.new("binary bulk role not found: #{role.inspect}"))
       String.new(name.to_slice)
+    end
+
+    # Read the retained physical basename length without allocating the
+    # detached String returned by #stream_name_for. Owners that need to
+    # preflight derived callback names can census their exact size first.
+    def stream_name_bytesize_for(role : String) : Int32
+      name = @names[role]? || raise(KeyError.new("binary bulk role not found: #{role.inspect}"))
+      name.bytesize
     end
 
     # Dictionary prefix ownership follows the admitted recursive role plan;

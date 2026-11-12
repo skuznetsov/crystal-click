@@ -16,6 +16,7 @@ module CrystalClick
       granules : Array(Array(StorageColumnValue)),
       @json_context : CompactJsonWriteContext,
       canonical_type : BinaryDataType? = nil,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     )
       if name.empty?
         raise ArgumentError.new("Compact JSON column name must be nonempty")
@@ -51,7 +52,7 @@ module CrystalClick
       end
 
       @name = String.new(name.to_slice)
-      @profile = BinaryBulkProfile.single_stream
+      @profile = profile
       @granules = Array(Array(StorageColumnValue)).new(granules.size)
       granules.each { |rows| @granules << rows.dup }
     end

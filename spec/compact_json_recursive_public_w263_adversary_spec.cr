@@ -11,7 +11,7 @@ describe "W263 recursive/public Compact JSON adversaries" do
   fixture = CompactJsonRecursivePublicW263MutantFixture
   expected = CompactJsonRecursivePublicW263Fixture.expected_signatures
 
-  it "admits only the four sealed recursive Object shapes" do
+  it "admits the bounded recursive Object/Array/Tuple/UInt8 subset" do
     object = CrystalClick::StorageColumnSchema.object(
       CrystalClick::ObjectDocumentSchema.parse_declaration("JSON"),
       "JSON",
@@ -19,20 +19,27 @@ describe "W263 recursive/public Compact JSON adversaries" do
     admitted = [
       object,
       CrystalClick::StorageColumnSchema.parse("Array(JSON)"),
+      CrystalClick::StorageColumnSchema.parse("Array(Array(JSON))"),
       CrystalClick::StorageColumnSchema.parse("Array(Tuple(JSON, UInt8))"),
       CrystalClick::StorageColumnSchema.parse("Tuple(JSON, JSON)"),
+      CrystalClick::StorageColumnSchema.parse("Tuple(Array(JSON), Array(JSON))"),
+      CrystalClick::StorageColumnSchema.parse("Tuple(JSON, UInt8)"),
+      CrystalClick::StorageColumnSchema.parse("Array(Tuple(UInt8, JSON))"),
+      # W283 expands the recursive JSON owner only; this JSON-free Variant
+      # Bulk sibling remains outside the shared prefix-free admission gate.
+      CrystalClick::StorageColumnSchema.parse("Tuple(JSON, Variant(String, UInt8))"),
     ]
     admitted.each do |schema|
       CrystalClick::CompactRecursiveJsonColumnReader.admitted_schema?(schema).should be_true
     end
 
+    variant = CrystalClick::BinaryRecursiveDataTypeNameReader.parse_canonical(
+      "Variant(String, UInt8)",
+    ).not_nil!
+    CrystalClick::BinaryPrefixFreeStaticTypeAdmission.admitted?(variant).should be_false
+
     rejected = [
-      "Array(Array(JSON))",
-      "Tuple(Array(JSON), Array(JSON))",
-      "Tuple(JSON, UInt8)",
-      "Array(Tuple(UInt8, JSON))",
       "Tuple(JSON, Dynamic(max_types=8))",
-      "Tuple(JSON, Variant(String, UInt8))",
     ]
     rejected.each do |declaration|
       schema = CrystalClick::StorageColumnSchema.parse(declaration)

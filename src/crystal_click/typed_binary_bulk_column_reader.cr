@@ -29,11 +29,12 @@ module CrystalClick
         "typed BinaryBulk reader transport budget differs from its read limits",
       )
       dispatch_budget = transport_budget || CompressedStreamBudget.new(transport_limits)
-      metadata = PartMetadataFileReader.new(File.expand_path(part_path), dispatch_budget)
+      path = File.expand_path(part_path)
+      metadata = PartMetadataFileReader.new(path, dispatch_budget)
       checksums = PartChecksums.parse(
         metadata.read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice
       )
-      if checksums.entry("data.mrk3") || checksums.entry("data.mrk4")
+      if CompactMarkFileAdapter.routing_candidate?(path, checksums)
         effective_transport_budget = transport_budget || dispatch_budget
         reader = CompactBinaryBulkColumnReader.open(
           part_path,

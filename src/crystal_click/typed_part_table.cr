@@ -63,7 +63,7 @@ module CrystalClick
         checksums = PartChecksums.parse(
           metadata.read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice
         )
-        reader : Reader = if checksums.entry("data.mrk3") || checksums.entry("data.mrk4")
+        reader : Reader = if CompactMarkFileAdapter.routing_candidate?(path, checksums)
           CompactPartTable.open_selected_typed([path], @columns)
         else
           WidePartTable.open_selected_typed([path], @columns)

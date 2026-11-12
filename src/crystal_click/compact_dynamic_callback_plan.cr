@@ -34,8 +34,8 @@ module CrystalClick
       unless @type.contains_dynamic?
         raise ArgumentError.new("Compact Dynamic callback plan requires a Dynamic-bearing descriptor")
       end
-      unless @profile.single_stream? && input.map_basic?
-        raise UnsupportedFormatError.new("Compact Dynamic writer requires single-stream BASIC Map serialization")
+      unless (@profile.single_stream? || @profile.with_size_stream?) && input.map_basic?
+        raise UnsupportedFormatError.new("Compact Dynamic writer requires a supported String profile and BASIC Map serialization")
       end
       if @column_name.empty?
         raise ArgumentError.new("Compact Dynamic column name must be nonempty")

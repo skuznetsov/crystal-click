@@ -198,6 +198,29 @@ module CrystalClick
       nil
     end
 
+    # Borrow the next named MRK4 callback without opening or advancing it.
+    # The cursor's complete physical input must already be charged. The
+    # read-only view shares the event's storage and must not outlive this cursor.
+    def pending_event_slice(name : String) : Bytes
+      unless @complete_wire_input_charged
+        raise ArgumentError.new("Compact borrowed input requires a prior complete-granule charge")
+      end
+      unless @mode.mrk4?
+        raise ArgumentError.new("Compact pending named callback view requires mrk4")
+      end
+      if @active_name || @active_bytes
+        raise CorruptPartError.new("Compact pending callback view cannot overlap an active callback")
+      end
+
+      event = @events[@event_index]? ||
+              raise(CorruptPartError.new("Compact mrk4 callback is missing from its exact roster"))
+      unless event[0] == name
+        raise CorruptPartError.new("Compact mrk4 pending callback differs from the selected serializer traversal")
+      end
+      bytes = event[1]
+      Bytes.new(bytes.to_unsafe, bytes.size, read_only: true)
+    end
+
     # Borrow the unconsumed callback slice for an existing codec parser. The
     # returned Bytes is a view over cursor-owned bytes and remains valid while
     # this cursor is alive; callers must commit only the parser's observed
@@ -208,6 +231,29 @@ module CrystalClick
       end
       source = current_source
       source[@position, source.size - @position]
+    end
+
+    # Parse and commit one bounded grammar extent without changing the
+    # caller's historical input-byte accounting. The parser receives a
+    # read-only borrowed view; failure, an out-of-range extent, or MRK4
+    # trailing bytes leave the cursor position unchanged. This is for
+    # consumers that charge their normalized output lanes rather than
+    # precharging raw physical input.
+    def with_transactional_borrowed_prefix(&block : Bytes -> Tuple(T, Int32)) : Tuple(T, Bytes) forall T
+      source = current_source
+      source_view = source[@position, source.size - @position]
+      borrowed = Bytes.new(source_view.to_unsafe, source_view.size, read_only: true)
+      value, consumed = yield borrowed
+      unless consumed >= 0 && consumed <= borrowed.size
+        raise CorruptPartError.new("Compact borrowed parser consumed outside its callback slice")
+      end
+      if @mode.mrk4? && consumed != borrowed.size
+        raise CorruptPartError.new("Compact borrowed parser did not consume its exact named callback")
+      end
+
+      start = @position
+      @position += consumed
+      {value, source[start, consumed]}
     end
 
     # Advance after a codec parsed a borrowed prefix. The enclosing caller must

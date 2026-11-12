@@ -211,7 +211,7 @@ module CrystalClick
         checksums = PartChecksums.parse(
           metadata.read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice
         )
-        if checksums.entry("data.mrk3") || checksums.entry("data.mrk4")
+        if CompactMarkFileAdapter.routing_candidate?(path, checksums)
           CompactDynamicBulkColumnReader.open(path, column, type)
         else
           DynamicBulkColumnReader.open(path, column, type)

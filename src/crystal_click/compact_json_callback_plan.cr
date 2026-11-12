@@ -11,8 +11,17 @@ module CrystalClick
       getter kind : Symbol
       getter owner_path : String
       getter structure_path : String
+      getter owner_plan : ObjectDocumentPlan
+      getter owner_physical_plan : ObjectDocumentPhysicalPlan
 
-      def initialize(@site_key : String, @kind : Symbol, @owner_path : String, @structure_path : String)
+      def initialize(
+        @site_key : String,
+        @kind : Symbol,
+        @owner_path : String,
+        @structure_path : String,
+        @owner_plan : ObjectDocumentPlan,
+        @owner_physical_plan : ObjectDocumentPhysicalPlan,
+      )
       end
     end
 
@@ -98,8 +107,8 @@ module CrystalClick
       unless budget.writing? && same_limits?(budget.limits, limits)
         raise ArgumentError.new("Compact JSON callback planning requires a compatible write codec budget")
       end
-      unless input.profile.single_stream? && input.map_basic?
-        raise UnsupportedFormatError.new("Compact JSON writer requires the source single-stream BASIC Map profile")
+      unless (input.profile.single_stream? || input.profile.with_size_stream?) && input.map_basic?
+        raise UnsupportedFormatError.new("Compact JSON writer requires a supported String profile and BASIC Map serialization")
       end
       if input.name.empty?
         raise ArgumentError.new("Compact JSON column name must be nonempty")
@@ -127,15 +136,16 @@ module CrystalClick
       @bound_grid = Array(Array(StorageColumnValue)).new(input.granules.size)
       input.granules.each { |rows| @bound_grid << rows.dup }
 
-      @schema_plan = CompactRecursiveJsonSchemaPlan.new(input.schema, input.name, limits, budget)
+      @schema_plan = CompactRecursiveJsonSchemaPlan.new(input.schema, input.name, limits, budget, input.profile)
       json_site_count = @schema_plan.json_site_count
       array_site_count = @schema_plan.array_site_count
       uint8_site_count = @schema_plan.uint8_site_count
+      bulk_site_count = @schema_plan.bulk_site_count
       site_slots = checked_add(
         checked_add(json_site_count.to_u64, array_site_count.to_u64),
-        uint8_site_count.to_u64,
+        checked_add(uint8_site_count.to_u64, bulk_site_count.to_u64),
       )
-      unless json_site_count > 0 && site_slots <= 4_u64
+      unless json_site_count > 0
         raise UnsupportedFormatError.new("Compact JSON callback plan has an inconsistent schema-site roster")
       end
       budget.ensure_future_nodes(3_u64)
@@ -145,6 +155,11 @@ module CrystalClick
       sites = @schema_plan.json_sites
       array_sites = @schema_plan.array_sites
       uint8_sites = @schema_plan.uint8_sites
+      bulk_sites = @schema_plan.bulk_sites
+      unless sites.size == json_site_count && array_sites.size == array_site_count &&
+             uint8_sites.size == uint8_site_count && bulk_sites.size == bulk_site_count
+        raise UnsupportedFormatError.new("Compact JSON schema-site roster changed after planning")
+      end
       object_schemas = Hash(String, ObjectDocumentSchema).new(initial_capacity: sites.size)
       input.schema.each_json_site { |path, schema| object_schemas[String.new(path.to_slice)] = schema }
       unless @json_context.site_count == sites.size
@@ -167,6 +182,19 @@ module CrystalClick
       prefixes = Hash(String, Array(String)).new(initial_capacity: sites.size)
       body_pairs_by_site = Hash(String, Array(CallbackPair)).new(initial_capacity: sites.size)
       seen_callback_names = Set(String).new
+      prefix_callback_count = 0_u64
+      bulk_sites.each do |site|
+        prefix_callback_count = checked_add(prefix_callback_count, site.prefix_role_count.to_u64)
+      end
+      prefix_metadata = nil.as(Hash(String, Tuple(String, Int32))?)
+      if prefix_callback_count > 0_u64
+        budget.ensure_future_nodes(prefix_callback_count + 1_u64)
+        budget.ensure_future_elements(checked_multiply(prefix_callback_count, 2_u64))
+        budget.charge_node
+        prefix_callback_count.times { budget.charge_node }
+        budget.charge_elements(checked_multiply(prefix_callback_count, 2_u64))
+        prefix_metadata = Hash(String, Tuple(String, Int32)).new(initial_capacity: prefix_callback_count.to_i)
+      end
 
       physical_context = PhysicalStreamPlanContext.new(limits)
       sites.each do |site|
@@ -174,12 +202,11 @@ module CrystalClick
                         raise(UnsupportedFormatError.new("Compact JSON schema site has no Object declaration"))
         object_plan = @json_context.site_plan_for(site.key)
         object_schema.validate_plan(object_plan, budget, site.descriptor_depth)
-        validate_object_layout!(object_plan, limits, site.descriptor_depth)
 
         physical = ObjectDocumentPhysicalPlan.from_escaped_prefix(
           site.physical_prefix,
           object_plan,
-          BinaryBulkProfile.single_stream,
+          @profile,
           BinaryBulkProfile.single_stream,
           limits,
           site.array_level,
@@ -191,22 +218,53 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact JSON Object bucket plan differs from its structure")
         end
 
-        prefix_pairs = ObjectDocumentInlineCallbackOrder.prefix_callback_pairs(
+        descendants = CompactJsonCallbackOwners.for_owner(
           physical,
           object_plan,
           site.callback_prefix,
           budget,
-          false,
         )
-        body_pairs = ObjectDocumentInlineCallbackOrder.body_callback_pairs(
+        validate_object_layout!(object_plan, limits, site.descriptor_depth, budget)
+        validate_first_prefix_statistics!(object_plan)
+        descendants.each { |owner| validate_first_prefix_statistics!(owner[3]) }
+
+        root_owner : ObjectDocumentInlineCallbackOrder::CallbackOwner = {
+          ObjectDocumentInlineCallbackOrder.canonical_root_prefix(physical),
+          site.callback_prefix,
           physical,
           object_plan,
-          BinaryBulkProfile.single_stream,
+        }
+        owners_by_root = Hash(String, ObjectDocumentInlineCallbackOrder::CallbackOwner).new(
+          initial_capacity: descendants.size + 1,
+        )
+        owners_by_root[root_owner[0]] = root_owner
+        descendants.each do |owner|
+          if owners_by_root.has_key?(owner[0])
+            raise UnsupportedFormatError.new("Compact JSON callback owner root is duplicated")
+          end
+          owners_by_root[owner[0]] = owner
+        end
+
+        prefix_events = ObjectDocumentInlineCallbackOrder.prefix_callback_events(
+          physical,
+          object_plan,
           site.callback_prefix,
           budget,
-          false,
           true,
+          descendants,
         )
+        body_events = ObjectDocumentInlineCallbackOrder.body_callback_events(
+          physical,
+          object_plan,
+          @profile,
+          site.callback_prefix,
+          budget,
+          true,
+          true,
+          descendants,
+        )
+        prefix_pairs = callback_pairs(prefix_events, budget)
+        body_pairs = callback_pairs(body_events, budget)
         validate_unique_pair_roster!(prefix_pairs, seen_callback_names)
         validate_unique_pair_roster!(body_pairs, seen_callback_names)
         prefixes[site.key] = prefix_pairs.map { |pair| String.new(pair[1].to_slice) }
@@ -218,7 +276,7 @@ module CrystalClick
           prefix_pairs,
           body_pairs,
         )
-        bind_structure_sources!(site, object_plan, physical, prefix_pairs)
+        bind_structure_sources!(site, prefix_events, owners_by_root)
         body_pairs.each do |pair|
           @body_callbacks[String.new(pair[1].to_slice)] = String.new(site.key.to_slice)
         end
@@ -235,6 +293,27 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact JSON callback schedule repeats a physical callback")
         end
         seen_callback_names << site.callback_name
+      end
+      bulk_sites.each do |site|
+        site.each_role do |role|
+          callback_name = site.callback_name_for(role.name)
+          if seen_callback_names.includes?(callback_name)
+            raise UnsupportedFormatError.new("Compact JSON callback schedule repeats a physical callback")
+          end
+          seen_callback_names << callback_name
+        end
+        site.prefix_role_count.times do |prefix_index|
+          prefix_role = site.prefix_role_at(prefix_index)
+          role = site.role_at(prefix_role.role_index).name
+          callback_name = prefix_role.callback_name
+          metadata = prefix_metadata ||
+                     raise(UnsupportedFormatError.new("Compact JSON prefix callback metadata was not preflighted"))
+          if seen_callback_names.includes?(callback_name) || metadata.has_key?(callback_name)
+            raise UnsupportedFormatError.new("Compact JSON callback schedule repeats a state-prefix callback")
+          end
+          seen_callback_names << callback_name
+          metadata[callback_name] = {role, 8}
+        end
       end
 
       ordered_names = @schema_plan.expected_event_names(prefixes, body_pairs_by_site)
@@ -279,6 +358,16 @@ module CrystalClick
       uint8_sites.each do |site|
         register_physical_pair!(canonical_by_callback, seen_canonical, site.callback_name, site.callback_name)
       end
+      bulk_sites.each do |site|
+        site.each_role do |role|
+          callback_name = site.callback_name_for(role.name)
+          register_physical_pair!(canonical_by_callback, seen_canonical, callback_name, callback_name)
+        end
+        site.prefix_role_count.times do |index|
+          callback_name = site.prefix_callback_name_at(index)
+          register_physical_pair!(canonical_by_callback, seen_canonical, callback_name, callback_name)
+        end
+      end
       unless canonical_by_callback.size == expected_count
         raise UnsupportedFormatError.new("Compact JSON physical callback projection is not a complete roster")
       end
@@ -295,7 +384,16 @@ module CrystalClick
 
       @callback_events = Array(CompactBinaryBulkCallback).new(ordered_names.size)
       ordered_names.each do |name|
-        @callback_events << CompactBinaryBulkCallback.new(name, name, 0)
+        if metadata = prefix_metadata
+          if prefix = metadata[name]?
+            role, prefix_size = prefix
+            @callback_events << CompactBinaryBulkCallback.new(name, role, prefix_size)
+          else
+            @callback_events << CompactBinaryBulkCallback.new(name, name, 0)
+          end
+        else
+          @callback_events << CompactBinaryBulkCallback.new(name, name, 0)
+        end
       end
       nil
     end
@@ -357,6 +455,14 @@ module CrystalClick
       @schema_plan.uint8_site_count
     end
 
+    def bulk_sites : Array(CompactRecursiveJsonBulkSite)
+      @schema_plan.bulk_sites
+    end
+
+    def bulk_site_count : Int32
+      @schema_plan.bulk_site_count
+    end
+
     def site_binding(path : String) : SiteBinding
       @site_bindings[path]? || raise(UnsupportedFormatError.new("Compact JSON Object site is outside its callback plan"))
     end
@@ -416,12 +522,15 @@ module CrystalClick
       plan : ObjectDocumentPlan,
       limits : BinaryCodecLimits,
       descriptor_depth : Int32,
+      budget : BinaryCodecBudget,
     ) : Nil
       object = plan.structures.object
       unless object.version == 4_u64 &&
              ((object.shared_data_version == 0_u64 && object.bucket_count == 1_u64) ||
-             (object.shared_data_version == 1_u64 && object.bucket_count == 2_u64))
-        raise UnsupportedFormatError.new("Compact JSON writer admits Object V3 MAP or MAP_WITH_BUCKETS only")
+             (object.shared_data_version == 1_u64 && object.bucket_count == 2_u64) ||
+             ((object.shared_data_version == 2_u64 || object.shared_data_version == 3_u64) &&
+             object.bucket_count == 2_u64))
+        raise UnsupportedFormatError.new("Compact JSON writer admits Object V3 MAP, MAP_WITH_BUCKETS, ADVANCED, or ADVANCED_CHUNKED with sealed bucket counts only")
       end
 
       plan.typed_path_count.times do |index|
@@ -440,9 +549,9 @@ module CrystalClick
               raise UnsupportedFormatError.new("Compact JSON typed Dynamic actual arm exceeds the configured depth")
             end
             structure.type_count.times do |type_index|
-              CompactDynamicBulkPrefixTraversal.validate_compact_type_admission!(
-                structure.type_at(type_index), limits, actual_depth.to_i32
-              )
+              actual_type = structure.type_at(type_index)
+              next if bound_typed_dynamic_json_actual?(plan, path, actual_type, budget)
+              CompactDynamicBulkPrefixTraversal.validate_compact_type_admission!(actual_type, limits, actual_depth.to_i32)
             end
           end
         else
@@ -466,16 +575,77 @@ module CrystalClick
       nil
     end
 
+    private def bound_typed_dynamic_json_actual?(
+      plan : ObjectDocumentPlan,
+      path : String,
+      actual_type : BinaryDataType,
+      budget : BinaryCodecBudget,
+    ) : Bool
+      return false unless plan.typed_type_for(path).tag == BinaryDataType::TAG_DYNAMIC &&
+                          plan.typed_dynamic_site_count_for(path) == 1 &&
+                          plan.typed_dynamic_site_path_at(path, 0) == "root"
+
+      structure = plan.typed_dynamic_for(path)
+      canonical_arm_index = structure.canonical_index_for(actual_type)
+      plan.typed_dynamic_json_object_leaf_plans_for(path, budget).any? do |entry|
+        key = entry[0]
+        key.canonical_arm_index == canonical_arm_index &&
+          CompactJsonCallbackOwners.admitted_typed_dynamic_json_leaf_key?(
+            actual_type, key, budget.limits.max_depth
+          )
+      end
+    end
+
+    private def validate_first_prefix_statistics!(plan : ObjectDocumentPlan) : Nil
+      unless plan.structures.object.statistics
+        raise UnsupportedFormatError.new("Compact JSON first Object prefix requires full statistics")
+      end
+      plan.structures.object.dynamic_path_count.times do |index|
+        dynamic = plan.structures.dynamic_for(plan.structures.object.dynamic_path_at(index))
+        unless dynamic.statistics
+          raise UnsupportedFormatError.new("Compact JSON first Dynamic prefix requires full statistics")
+        end
+      end
+      plan.typed_dynamic_count.times do |index|
+        path = plan.typed_dynamic_path_at(index)
+        plan.typed_dynamic_site_count_for(path).times do |site_index|
+          site_path = plan.typed_dynamic_site_path_at(path, site_index)
+          dynamic = plan.typed_dynamic_site_structure_for(path, site_path)
+          unless dynamic.statistics
+            raise UnsupportedFormatError.new("Compact JSON first typed Dynamic prefix requires full statistics")
+          end
+        end
+      end
+      nil
+    end
+
+    private def callback_pairs(
+      events : Array(ObjectDocumentInlineCallbackOrder::CallbackEvent),
+      budget : BinaryCodecBudget,
+    ) : Array(CallbackPair)
+      count = events.size.to_u64
+      budget.ensure_future_nodes(count + 1_u64)
+      budget.ensure_future_elements(count)
+      (count + 1_u64).times { budget.charge_node }
+      budget.charge_elements(count) if count > 0_u64
+      pairs = Array(CallbackPair).new(events.size)
+      events.each { |event| pairs << {event[1], event[2]} }
+      pairs
+    end
+
     private def bind_structure_sources!(
       site : CompactRecursiveJsonSchemaPlan::JsonSite,
-      object_plan : ObjectDocumentPlan,
-      physical : ObjectDocumentPhysicalPlan,
-      prefix_pairs : Array(CallbackPair),
+      events : Array(ObjectDocumentInlineCallbackOrder::CallbackEvent),
+      owners_by_root : Hash(String, ObjectDocumentInlineCallbackOrder::CallbackOwner),
     ) : Nil
-      prefix_pairs.each do |pair|
-        canonical, callback = pair
+      events.each do |event|
+        owner_root, canonical, callback = event
+        owner = owners_by_root[owner_root]? ||
+                raise(UnsupportedFormatError.new("Compact JSON structure callback has no exact Object owner"))
+        object_plan = owner[3]
+        physical = owner[2]
         source = if canonical == physical.object_structure_stream
-                   StructureSource.new(site.key, :object, "", "")
+                   StructureSource.new(site.key, :object, "", "", object_plan, physical)
                  else
                    object_path = nil.as(String?)
                    object_plan.structures.object.dynamic_path_count.times do |index|
@@ -486,7 +656,7 @@ module CrystalClick
                      end
                    end
                    if path = object_path
-                     StructureSource.new(site.key, :object_dynamic, path, "")
+                     StructureSource.new(site.key, :object_dynamic, path, "", object_plan, physical)
                    else
                      typed_owner = nil.as(String?)
                      typed_site = nil.as(String?)
@@ -505,7 +675,7 @@ module CrystalClick
                        break if typed_owner
                      end
                      if owner = typed_owner
-                       StructureSource.new(site.key, :typed_dynamic, owner, typed_site.not_nil!)
+                       StructureSource.new(site.key, :typed_dynamic, owner, typed_site.not_nil!, object_plan, physical)
                      else
                        next
                      end

@@ -7,6 +7,7 @@ module CrystalClick
     @budget : BinaryCodecBudget
     @ordinary_profile : BinaryBulkProfile
     @typed_schema : Hash(String, BinaryDataType)
+    @typed_json_context : ObjectDocumentTypedDynamicJsonReadContext?
     @typed_descriptor_root_depth : Int32
     @inferred_actual_root_depth : Int32
     @ordinary_streams : ObjectDocumentStreams
@@ -25,6 +26,7 @@ module CrystalClick
       ordinary_profile : BinaryBulkProfile,
       source_framer : CompactJsonObjectSiteFramer | CompactRecursiveJsonObjectSiteSource,
       workspace_observer : Proc(UInt64, Nil)? = nil,
+      schedule : CompactJsonObjectRoleSchedule? = nil,
     ) : CompactStaticJsonAdvancedPreparedMark
       nested_context = prefix.nested_context
       if budget.writing? || nested_context.writing?
@@ -50,13 +52,21 @@ module CrystalClick
       # This is the source-authentication boundary: only a completed framer
       # for this exact physical owner, prefix, schedule, and budget can reach
       # either materializer below.
+      prepared_schedule = schedule || begin
+        unless prefix.plan.typed_dynamic_json_object_leaf_plans(budget).empty?
+          raise UnsupportedFormatError.new("prepared Compact Advanced JSON child requires its captured callback schedule")
+        end
+        CompactJsonObjectRoleSchedule.build(prefix, physical_plan, ordinary_profile, budget)
+      end
       source_framer.validate_prepared_source!(
         prefix,
         physical_plan,
         role_bindings,
         callback_pairs,
         budget,
+        prepared_schedule,
       )
+      typed_json_context = ObjectDocumentTypedDynamicJsonReadContext.from_prefix(prefix, budget)
 
       ordinary_streams = ObjectDocumentInlineBodyMaterializer.materialize(
         prefix,
@@ -90,6 +100,7 @@ module CrystalClick
         budget,
         ordinary_profile,
         typed_schema,
+        typed_json_context,
         prefix.typed_descriptor_root_depth,
         prefix.inferred_actual_root_depth,
         ordinary_streams,
@@ -107,6 +118,7 @@ module CrystalClick
       @budget : BinaryCodecBudget,
       @ordinary_profile : BinaryBulkProfile,
       @typed_schema : Hash(String, BinaryDataType),
+      @typed_json_context : ObjectDocumentTypedDynamicJsonReadContext?,
       @typed_descriptor_root_depth : Int32,
       @inferred_actual_root_depth : Int32,
       @ordinary_streams : ObjectDocumentStreams,
@@ -164,6 +176,7 @@ module CrystalClick
         shared_profile: BinaryBulkProfile.single_stream,
         typed_descriptor_root_depth: @typed_descriptor_root_depth,
         inferred_actual_root_depth: @inferred_actual_root_depth,
+        typed_dynamic_json_read_context: @typed_json_context,
       )
       unless decoded_marks.size == 1 && decoded_marks[0].size.to_u64 == @logical_row_count
         raise CorruptPartError.new("prepared Compact Advanced decoder returned the wrong mark grid")
@@ -185,9 +198,13 @@ module CrystalClick
       bytes = checked_add(bytes, sizeof(Pointer(BinaryBulkProfile)).to_u64)
       bytes = checked_add(bytes, sizeof(Pointer(ObjectDocumentStreams)).to_u64)
       bytes = checked_add(bytes, sizeof(Pointer(ObjectSharedAdvancedInlinePrepared)).to_u64)
+      bytes = checked_add(bytes, sizeof(Pointer(ObjectDocumentTypedDynamicJsonReadContext)).to_u64)
       bytes = checked_add(bytes, grid_workspace_bytes)
       bytes = checked_add(bytes, typed_schema_workspace_bytes)
       bytes = checked_add(bytes, ordinary_stream_workspace_bytes(@ordinary_streams))
+      if context = @typed_json_context
+        bytes = checked_add(bytes, context.retained_workspace_bytes)
+      end
       checked_add(bytes, @shared_prepared.retained_workspace_bytes)
     end
 

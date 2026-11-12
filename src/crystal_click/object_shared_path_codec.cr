@@ -367,6 +367,7 @@ module CrystalClick
       virtual_root_dynamic : Bool = false,
       statistics_context : ObjectDocumentCallbackPrefix::StatisticsContext = ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly,
       statistics_offset_observer : Proc(String, Int32, Nil)? = nil,
+      owner_statistics_offset_observer : Proc(String, Int32, Nil)? = nil,
     ) : Nil forall T
       if !register_prefixes_with_parent && capture_prefix_fragment.nil? && capture_prefix_slice.nil?
         raise ArgumentError.new("scoped inline prefix traversal requires a fragment capture callback")
@@ -395,6 +396,7 @@ module CrystalClick
         virtual_root_dynamic,
         statistics_context,
         statistics_offset_observer,
+        owner_statistics_offset_observer,
       )
     end
 
@@ -656,6 +658,7 @@ module CrystalClick
       virtual_root_dynamic : Bool = false,
       statistics_context : ObjectDocumentCallbackPrefix::StatisticsContext = ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly,
       statistics_offset_observer : Proc(String, Int32, Nil)? = nil,
+      owner_statistics_offset_observer : Proc(String, Int32, Nil)? = nil,
     ) : Nil forall T
       budget.ensure_depth(depth)
       case type.tag
@@ -667,7 +670,7 @@ module CrystalClick
         structure_name = append_name(physical_prefix, ".dynamic_structure", budget)
         callback_structure_name = append_name(callback_prefix, ".dynamic_structure", budget)
         structure_bytes, structure, statistics_offset = if capture = capture_prefix_slice
-                                                          slice = reader.take_inline_fragment_slice(structure_name, callback_structure_name)
+                                                          slice = take_inline_fragment_slice(reader, structure_name, callback_structure_name)
                                                           capture.call(slice)
                                                           context = BinaryCodecContext.new(budget.limits, slice.bytes, false, budget, false, false)
                                                           parsed, parsed_offset = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
@@ -689,11 +692,15 @@ module CrystalClick
                                                           context.ensure_consumed
                                                           {slice.bytes, parsed, parsed_offset}
                                                         else
-                                                          if reader.responds_to?(:with_grammar_extent)
+                                                          if reader.responds_to?(:with_physical_grammar_extent) || reader.responds_to?(:with_grammar_extent)
                                                             unless statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
                                                               raise UnsupportedFormatError.new("Compact grammar-framed Dynamic prefixes require complete statistics")
                                                             end
-                                                            parsed, consumed_dynamic_prefix_bytes = reader.with_grammar_extent(callback_structure_name) do |bytes|
+                                                            parsed, consumed_dynamic_prefix_bytes = with_grammar_extent(
+                                                              reader,
+                                                              structure_name,
+                                                              callback_structure_name,
+                                                            ) do |bytes|
                                                               context = BinaryCodecContext.new(budget.limits, bytes, false, budget, false, false)
                                                               parsed, parsed_offset = DynamicStructureCodec.read_with_statistics_offset(
                                                                 context,
@@ -729,6 +736,7 @@ module CrystalClick
                                                           end
                                                         end
         statistics_offset_observer.try(&.call(structure_name, statistics_offset))
+        owner_statistics_offset_observer.try(&.call(structure_name, statistics_offset))
         if register_prefixes_with_parent
           if reader.responds_to?(:add_structure)
             reader.add_structure(path, structure_bytes, structure)
@@ -749,15 +757,16 @@ module CrystalClick
           end
         else
           prefix_bytes = if capture = capture_prefix_slice
-                           slice = reader.take_inline_fragment_slice(prefix_name, callback_prefix_name)
+                           slice = take_inline_fragment_slice(reader, prefix_name, callback_prefix_name)
                            capture.call(slice)
                            slice.bytes
                          else
-                           if reader.responds_to?(:take_exact)
-                             reader.take_exact(callback_prefix_name, BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES)
-                           else
-                             reader.take_inline_fragment(callback_prefix_name)
-                           end
+                           take_fixed_prefix(
+                             reader,
+                             prefix_name,
+                             callback_prefix_name,
+                             BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES,
+                           )
                          end
           unless prefix_bytes.size == BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES
             raise CorruptPartError.new("inline Object discriminator prefix is not eight bytes")
@@ -780,7 +789,7 @@ module CrystalClick
                                 end
           arm_key = BinaryDynamicJsonLeafKey.new(path, index, [] of Int32)
           child_bare_json_origin = virtual_root_dynamic
-          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, arm_key, capture_prefix_slice, child_bare_json_origin, false, statistics_context, statistics_offset_observer)
+          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, arm_key, capture_prefix_slice, child_bare_json_origin, false, statistics_context, statistics_offset_observer, owner_statistics_offset_observer)
         end
       when BinaryDataType::TAG_VARIANT
         role = logical_name(path, ".discriminators", budget)
@@ -794,15 +803,16 @@ module CrystalClick
           end
         else
           prefix_bytes = if capture = capture_prefix_slice
-                           slice = reader.take_inline_fragment_slice(prefix_name, callback_prefix_name)
+                           slice = take_inline_fragment_slice(reader, prefix_name, callback_prefix_name)
                            capture.call(slice)
                            slice.bytes
                          else
-                           if reader.responds_to?(:take_exact)
-                             reader.take_exact(callback_prefix_name, BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES)
-                           else
-                             reader.take_inline_fragment(callback_prefix_name)
-                           end
+                           take_fixed_prefix(
+                             reader,
+                             prefix_name,
+                             callback_prefix_name,
+                             BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES,
+                           )
                          end
           unless prefix_bytes.size == BinaryBulkDiscriminatorFramingAdapter::PREFIX_BYTES
             raise CorruptPartError.new("inline Object discriminator prefix is not eight bytes")
@@ -818,24 +828,24 @@ module CrystalClick
                          append_escaped_type_component(physical_prefix, arm, budget)
                        end
           callback_arm_prefix = append_type_component(callback_prefix, arm, budget)
-          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
+          decode_prefix_type(arm, child, arm_prefix, callback_arm_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer, owner_statistics_offset_observer)
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        decode_prefix_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, callback_prefix, array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
+        decode_prefix_type(type.child_at(0), logical_name(path, ".elements", budget), physical_prefix, callback_prefix, array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer, owner_statistics_offset_observer)
       when BinaryDataType::TAG_NULLABLE
-        decode_prefix_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
+        decode_prefix_type(type.child_at(0), logical_name(path, ".nested", budget), physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer, owner_statistics_offset_observer)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        decode_prefix_type(type.child_at(0), path, physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
+        decode_prefix_type(type.child_at(0), path, physical_prefix, callback_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer, owner_statistics_offset_observer)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         type.child_count.times do |index|
           child = indexed_path(path, ".field.", index, budget)
           field_prefix = append_tuple_field(physical_prefix, type, index, budget)
           callback_field_prefix = append_tuple_field(callback_prefix, type, index, budget)
-          decode_prefix_type(type.child_at(index), child, field_prefix, callback_field_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
+          decode_prefix_type(type.child_at(index), child, field_prefix, callback_field_prefix, array_level, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(index) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer, owner_statistics_offset_observer)
         end
       when BinaryDataType::TAG_MAP
-        decode_prefix_type(type.child_at(0), logical_name(path, ".elements.field.0", budget), append_escaped_field(physical_prefix, "keys", budget), append_escaped_field(callback_prefix, "keys", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
-        decode_prefix_type(type.child_at(1), logical_name(path, ".elements.field.1", budget), append_escaped_field(physical_prefix, "values", budget), append_escaped_field(callback_prefix, "values", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(1) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer)
+        decode_prefix_type(type.child_at(0), logical_name(path, ".elements.field.0", budget), append_escaped_field(physical_prefix, "keys", budget), append_escaped_field(callback_prefix, "keys", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(0) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer, owner_statistics_offset_observer)
+        decode_prefix_type(type.child_at(1), logical_name(path, ".elements.field.1", budget), append_escaped_field(physical_prefix, "values", budget), append_escaped_field(callback_prefix, "values", budget), array_level + 1, depth + 1, reader, budget, observer, reject_json_descendants, capture_prefix_fragment, register_prefixes_with_parent, nested_context, json_prefixes, json_leaf_key.try { |key| key.with_child(1) }, capture_prefix_slice, bare_inferred_json_origin, virtual_root_dynamic, statistics_context, statistics_offset_observer, owner_statistics_offset_observer)
       when BinaryDataType::TAG_LOW_CARDINALITY
         role = logical_name(path, ".dictionary", budget)
         prefix_name = append_name(physical_prefix, ".dict_prefix", budget)
@@ -848,15 +858,16 @@ module CrystalClick
           end
         else
           prefix_bytes = if capture = capture_prefix_slice
-                           slice = reader.take_inline_fragment_slice(prefix_name, callback_prefix_name)
+                           slice = take_inline_fragment_slice(reader, prefix_name, callback_prefix_name)
                            capture.call(slice)
                            slice.bytes
                          else
-                           if reader.responds_to?(:take_exact)
-                             reader.take_exact(callback_prefix_name, OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES)
-                           else
-                             reader.take_inline_fragment(callback_prefix_name)
-                           end
+                           take_fixed_prefix(
+                             reader,
+                             prefix_name,
+                             callback_prefix_name,
+                             OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES,
+                           )
                          end
           unless prefix_bytes.size == OBJECT_SHARED_PATH_LOW_CARDINALITY_VERSION_BYTES
             raise CorruptPartError.new("inline Object LowCardinality prefix is not eight bytes")
@@ -882,6 +893,7 @@ module CrystalClick
           budget,
           bare_inferred_json_origin,
           statistics_context,
+          statistics_offset_observer,
         )
         if prefix.key != key || prefixes.has_key?(key)
           raise CorruptPartError.new("inline JSON prefix identity is duplicated or inconsistent")
@@ -1339,6 +1351,50 @@ module CrystalClick
         raise UnsupportedFormatError.new("inline JSON relocation validation work overflows UInt64")
       end
       base_work + sort_work
+    end
+
+    private def self.take_inline_fragment_slice(
+      reader : T,
+      canonical_physical_name : String,
+      raw_callback_name : String,
+    ) : ObjectSharedInlineCallbackReadSlice forall T
+      if reader.responds_to?(:take_physical_inline_fragment_slice)
+        reader.take_physical_inline_fragment_slice(canonical_physical_name, raw_callback_name)
+      else
+        reader.take_inline_fragment_slice(canonical_physical_name, raw_callback_name)
+      end
+    end
+
+    private def self.take_fixed_prefix(
+      reader : T,
+      canonical_physical_name : String,
+      raw_callback_name : String,
+      size : Int32,
+    ) : Bytes forall T
+      if reader.responds_to?(:take_physical_exact)
+        reader.take_physical_exact(canonical_physical_name, raw_callback_name, size)
+      elsif reader.responds_to?(:take_exact)
+        reader.take_exact(raw_callback_name, size)
+      else
+        reader.take_inline_fragment(raw_callback_name)
+      end
+    end
+
+    private def self.with_grammar_extent(
+      reader : T,
+      canonical_physical_name : String,
+      raw_callback_name : String,
+      &block : Bytes -> Tuple(U, Int32)
+    ) : Tuple(U, Bytes) forall T, U
+      if reader.responds_to?(:with_physical_grammar_extent)
+        reader.with_physical_grammar_extent(canonical_physical_name, raw_callback_name) do |bytes|
+          yield bytes
+        end
+      else
+        reader.with_grammar_extent(raw_callback_name) do |bytes|
+          yield bytes
+        end
+      end
     end
 
     private def self.append_name(prefix : String, suffix : String, budget : BinaryCodecBudget) : String

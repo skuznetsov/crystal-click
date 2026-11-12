@@ -198,7 +198,13 @@ module CrystalClick
         raise CorruptPartError.new("inline JSON child prefix differs from its bound plan")
       end
       physical_plan = physical_plan_for_prefix(prefix, budget)
-      streams = ObjectDocumentInlineBodyMaterializer.materialize(prefix, physical_plan, grid, budget)
+      streams = ObjectDocumentInlineBodyMaterializer.materialize(
+        prefix,
+        physical_plan,
+        grid,
+        budget,
+        statistics_offsets: prefix.statistics_offsets_snapshot(budget),
+      )
       schema = prefix.typed_schema_for(budget)
       context = prefix.nested_context
       unless profile == context.profile
@@ -248,11 +254,18 @@ module CrystalClick
       descendants : Array(ObjectDocumentInlineCallbackOrder::CallbackOwner),
       budget : BinaryCodecBudget,
     ) : Nil
-      owner_prefix.each_root_dynamic_json_prefix_entry(budget) do |path, key, child_prefix|
+      owner_prefix.each_dynamic_json_prefix_entry(budget) do |scope, path, key, child_prefix|
         unless child_prefix.key == key && child_prefix.nested_context.shared_data_version == owner_prefix.nested_context.shared_data_version && child_prefix.nested_context.profile == owner_prefix.nested_context.profile
           raise CorruptPartError.new("inline JSON descendant context or leaf key differs from its owning Object")
         end
-        site = owner_physical_plan.root_dynamic_json(path).json_object_site(key)
+        site = case scope
+               when :typed_dynamic
+                 owner_physical_plan.typed_dynamic(path).json_object_site(key)
+               when :root_dynamic
+                 owner_physical_plan.root_dynamic_json(path).json_object_site(key)
+               else
+                 raise CorruptPartError.new("inline JSON descendant has an unknown Dynamic owner scope")
+               end
         binding = site.binding
         unless site.leaf_key == key && binding.leaf_key == key && binding.json_type == child_prefix.descriptor
           raise CorruptPartError.new("inline JSON descendant differs from its descriptor-relative physical site")

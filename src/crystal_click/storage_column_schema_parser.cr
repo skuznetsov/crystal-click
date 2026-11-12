@@ -76,6 +76,11 @@ module CrystalClick
         return StorageColumnSchema.bulk(type, prefix)
       end
 
+      if type = StorageStaticBulkDeclaration.parse_slice(@source, first, after, @budget, depth)
+        prefix = retain_source ? text(first, after) : ""
+        return StorageColumnSchema.bulk(type, prefix)
+      end
+
       if json_slice?(first, after)
         declaration = text(first, after)
         schema = ObjectDocumentSchema.parse_declaration(declaration, @limits)

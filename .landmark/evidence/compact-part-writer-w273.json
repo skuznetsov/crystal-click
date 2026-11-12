@@ -1,0 +1,469 @@
+{
+  "format": "crystal_click_w273_curated_evidence_index_v1",
+  "slice": "Bounded recursive Array-chain JSON ownership in typed-Dynamic Compact Object fields",
+  "date": "2026-10-13",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary_verdict": "ROBUST",
+    "scope": "Only bounded Array* -> JSON actuals at the existing root typed-Dynamic field inside Object V3/wire 4, String0, MAP0/one bucket, plain MRK3/MRK4, BASIC/COMPACT; native descriptor depths 2 and 3, local depth 4 only.",
+    "full_goal": "ACTIVE",
+    "performance_objective": "Unmeasured; all types/layouts and MV/projections precede optimization.",
+    "index_boundary": "Curated index to source, run summaries and raw captures; field presence and JSON/shape validation do not execute or dereference evidence. The finite claim is promoted only on the recorded root final-gate authorization; this packet does not establish broader compatibility or full-goal completion."
+  },
+  "baseline": {
+    "revision": "c39487774c0aefdba95f966ac25f236116567b52",
+    "previous_packet": ".landmark/evidence/compact-part-writer-w272.json",
+    "entry_production_files": 608,
+    "entry_production_seal": "00dbc41d38e307f85d2127c721ab8795f71a44b71ff4b05129b6b6702041c422",
+    "held_production_files": 609,
+    "held_production_seal": "78766bc34791de62d336ad3fa8ef18fd4f0ba9eea923474ede61e9e7b254cf03",
+    "held_all_2042_file_seal": "32bf269693e24ee72107e5e2b6b6b53f6094d610e29e67db0a2721f20b709c32",
+    "held_all_2042_file_seal_scope": "Source/spec/script inventory, distinct from the 609-file production subset.",
+    "seal_recheck": {
+      "state": "PASS_NARROW",
+      "initial_chunk": "root990ec9",
+      "final_chunk": "d9752d",
+      "final_exit_code": 0,
+      "baseline_revision_unchanged": "c39487774c0aefdba95f966ac25f236116567b52",
+      "held_production_files": 609,
+      "held_production_seal": "78766bc34791de62d336ad3fa8ef18fd4f0ba9eea923474ede61e9e7b254cf03",
+      "held_all_2042_file_seal": "32bf269693e24ee72107e5e2b6b6b53f6094d610e29e67db0a2721f20b709c32",
+      "git_diff_check_chunk": "d01b5f",
+      "git_diff_check_exit_code": 0
+    }
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "failure": "A nested Array sizes role is applied at the wrong occurrence level, producing wrong selected values in a checksum-valid part or collapsing empty-array and Dynamic NULL identity.",
+    "rollback": "Revert only the atomic W273 feature against W272; preserve frozen evidence and all three user-owned W263 specs.",
+    "guard": "Keep canonical actual/site ownership, exact parsed size counts, profile/depth/budget checks and fail-closed unsupported wrappers."
+  },
+  "implementation": {
+    "architecture": "Reuse existing recursive Array/JSON value codecs. BinaryArrayJsonLeafShape recognizes exact zero-or-more one-child Array wrappers ending in JSON; caller retains Object owner/site/canonical-arm identity. Typed-Dynamic tape grammar derives each nested occurrence from its parsed sizes role, and Object framing consumes the selected JSON-leaf count. No duplicate logical value codec or new site.",
+    "source_refs": [
+      "src/crystal_click/binary_array_json_leaf_shape.cr:2-29",
+      "src/crystal_click/compact_json_callback_owners.cr:80-95",
+      "src/crystal_click/binary_dynamic_bulk_physical_plan.cr:389-427",
+      "src/crystal_click/compact_json_typed_dynamic_tape_grammar.cr:124-167",
+      "src/crystal_click/compact_json_object_map_tape_framer.cr:217"
+    ],
+    "entry_falsifier": "At unchanged production, common-codec controls passed (2 DEBUG examples) and the public depth-two positive failed at the single-Array owner gate (one expected physical-admission error). Separate stock depth-two/depth-three runs observed ordinary nested Array actuals and distinct NULL, [], [[]], and [[[]]] identities before candidate use.",
+    "layout_law": "Each Array sizes lane consumes its own parent's occurrence count and produces the next level's count; never infer this from callback byte lengths."
+  },
+  "pins": {
+    "source_and_runtime": "Unchanged from the W272 packet: pinned local ClickHouse source and runtime/build pins remain distinct. This is not a latest-version claim.",
+    "reference": ".landmark/evidence/compact-part-writer-w272.json"
+  },
+  "native_matrices": [
+    {
+      "mode": "DEBUG",
+      "depth": 2,
+      "root": "/private/tmp/crystal-click-w273-native-debug-d2-final.VoJrB5",
+      "summary_sha256": "0ca87b603bd35a785f8a178122b4768044e7bd9c2af86e02294272a8e757df05",
+      "record_audit_chunk": "7abd4b"
+    },
+    {
+      "mode": "DEBUG",
+      "depth": 3,
+      "root": "/private/tmp/crystal-click-w273-native-debug-d3-final.1EB0Dv",
+      "summary_sha256": "dfb51794ac5b285968781b797b0228dfa674fa97a9025e5d11473a6d64442618",
+      "record_audit_chunk": "d3f7ba"
+    },
+    {
+      "mode": "RELEASE",
+      "depth": 2,
+      "root": "/private/tmp/crystal-click-w273-native-release-d2-final.T8Xt1V",
+      "summary_sha256": "269f10dac297064a03c99e892b0ba3724ca6f38daf62b7b1cfe2b591afc97cb0",
+      "record_audit_chunk": "ea42d0"
+    },
+    {
+      "mode": "RELEASE",
+      "depth": 3,
+      "root": "/private/tmp/crystal-click-w273-native-release-d3-final.UV7QLg",
+      "summary_sha256": "7ec9eacda9784c46cdea0e98bb4ec094f8db18cb9fc747be5bcafc5fb88360a1",
+      "record_audit_chunk": "95b870"
+    }
+  ],
+  "matrix_shape": {
+    "per_matrix": "119 invocations; 476 raw files; 70 native and 49 helper invocations; two stock, four generated and one mutant cell; seven windows.",
+    "callback_and_tape_audit": "Six exact callback tapes, four data marks and EOF; 20 callbacks at depth 2 and 21 at depth 3.",
+    "raw_byte_lengths_basic_stock_compact_generated_compact": {
+      "depth_2": [627, 633, 633],
+      "depth_3": [720, 724, 725]
+    }
+  },
+  "root_audits": [
+    {
+      "mode": "DEBUG",
+      "depth": 2,
+      "matrix": "2c8b4d",
+      "mutant": "d61316",
+      "pressure": "8ce6c9",
+      "status": "Each exited 0."
+    },
+    {
+      "mode": "DEBUG",
+      "depth": 3,
+      "matrix": "2d3974",
+      "mutant": "4391c2",
+      "pressure": "a2ce7d",
+      "status": "Each exited 0."
+    },
+    {
+      "mode": "RELEASE",
+      "depth": 2,
+      "matrix": "5020e9",
+      "mutant": "42088a",
+      "pressure": "3d1b9c",
+      "status": "Each exited 0."
+    },
+    {
+      "mode": "RELEASE",
+      "depth": 3,
+      "matrix": "0edb86",
+      "mutant": "524e5d",
+      "pressure": "a7a82f",
+      "status": "Each exited 0."
+    }
+  ],
+  "mutant_and_pressure_scope": {
+    "mutant": "Same-extent mark-3 defect changes data.bin and checksums only, byte 4 -> 5 at offsets 507/552; frames and grids are unchanged. No independent CityHash claim.",
+    "pressure": "Rejects a same-extent wrong table and a missing 119th invocation; in-memory only, captures unchanged."
+  },
+  "subject_binding": {
+    "state": "SQL-subject binding was audited, but uses a detached pre-ATTACH snapshot; consumed path is absent and binding is to active source plus exact ClickHouse sidecar.",
+    "limit": "Not OS attestation."
+  },
+  "source_cohorts": {
+    "per_mode": {
+      "DEBUG": {
+        "examples": 979,
+        "disjoint_paths": 158,
+        "serial_executables": 7,
+        "failures_errors_pending": 0
+      },
+      "RELEASE": {
+        "examples": 979,
+        "disjoint_paths": 158,
+        "serial_executables": 7,
+        "failures_errors_pending": 0
+      }
+    },
+    "cohorts": [
+      {"name": "focused", "paths": 27, "examples": 74, "debug_chunk": "0eb312", "release_chunk": "d3942f"},
+      {"name": "JSON", "paths": 61, "examples": 398, "debug_chunk": "b2c8e7", "release_chunk": "b7748d"},
+      {"name": "writer", "paths": 32, "examples": 202, "debug_chunk": "ad9e7e", "release_chunk": "d91f45"},
+      {"name": "LC", "paths": 11, "examples": 108, "debug_chunk": "d14315", "release_chunk": "d664b8"},
+      {"name": "Variant", "paths": 9, "examples": 59, "debug_chunk": "707fb5", "release_chunk": "37fae7"},
+      {"name": "Dynamic", "paths": 14, "examples": 109, "debug_chunk": "5cd125", "release_chunk": "740dbb"},
+      {"name": "CommonObject", "paths": 4, "examples": 29, "debug_chunk": "02d0f4", "release_chunk": "ea0809"}
+    ],
+    "focused_roster_delta": "W272 focused 21 plus four W273 control/baseline/spec/adversary paths and recursive_storage_array_w187 plus recursive_array_schema_w187; other rosters reuse the W272 packet rosters."
+  },
+  "verification_protocol": {
+    "source_rosters": "Reuse the exact unchanged cohort rosters and command pattern in .landmark/evidence/compact-part-writer-w272.json; only the focused roster delta above is new. Seven disjoint cohort executables per mode; this is not a combined or full-suite run.",
+    "serial_run_safe_policy": "Root-owned heavy jobs only; one guarded executable at a time, CRYSTAL_WORKERS=1, minimum free memory 50%, 12288 MiB process-tree limit, TMPDIR=/private/tmp, pinned SDKROOT, fresh per-run cache/evidence paths. Do not run cohorts or native matrices in parallel. Reuse the W272 execution.guard_prefix policy with run-specific temporary paths.",
+    "source_cohort_command_template": "<W272 guarded run_safe prefix with fresh per-run cache> /opt/homebrew/bin/crystal 480 12288 spec <one exact W272/W273 cohort roster> [--release] --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+    "native_matrix_command_template": "<W272 guarded run_safe prefix with fresh per-run cache> /usr/bin/ruby 900 12288 scripts/probe_compact_part_writer_w273.rb --full-matrix --depth <2|3> --helper <prebuilt W273 helper> --helper-sha256 <matching helper SHA-256> --evidence-root <fresh empty directory under /private/tmp> --binary <pinned ClickHouse runtime> --source-root /private/tmp/clickhouse-w254-upstream.AqeqyC",
+    "definition_of_done": "Observed: all seven scoped cohorts per DEBUG/RELEASE mode exit successfully with zero failures/errors/pending and reported 979 examples/158 disjoint paths; all four depth/mode native matrices exit successfully at 119 invocations/476 raw files with record, subject, inventory, physical, mutant and pressure audits. W272 RELEASE/static regressions and final source/user-file seal checks passed narrowly. The supplemental checksum-resealed nested count-fault clean read, mutation, selected-reader rejection, fault-specific mark-0 control, and independent exact-byte audit passed. Root hostile source/diff and raw/native/byte/negative review authorized VERIFIED / ROBUST for finite serialization behavior only. Formatting cleanliness, broader compatibility, and full-goal completion are not claimed.",
+    "command_source": ".landmark/evidence/compact-part-writer-w272.json execution guard and rosters; the W273 focused roster delta is stated above. Command text is an index/template, not evidence of execution."
+  },
+  "execution_source_pins": {
+    "scripts/compact_part_writer_w273_helper.cr": "d0e93c8649968d4f373f890777eba83dc84a35b0ad69e6b49424ba2255dc187e",
+    "scripts/probe_compact_part_writer_w273.rb": "812490075910ca6669e0e7dce98dd5c0a53b5fa91902d4e2b93a9efbf1ed7381",
+    "scripts/support/compact_part_writer_w273_native_fixture.cr": "8ef35f84942260764b23992f7fda57c2cea2ab56e0e7d44ee3d96622c94dbdd0",
+    "spec/support/compact_part_writer_w273_fixture.cr": "12bbd9cd19146851b0a9574a0492b1f33317f18f18541643116da3121b40111b",
+    "scratch_auditors": {
+      "source_root_chunk": "rootb71c36",
+      "sha256": {
+        "layout": "3acbaf0253828d0f1aa35eca22c4cbe792612eedf86a09a1a0f661ea91dfb93c",
+        "matrix": "a46565bec5c02d770e0f30ed555d457065d305d7dc1cd9a1d11beb52ab7e9c90",
+        "mutant": "87a908c023e74f0e1c3bd7926afdf7e840053b233681e9ecd5e2fc77415de47e",
+        "record": "eb3e713f23c6c8d1664288d9d0927bc1c636aa692f0351a9fd6406d32f0031b3",
+        "subject": "c5849867ded1024d455cde69cc4071a16587bbbdc859e47485cbba11c0ba05a8",
+        "pressure": "20aa7beacb5b32a512b8d31289099b177624534920520cb47df7fed2ebf70b3a"
+      }
+    },
+    "scratch_dependency_policy": "These hashes identify scratch-only audit sources. If a required scratch source or capture is unavailable or does not match its pin, the packet cannot replay that audit; mark dependent evidence stale and recover the exact artifact or rerun the authorized audit before promotion."
+  },
+  "boundaries": {
+    "granule_isolation": "Not established: full-grid JSON preflight can reject mark 0 after corruption at mark 3.",
+    "allowed_paths": [
+      ".landmark/evidence/compact-part-writer-w273.json",
+      "LANDMARKS.md",
+      "docs/COMPACT_PART_WRITER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_array_json_leaf_shape.cr",
+      "src/crystal_click/binary_dynamic_bulk_physical_plan.cr",
+      "src/crystal_click/compact_json_callback_owners.cr",
+      "src/crystal_click/compact_json_callback_plan.cr",
+      "src/crystal_click/compact_json_object_map_tape_framer.cr",
+      "src/crystal_click/compact_json_object_role_schedule.cr",
+      "src/crystal_click/compact_json_typed_dynamic_tape_grammar.cr",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr",
+      "src/crystal_click/object_document_typed_dynamic_json_read_context.cr",
+      "spec/compact_part_writer_w272_adversary_spec.cr",
+      "scripts/compact_part_writer_w273_helper.cr",
+      "scripts/probe_compact_part_writer_w273.rb",
+      "scripts/support/compact_part_writer_w273_native_fixture.cr",
+      "spec/compact_part_writer_w273_adversary_spec.cr",
+      "spec/compact_part_writer_w273_baseline_spec.cr",
+      "spec/compact_part_writer_w273_fixture_control_spec.cr",
+      "spec/compact_part_writer_w273_spec.cr",
+      "spec/support/compact_part_writer_w273_fixture.cr"
+    ],
+    "changed_paths": [
+      ".landmark/evidence/compact-part-writer-w273.json",
+      "LANDMARKS.md",
+      "docs/COMPACT_PART_WRITER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_array_json_leaf_shape.cr",
+      "src/crystal_click/binary_dynamic_bulk_physical_plan.cr",
+      "src/crystal_click/compact_json_callback_owners.cr",
+      "src/crystal_click/compact_json_callback_plan.cr",
+      "src/crystal_click/compact_json_object_map_tape_framer.cr",
+      "src/crystal_click/compact_json_object_role_schedule.cr",
+      "src/crystal_click/compact_json_typed_dynamic_tape_grammar.cr",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr",
+      "src/crystal_click/object_document_typed_dynamic_json_read_context.cr",
+      "spec/compact_part_writer_w272_adversary_spec.cr",
+      "scripts/compact_part_writer_w273_helper.cr",
+      "scripts/probe_compact_part_writer_w273.rb",
+      "scripts/support/compact_part_writer_w273_native_fixture.cr",
+      "spec/compact_part_writer_w273_adversary_spec.cr",
+      "spec/compact_part_writer_w273_baseline_spec.cr",
+      "spec/compact_part_writer_w273_fixture_control_spec.cr",
+      "spec/compact_part_writer_w273_spec.cr",
+      "spec/support/compact_part_writer_w273_fixture.cr"
+    ],
+    "unsupported": [
+      "Compressed Compact marks",
+      "Advanced/chunked ownership and broader profiles",
+      "Other wrappers/sites, root-Dynamic and arbitrary JSON owners",
+      "Compact MV/projection composition",
+      "All types/layouts closure and performance optimization"
+    ],
+    "next_slice": "After W273 closure, compressed Compact marks before advanced/chunked ownership; no stock compressed-mark execution is recorded here."
+  },
+  "w272_regression": {
+    "state": "PASS_NARROW",
+    "scope": "Fresh W272 current-source RELEASE native regression only; it is a separate supporting check and does not close any W273 final gate.",
+    "runner": {
+      "chunk": "e261c1",
+      "exit_code": 0,
+      "elapsed_seconds": 38,
+      "capture_directory": "/private/tmp/crystal-click-w273-w272-regression-native.c9wEOE",
+      "summary_sha256": "9de69a10a50bba1034f1239695867c8c07569903bcac992b6684c1c2c258083f"
+    },
+    "record_audit": {
+      "chunk": "a4b627",
+      "exit_code": 0,
+      "invocations": 106,
+      "raw_files": 424,
+      "status": "audited_raw_records",
+      "records_sha256": "6c510e3e1e997b3ae450e79b969259b5c2091b17c2f60647b74b0780c92b2fa0",
+      "combined_auditor_sha256": "a8b41c77565b53806c6e7159632755841f0de2ced62ca350087dc75892843123"
+    },
+    "layout_mutant_audit": {
+      "chunk": "a77312",
+      "exit_code": 0,
+      "scope": "Six layouts plus one mark2 slot5 one-byte mutant",
+      "status": "exact_callback_bytes_and_counts",
+      "layout_sha256": "8a7b4c12711c62612e8ab2129085551e47fcaa650a18952309e751271a657626",
+      "combined_auditor_sha256": "a8b41c77565b53806c6e7159632755841f0de2ced62ca350087dc75892843123",
+      "mutant": {
+        "raw_offset": 338,
+        "byte_change": "4 -> 5",
+        "changed_files_only": ["data.bin", "checksums.txt"],
+        "raw_bytes": 575,
+        "compressed_bytes": 683,
+        "frames": 4
+      }
+    },
+    "w269_dependency": {
+      "state": "UNCHANGED_BEFORE_AND_AFTER",
+      "sha256": "43bef35b09b5568a637c4359ca4c87d8852aa85c89c1f75b74f4c26f018f350a"
+    }
+  },
+  "w272_frozen_static_guard": {
+    "state": "PASS_NARROW",
+    "helper_build": {
+      "chunks": "9da061 -> a62033",
+      "exit_code": 0,
+      "elapsed_seconds_approx": 25,
+      "binary_sha256": "ff4ad7c6014db3fcfef86b0c73c333d7696584d68ef22dcaa37fa13012ebb73a"
+    },
+    "guarded_write_default": {
+      "chunk": "e594a0",
+      "exit_code": 0,
+      "destination": "/private/tmp/crystal-click-w273-root.gsk1Ps/w273-static-frozen-regression"
+    },
+    "independent_audit": {
+      "chunk": "37d6b9",
+      "exit_code": 0,
+      "status": "all_nine_frozen_static_files_unchanged",
+      "files": 9,
+      "bytes": 17902,
+      "comparison": "Equal to the frozen original and committed W270 digest roster.",
+      "frozen_original": "/private/tmp/crystal-click-w270-static-native.hUqncG/parts/generated_mrk3/all_1_1_0",
+      "auditor_sha256": "951eb29c4c4c03a59ecf0424ad9751526da8e8d45301ff6c576ce561a7467f85"
+    }
+  },
+  "final_source_preservation_recheck": {
+    "state": "PASS_NARROW",
+    "guarded_seal_check": {
+      "chunk": "d9752d",
+      "exit_code": 0,
+      "baseline_revision": "c39487774c0aefdba95f966ac25f236116567b52",
+      "production_files": 609,
+      "production_sha256": "78766bc34791de62d336ad3fa8ef18fd4f0ba9eea923474ede61e9e7b254cf03",
+      "all_2042_files_sha256": "32bf269693e24ee72107e5e2b6b6b53f6094d610e29e67db0a2721f20b709c32",
+      "all_2042_file_scope": "Source/spec/script inventory, distinct from the 609-file production subset."
+    },
+    "protected_files_check": {
+      "chunk": "b2a175",
+      "state": "All 12 protected/frozen files matched their pre-check SHA-256 values; no drift during the final checks.",
+      "files": {
+        "spec/compact_json_w263_native_spec.cr": "f1a8c38033477981ebc85928660f7c297d09e85d7e00264d59fcf2f606d0e0ac",
+        "spec/compact_static_json_internal_w263_spec.cr": "497914c5acd908caef6adff695d202fd6a638e292707035dd21a0c3887607ae8",
+        "spec/compact_static_json_root_w263_adversary_spec.cr": "d3d858b157f31e7daee0d171b8d0d0d8684cd0ab0dcd505145308bddfccc0dc6",
+        "spec/support/compact_part_writer_w271_fixture.cr": "7fad66795123b2fa47cf1fabee825556908d97b7edfb0bbcc8960ef266b75074",
+        "spec/compact_part_writer_w271_fixture_control_spec.cr": "34b3606f3bac2202bd9ed189f8cf2bf0b70a87c4ad70f5efb7f956e96d7ad148",
+        "spec/compact_part_writer_w271_baseline_spec.cr": "152df2d81e26643f9857b5ad42da79415fb4db2f548189fa00a1410bcc574d58",
+        "spec/support/compact_part_writer_w272_fixture.cr": "a988d951ee911718254c14fc1fb033ba35d8af28dc203e0daa4a6fff4be939a3",
+        "spec/compact_part_writer_w272_fixture_control_spec.cr": "76a8fbf9335ce64e930232e62e85fa432f680d8644545788929a05532c700326",
+        "spec/compact_part_writer_w272_baseline_spec.cr": "cbd2dd95de0a84aa334328292d71ebe3dc92e827ad1518ebf2f61f686669b130",
+        "spec/support/compact_part_writer_w273_fixture.cr": "12bbd9cd19146851b0a9574a0492b1f33317f18f18541643116da3121b40111b",
+        "spec/compact_part_writer_w273_fixture_control_spec.cr": "7a8d00ad5b8ae12fbd6043059634fd6c19a0d4d2888f2e40e9710a8515462c0a",
+        "spec/compact_part_writer_w273_baseline_spec.cr": "ec48a39b35aa8201803a665249dffecea4ad6e1e8de1f2b9d01994c08765cbb9"
+      },
+      "pin_source": "W263 and W271/W272 pins were preserved from their established checks; the W273 triplet hashes were directly observed in the root's b2a175 twelve-file check, not inferred from the committed W272 packet."
+    },
+    "scope_limit": "These checks establish only the stated seals and protected-file equality at the checked source state; they do not broaden the finite serialization claim."
+  },
+  "supplemental_count_fault": {
+    "state": "PASS_NARROW",
+    "helper_build": {
+      "chunks": "84f6cb -> 679548",
+      "exit_code": 0,
+      "elapsed_seconds_approx": 18,
+      "source_sha256": "f93ee8f165e823be6284bee539287d2ecfefeceb9d8ae42e853e5c935b81458c",
+      "binary": "/private/tmp/crystal-click-w273-root.gsk1Ps/w273-count-fault-release-final",
+      "binary_sha256": "0ebf26bf9d0a76fe468c06884c2ae01852e9cd4434bbd0da8e0a2373db0e4bae"
+    },
+    "clean_full_read": {
+      "chunk": "12e5c8",
+      "exit_code": 0,
+      "accepted_literal_rows": 8,
+      "marks": 4
+    },
+    "checksum_resealed_count_mutant": {
+      "copy_chunk": "c417c6",
+      "exit_code": 0,
+      "destination": "/private/tmp/crystal-click-w273-root.gsk1Ps/w273-size1-count-mutant-clean",
+      "mutation": "UInt64 size=1 at mark 3, slot 9, raw offset 589; 560 compressed bytes + 110 displacement; sizes [1,1,2,0] -> [0,1,2,0]. Only the targeted raw byte changed (1 -> 0); extent remained 828 compressed / 720 raw / four frames and checksums were resealed.",
+      "preservation": "First-copy/no-overwrite policy; original capture preserved."
+    },
+    "selected_reader": {
+      "chunk": "fd09ac",
+      "exit_code": 0,
+      "observed": "Production reader raised typed CorruptPartError: binary bulk shape lane has trailing bytes after the JSON occurrence schedule.",
+      "source_anchor": "src/crystal_click/binary_dynamic_json_object_schedule.cr:666",
+      "interpretation": "The selected read rejected the checksum-resealed count fault; this is not a native ClickHouse CHECK/query result or an independent CityHash validation."
+    },
+    "mark0_control": {
+      "chunk": "eacee5",
+      "exit_code": 0,
+      "observed": "Accepted two unchanged literal rows for this specific fault only.",
+      "limit": "No generic mark/granule-isolation claim; the separate child-version mutant still triggers full-grid refusal."
+    },
+    "independent_byte_audit": {
+      "state": "PASS_NARROW",
+      "auditor_source": "/private/tmp/crystal-click-w273-root.gsk1Ps/audit_w273_count_fault.rb",
+      "auditor_source_sha256": "6d01c0672866d283d07e81bd63881a03bad4392d0529f38868cde9ddc3af943d",
+      "root_chunk": "f94956",
+      "exit_code": 0,
+      "status": "exact_single_count_lane_mutation",
+      "source_inventory_sha256": "ec9a08171660038a341ab10fb927f49afc4f89bbedc85e7009da7cfc935ef7ee",
+      "mutant_sha256": "2fb87ef843986ea5814b33cb4f65ace707c3c196418ce44a0673569167fb9b77",
+      "checks": "Exact 10-file part roster; only data.bin and checksums.txt changed; unchanged 5x344 mark grid; mark 3 slot 9 maps compressed (560,110) to logical offset 589; size1 [1,1,2,0] -> [0,1,2,0], while next size2 at 621 remains [0,1,2,0]; same four frames, 828 compressed bytes and 720 raw bytes; sole raw-byte change is offset 589."
+    },
+    "remaining": "No independent CityHash claim and no native CHECK or native query was run for this supplemental count fault. Runner/tooling/report-overflow failures were inconclusive; captured originals were preserved."
+  },
+  "format_check": {
+    "state": "NOT_FORMAT_CLEAN",
+    "chunk": "root657593",
+    "command_result": "Guarded Crystal tool format --check exited 1; no files were changed.",
+    "paths_reported": [
+      "src/crystal_click/binary_array_json_leaf_shape.cr",
+      "src/crystal_click/binary_dynamic_bulk_physical_plan.cr",
+      "scripts/compact_part_writer_w273_helper.cr",
+      "scripts/support/compact_part_writer_w273_native_fixture.cr",
+      "spec/compact_part_writer_w273_adversary_spec.cr",
+      "spec/compact_part_writer_w273_spec.cr",
+      "spec/support/compact_part_writer_w273_fixture.cr"
+    ],
+    "interpretation": "Style-only signal, not a behavioral DoD failure. No formatter edits were made to the held source or frozen fixture bytes. Do not claim format-clean/polished; semantics-neutral formatting cleanup is a separate follow-up, especially where fixture preservation matters."
+  },
+  "final_pinned_matrix_recheck": {
+    "state": "PASS_NARROW",
+    "root_chunks": "2033bd -> f7fde2",
+    "exit_code": 0,
+    "scope": "Pinned auditor source and captured matrix reaffirmed the original 119-invocation/476-raw matrix and SQL/part lineage."
+  },
+  "root_hostile_review": {
+    "state": "ROBUST_WITHIN_DECLARED_FINITE_SCOPE",
+    "authorization": "Explicit root final-gate authorization for finite W273 serialization behavior only; source is the root's final-gate message in this task.",
+    "reviewed": "Held source/diff and raw/native/byte/negative evidence. Does not cover format cleanliness, all types/layouts, full suite, RSS, granule isolation, speed, or global completion."
+  },
+  "pending_gates": [],
+  "preservation": {
+    "user_owned_w263_specs_excluded": [
+      "spec/compact_json_w263_native_spec.cr",
+      "spec/compact_static_json_internal_w263_spec.cr",
+      "spec/compact_static_json_root_w263_adversary_spec.cr"
+    ],
+    "rule": "Do not edit, stage, or include these specs in W273 documentation changes.",
+    "additional_frozen_triplets": "W271, W272 and W273 fixture/control/baseline hashes are individually pinned under final_source_preservation_recheck and matched the root's twelve-file check."
+  },
+  "validation": {
+    "template_and_graph_validator": "Absent from the inspected repository file inventory; no validator was executed.",
+    "meaning": "A JSON parse/shape check would not execute or prove any referenced command, audit, capture, or source claim.",
+    "root_closure_dereference_check": {
+      "source": "/private/tmp/crystal-click-w273-root.gsk1Ps/validate_w273_closure.rb",
+      "source_sha256": "e9dace251e1e4d9b52877e3f2f068b8a00218e597724ed0dda24f48ba7ff7514",
+      "chunks": "ce8c38 -> c8515d",
+      "exit_code": 0,
+      "status": "closure_pins_and_source_seals_unchanged",
+      "scope": "Guarded root recheck: unchanged baseline HEAD, both held source seals, twelve protected files, execution source/auditor/helper/runtime pins, four captured summary digests, W272 regression summary digest, supplemental helper/auditor pins, source-reference extents, cohort census and 23-path boundary. It does not replay semantic/byte/native jobs or authenticate their raw process history."
+    }
+  },
+  "adversary": {
+    "source_review": "ROBUST within the stated W273 source scope.",
+    "root_final_verdict": "ROBUST",
+    "residual": "No granule isolation; no compressed-mark stock execution; SQL subject binder is not OS attestation. No independent CityHash or native CHECK/query claim for the supplemental count fault. The style check is not clean; no format-clean or polish claim follows. No all-types/layouts, full-suite, RSS, speed, or global-completion claim."
+  },
+  "decay": {
+    "triggers": [
+      "Source/spec/script/profile/compiler/runtime drift",
+      "Temporary capture or audit-evidence loss",
+      "Changed topology or scope expansion"
+    ],
+    "qualified_source_state": "Baseline HEAD c39487774c0aefdba95f966ac25f236116567b52; root's final guarded recheck confirmed the held 609-file production seal 78766bc34791de62d336ad3fa8ef18fd4f0ba9eea923474ede61e9e7b254cf03 and 2042-file source/spec/script seal 32bf269693e24ee72107e5e2b6b6b53f6094d610e29e67db0a2721f20b709c32, plus exact equality for all 12 protected/frozen files at check time.",
+    "refresh": "Evidence decays on source/spec/script, profile, compiler/runtime, topology/scope drift, or loss/mismatch of temporary captures/auditors. Recheck held seals and protected-file hashes on source/spec changes, and rerun affected source/runtime-pinned semantic/byte/negative audits after relevant drift. Structural packet validation never substitutes for execution or evidence dereferencing.",
+    "failure_policy": "Keep this finite W273 claim scoped to the verified source state; reopen or downgrade dependent claims on decay, and fail closed outside the declared scope. Full goal remains ACTIVE."
+  },
+  "handoff": {
+    "state": "Finite W273 behavior is root-authorized VERIFIED / ROBUST. Broader layouts/profiles, granule isolation, format cleanup, optimization, and full-goal work remain open.",
+    "full_goal_complete": false,
+    "push": false,
+    "documentation": [
+      "docs/COMPACT_PART_WRITER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-part-writer-w273.json"
+    ]
+  }
+}

@@ -25,6 +25,7 @@ module CrystalClick
     # budget. #parse remains the compatibility flat-leaf projection.
     def self.parse_tree(source : String) : WideTupleSchemaNode?
       return nil if source.bytesize > MAX_SOURCE_BYTES
+      return nil unless source.starts_with?("Tuple")
       new(source).parse_tree
     rescue ex : ArgumentError
       nil
@@ -35,6 +36,7 @@ module CrystalClick
     # particular, the outer Array syntax node is charged before its child.
     def self.parse_array_tuple_tree(source : String) : WideTupleSchemaNode?
       return nil if source.bytesize > MAX_SOURCE_BYTES
+      return nil unless source.starts_with?("Array")
       new(source).parse_array_tuple_tree
     rescue ex : ArgumentError
       nil
@@ -46,6 +48,7 @@ module CrystalClick
     # parser charges the Tuple node and every descendant exactly once.
     def self.parse_nested_tree(source : String) : WideTupleSchemaNode?
       return nil if source.bytesize > MAX_SOURCE_BYTES
+      return nil unless source.starts_with?("Nested")
       new(source).parse_nested_tree
     rescue ex : ArgumentError
       nil
@@ -56,6 +59,7 @@ module CrystalClick
     # normal recursive Tuple tree; neither child is reparsed by a new parser.
     def self.parse_map_tuple_tree(source : String) : {WideTupleLeafType, WideTupleSchemaNode}?
       return nil if source.bytesize > MAX_SOURCE_BYTES
+      return nil unless source.starts_with?("Map")
       new(source).parse_map_tuple_tree
     rescue ex : ArgumentError
       nil

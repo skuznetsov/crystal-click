@@ -2,13 +2,15 @@ require "file_utils"
 require "json"
 
 module CrystalClick
-  # A Crystal-owned table over immutable W3 UInt64/String Wide parts.
+  # A Crystal-owned table over immutable Wide parts with a UInt64 key and
+  # either String payloads or declared scalar JSON typed paths.
   #
   # Visibility is selected by an empty directory under `committed/`. This is
   # process-atomic for cooperating writers on a local Darwin filesystem; it is
   # not a ClickHouse server table or a power-loss durability protocol.
   class EmbeddedMergeTreeTable
     FORMAT_VERSION          =         1
+    JSON_FORMAT_VERSION     =         2
     MAX_COLUMN_NAME_BYTES   =       128
     MAX_MANIFEST_BYTES      = 4_096_i64
     MAX_METADATA_BYTES      = 4_096_i64
@@ -18,6 +20,7 @@ module CrystalClick
     MAX_COMMITTED_MARKERS   =       2_048
     MAX_MERGE_ROWS          = 100_000_u64
     MAX_MERGE_PAYLOAD_BYTES = 64_i64 * 1024 * 1024
+    MAX_JSON_PATHS          = WidePartTable::MAX_COLUMNS - 1
     WRITER_STAGE_PREFIX     = ".crystal-click-wide-writer-"
     TABLE_STAGE_PREFIX      = ".crystal-click-embedded-table-"
     LOCK_FILE               = "writer.lock"
@@ -40,6 +43,23 @@ module CrystalClick
       end
     end
 
+    private struct Schema
+      getter format_version : Int32
+      getter key_name : String
+      getter value_name : String
+      getter value_type : String
+      getter json_paths : Array(Tuple(String, String))
+
+      def initialize(
+        @format_version : Int32,
+        @key_name : String,
+        @value_name : String,
+        @value_type : String,
+        @json_paths : Array(Tuple(String, String)),
+      )
+      end
+    end
+
     private struct MergeInput
       getter keys : Array(UInt64)
       getter values : Array(String)
@@ -49,9 +69,24 @@ module CrystalClick
       end
     end
 
+    private struct JSONMergeInput
+      getter keys : Array(UInt64)
+      getter paths : Array(WidePartWriter::JSONTypedPathColumn)
+      getter payload_bytes : Int64
+
+      def initialize(
+        @keys : Array(UInt64),
+        @paths : Array(WidePartWriter::JSONTypedPathColumn),
+        @payload_bytes : Int64,
+      )
+      end
+    end
+
     @root : String
     @key_name : String
     @value_name : String
+    @value_type : String
+    @json_paths : Array(Tuple(String, String))
 
     def self.create(root : String, key_name : String, value_name : String) : EmbeddedMergeTreeTable
       validate_column_name(key_name)
@@ -79,6 +114,41 @@ module CrystalClick
       open(target)
     end
 
+    # Create a table whose payload is a top-level JSON column with an explicit,
+    # bounded set of simple scalar typed paths. Values for absent paths are
+    # supplied by the caller as normalized scalar defaults.
+    def self.create_json(
+      root : String,
+      key_name : String,
+      value_name : String,
+      paths : Array(Tuple(String, String)),
+    ) : EmbeddedMergeTreeTable
+      validate_column_name(key_name)
+      validate_column_name(value_name)
+      raise ArgumentError.new("column names must be distinct") if key_name == value_name
+      raise ArgumentError.new("root must not be empty") if root.empty?
+      canonical_paths = validate_json_schema!(key_name, value_name, paths)
+
+      target = File.expand_path(root)
+      raise ArgumentError.new("root must not already exist") if File.exists?(target) || File.symlink?(target)
+      parent = File.dirname(target)
+      raise ArgumentError.new("root parent must exist") unless Dir.exists?(parent)
+      raise UnsupportedFormatError.new("atomic exclusive table publication is supported only on Darwin") unless darwin?
+
+      stage = create_stage(parent)
+      begin
+        Dir.mkdir(File.join(stage, "parts"))
+        Dir.mkdir(File.join(stage, "committed"))
+        File.write(File.join(stage, MANIFEST_FILE), manifest_json_v2(key_name, value_name, canonical_paths))
+        File.write(File.join(stage, LOCK_FILE), "")
+        publish_root_exclusively(stage, target)
+      ensure
+        FileUtils.rm_rf(stage) if Dir.exists?(stage)
+      end
+
+      open(target)
+    end
+
     def self.open(root : String) : EmbeddedMergeTreeTable
       raise InvalidPartError.new("embedded table root must not be empty") if root.empty?
       target = File.expand_path(root)
@@ -86,7 +156,7 @@ module CrystalClick
       raise InvalidPartError.new("embedded table root is not a directory") unless Dir.exists?(target)
 
       manifest = read_manifest(target)
-      table = new(target, manifest[0], manifest[1])
+      table = new(target, manifest.key_name, manifest.value_name, manifest.json_paths)
       table.part_paths
       table
     end
@@ -97,6 +167,14 @@ module CrystalClick
 
     def value_name : String
       @value_name.dup
+    end
+
+    def value_type : String
+      @value_type.dup
+    end
+
+    def json_paths : Array(Tuple(String, String))
+      @json_paths.map { |name, type| {name.dup, type.dup} }
     end
 
     # Return paths for the currently committed, structurally valid parts.
@@ -198,6 +276,45 @@ module CrystalClick
       end
     end
 
+    # Publish one sorted UInt64 part with the complete declared JSON path set.
+    # Each path column must be homogeneous and have exactly the declared type.
+    def insert_json(
+      keys : Slice(UInt64),
+      paths : Array(WidePartWriter::JSONTypedPathColumn),
+      rows_per_mark : Int32 = 8192,
+    ) : String
+      validate_json_insert_inputs(keys, paths, rows_per_mark)
+      validate_layout!
+
+      with_writer_lock do
+        committed, _orphans, physical, physical_entry_count, marker_count, _covered = inventory
+        raise BoundsError.new("embedded table exceeds part limit") if committed.size >= MAX_PARTS
+        preflight_new_part!(physical_entry_count, marker_count)
+
+        max_block = physical.reduce(0_i64) { |current, part| {current, part.info.max_block}.max }
+        raise BoundsError.new("embedded part block number is exhausted") if max_block == Int64::MAX
+        block = max_block + 1_i64
+        part_name = "all_#{block}_#{block}_0"
+        part_path = File.join(parts_path, part_name)
+
+        WidePartWriter.write_uint64_json_typed_paths(
+          part_path,
+          @key_name,
+          keys,
+          @value_name,
+          paths,
+          rows_per_mark
+        )
+
+        # mkdir remains the only visibility point for both schema versions.
+        Dir.mkdir(File.join(committed_path, part_name))
+        {% if flag?(:crystal_click_test_failpoints) %}
+          CrystalClick::TestFailpoint.hit("marker_created")
+        {% end %}
+        part_name
+      end
+    end
+
     # Merge two neighboring visible parts into one new immutable part. The
     # input names are resolved against the locked active inventory before any
     # caller-supplied string can be used as a filesystem path.
@@ -217,6 +334,10 @@ module CrystalClick
         left = active[left_index]
         right = active[right_index]
         preflight_new_part!(physical_entry_count, marker_count)
+
+        unless @json_paths.empty?
+          next merge_json_pair(left, right, physical, rows_per_mark)
+        end
 
         left_reader = WidePartTable.open_selected_typed([left.path], [@key_name, @value_name])
         right_reader = WidePartTable.open_selected_typed([right.path], [@key_name, @value_name])
@@ -286,7 +407,7 @@ module CrystalClick
         committed, _orphans, _physical, _physical_entry_count, _marker_count, _covered = inventory
         unless committed.empty?
           table = WidePartTable.open_selected_typed(committed.map(&.path), columns)
-          expected_column_types = columns.map { |column| {column, column == @key_name ? "UInt64" : "String"} }
+          expected_column_types = columns.map { |column| {column, embedded_column_type(column).not_nil!} }
           unless table.column_types == expected_column_types
             raise UnsupportedFormatError.new("embedded candidate column types do not match the table schema")
           end
@@ -314,12 +435,23 @@ module CrystalClick
       nil
     end
 
-    private def initialize(@root : String, @key_name : String, @value_name : String)
+    private def initialize(
+      @root : String,
+      @key_name : String,
+      @value_name : String,
+      paths : Array(Tuple(String, String)) = [] of Tuple(String, String),
+    )
+      @json_paths = paths.map { |name, type| {name.dup, type.dup} }
+      @value_type = @json_paths.empty? ? "String" : json_value_type(@json_paths)
     end
 
     private def reject_symlink!(path : String, label : String) : Nil
       raise CorruptPartError.new("#{label} must not be a symbolic link") if File.symlink?(path)
       nil
+    end
+
+    private def json_value_type(paths : Array(Tuple(String, String))) : String
+      "JSON(#{paths.map { |name, type| "#{name} #{type}" }.join(", ")})"
     end
 
     private def validate_layout! : Nil
@@ -330,7 +462,8 @@ module CrystalClick
       reject_symlink!(manifest_path, "manifest")
       raise UnsupportedFormatError.new("embedded table manifest is missing") unless File.file?(manifest_path)
       manifest = self.class.read_manifest(@root)
-      unless manifest[0] == @key_name && manifest[1] == @value_name
+      unless manifest.key_name == @key_name && manifest.value_name == @value_name &&
+             manifest.value_type == @value_type && manifest.json_paths == @json_paths
         raise UnsupportedFormatError.new("embedded table schema changed after open")
       end
 
@@ -438,6 +571,11 @@ module CrystalClick
       reject_symlink!(part.path, "part")
       raise CorruptPartError.new("physical part entry is not a directory") unless Dir.exists?(part.path)
 
+      unless @json_paths.empty?
+        validate_json_part_contents!(part)
+        return nil
+      end
+
       expected_columns = "columns format version: 1\n2 columns:\n`#{@key_name}` UInt64\n`#{@value_name}` String\n"
       expected_substreams = "columns substreams version: 1\n2 columns:\n1 substreams for column `#{@key_name}`:\n\t#{@key_name}\n2 substreams for column `#{@value_name}`:\n\t#{@value_name}.size\n\t#{@value_name}\n"
       expected_files = [
@@ -503,9 +641,156 @@ module CrystalClick
       nil
     end
 
+    private def validate_json_part_contents!(part : PhysicalPart) : Nil
+      sorted_paths = @json_paths.sort_by { |name, _type| name }
+      expected_columns = "columns format version: 1\n2 columns:\n`#{@key_name}` UInt64\n`#{@value_name}` #{json_value_type(sorted_paths)}\n"
+      substreams = ["#{@value_name}.object_structure"]
+      sorted_paths.each do |name, type|
+        typed_name = "#{@value_name}.#{name}"
+        substreams << "#{typed_name}.size" if type == "String"
+        substreams << typed_name
+      end
+      substreams.concat([
+        "#{@value_name}.object_shared_data.0.size0",
+        "#{@value_name}.object_shared_data.0%2Epaths",
+        "#{@value_name}.object_shared_data.0%2Evalues",
+      ])
+      expected_substreams = String.build do |text|
+        text << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{@key_name}`:\n\t#{@key_name}\n"
+        text << "#{substreams.size} substreams for column `#{@value_name}`:\n"
+        substreams.each { |stream| text << "\t#{stream}\n" }
+      end
+
+      expected_files = [
+        "columns.txt",
+        "columns_substreams.txt",
+        "default_compression_codec.txt",
+        "metadata_version.txt",
+        "serialization.json",
+        "count.txt",
+        "primary.idx",
+        "checksums.txt",
+      ]
+      checksummed_files = ["count.txt", "primary.idx", "serialization.json"]
+      logical_streams = [@key_name, "#{@value_name}.object_structure"]
+      sorted_paths.each do |name, type|
+        typed_name = "#{@value_name}.#{name}"
+        logical_streams << "#{typed_name}.size" if type == "String"
+        logical_streams << typed_name
+      end
+      logical_streams.concat([
+        "#{@value_name}.object_shared_data.0.size0",
+        "#{@value_name}.object_shared_data.0%2Epaths",
+        "#{@value_name}.object_shared_data.0%2Evalues",
+      ])
+      logical_streams.each do |logical_name|
+        base = StreamName.hash(logical_name)
+        {"#{base}.bin", "#{base}.mrk2"}.each do |name|
+          expected_files << name
+          checksummed_files << name
+        end
+      end
+      raise UnsupportedFormatError.new("embedded JSON part streams collide") unless expected_files.uniq.size == expected_files.size
+
+      children = Dir.children(part.path)
+      unless children.sort == expected_files.sort
+        raise CorruptPartError.new("committed JSON part has an unexpected physical layout")
+      end
+      children.each do |name|
+        child = File.join(part.path, name)
+        reject_symlink!(child, "part entry")
+        raise CorruptPartError.new("part entry is not a regular file") unless File.file?(child)
+      end
+      unless read_part_metadata(part.path, "columns.txt") == expected_columns
+        raise UnsupportedFormatError.new("committed JSON part schema does not match the embedded table")
+      end
+      unless read_part_metadata(part.path, "columns_substreams.txt") == expected_substreams
+        raise UnsupportedFormatError.new("committed JSON part substreams do not match the embedded table")
+      end
+      unless read_part_metadata(part.path, "default_compression_codec.txt") == "CODEC(LZ4)"
+        raise UnsupportedFormatError.new("committed JSON part codec does not match W3")
+      end
+      unless read_part_metadata(part.path, "metadata_version.txt") == "0"
+        raise UnsupportedFormatError.new("committed JSON part metadata version does not match W3")
+      end
+
+      checksums_path = File.join(part.path, "checksums.txt")
+      raise CorruptPartError.new("checksums.txt exceeds embedded table metadata limit") if File.size(checksums_path) > MAX_CHECKSUMS_BYTES
+      checksums = PartChecksums.open(part.path)
+      unless checksums.entries.keys.sort == checksummed_files.sort
+        raise CorruptPartError.new("committed JSON part checksum entries do not match the declared streams")
+      end
+      checksummed_files.each { |name| checksums.validate_selected_entries(part.path, name) }
+
+      projections = [@key_name] + sorted_paths.map { |name, _type| "#{@value_name}.#{name}" }
+      expected_types = [{@key_name, "UInt64"}] + sorted_paths.map { |name, type| {"#{@value_name}.#{name}", type} }
+      reader = WidePartTable.open_selected_typed([part.path], projections)
+      unless reader.column_types == expected_types
+        raise UnsupportedFormatError.new("committed JSON part types do not match the embedded table")
+      end
+      row_count = reader.total_row_count
+      unless read_part_metadata(part.path, "count.txt") == row_count.to_s
+        raise CorruptPartError.new("committed JSON part count does not match its marks")
+      end
+      validate_json_serialization_metadata!(part.path, row_count)
+      mark_rows = reader.part_mark_row_counts.first? || raise(CorruptPartError.new("committed JSON part has no marks"))
+      PrimaryKeyIndex.open(part.path, mark_rows.size, checksums)
+      nil
+    end
+
+    private def validate_json_serialization_metadata!(part_path : String, rows : UInt64) : Nil
+      text = read_part_metadata(part_path, "serialization.json")
+      begin
+        manifest = JSON.parse(text).as_h
+        expected_top = ["columns", "propagate_types_serialization_versions_to_nested_types", "types_serialization_versions", "version"].sort
+        raise UnsupportedFormatError.new("embedded JSON serialization fields do not match") unless manifest.keys.sort == expected_top
+        raise UnsupportedFormatError.new("embedded JSON serialization version is unsupported") unless manifest["version"].as_i == 1
+        raise UnsupportedFormatError.new("embedded JSON nested serialization flag differs") unless manifest["propagate_types_serialization_versions_to_nested_types"].as_bool
+        raise UnsupportedFormatError.new("embedded JSON serialization type versions differ") unless manifest["types_serialization_versions"].as_h == {"string" => JSON::Any.new(1_i64)}
+
+        columns = manifest["columns"].as_a
+        raise UnsupportedFormatError.new("embedded JSON serialization columns differ") unless columns.size == 1
+        key = columns[0].as_h
+        raise UnsupportedFormatError.new("embedded JSON key serialization fields differ") unless key.keys.sort == ["kind", "name", "num_defaults", "num_rows"].sort
+        raise UnsupportedFormatError.new("embedded JSON key serialization kind differs") unless key["kind"].as_s == "Default"
+        raise UnsupportedFormatError.new("embedded JSON key serialization name differs") unless key["name"].as_s == @key_name
+        raise UnsupportedFormatError.new("embedded JSON key serialization row count differs") unless key["num_rows"].as_i == rows
+        defaults = key["num_defaults"].as_i
+        raise UnsupportedFormatError.new("embedded JSON key default count exceeds row count") if defaults < 0 || defaults.to_u64 > rows
+      rescue ex : JSON::ParseException | TypeCastError | KeyError
+        raise UnsupportedFormatError.new("embedded JSON serialization metadata is malformed")
+      end
+      nil
+    end
+
     private def validate_insert_inputs(keys : Slice(UInt64), values : Slice(String), rows_per_mark : Int32) : Nil
+      raise ArgumentError.new("insert requires a String table; use insert_json") unless @json_paths.empty?
       raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty? || keys.size != values.size
       raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      previous = keys[0]
+      keys.each_with_index do |key, index|
+        raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
+        previous = key
+      end
+      nil
+    end
+
+    private def validate_json_insert_inputs(
+      keys : Slice(UInt64),
+      paths : Array(WidePartWriter::JSONTypedPathColumn),
+      rows_per_mark : Int32,
+    ) : Nil
+      raise ArgumentError.new("insert_json requires a JSON typed-path table") if @json_paths.empty?
+      raise ArgumentError.new("columns must contain the same nonzero row count") if keys.empty?
+      raise ArgumentError.new("JSON path set differs from the table schema") if paths.size != @json_paths.size
+      raise ArgumentError.new("rows_per_mark must be positive") if rows_per_mark <= 0
+      raise ArgumentError.new("rows_per_mark exceeds writer limit") if rows_per_mark > WidePartWriter::MAX_ROWS_PER_MARK
+
+      actual_schema = paths.map { |path| {path.name, path.type_name} }.sort_by(&.[0])
+      raise ArgumentError.new("JSON path set differs from the table schema") unless actual_schema == @json_paths
+      unless paths.all? { |path| path.values.size == keys.size }
+        raise ArgumentError.new("JSON typed-path columns must match key row count")
+      end
       previous = keys[0]
       keys.each_with_index do |key, index|
         raise ArgumentError.new("primary keys must be nondecreasing") if index > 0 && key < previous
@@ -565,6 +850,143 @@ module CrystalClick
       MergeInput.new(keys, values, payload_bytes)
     end
 
+    private def merge_json_pair(
+      left : PhysicalPart,
+      right : PhysicalPart,
+      physical : Array(PhysicalPart),
+      rows_per_mark : Int32,
+    ) : String
+      projections = [@key_name] + @json_paths.map { |name, _type| "#{@value_name}.#{name}" }
+      left_reader = WidePartTable.open_selected_typed([left.path], projections)
+      right_reader = WidePartTable.open_selected_typed([right.path], projections)
+      left_row_count = part_row_count(left_reader)
+      right_row_count = part_row_count(right_reader)
+      if left_row_count > MAX_MERGE_ROWS || right_row_count > MAX_MERGE_ROWS - left_row_count
+        raise BoundsError.new("embedded merge exceeds row limit")
+      end
+
+      left_rows = read_json_merge_input(left_reader, left_row_count, 0_i64)
+      right_rows = read_json_merge_input(right_reader, right_row_count, left_rows.payload_bytes)
+      merged_keys, merged_paths = stable_json_merge(left_rows, right_rows)
+      level = next_merge_level(physical, left, right)
+      part_name = canonical_part_name(left.info.min_block, right.info.max_block, level)
+      part_path = File.join(parts_path, part_name)
+
+      WidePartWriter.write_uint64_json_typed_paths(
+        part_path,
+        @key_name,
+        merged_keys.to_unsafe.to_slice(merged_keys.size),
+        @value_name,
+        merged_paths,
+        rows_per_mark
+      )
+      Dir.mkdir(File.join(committed_path, part_name))
+      part_name
+    end
+
+    private def read_json_merge_input(
+      reader : WidePartTable,
+      expected_rows : UInt64,
+      payload_bytes_before : Int64,
+    ) : JSONMergeInput
+      keys = [] of UInt64
+      path_values = @json_paths.map { [] of WidePartWriter::JSONTypedPathValue }
+      payload_bytes = payload_bytes_before
+      have_previous = false
+      previous_key = 0_u64
+      reader.scan_typed do |batch|
+        batch_keys = batch.values_for(@key_name, UInt64)
+        batch_values = @json_paths.map do |name, type|
+          read_json_path_values(batch, "#{@value_name}.#{name}", type)
+        end
+        unless batch_values.all? { |values| values.size == batch_keys.size }
+          raise CorruptPartError.new("JSON merge input columns are not row-aligned")
+        end
+
+        batch_keys.each_with_index do |key, row|
+          if have_previous && key < previous_key
+            raise CorruptPartError.new("merge input primary keys are not nondecreasing")
+          end
+          batch_values.each_with_index do |values, path_index|
+            value = values[row]
+            if value.is_a?(String)
+              value_bytes = value.bytesize.to_i64
+              if value_bytes > MAX_MERGE_PAYLOAD_BYTES - payload_bytes
+                raise BoundsError.new("embedded merge exceeds String payload limit")
+              end
+              payload_bytes += value_bytes
+            end
+            path_values[path_index] << value
+          end
+          keys << key
+          previous_key = key
+          have_previous = true
+        end
+      end
+
+      unless keys.size.to_u64 == expected_rows
+        raise CorruptPartError.new("JSON merge input row count changed while reading")
+      end
+      columns = @json_paths.each_with_index.map do |(name, type), index|
+        WidePartWriter::JSONTypedPathColumn.new(name, type, path_values[index])
+      end.to_a
+      JSONMergeInput.new(keys, columns, payload_bytes)
+    end
+
+    private def read_json_path_values(
+      batch : WidePartTableBatch,
+      column : String,
+      type_name : String,
+    ) : Array(WidePartWriter::JSONTypedPathValue)
+      case type_name
+      when "String"  then batch.strings_for(column).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "Int8"    then batch.values_for(column, Int8).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "Int16"   then batch.values_for(column, Int16).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "Int32"   then batch.values_for(column, Int32).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "Int64"   then batch.values_for(column, Int64).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "UInt8"   then batch.values_for(column, UInt8).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "UInt16"  then batch.values_for(column, UInt16).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "UInt32"  then batch.values_for(column, UInt32).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "UInt64"  then batch.values_for(column, UInt64).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "Float32" then batch.values_for(column, Float32).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      when "Float64" then batch.values_for(column, Float64).to_a.map { |value| value.as(WidePartWriter::JSONTypedPathValue) }
+      else                raise UnsupportedFormatError.new("embedded JSON path type is unsupported")
+      end
+    end
+
+    private def stable_json_merge(
+      left : JSONMergeInput,
+      right : JSONMergeInput,
+    ) : {Array(UInt64), Array(WidePartWriter::JSONTypedPathColumn)}
+      merged_keys = Array(UInt64).new(left.keys.size + right.keys.size)
+      merged_values = @json_paths.map do |_name, _type|
+        [] of WidePartWriter::JSONTypedPathValue
+      end
+      left_index = 0
+      right_index = 0
+
+      while left_index < left.keys.size || right_index < right.keys.size
+        take_left = right_index >= right.keys.size ||
+                    left_index < left.keys.size && left.keys[left_index] <= right.keys[right_index]
+        source = take_left ? left : right
+        row = take_left ? left_index : right_index
+        merged_keys << source.keys[row]
+        source.paths.each_with_index do |path, path_index|
+          merged_values[path_index] << path.values[row]
+        end
+        if take_left
+          left_index += 1
+        else
+          right_index += 1
+        end
+      end
+
+      columns = @json_paths.each_with_index.map do |(name, type), index|
+        WidePartWriter::JSONTypedPathColumn.new(name, type, merged_values[index])
+      end.to_a
+      {merged_keys, columns}
+    end
+
     private def stable_merge(left : MergeInput, right : MergeInput) : {Array(UInt64), Array(String)}
       merged_keys = Array(UInt64).new(left.keys.size + right.keys.size)
       merged_values = Array(String).new(left.values.size + right.values.size)
@@ -613,9 +1035,10 @@ module CrystalClick
     private def validate_scan_request!(columns : Array(String), batch_rows : Int) : Nil
       raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > WidePartTable::MAX_BATCH_ROWS
       raise UnsupportedFormatError.new("at least one embedded table column must be selected") if columns.empty?
-      raise UnsupportedFormatError.new("embedded table scan supports at most two columns") if columns.size > 2
+      max_columns = @json_paths.empty? ? 2 : WidePartTable::MAX_COLUMNS
+      raise UnsupportedFormatError.new("embedded table scan exceeds the selected-column limit") if columns.size > max_columns
       raise UnsupportedFormatError.new("selected embedded table columns must be distinct") unless columns.uniq.size == columns.size
-      unless columns.all? { |column| column == @key_name || column == @value_name }
+      unless columns.all? { |column| !embedded_column_type(column).nil? }
         raise UnsupportedFormatError.new("selected column is not present in the embedded table")
       end
       nil
@@ -623,16 +1046,26 @@ module CrystalClick
 
     private def validate_pk_candidate_request!(columns : Array(String)) : Nil
       raise BoundsError.new("at least one embedded table column must be selected") if columns.empty?
-      raise BoundsError.new("embedded table scan supports at most two columns") if columns.size > 2
+      max_columns = @json_paths.empty? ? 2 : WidePartTable::MAX_COLUMNS
+      raise BoundsError.new("embedded table scan exceeds the selected-column limit") if columns.size > max_columns
       raise BoundsError.new("selected embedded table columns must be distinct") unless columns.uniq.size == columns.size
       columns.each do |column|
         raise BoundsError.new("column name is empty or exceeds limit") if column.empty? || column.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
-        unless column == @key_name || column == @value_name
+        unless !embedded_column_type(column).nil?
           raise UnsupportedFormatError.new("selected column is not present in the embedded table")
         end
       end
       raise UnsupportedFormatError.new("selected columns must include the embedded primary key") unless columns.includes?(@key_name)
       nil
+    end
+
+    private def embedded_column_type(column : String) : String?
+      return "UInt64" if column == @key_name
+      return "String" if @json_paths.empty? && column == @value_name
+      return nil if @json_paths.empty?
+
+      path = @json_paths.find { |name, _type| column == "#{@value_name}.#{name}" }
+      path.try(&.[1])
     end
 
     private def with_reader_lock(&)
@@ -679,7 +1112,7 @@ module CrystalClick
       File.join(@root, "committed")
     end
 
-    protected def self.read_manifest(root : String) : {String, String}
+    protected def self.read_manifest(root : String) : Schema
       path = File.join(root, MANIFEST_FILE)
       reject_symlink!(path, "manifest")
       raise UnsupportedFormatError.new("embedded table manifest is missing or not regular") unless File.file?(path)
@@ -689,19 +1122,41 @@ module CrystalClick
         text = File.read(path)
         raise CorruptPartError.new("manifest changed size while being read") unless text.bytesize.to_i64 == size
         manifest = JSON.parse(text).as_h
-        expected_keys = ["format_version", "key_name", "key_type", "partition", "value_name", "value_type"].sort
-        raise UnsupportedFormatError.new("embedded table manifest fields do not match W4") unless manifest.keys.sort == expected_keys
-        raise UnsupportedFormatError.new("unsupported embedded table format version") unless manifest["format_version"].as_i == FORMAT_VERSION
+        version = manifest["format_version"].as_i
+        expected_keys = if version == FORMAT_VERSION
+                          ["format_version", "key_name", "key_type", "partition", "value_name", "value_type"].sort
+                        elsif version == JSON_FORMAT_VERSION
+                          ["format_version", "json_paths", "key_name", "key_type", "partition", "value_name", "value_type"].sort
+                        else
+                          raise UnsupportedFormatError.new("unsupported embedded table format version")
+                        end
+        raise UnsupportedFormatError.new("embedded table manifest fields do not match its version") unless manifest.keys.sort == expected_keys
         raise UnsupportedFormatError.new("unsupported embedded table key type") unless manifest["key_type"].as_s == "UInt64"
-        raise UnsupportedFormatError.new("unsupported embedded table payload type") unless manifest["value_type"].as_s == "String"
         raise UnsupportedFormatError.new("unsupported embedded table partition") unless manifest["partition"].as_s == "all"
         key_name = manifest["key_name"].as_s
         value_name = manifest["value_name"].as_s
         validate_column_name(key_name)
         validate_column_name(value_name)
         raise UnsupportedFormatError.new("embedded table column names are not distinct") if key_name == value_name
-        {key_name, value_name}
-      rescue ex : JSON::ParseException | TypeCastError | KeyError
+        value_type = manifest["value_type"].as_s
+        paths = [] of Tuple(String, String)
+        if version == FORMAT_VERSION
+          raise UnsupportedFormatError.new("unsupported embedded table payload type") unless value_type == "String"
+        else
+          paths = manifest["json_paths"].as_a.map do |entry|
+            path_fields = entry.as_h
+            unless path_fields.keys.sort == ["name", "type"]
+              raise UnsupportedFormatError.new("embedded JSON path schema fields do not match")
+            end
+            {path_fields["name"].as_s, path_fields["type"].as_s}
+          end
+          paths = validate_json_schema!(key_name, value_name, paths)
+          unless value_type == json_value_type(paths)
+            raise UnsupportedFormatError.new("embedded JSON payload type does not match its path schema")
+          end
+        end
+        Schema.new(version.to_i32, key_name, value_name, value_type, paths)
+      rescue ex : JSON::ParseException | TypeCastError | KeyError | ArgumentError
         raise UnsupportedFormatError.new("embedded table manifest is malformed")
       end
     rescue ex : IO::Error
@@ -710,6 +1165,74 @@ module CrystalClick
 
     private def self.manifest_json(key_name : String, value_name : String) : String
       "{\"format_version\":1,\"key_name\":\"#{key_name}\",\"key_type\":\"UInt64\",\"partition\":\"all\",\"value_name\":\"#{value_name}\",\"value_type\":\"String\"}\n"
+    end
+
+    private def self.manifest_json_v2(key_name : String, value_name : String, paths : Array(Tuple(String, String))) : String
+      encoded_paths = paths.map { |name, type| "{\"name\":\"#{name}\",\"type\":\"#{type}\"}" }.join(",")
+      "{\"format_version\":2,\"json_paths\":[#{encoded_paths}],\"key_name\":\"#{key_name}\",\"key_type\":\"UInt64\",\"partition\":\"all\",\"value_name\":\"#{value_name}\",\"value_type\":\"#{json_value_type(paths)}\"}\n"
+    end
+
+    private def self.json_value_type(paths : Array(Tuple(String, String))) : String
+      "JSON(#{paths.map { |name, type| "#{name} #{type}" }.join(", ")})"
+    end
+
+    private def self.validate_json_schema!(
+      key_name : String,
+      value_name : String,
+      paths : Array(Tuple(String, String)),
+    ) : Array(Tuple(String, String))
+      raise ArgumentError.new("JSON typed-path declaration must be nonempty") if paths.empty?
+      raise ArgumentError.new("embedded JSON schema exceeds the selected-column limit") if paths.size > MAX_JSON_PATHS
+
+      canonical = paths.sort_by { |name, _type| name }
+      seen = Set(String).new
+      canonical.each do |name, type|
+        unless name.bytesize > 0 && name.bytesize <= MAX_COLUMN_NAME_BYTES && /\A[A-Za-z_][A-Za-z0-9_]*\z/.matches?(name)
+          raise ArgumentError.new("JSON typed-path name must be a bounded simple identifier")
+        end
+        raise ArgumentError.new("duplicate JSON typed path") unless seen.add?(name)
+        unless type == "String" || WidePart.supports_numeric_type?(type)
+          raise ArgumentError.new("JSON typed-path type must be an exact supported scalar")
+        end
+      end
+
+      declaration_bytes = canonical.sum { |name, type| name.bytesize + 1 + type.bytesize }
+      metadata_line_bytes = "`#{value_name}` JSON(".bytesize + declaration_bytes + 2 * (canonical.size - 1) + ")\n".bytesize
+      raise ArgumentError.new("JSON typed-path metadata line exceeds reader limit") if metadata_line_bytes > WidePart::MAX_METADATA_LINE_BYTES
+
+      declaration = canonical.map { |name, type| "#{name} #{type}" }.join(", ")
+      columns_metadata = "columns format version: 1\n2 columns:\n`#{key_name}` UInt64\n`#{value_name}` JSON(#{declaration})\n"
+      raise ArgumentError.new("embedded JSON columns metadata exceeds table limit") if columns_metadata.bytesize.to_i64 > MAX_METADATA_BYTES
+
+      logical_names = [key_name, "#{value_name}.object_structure"]
+      canonical.each do |name, type|
+        logical_name = "#{value_name}.#{name}"
+        logical_names << "#{logical_name}.size" if type == "String"
+        logical_names << logical_name
+      end
+      logical_names.concat([
+        "#{value_name}.object_shared_data.0.size0",
+        "#{value_name}.object_shared_data.0%2Epaths",
+        "#{value_name}.object_shared_data.0%2Evalues",
+      ])
+      logical_names.each do |name|
+        raise ArgumentError.new("physical stream name exceeds reader limit") if name.empty? || name.bytesize > WidePart::MAX_METADATA_LINE_BYTES
+      end
+      stream_bases = logical_names.map { |name| StreamName.hash(name) }
+      raise ArgumentError.new("physical stream names must be distinct") unless stream_bases.uniq.size == stream_bases.size
+
+      substreams_metadata = String.build do |text|
+        text << "columns substreams version: 1\n2 columns:\n1 substreams for column `#{key_name}`:\n\t#{key_name}\n"
+        text << "#{logical_names.size - 1} substreams for column `#{value_name}`:\n"
+        logical_names[1..].each { |name| text << "\t#{name}\n" }
+      end
+      if substreams_metadata.bytesize.to_i64 > MAX_METADATA_BYTES || substreams_metadata.bytesize.to_i64 > WidePart::MAX_METADATA_FILE_BYTES
+        raise ArgumentError.new("embedded JSON substream metadata exceeds table limit")
+      end
+
+      result = manifest_json_v2(key_name, value_name, canonical)
+      raise ArgumentError.new("embedded table manifest exceeds metadata limit") if result.bytesize.to_i64 > MAX_MANIFEST_BYTES
+      canonical
     end
 
     private def self.validate_column_name(name : String) : Nil

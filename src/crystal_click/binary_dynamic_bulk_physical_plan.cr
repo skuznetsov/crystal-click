@@ -268,9 +268,11 @@ module CrystalClick
     # Statistics are intentionally excluded: physical planning removes them
     # from Dynamic structures, while the parsed prefix plan remains the sole
     # authority for prefix callbacks and their statistics.
-    def same_prepared_layout?(plan : BinaryDynamicBulkPlan) : Bool
-      return false if @prepared.has_json_object_bindings? || plan.has_json_object_bindings?
-      return false unless @json_object_names.empty?
+    def same_prepared_layout?(plan : BinaryDynamicBulkPlan, budget : BinaryCodecBudget? = nil) : Bool
+      prepared_has_json = @prepared.has_json_object_bindings?
+      candidate_has_json = plan.has_json_object_bindings?
+      return false unless prepared_has_json == candidate_has_json
+      return false unless prepared_has_json || @json_object_names.empty?
       return false unless @prepared.type == plan.type && @prepared.profile == plan.profile
       return false unless @prepared.site_count == plan.site_count
       return false unless @prepared.role_count == plan.role_count
@@ -315,6 +317,16 @@ module CrystalClick
       @prepared.each_data_role do |role|
         return false unless plan.has_data_role?(role)
       end
+
+      if prepared_has_json
+        # Existing callers without a read budget retain the JSON-free W270
+        # comparison contract. A bound JSON child adds plan-tree work and may
+        # only be compared under the caller's aggregate read budget.
+        selected_budget = budget || return false
+        return false if selected_budget.writing?
+        return false unless same_limits?(selected_budget.limits, @context.limits)
+        return false unless same_prepared_json_layout?(plan, selected_budget)
+      end
       true
     end
 
@@ -355,11 +367,271 @@ module CrystalClick
       file_for_data_role(role, ".mrk2", hashed)
     end
 
-    private def same_structure_layout?(left : DynamicStructure, right : DynamicStructure) : Bool
+    private def same_prepared_json_layout?(plan : BinaryDynamicBulkPlan, budget : BinaryCodecBudget) : Bool
+      # Admit a direct JSON actual or a bounded Array chain ending at JSON.
+      # Other wrapped leaves and non-root Dynamic sites remain outside this
+      # structural read-layout comparison. The parent String profile may be
+      # String0 or String1; equality with the candidate was established by
+      # same_prepared_layout? before reaching this child-grammar comparison.
+      return false unless (@prepared.profile.single_stream? || @prepared.profile.with_size_stream?) &&
+                          (plan.profile.single_stream? || plan.profile.with_size_stream?)
+
+      prepared_keys = @prepared.json_object_leaf_keys(budget)
+      candidate_keys = plan.json_object_leaf_keys(budget)
+      return false unless prepared_keys.size == candidate_keys.size
+      return false unless prepared_keys.size == @json_object_sites.size
+      return false unless @prepared.json_object_binding_count == @json_object_sites.size
+
+      prepared_keys.each_with_index do |key, index|
+        return false unless key == candidate_keys[index]
+        return false unless key.dynamic_site == "root"
+
+        prepared_actual = @prepared.arm_type("root", key.canonical_arm_index)
+        candidate_actual = plan.arm_type("root", key.canonical_arm_index)
+        return false unless prepared_actual == candidate_actual
+        return false if BinaryArrayJsonLeafShape.wrapper_count?(
+                          prepared_actual, key, budget.limits.max_depth
+                        ).nil?
+        return false if BinaryArrayJsonLeafShape.wrapper_count?(
+                          candidate_actual, key, budget.limits.max_depth
+                        ).nil?
+
+        prepared_binding = @prepared.json_object_binding(key)
+        candidate_binding = plan.json_object_binding(key)
+        return false unless prepared_binding.leaf_key == key && candidate_binding.leaf_key == key
+        return false unless prepared_binding.json_type == candidate_binding.json_type
+        return false unless @prepared.json_object_leaf_type(key) == plan.json_object_leaf_type(key)
+
+        prepared_depth = @prepared.json_object_leaf_depth(key, @initial_descriptor_depth)
+        candidate_depth = plan.json_object_leaf_depth(key, @initial_descriptor_depth)
+        return false unless prepared_depth == candidate_depth
+
+        site = @json_object_sites[key]?
+        return false unless site
+        return false unless site.leaf_key == key && site.binding.leaf_key == key
+        return false unless site.json_depth == prepared_depth
+        return false unless site.binding.json_type == prepared_binding.json_type
+        return false unless site.escaped_prefix.bytesize.to_u64 <= budget.limits.max_bytes.to_u64
+        return false unless site.physical_plan.initial_array_level == site.array_level
+        return false unless site.physical_plan.shared_profile.single_stream?
+        child_bucket_count = sealed_object_bucket_count(prepared_binding.plan.structures.object)
+        return false unless child_bucket_count && site.physical_plan.shared_bucket_count == child_bucket_count.not_nil!
+
+        expected_descriptor_depth64 = prepared_depth.to_i64 + 1_i64
+        return false if expected_descriptor_depth64 > Int32::MAX.to_i64
+        return false unless site.physical_plan.typed_descriptor_root_depth == expected_descriptor_depth64.to_i32
+
+        candidate_actual_offset = if candidate_binding.plan.structures.object.dynamic_path_count > 0
+                                    2_i64
+                                  else
+                                    1_i64
+                                  end
+        expected_actual_depth64 = candidate_depth.to_i64 + candidate_actual_offset
+        return false if expected_actual_depth64 > Int32::MAX.to_i64
+        return false unless site.physical_plan.inferred_actual_root_depth == expected_actual_depth64.to_i32
+
+        return false unless same_json_schema_layout?(prepared_binding, candidate_binding, budget)
+        return false unless same_object_physical_layout?(prepared_binding.plan, candidate_binding.plan, budget)
+      end
+
+      true
+    end
+
+    private def same_json_schema_layout?(
+      left : DynamicJsonObjectBinding,
+      right : DynamicJsonObjectBinding,
+      budget : BinaryCodecBudget,
+    ) : Bool
+      left_schema = left.schema
+      right_schema = right.schema
+      return false unless left_schema.max_dynamic_paths == right_schema.max_dynamic_paths
+      return false unless left_schema.max_dynamic_types == right_schema.max_dynamic_types
+      return false unless same_limits?(left_schema.limits, right_schema.limits)
+
+      left_size = left_schema.declaration_byte_size.to_u64
+      right_size = right_schema.declaration_byte_size.to_u64
+      return false unless left_size == right_size
+      charge_layout_string_copies!(budget, 2_u64, add_size(left_size, right_size))
+      left_schema.declaration == right_schema.declaration
+    end
+
+    private def same_object_physical_layout?(
+      left : ObjectDocumentPlan,
+      right : ObjectDocumentPlan,
+      budget : BinaryCodecBudget,
+    ) : Bool
+      left_object = left.structures.object
+      right_object = right.structures.object
+
+      # Typed-Dynamic JSON children admit only the sealed Object V3 shared
+      # layouts: MAP0 uses one bucket; MAP_WITH_BUCKETS, ADVANCED and CHUNKED
+      # use exactly two. The Object and Dynamic statistics are not layout
+      # identity; parsed prefix plans retain authority over their own
+      # statistics callbacks.
+      return false unless left_object.version == 4_u64 && right_object.version == 4_u64
+      left_bucket_count = sealed_object_bucket_count(left_object)
+      right_bucket_count = sealed_object_bucket_count(right_object)
+      return false unless left_bucket_count && right_bucket_count
+      return false unless left_object.shared_data_version == right_object.shared_data_version
+      return false unless left_bucket_count == right_bucket_count
+      return false unless left_object.bucket_count == left_bucket_count.not_nil!.to_u64
+      return false unless right_object.bucket_count == right_bucket_count.not_nil!.to_u64
+      return false unless left_object.legacy_max_dynamic_paths.nil? && right_object.legacy_max_dynamic_paths.nil?
+      return false unless left.inferred_actual_root_depth == right.inferred_actual_root_depth
+
+      # A child Object may own ordinary Dynamic arms, but this first slice
+      # does not recursively admit another JSON Object owner.
+      return false unless left.typed_dynamic_json_object_leaf_plans(budget).empty?
+      return false unless right.typed_dynamic_json_object_leaf_plans(budget).empty?
+      return false unless left.root_dynamic_json_object_leaf_plans(budget).empty?
+      return false unless right.root_dynamic_json_object_leaf_plans(budget).empty?
+
+      return false unless left_object.dynamic_path_count == right_object.dynamic_path_count
+      left_object.dynamic_path_count.times do |index|
+        return false unless same_object_path_bytes?(left_object, index, right_object, index, budget)
+        path_size = left_object.dynamic_path_byte_size(index).to_u64
+        charge_layout_string_copies!(budget, 1_u64, path_size)
+        path = left_object.dynamic_path_at(index)
+        return false unless same_structure_layout?(
+                              left.structures.dynamic_for(path), right.structures.dynamic_for(path), budget
+                            )
+      end
+
+      return false unless left.typed_path_count == right.typed_path_count
+      left.typed_path_count.times do |index|
+        return false unless same_typed_path_bytes?(left, index, right, index, budget)
+        path_size = left.typed_path_byte_size_at(index).to_u64
+        charge_layout_string_copies!(budget, 1_u64, path_size)
+        path = left.typed_path_at(index)
+        return false unless left.typed_type_for(path) == right.typed_type_for(path)
+      end
+
+      return false unless left.typed_dynamic_count == right.typed_dynamic_count
+      left.typed_dynamic_count.times do |index|
+        return false unless same_typed_dynamic_path_bytes?(left, index, right, index, budget)
+        path_size = left.typed_dynamic_path_byte_size_at(index).to_u64
+        charge_layout_string_copies!(budget, 1_u64, path_size)
+        path = left.typed_dynamic_path_at(index)
+        return false unless left.typed_type_for(path) == right.typed_type_for(path)
+
+        left_site_count = left.typed_dynamic_site_count_for(path)
+        right_site_count = right.typed_dynamic_site_count_for(path)
+        return false unless left_site_count == right_site_count
+        left_site_count.times do |site_index|
+          left_site_size = left.typed_dynamic_site_path_byte_size_at(path, site_index).to_u64
+          right_site_size = right.typed_dynamic_site_path_byte_size_at(path, site_index).to_u64
+          return false unless left_site_size == right_site_size
+          charge_layout_string_copies!(budget, 2_u64, add_size(left_site_size, right_site_size))
+          left_site_path = left.typed_dynamic_site_path_at(path, site_index)
+          right_site_path = right.typed_dynamic_site_path_at(path, site_index)
+          return false unless left_site_path == right_site_path
+          return false unless left.typed_dynamic_site_type_for(path, left_site_path) ==
+                                right.typed_dynamic_site_type_for(path, right_site_path)
+          return false unless left.typed_dynamic_site_object_depth_for(path, left_site_path) ==
+                                right.typed_dynamic_site_object_depth_for(path, right_site_path)
+          return false unless same_structure_layout?(
+                                left.typed_dynamic_site_structure_for(path, left_site_path),
+                                right.typed_dynamic_site_structure_for(path, right_site_path),
+                                budget,
+                              )
+        end
+      end
+
+      true
+    end
+
+    private def sealed_object_bucket_count(object : ObjectStructure) : Int32?
+      return nil unless object.version == 4_u64
+      case object.shared_data_version
+      when 0_u64
+        object.bucket_count == 1_u64 ? 1 : nil
+      when 1_u64, 2_u64, 3_u64
+        object.bucket_count == 2_u64 ? 2 : nil
+      else
+        nil
+      end
+    end
+
+    private def same_object_path_bytes?(
+      left : ObjectStructure,
+      left_index : Int,
+      right : ObjectStructure,
+      right_index : Int,
+      budget : BinaryCodecBudget,
+    ) : Bool
+      left_size = left.dynamic_path_byte_size(left_index)
+      right_size = right.dynamic_path_byte_size(right_index)
+      return false unless left_size == right_size
+      byte_count = add_size(left_size.to_u64, right_size.to_u64)
+      budget.charge_wire_bytes(byte_count)
+      left_size.times do |byte_index|
+        return false unless left.dynamic_path_byte_at(left_index, byte_index) ==
+                              right.dynamic_path_byte_at(right_index, byte_index)
+      end
+      true
+    end
+
+    private def same_typed_path_bytes?(
+      left : ObjectDocumentPlan,
+      left_index : Int,
+      right : ObjectDocumentPlan,
+      right_index : Int,
+      budget : BinaryCodecBudget,
+    ) : Bool
+      left_size = left.typed_path_byte_size_at(left_index)
+      right_size = right.typed_path_byte_size_at(right_index)
+      return false unless left_size == right_size
+      budget.charge_wire_bytes(add_size(left_size.to_u64, right_size.to_u64))
+      left_size.times do |byte_index|
+        return false unless left.typed_path_byte_at(left_index, byte_index) ==
+                              right.typed_path_byte_at(right_index, byte_index)
+      end
+      true
+    end
+
+    private def same_typed_dynamic_path_bytes?(
+      left : ObjectDocumentPlan,
+      left_index : Int,
+      right : ObjectDocumentPlan,
+      right_index : Int,
+      budget : BinaryCodecBudget,
+    ) : Bool
+      left_size = left.typed_dynamic_path_byte_size_at(left_index)
+      right_size = right.typed_dynamic_path_byte_size_at(right_index)
+      return false unless left_size == right_size
+      budget.charge_wire_bytes(add_size(left_size.to_u64, right_size.to_u64))
+      left_size.times do |byte_index|
+        return false unless left.typed_dynamic_path_byte_at(left_index, byte_index) ==
+                              right.typed_dynamic_path_byte_at(right_index, byte_index)
+      end
+      true
+    end
+
+    private def charge_layout_string_copies!(budget : BinaryCodecBudget, count : UInt64, bytes : UInt64) : Nil
+      budget.ensure_future_elements(count)
+      budget.ensure_future_nodes(count)
+      budget.ensure_wire_bytes(bytes)
+      budget.charge_elements(count)
+      budget.charge_wire_bytes(bytes)
+      count.times { budget.charge_node }
+      nil
+    end
+
+    private def same_structure_layout?(
+      left : DynamicStructure,
+      right : DynamicStructure,
+      budget : BinaryCodecBudget? = nil,
+    ) : Bool
       return false unless left.version == right.version
       return false unless left.legacy_max_dynamic_types == right.legacy_max_dynamic_types
       return false unless left.shared_index == right.shared_index
       return false unless left.type_count == right.type_count
+
+      if selected_budget = budget
+        compared_types = left.type_count.to_u64 * 2_u64
+        selected_budget.preflight_children(compared_types) if compared_types > 0_u64
+        compared_types.times { selected_budget.charge_node }
+      end
 
       left.type_count.times do |index|
         return false unless left.type_at(index) == right.type_at(index)

@@ -16,6 +16,8 @@ module CrystalClick
       reader_limits : CompressedStreamLimits,
       mark_format : CompactMarkFormat,
       variant_discriminator_mode : CompactVariantDiscriminatorMode,
+      compress_marks : Bool = false,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     ) : String
       validate_mark_format!(mark_format)
       variant_discriminator_mode.wire_value
@@ -37,17 +39,18 @@ module CrystalClick
       value_inputs = Array(CompactPartWriteInput).new(columns.size)
       columns.each do |column|
         if column.json_context?
-          value_inputs << column.json_input
+          value_inputs << column.json_input(profile)
         elsif column.dynamic_context?
-          value_inputs << column.dynamic_input
+          value_inputs << column.dynamic_input(profile)
         else
-          value_inputs << column.static_input
+          value_inputs << column.static_input(profile)
         end
       end
       key_input = CompactStaticColumnInput.new(
         key_name,
         BinaryDataType.primitive("UInt64"),
         key_granules,
+        profile,
       )
       backend_columns = Array(CompactPartWriteInput).new(columns.size + 1)
       backend_columns << key_input
@@ -86,6 +89,8 @@ module CrystalClick
         write_codec_budget,
         write_transport_budget,
         write_plan,
+        compress_marks,
+        profile,
       )
       files = case write_plan
               when CompactStaticWritePlan
@@ -115,10 +120,15 @@ module CrystalClick
       validate_output_sizes!(files, rows_per_mark_grid.size, write_plan.slot_count, write_plan.mark_format)
 
       data_size = files.data_size
-      marks_size = files.marks_size
-      reserve_pair_snapshot!(write_transport_budget, data_size, marks_size)
+      reserve_data_snapshot!(write_transport_budget, data_size)
       data = files.data
-      marks = files.marks
+      mark_output = CompactPhysicalMarkOutput.from_canonical_files(
+        files,
+        write_plan.mark_format,
+        compress_marks,
+        frame_bytes,
+        write_transport_budget,
+      )
 
       index_record = planned_primary_index_record(key_snapshot, rows_per_mark_grid)
       reserve_primary_index_output!(write_transport_budget, index_record)
@@ -133,8 +143,7 @@ module CrystalClick
         files.raw_size,
         files.raw_hash_fold,
       )
-      marks_name = mark_file_name(write_plan.mark_format)
-      records << ChecksumRecord.new(marks_name, marks_size.to_u64, files.marks_hash, false)
+      records << mark_output.checksum_record
       records << index_record
       records << ChecksumRecord.new("count.txt", count_bytes.size.to_u64, CityHashV1.file_hash(count_bytes), false)
       records << ChecksumRecord.new(
@@ -156,7 +165,7 @@ module CrystalClick
       stage = PartWriterInfrastructure::PartDirectoryPublisher.create_stage(parent)
       begin
         File.write(File.join(stage, "data.bin"), data)
-        File.write(File.join(stage, marks_name), marks)
+        mark_output.write_to(stage)
         written_index = PartWriterInfrastructure::PrimaryIndexWriter.write(
           stage,
           key_snapshot.to_unsafe.to_slice(key_snapshot.size),
@@ -183,6 +192,7 @@ module CrystalClick
           value_inputs,
           rows_per_mark_grid,
           records,
+          mark_output,
           checksums_bytes,
           write_plan,
           limits,
@@ -376,7 +386,9 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact data.bin exceeds the typed reader bound")
       end
       if marks_size <= 0 || marks_size > WidePart::MAX_MARK_FILE_BYTES || marks_size > Int32::MAX
-        raise UnsupportedFormatError.new("Compact #{mark_file_name(mark_format)} exceeds the typed reader bound")
+        raise UnsupportedFormatError.new(
+          "Compact #{CompactPhysicalMarkOutput.file_name(mark_format, false)} exceeds the typed reader bound"
+        )
       end
       if mark_count <= 0 || mark_count > WidePartTable::MAX_MARKS_PER_READER || slot_count <= 0
         raise UnsupportedFormatError.new("Compact mark count cannot represent the terminal record")
@@ -384,25 +396,15 @@ module CrystalClick
       record_width = checked_add_u64(checked_multiply_u64(slot_count.to_u64, 16_u64), 8_u64)
       expected = checked_multiply_u64(checked_add_u64(mark_count.to_u64, 1_u64), record_width)
       unless marks_size.to_u64 == expected
-        raise UnsupportedFormatError.new("Compact #{mark_file_name(mark_format)} output differs from its complete grid")
+        raise UnsupportedFormatError.new(
+          "Compact #{CompactPhysicalMarkOutput.file_name(mark_format, false)} output differs from its complete grid"
+        )
       end
       nil
     end
 
-    private def self.mark_file_name(mark_format : CompactMarkFormat) : String
-      case mark_format
-      when CompactMarkFormat::Mrk3
-        "data.mrk3"
-      when CompactMarkFormat::Mrk4
-        "data.mrk4"
-      else
-        raise UnsupportedFormatError.new("unsupported Compact mark format")
-      end
-    end
-
-    private def self.reserve_pair_snapshot!(budget : CompressedStreamBudget, data_size : Int32, marks_size : Int32) : Nil
-      total = data_size.to_i64 + marks_size.to_i64
-      budget.reserve_result_bytes(total)
+    private def self.reserve_data_snapshot!(budget : CompressedStreamBudget, data_size : Int32) : Nil
+      budget.reserve_result_bytes(data_size.to_i64)
       nil
     end
 
@@ -458,6 +460,7 @@ module CrystalClick
       value_inputs : Array(CompactPartWriteInput),
       rows : Array(UInt64),
       records : Array(ChecksumRecord),
+      mark_output : CompactPhysicalMarkOutput,
       expected_checksums : Bytes,
       write_plan : CompactStaticWritePlan | CompactPartWritePlan,
       limits : BinaryCodecLimits,
@@ -505,7 +508,8 @@ module CrystalClick
       records.each do |record|
         entry = checksums.entry(record.name) || raise(CorruptPartError.new("staged Compact checksum entry is missing"))
         unless entry.physical_size == record.physical_size && entry.file_hash == record.file_hash &&
-               entry.compressed == record.compressed && entry.uncompressed_size == record.uncompressed_size
+               entry.compressed == record.compressed && entry.uncompressed_size == record.uncompressed_size &&
+               entry.uncompressed_hash == record.uncompressed_hash
           raise CorruptPartError.new("staged Compact checksum declaration differs from preflight")
         end
         checksums.validate_selected_entries(stage, record.name)
@@ -520,6 +524,9 @@ module CrystalClick
       context = CompactPartPhysicalContext.open(stage, transport_budget)
       context_workspace = checked_add_u64(context.retained_workspace_bytes, context.retained_grid_workspace_bytes)
       transport_budget.reserve_result_bytes(to_i64(context_workspace))
+      unless context.marks_name == mark_output.name
+        raise CorruptPartError.new("staged Compact mark filename differs from its physical output owner")
+      end
       unless context.mode == write_plan.mark_format && context.row_count == keys.size.to_u64 &&
              context.granule_count == rows.size && context.columns == metadata.schema_columns
         raise CorruptPartError.new("staged Compact physical metadata differs from preflight")

@@ -1,0 +1,584 @@
+{
+  "format": "crystal_click_w274_curated_evidence_index_v1",
+  "slice": "Compressed Compact marks transport and existing public reader integration",
+  "date": "2026-10-13",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary_verdict": "ROBUST",
+    "scope": "Only checksum-declared data.cmrk3/data.cmrk4 adaptation to existing MRK3/MRK4 grids and existing admitted typed/offline consumer profiles. Plain behavior is retained; no new logical type, profile, wrapper, site or writer compression.",
+    "full_goal": "ACTIVE",
+    "performance_objective": "Unmeasured; all types/layouts and MV/projections precede optimization.",
+    "index_boundary": "Curated evidence index, not a proof engine. Recorded command execution, source checks and dereferenced native/raw observations support the finite claim. JSON/shape validation does not execute commands, prove independence or establish universal compatibility."
+  },
+  "baseline": {
+    "revision": "73c85f6219000de789f7f0c33438604dc8aa2f1e",
+    "previous_packet": ".landmark/evidence/compact-part-writer-w273.json",
+    "historic_seal_boundary": "W273 609/2042-file seals and 979-example cohorts apply to W273 only. They were not replayed or re-certified as full W274 coverage.",
+    "final_feature_code_hashes": [
+      {
+        "path": "src/crystal_click.cr",
+        "sha256": "b0bc9f014cfbfa1cdd12e34864f86e239446a9d7bda3195b77cb512c726b6f8f"
+      },
+      {
+        "path": "src/crystal_click/compact_mark_file_adapter.cr",
+        "sha256": "f756dacfa3c049588b556c37c0720a98244a102843a8e3f878a55ce92771b97a"
+      },
+      {
+        "path": "src/crystal_click/compact_mark_index.cr",
+        "sha256": "184d4c4b3f7b60d45418c801d14716007aa94a5aa014552c60bc619d891d208e"
+      },
+      {
+        "path": "src/crystal_click/compact_part_physical_context.cr",
+        "sha256": "8054c8beade15a1d27d016fad9b0c21d5e7f53dfb948d6f58bc928acf7a10754"
+      },
+      {
+        "path": "src/crystal_click/compressed_mark_reader.cr",
+        "sha256": "f75a7d5b4adc6b500d049ca4ba40616c14542c7eb09732c0482e53139e961d00"
+      },
+      {
+        "path": "src/crystal_click/part_checksums.cr",
+        "sha256": "72523d98b00b21ec31ba8b57cc1ea1c0db2dc732620157ce8ec5fd6f6a0ed3af"
+      },
+      {
+        "path": "src/crystal_click/part_stream_source.cr",
+        "sha256": "9751db16e8b6a8b6483b9cae49bde3eb432cb4a26a412cc6548d7927c4de5d5b"
+      },
+      {
+        "path": "src/crystal_click/compact_binary_bulk_column_reader.cr",
+        "sha256": "a948d7becce931bc250c83d40e187863ce5027f37aed017e5282fb3074b318f1"
+      },
+      {
+        "path": "src/crystal_click/compact_dynamic_bulk_column_reader.cr",
+        "sha256": "630932dfb58edeae2d673a1d213a1d0ab0b42df109d642bdebc3d011967fd8e4"
+      },
+      {
+        "path": "src/crystal_click/compact_static_json_bulk_column_reader.cr",
+        "sha256": "213cc9ff7471e77ed5eee3ac0f3ada817de68f8af5b59522b11b26c4e62ebbf6"
+      },
+      {
+        "path": "src/crystal_click/compact_recursive_json_column_reader.cr",
+        "sha256": "514a9987a565d208fdfe18ed6fd0180e0e94ec27fd051a0903437e1dce070cb2"
+      },
+      {
+        "path": "src/crystal_click/typed_part_table.cr",
+        "sha256": "a4226f06ffca93e3a50a1dfbaafd06b16e3c43f91790757a1bacd01f25f6706b"
+      },
+      {
+        "path": "src/crystal_click/typed_binary_bulk_column_reader.cr",
+        "sha256": "d582158d9f46f1dc44335b657eba168c483ba36c68d2814a5a047caaa1a63844"
+      },
+      {
+        "path": "src/crystal_click/offline_table/dynamic_bulk_values_materializer.cr",
+        "sha256": "ac2d22cab8205c8f22a631becccd535af23f26062490ab35e1aa2a31f0fc9b8b"
+      },
+      {
+        "path": "src/crystal_click/offline_table/compact_json_values_materializer.cr",
+        "sha256": "9f8521bea9fb007d61124436b4772673a1344737895dab46e9bcd0c1ffe7d206"
+      },
+      {
+        "path": "spec/compact_mark_file_adapter_w274_entry_spec.cr",
+        "sha256": "676c2ea162e590e76c3bb31f2fb5bb9b8de8106b9a631a0fcd5bef99c9a36387"
+      },
+      {
+        "path": "spec/compact_mark_file_adapter_w274_spec.cr",
+        "sha256": "74ea5e4b1862f6c6aabf53a9471220ba17f2bfd0a8052b15db09f6faa185c1c1"
+      },
+      {
+        "path": "spec/compact_mark_file_adapter_w274_adversary_spec.cr",
+        "sha256": "5b9e2caaff9d4c013edf37ec238e50b31bfcc3064ab4b6e414534f9bd7f7f1ac"
+      },
+      {
+        "path": "spec/compact_mark_file_adapter_w274_integration_spec.cr",
+        "sha256": "4d272650c488327fa85b76d41e7af6e193f4cdb39933ecc87e43b4b3197bae96"
+      },
+      {
+        "path": "spec/support/compact_mark_file_adapter_w274_fixture.cr",
+        "sha256": "4d2b460be10a3801f456611e9b493343a1499abdc752bfecc3af33a25f69e142"
+      },
+      {
+        "path": "scripts/compact_marks_w274_helper.cr",
+        "sha256": "3fc1ff93812418b604d13a468ea8cbaa0e1431b2f5c128db60b34238b46e2efb"
+      },
+      {
+        "path": "scripts/probe_compact_marks_w274.rb",
+        "sha256": "6c32a01c5492a37065ef72f0e701245d58250395f32959ecc86388c3fe7ad5fb"
+      }
+    ],
+    "production_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/compact_mark_file_adapter.cr",
+      "src/crystal_click/compact_mark_index.cr",
+      "src/crystal_click/compact_part_physical_context.cr",
+      "src/crystal_click/compressed_mark_reader.cr",
+      "src/crystal_click/part_checksums.cr",
+      "src/crystal_click/part_stream_source.cr",
+      "src/crystal_click/compact_binary_bulk_column_reader.cr",
+      "src/crystal_click/compact_dynamic_bulk_column_reader.cr",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr",
+      "src/crystal_click/compact_recursive_json_column_reader.cr",
+      "src/crystal_click/typed_part_table.cr",
+      "src/crystal_click/typed_binary_bulk_column_reader.cr",
+      "src/crystal_click/offline_table/dynamic_bulk_values_materializer.cr",
+      "src/crystal_click/offline_table/compact_json_values_materializer.cr"
+    ],
+    "held_source_recheck_chunk": "e860f3",
+    "test_subject_boundary": "All fifteen production paths and final focused specs remain unchanged across the final cohorts and native captures. Helper reporting was corrected after the cohorts, then rebuilt in both modes and exercised in both fresh native matrices; the standalone helper is not a production codec."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "An attacker-sized canonical mark payload is decoded before its byte bound, or ambiguous sidecars are accepted and route to a wrong physical layout.",
+    "rollback": "Revert only the atomic W274 feature against W273. Preserve unrelated changes and all three protected user-owned W263 specs; no history rewrite or push is authorized.",
+    "guards": [
+      "Strict declared/physical Compact-family inventory and extension/compression agreement; no chosen precedence.",
+      "Physical and canonical Int32/configured byte bounds before payload allocation; consumptive budget ownership and no double input charge.",
+      "Physical CityHash checked on the same mmap before frame index; each frame authenticated; exact canonical length/hash before grid.",
+      "Routing hint chooses strict validation, not admission. Four exact valid Wide names are excluded.",
+      "Actual detached mark filename propagates to selected checksum consumers; canonical grid coordinate/row/EOF laws remain unchanged."
+    ]
+  },
+  "implementation": {
+    "architecture": "One own-file schema-neutral CompactMarkFileAdapter adapts physical compressed marks. Existing compressed-frame transport, CompactMarkIndex and recursive value codecs are reused; no duplicate column serde.",
+    "dispatch_paths": [
+      "src/crystal_click/typed_binary_bulk_column_reader.cr",
+      "src/crystal_click/typed_part_table.cr",
+      "src/crystal_click/offline_table/dynamic_bulk_values_materializer.cr",
+      "src/crystal_click/offline_table/compact_json_values_materializer.cr"
+    ],
+    "checksum_identity_consumers": [
+      "src/crystal_click/compact_binary_bulk_column_reader.cr",
+      "src/crystal_click/compact_dynamic_bulk_column_reader.cr",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr",
+      "src/crystal_click/compact_recursive_json_column_reader.cr"
+    ],
+    "shared_api_boundary": "PartChecksums.Entry gains a trailing optional raw hash and PartStreamSource preserves it by value. CompressedMarkReader.read_all gains optional trailing maximum_output_size/expected_file_hash parameters; defaults preserve existing callers.",
+    "direct_api_limit": "Direct canonical CompactMarkIndex.read is not itself the authenticated preallocation/transport entry; CompactPartPhysicalContext/adapter supplies that boundary."
+  },
+  "pins": {
+    "upstream": {
+      "root": "/private/tmp/clickhouse-w254-upstream.AqeqyC",
+      "revision": "ed30948f095ecb70679986d7d60e27ad770ae27a",
+      "files": [
+        {
+          "path": "src/Storages/MergeTree/MergeTreeSettings.cpp",
+          "sha256": "99ec4877b2a7db63a05272cf918c6b312e674140f9ea2d221c4ef4542ffefe46"
+        },
+        {
+          "path": "src/Storages/MergeTree/MergeTreeIndexGranularityInfo.cpp",
+          "sha256": "78a430e4b026f53bb0f49da8edfd1b674009f0bad1c1c78488848cca5e765901"
+        },
+        {
+          "path": "src/Storages/MergeTree/MergeTreeDataPartWriterCompact.cpp",
+          "sha256": "0b551c2e4efe5638fc734f854e45d78beab342ce43fffd464b6196d1eeff2072"
+        },
+        {
+          "path": "src/Storages/MergeTree/MergeTreeWriterStream.cpp",
+          "sha256": "99333fae1e7e4c033c90956704ac20420008cc31bf692566642b11f86b664cbf"
+        }
+      ]
+    },
+    "clickhouse_runtime": {
+      "path": "/private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped",
+      "sha256": "bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2",
+      "version": "26.10.1.1201",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028"
+    },
+    "provenance_boundary": "Upstream source and executable are separate pinned witnesses. No latest-version or executable-built-from-this-source claim.",
+    "guard": {
+      "path": "/Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh",
+      "sha256": "ca3d326eac90731c4915883158d394e72dde766786fadf95a4241acd7f627ea4",
+      "min_free_percent": 50,
+      "memory_mb": 12288,
+      "crystal_workers": 1,
+      "policy": "Root alone executes guarded Crystal/Ruby/native jobs serially. Crystal timeout 480 seconds; native probe 900; audit 120. SDKROOT, TMPDIR and dedicated Crystal cache are explicit in captured commands."
+    },
+    "compiler": {
+      "path": "/opt/homebrew/bin/crystal",
+      "version": "1.21.0",
+      "llvm": "22.1.8",
+      "target": "aarch64-apple-darwin25.6.0",
+      "release_flag": "--release"
+    },
+    "native_local_source_seal": {
+      "file_count": 41,
+      "sha256": "90d792b17aa14e875c2aa570187bc9ff21890974b87b19f152522bed8cfddf01",
+      "encoding": "SHA256 of Ruby JSON.generate of the exact current path/sha256 array in captured order.",
+      "boundary": "Before/after/current source equality is checked independently of docs. This is a finite capture roster, not the full repository seal."
+    }
+  },
+  "verification": {
+    "cohorts": [
+      {
+        "mode": "DEBUG",
+        "kind": "focused",
+        "paths": [
+          "spec/compact_mark_file_adapter_w274_entry_spec.cr",
+          "spec/compact_mark_file_adapter_w274_spec.cr",
+          "spec/compact_mark_file_adapter_w274_adversary_spec.cr",
+          "spec/compact_mark_file_adapter_w274_integration_spec.cr"
+        ],
+        "examples": 39,
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 480 12288 spec spec/compact_mark_file_adapter_w274_entry_spec.cr spec/compact_mark_file_adapter_w274_spec.cr spec/compact_mark_file_adapter_w274_adversary_spec.cr spec/compact_mark_file_adapter_w274_integration_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+        "initial_chunk": "44979d",
+        "final_chunk": "f395ff",
+        "exit_code": 0,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "RELEASE",
+        "kind": "focused",
+        "paths": [
+          "spec/compact_mark_file_adapter_w274_entry_spec.cr",
+          "spec/compact_mark_file_adapter_w274_spec.cr",
+          "spec/compact_mark_file_adapter_w274_adversary_spec.cr",
+          "spec/compact_mark_file_adapter_w274_integration_spec.cr"
+        ],
+        "examples": 39,
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 480 12288 spec spec/compact_mark_file_adapter_w274_entry_spec.cr spec/compact_mark_file_adapter_w274_spec.cr spec/compact_mark_file_adapter_w274_adversary_spec.cr spec/compact_mark_file_adapter_w274_integration_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+        "initial_chunk": "657332",
+        "final_chunk": "84618c",
+        "exit_code": 0,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "DEBUG",
+        "kind": "affected",
+        "paths": [
+          "spec/part_checksums_spec.cr",
+          "spec/compressed_mark_transport_w124_spec.cr",
+          "spec/compressed_mark_transport_w124_root_spec.cr",
+          "spec/compact_physical_context_w259_spec.cr",
+          "spec/compact_physical_context_w259_adversary_spec.cr",
+          "spec/compact_typed_w260_spec.cr",
+          "spec/compact_typed_w260_adversary_spec.cr",
+          "spec/compact_static_json_mrk3_compact_native_w263_spec.cr",
+          "spec/compact_static_json_mrk4_map_native_w263_spec.cr",
+          "spec/recursive_dynamic_json_w204_adversary_spec.cr",
+          "spec/recursive_dynamic_json_w205_adversary_spec.cr",
+          "spec/compact_part_writer_w272_spec.cr",
+          "spec/compact_part_writer_w272_adversary_spec.cr",
+          "spec/compact_part_writer_w273_spec.cr",
+          "spec/compact_part_writer_w273_adversary_spec.cr",
+          "spec/compact_dynamic_w262_spec.cr",
+          "spec/compact_dynamic_w262_adversary_spec.cr",
+          "spec/compact_json_recursive_public_native_w263_spec.cr",
+          "spec/compact_json_recursive_public_w263_adversary_spec.cr",
+          "spec/binary_dynamic_bulk_values_w155_spec.cr",
+          "spec/binary_dynamic_bulk_values_w155_adversary_spec.cr",
+          "spec/dynamic_owned_values_w220_spec.cr",
+          "spec/wide_ragged_selected_metadata_w261_spec.cr",
+          "spec/compact_part_writer_w268_spec.cr",
+          "spec/compact_part_writer_w268_adversary_spec.cr"
+        ],
+        "examples": 236,
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 480 12288 spec spec/part_checksums_spec.cr spec/compressed_mark_transport_w124_spec.cr spec/compressed_mark_transport_w124_root_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_static_json_mrk3_compact_native_w263_spec.cr spec/compact_static_json_mrk4_map_native_w263_spec.cr spec/recursive_dynamic_json_w204_adversary_spec.cr spec/recursive_dynamic_json_w205_adversary_spec.cr spec/compact_part_writer_w272_spec.cr spec/compact_part_writer_w272_adversary_spec.cr spec/compact_part_writer_w273_spec.cr spec/compact_part_writer_w273_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr spec/compact_json_recursive_public_native_w263_spec.cr spec/compact_json_recursive_public_w263_adversary_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/dynamic_owned_values_w220_spec.cr spec/wide_ragged_selected_metadata_w261_spec.cr spec/compact_part_writer_w268_spec.cr spec/compact_part_writer_w268_adversary_spec.cr --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+        "initial_chunk": "8cd10b",
+        "final_chunk": "9539dd",
+        "exit_code": 0,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      },
+      {
+        "mode": "RELEASE",
+        "kind": "affected",
+        "paths": [
+          "spec/part_checksums_spec.cr",
+          "spec/compressed_mark_transport_w124_spec.cr",
+          "spec/compressed_mark_transport_w124_root_spec.cr",
+          "spec/compact_physical_context_w259_spec.cr",
+          "spec/compact_physical_context_w259_adversary_spec.cr",
+          "spec/compact_typed_w260_spec.cr",
+          "spec/compact_typed_w260_adversary_spec.cr",
+          "spec/compact_static_json_mrk3_compact_native_w263_spec.cr",
+          "spec/compact_static_json_mrk4_map_native_w263_spec.cr",
+          "spec/recursive_dynamic_json_w204_adversary_spec.cr",
+          "spec/recursive_dynamic_json_w205_adversary_spec.cr",
+          "spec/compact_part_writer_w272_spec.cr",
+          "spec/compact_part_writer_w272_adversary_spec.cr",
+          "spec/compact_part_writer_w273_spec.cr",
+          "spec/compact_part_writer_w273_adversary_spec.cr",
+          "spec/compact_dynamic_w262_spec.cr",
+          "spec/compact_dynamic_w262_adversary_spec.cr",
+          "spec/compact_json_recursive_public_native_w263_spec.cr",
+          "spec/compact_json_recursive_public_w263_adversary_spec.cr",
+          "spec/binary_dynamic_bulk_values_w155_spec.cr",
+          "spec/binary_dynamic_bulk_values_w155_adversary_spec.cr",
+          "spec/dynamic_owned_values_w220_spec.cr",
+          "spec/wide_ragged_selected_metadata_w261_spec.cr",
+          "spec/compact_part_writer_w268_spec.cr",
+          "spec/compact_part_writer_w268_adversary_spec.cr"
+        ],
+        "examples": 236,
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 480 12288 spec spec/part_checksums_spec.cr spec/compressed_mark_transport_w124_spec.cr spec/compressed_mark_transport_w124_root_spec.cr spec/compact_physical_context_w259_spec.cr spec/compact_physical_context_w259_adversary_spec.cr spec/compact_typed_w260_spec.cr spec/compact_typed_w260_adversary_spec.cr spec/compact_static_json_mrk3_compact_native_w263_spec.cr spec/compact_static_json_mrk4_map_native_w263_spec.cr spec/recursive_dynamic_json_w204_adversary_spec.cr spec/recursive_dynamic_json_w205_adversary_spec.cr spec/compact_part_writer_w272_spec.cr spec/compact_part_writer_w272_adversary_spec.cr spec/compact_part_writer_w273_spec.cr spec/compact_part_writer_w273_adversary_spec.cr spec/compact_dynamic_w262_spec.cr spec/compact_dynamic_w262_adversary_spec.cr spec/compact_json_recursive_public_native_w263_spec.cr spec/compact_json_recursive_public_w263_adversary_spec.cr spec/binary_dynamic_bulk_values_w155_spec.cr spec/binary_dynamic_bulk_values_w155_adversary_spec.cr spec/dynamic_owned_values_w220_spec.cr spec/wide_ragged_selected_metadata_w261_spec.cr spec/compact_part_writer_w268_spec.cr spec/compact_part_writer_w268_adversary_spec.cr --release --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+        "initial_chunk": "7a19fc",
+        "final_chunk": "4cc173",
+        "exit_code": 0,
+        "failures": 0,
+        "errors": 0,
+        "pending": 0
+      }
+    ],
+    "unique_per_mode": {
+      "examples": 275,
+      "paths": 29,
+      "executables": 2
+    },
+    "scope": "Disjoint focused and affected executables in DEBUG and actual RELEASE; not a combined/full-suite/fresh-clone run.",
+    "structure_check": {
+      "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 12288 /private/tmp/crystal-click-w274-root.f9uIyD/packet_structure_check.rb",
+      "chunk": "705e3c",
+      "exit_code": 0,
+      "validator_path": "/private/tmp/crystal-click-w274-root.f9uIyD/packet_structure_check.rb",
+      "validator_sha256": "57920a08b8ec457e08a32f2d5778e5f82d94fb3f4a59664c9e0086b4a57c1e7e",
+      "scope": "JSON/roster structure, current code/protected/runtime/guard/capture digests and recorded finite zero-exit signals only; does not execute DoD or prove the claim."
+    },
+    "native_matrices": [
+      {
+        "mode": "DEBUG",
+        "root": "/private/tmp/crystal-click-w274-native-debug-integrated.PWjSS9",
+        "summary_sha256": "e1da4d12479d9af988218aa4cf8e9f744e8541c3b4ccf641383e4019176b0d33",
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 900 12288 scripts/probe_compact_marks_w274.rb --evidence-root /private/tmp/crystal-click-w274-native-debug-integrated.PWjSS9 --helper /private/tmp/crystal-click-w274-root.f9uIyD/marks-helper-debug-integrated --clickhouse /private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped",
+        "initial_chunk": "8d089a",
+        "final_chunk": "ed2729",
+        "exit_code": 0,
+        "helper_path": "/private/tmp/crystal-click-w274-root.f9uIyD/marks-helper-debug-integrated",
+        "helper_sha256": "053de845e5bbd5a4546e00ceb8a993870dcf8cd5ec3de21019a0f21e6e19f9b0",
+        "helper_build_command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 480 12288 build scripts/compact_marks_w274_helper.cr -o /private/tmp/crystal-click-w274-root.f9uIyD/marks-helper-debug-integrated --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color",
+        "helper_build_initial_chunk": "c6f33c",
+        "helper_build_final_chunk": "738d63",
+        "helper_build_exit_code": 0,
+        "audit_path": "/private/tmp/crystal-click-w274-root.f9uIyD/native-audit-debug-reviewed.json",
+        "audit_sha256": "c0488b7d0dc55c3ee8db759679f85a68fb4e421133e59279830bd28e8431a828",
+        "audit_command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 12288 /private/tmp/crystal-click-w274-root.f9uIyD/native_capture_audit.rb --evidence-root /private/tmp/crystal-click-w274-native-debug-integrated.PWjSS9 --output /private/tmp/crystal-click-w274-root.f9uIyD/native-audit-debug-reviewed.json",
+        "audit_initial_chunk": "39da7a",
+        "audit_final_chunk": "3a4c6a",
+        "audit_exit_code": 0,
+        "audit_status": "audit_passed"
+      },
+      {
+        "mode": "RELEASE",
+        "root": "/private/tmp/crystal-click-w274-native-release.I4fvHx",
+        "summary_sha256": "14e60164c540345ed11c03b55f33320b14078735e711833d54857046d3bebe35",
+        "command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 900 12288 scripts/probe_compact_marks_w274.rb --evidence-root /private/tmp/crystal-click-w274-native-release.I4fvHx --helper /private/tmp/crystal-click-w274-root.f9uIyD/marks-helper-release-integrated --clickhouse /private/tmp/crystal-click-w263-runtime-recovery.B9uAPX/clickhouse-stripped",
+        "initial_chunk": "4fadb4",
+        "final_chunk": "342b08",
+        "exit_code": 0,
+        "helper_path": "/private/tmp/crystal-click-w274-root.f9uIyD/marks-helper-release-integrated",
+        "helper_sha256": "cbfce35a7ad978237c08e96e380b9c3fb1394c7fd50c9ab23ef65d5e193d76f0",
+        "helper_build_command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /opt/homebrew/bin/crystal 480 12288 build scripts/compact_marks_w274_helper.cr -o /private/tmp/crystal-click-w274-root.f9uIyD/marks-helper-release-integrated --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color --release",
+        "helper_build_initial_chunk": "467ba5",
+        "helper_build_final_chunk": "914487",
+        "helper_build_exit_code": 0,
+        "audit_path": "/private/tmp/crystal-click-w274-root.f9uIyD/native-audit-release-reviewed.json",
+        "audit_sha256": "cc88ce47161d55bcb4cb43e2846487b5ce69050e7fb3d0d03ff2b88eff09971d",
+        "audit_command": "env CRYSTAL_CLICK_W263_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-multichunk-baseline.b1p2QS CRYSTAL_CLICK_W263_COMPACT_EVIDENCE_ROOT=/private/tmp/crystal-click-w263-mrk3-frame-witness.GLQMkU COGNI_RUN_SAFE_MIN_FREE_PCT=50 RUN_SAFE_PASSTHROUGH_STDIO=1 CRYSTAL_WORKERS=1 TMPDIR=/private/tmp CRYSTAL_CACHE_DIR=/private/tmp/crystal-click-w274-root.f9uIyD/crystal-cache SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk /Users/sergey/Projects/Crystal/cogni-ml/scripts/run_safe.sh /usr/bin/ruby 120 12288 /private/tmp/crystal-click-w274-root.f9uIyD/native_capture_audit.rb --evidence-root /private/tmp/crystal-click-w274-native-release.I4fvHx --output /private/tmp/crystal-click-w274-root.f9uIyD/native-audit-release-reviewed.json",
+        "audit_initial_chunk": "21215a",
+        "audit_final_chunk": "796c4d",
+        "audit_exit_code": 0,
+        "audit_status": "audit_passed"
+      }
+    ],
+    "matrix_shape": {
+      "cells": 4,
+      "axes": "MRK3/MRK4 x plain/compressed; native compressed marks use ZSTD(3).",
+      "native_invocations": 1,
+      "helper_invocations": 8,
+      "raw_sidecars": 36,
+      "record_and_sidecar_files": 45,
+      "grid": {
+        "raw_per_granule_rows": [
+          2,
+          2,
+          2,
+          0
+        ],
+        "data_granules": 3,
+        "terminal_granules": 1,
+        "mrk3_slots": 4,
+        "mrk3_mark_bytes": 288,
+        "mrk4_slots": 6,
+        "mrk4_mark_bytes": 416
+      },
+      "typed_scope": "UInt64 pk/value, decimal strings preserve UInt64::MAX. Native selected four-column literal values qualify stock fixture provenance, but candidate String1/Array(Int32) observations are only raw physical windows.",
+      "windows": "Full three two-row batches; middle start_row=3/max_rows=2 gives pk4 at mark1/offset1 and pk5 at mark2/offset0; EOF is empty.",
+      "checksum_identity": "Actual physical mark filenames are asserted before normalization; only validated name identities are removed for plain/compressed semantic comparison."
+    },
+    "raw_audit": {
+      "path": "/private/tmp/crystal-click-w274-root.f9uIyD/native_capture_audit.rb",
+      "sha256": "2cfa1acc0e22cb623fc88b692f611dc9b77a287e40765edd11c8ec53106ec099",
+      "self_test_chunk": "1c5670",
+      "self_test_exit_code": 0,
+      "self_controls": 9,
+      "scope": "Exact SQL/argv/native literal subjects, all record and sidecar digests, pinned runtime/helper/current 41-file sources, four physical inventories, raw grid coordinates/EOF, UInt64/MAX, typed table fields and peer bytes/semantics; captures unchanged during audit.",
+      "limits": "Scratch auditor imports neither production nor probe runtime modules. Reviews remain same-lineage/correlated. Helper frame authentication plus plain-peer equality is not independent ClickHouse decompression or a reimplemented CityHash oracle."
+    }
+  },
+  "falsifiers_and_instrument_repairs": [
+    {
+      "kind": "historical_entry_RED",
+      "chunks": [
+        "c55853",
+        "eb40e4"
+      ],
+      "signal": "Unchanged W273 public entry rejects both compressed layouts, two errors; baseline production admission gap."
+    },
+    {
+      "kind": "historical_stock_first",
+      "chunks": [
+        "9f59f4",
+        "19192a",
+        "557ef5"
+      ],
+      "root": "/private/tmp/crystal-click-w274-stock-qualified.xdIPN3",
+      "signal": "Four stock cells, native CHECK/literal SELECT and canonical replay pass before implementation; not the final integrated candidate capture."
+    },
+    {
+      "kind": "historical_integration_RED",
+      "chunk": "12ab31",
+      "signal": "Nine core entry tests, four failures/four errors with valid Wide control passing, before neutral dispatch/name reconstruction edits."
+    },
+    {
+      "kind": "instrument_repair",
+      "chunk": "6f1a3f",
+      "signal": "Affected cohort lacked required W263 capture ENV; rerun with both authenticated baseline roots, no production change."
+    },
+    {
+      "kind": "instrument_repair",
+      "chunk": "70d9cc",
+      "signal": "Physical-only negative used unsupported UInt8 typed carrier and failed before inventory validation. Replaced only test fixture with admitted UInt64 u; final 39-example cohort passes; no type admission."
+    },
+    {
+      "kind": "instrument_repair",
+      "chunk": "77badf",
+      "signal": "Standalone helper compilation exposed Slice(String) JSON reporting mismatch. Convert the two table value slices to Arrays; final DEBUG/RELEASE builds and native UInt64/MAX reports pass."
+    },
+    {
+      "kind": "instrument_repair",
+      "chunk": "a5b7f6",
+      "signal": "Scratch audit dropped the already-validated table identifier when projecting cell results, then failed its exact native SQL check. Preserve that validated identifier; self-controls and both full raw audits pass. Failed report retained at /private/tmp/crystal-click-w274-root.f9uIyD/native-audit-debug-integrated.json."
+    },
+    {
+      "kind": "instrument_boundary",
+      "signal": "Earlier cumulative raw-row and five-slot MRK4 expectations were rejected by source/raw observations: rows are per-granule [2,2,2,0], and String1 contributes label.size plus label. These are discarded instrument assumptions, not format conclusions."
+    }
+  ],
+  "adversary": {
+    "verdict": "ROBUST",
+    "scope": "Only declared W274 transport/public integration, fifteen production changes, final focused/affected cohorts and both fresh native/raw captures.",
+    "strongest_cases": [
+      "Declared raw size/hash and physical hash disagreements, later-frame corruption, truncation and frame/output bounds.",
+      "Mixed/unknown/undeclared/missing sidecars, symlink/FIFO, suffix/flag disagreement and physical-only routing.",
+      "All four valid Wide hint exclusions and actual 200000-row Wide mrk2 control.",
+      "Actual checksum name identities, copied checksum metadata, middle-mark offsets, EOF and UInt64::MAX.",
+      "Existing finite Dynamic/static JSON/recursive JSON/offline generated compressed-mark profiles without widening carriers or ownership."
+    ],
+    "correlation": "Luna implementation/oracle/audit suggestions are candidate evidence. Root inspected source, repaired instruments and executed guarded commands, raw-record and current-hash checks. Same-model lineage is not independent model replication.",
+    "limits": "Quiescent part only. CityHash validates declared integrity, not cryptographic authenticity. Selected mark validation is not whole-part or all-type/layout proof."
+  },
+  "boundaries": {
+    "allowed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/compact_mark_file_adapter.cr",
+      "src/crystal_click/compact_mark_index.cr",
+      "src/crystal_click/compact_part_physical_context.cr",
+      "src/crystal_click/compressed_mark_reader.cr",
+      "src/crystal_click/part_checksums.cr",
+      "src/crystal_click/part_stream_source.cr",
+      "src/crystal_click/compact_binary_bulk_column_reader.cr",
+      "src/crystal_click/compact_dynamic_bulk_column_reader.cr",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr",
+      "src/crystal_click/compact_recursive_json_column_reader.cr",
+      "src/crystal_click/typed_part_table.cr",
+      "src/crystal_click/typed_binary_bulk_column_reader.cr",
+      "src/crystal_click/offline_table/dynamic_bulk_values_materializer.cr",
+      "src/crystal_click/offline_table/compact_json_values_materializer.cr",
+      "spec/compact_mark_file_adapter_w274_entry_spec.cr",
+      "spec/compact_mark_file_adapter_w274_spec.cr",
+      "spec/compact_mark_file_adapter_w274_adversary_spec.cr",
+      "spec/compact_mark_file_adapter_w274_integration_spec.cr",
+      "spec/support/compact_mark_file_adapter_w274_fixture.cr",
+      "scripts/compact_marks_w274_helper.cr",
+      "scripts/probe_compact_marks_w274.rb",
+      "docs/COMPACT_PART_WRITER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-marks-reader-w274.json"
+    ],
+    "changed_paths": [
+      "src/crystal_click.cr",
+      "src/crystal_click/compact_mark_file_adapter.cr",
+      "src/crystal_click/compact_mark_index.cr",
+      "src/crystal_click/compact_part_physical_context.cr",
+      "src/crystal_click/compressed_mark_reader.cr",
+      "src/crystal_click/part_checksums.cr",
+      "src/crystal_click/part_stream_source.cr",
+      "src/crystal_click/compact_binary_bulk_column_reader.cr",
+      "src/crystal_click/compact_dynamic_bulk_column_reader.cr",
+      "src/crystal_click/compact_static_json_bulk_column_reader.cr",
+      "src/crystal_click/compact_recursive_json_column_reader.cr",
+      "src/crystal_click/typed_part_table.cr",
+      "src/crystal_click/typed_binary_bulk_column_reader.cr",
+      "src/crystal_click/offline_table/dynamic_bulk_values_materializer.cr",
+      "src/crystal_click/offline_table/compact_json_values_materializer.cr",
+      "spec/compact_mark_file_adapter_w274_entry_spec.cr",
+      "spec/compact_mark_file_adapter_w274_spec.cr",
+      "spec/compact_mark_file_adapter_w274_adversary_spec.cr",
+      "spec/compact_mark_file_adapter_w274_integration_spec.cr",
+      "spec/support/compact_mark_file_adapter_w274_fixture.cr",
+      "scripts/compact_marks_w274_helper.cr",
+      "scripts/probe_compact_marks_w274.rb",
+      "docs/COMPACT_PART_WRITER_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "LANDMARKS.md",
+      ".landmark/evidence/compact-marks-reader-w274.json"
+    ]
+  },
+  "protected_user_files": [
+    {
+      "path": "spec/compact_json_w263_native_spec.cr",
+      "sha256": "f1a8c38033477981ebc85928660f7c297d09e85d7e00264d59fcf2f606d0e0ac"
+    },
+    {
+      "path": "spec/compact_static_json_internal_w263_spec.cr",
+      "sha256": "497914c5acd908caef6adff695d202fd6a638e292707035dd21a0c3887607ae8"
+    },
+    {
+      "path": "spec/compact_static_json_root_w263_adversary_spec.cr",
+      "sha256": "d3d858b157f31e7daee0d171b8d0d0d8684cd0ab0dcd505145308bddfccc0dc6"
+    }
+  ],
+  "availability": {
+    "source_tests_scripts_and_curated_packet": "Committed locally with the atomic feature; no push.",
+    "raw_capture_roots_and_scratch_auditor": "Temporary local artifacts, available when checked on 2026-10-13; not committed, not remotely durable. Digests identify observations but cannot recover missing bytes.",
+    "failure_policy": "Loss/drift reopens dependent evidence; rerun guarded matrices/audits before reuse. Do not treat missing captures as current VERIFIED support.",
+    "shape_validation": "Skill template/validate-landmark-graph.sh are absent in this repository. Fallback parses JSON, checks exact changed-path boundaries, source hashes, unique cohort rosters and recorded zero-exit signals; those checks establish structure/current identity only, not substantive truth."
+  },
+  "residual_risks": [
+    "Compressed Compact writer is not implemented by W274. Current writer remains whole-part sorted UInt64-key, no arbitrary-key/append.",
+    "Modern String/profile and advanced/chunked JSON/Dynamic ownership and unqualified wrapper/site combinations remain open.",
+    "Local compressed JSON/Dynamic integration fixtures are not native JSON x compressed-mark serializer qualification.",
+    "Public typed carriers are finite, unchanged; no universal all-base-type combination admission.",
+    "Compact MV/projection composition remains open; existing bounded Wide/metadata support is separate.",
+    "Whole-grid preflight remains; no granule-isolation/granule-only-I/O, large-part RSS, performance or <=10% slowdown evidence.",
+    "Historical W273 formatter residuals/full-suite counts are not refreshed by this finite W274 run."
+  ],
+  "next": {
+    "slice": "W275",
+    "level": "PROPOSED",
+    "action": "Budgeted physical mark compression over the existing canonical Compact grid, actual output names, compressed/raw checksum records and staged readback; no duplicate logical serializer.",
+    "discriminator": "Generate plain/compressed MRK3/MRK4 parts, require pinned native CHECK/literal SELECT plus current public reader agreement, and reject inconsistent metadata before publication.",
+    "order": "Compressed writer, remaining types/layouts, Compact MV/projections, then memory/performance."
+  },
+  "decay": {
+    "triggers": [
+      "production/test/helper/probe/compiler/runtime/profile/capture drift",
+      "temporary evidence loss",
+      "scope widening or concurrent part mutation"
+    ],
+    "refresh": "Run focused/affected DEBUG+actual RELEASE checks and fresh guarded stock/helper/native/raw matrices at held source identities; update this index only from executed evidence."
+  }
+}

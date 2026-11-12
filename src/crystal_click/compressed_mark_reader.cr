@@ -157,9 +157,14 @@ module CrystalClick
       path : String,
       expected_size : Int64,
       budget : CompressedStreamBudget = CompressedStreamBudget.read_default,
+      maximum_output_size : Int64? = nil,
+      expected_file_hash : {UInt64, UInt64}? = nil,
     ) : Bytes
       budget.ensure_direction(false)
       validate_expected_size(expected_size, "data")
+      if maximum_output_size && maximum_output_size < 0
+        raise ArgumentError.new("maximum output size must be nonnegative")
+      end
       raise CorruptPartError.new("empty compressed stream is unsupported without a mark grid") if expected_size == 0
       if expected_size > Int32::MAX
         raise CorruptPartError.new("data file exceeds supported in-memory domain")
@@ -170,7 +175,15 @@ module CrystalClick
       output = nil.as(Bytes?)
       MMapDataSource.with_file(path, expected_size, budget.limits.max_file_bytes) do |data|
         limits = budget.limits
+        if expected_file_hash && CityHashV1.file_hash(data) != expected_file_hash
+          raise CorruptPartError.new("compressed file hash does not match checksums.txt")
+        end
         index = CompressedFrameIndex.new(data, limits, budget)
+        if maximum = maximum_output_size
+          if index.logical_size > maximum
+            raise CorruptPartError.new("decompressed result exceeds its declared output size")
+          end
+        end
         decoded_work = 0_i64
         index.frames.each do |frame|
           decoded_work = checked_add(decoded_work, frame.decompressed_size, "decoded work")

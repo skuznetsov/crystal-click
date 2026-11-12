@@ -17,6 +17,7 @@ module CrystalClick
       array_level : UInt64,
       nested_context : ObjectSharedNestedSerializationContext,
       object_structure_statistics_offset : Int32,
+      statistics_offsets : Hash(String, Int32),
       plan : ObjectDocumentPlan,
       structures : ObjectDynamicStructureSet,
       prefix_callbacks : Array(Tuple(String, Bytes)),
@@ -26,6 +27,7 @@ module CrystalClick
       root_dynamic_plans : Hash(String, BinaryDynamicBulkPlan),
       root_dynamic_json_prefixes : Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap),
       statistics_context : ObjectDocumentCallbackPrefix::StatisticsContext = ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly,
+      typed_dynamic_json_prefixes : Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap) = Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap).new,
     )
       super(
         descriptor,
@@ -38,6 +40,7 @@ module CrystalClick
         nested_context,
         object_structure_statistics_offset,
         statistics_context,
+        statistics_offsets,
         plan,
         structures,
         prefix_callbacks,
@@ -46,9 +49,31 @@ module CrystalClick
         typed_dynamic_plans,
         root_dynamic_plans,
         root_dynamic_json_prefixes,
+        typed_dynamic_json_prefixes,
       )
       @key = key
       @event_schedule_context = nil
+    end
+
+    # Include the inline-only owner and its exact leaf key in the retained
+    # callback-capture estimate. The base implementation counts the shared
+    # callback-prefix state; this delta is scoped to the inline owner and key,
+    # not the shared schedule, physical plan, or surrounding graph.
+    def retained_callback_capture_workspace_bytes : UInt64
+      bytes = super
+      inline_size = instance_sizeof(ObjectDocumentInlinePrefix).to_u64
+      base_size = instance_sizeof(ObjectDocumentCallbackPrefix).to_u64
+      if inline_size < base_size
+        raise BoundsError.new("inline Object callback owner is smaller than its base prefix owner")
+      end
+      bytes = checked_add(bytes, inline_size - base_size)
+      bytes = checked_add(bytes, instance_sizeof(BinaryDynamicJsonLeafKey).to_u64)
+      bytes = checked_add(bytes, sizeof(String).to_u64)
+      bytes = checked_add(bytes, @key.dynamic_site_bytesize.to_u64)
+      bytes = checked_add(bytes, instance_sizeof(Array(Int32)).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(@key.descriptor_path_size.to_u64, sizeof(Int32).to_u64))
+      bytes
     end
 
     # Consumes the source-ordered Object body callbacks after all header,
@@ -192,6 +217,50 @@ module CrystalClick
       nil
     end
 
+    def each_typed_dynamic_json_prefix_entry(
+      budget : BinaryCodecBudget,
+      &block : String, BinaryDynamicJsonLeafKey, ObjectDocumentInlinePrefix -> Nil
+    ) : Nil
+      count = 0_u64
+      @typed_dynamic_json_prefixes.each_value do |prefixes|
+        count = checked_add(count, prefixes.size.to_u64)
+      end
+      budget.preflight_children(count) if count > 0_u64
+      count.times { budget.charge_node }
+      @typed_dynamic_json_prefixes.each do |path, prefixes|
+        prefixes.each do |key, prefix|
+          yield path, key, prefix
+        end
+      end
+      nil
+    end
+
+    def each_dynamic_json_prefix_entry(
+      budget : BinaryCodecBudget,
+      &block : Symbol, String, BinaryDynamicJsonLeafKey, ObjectDocumentInlinePrefix -> Nil
+    ) : Nil
+      count = 0_u64
+      @typed_dynamic_json_prefixes.each_value do |prefixes|
+        count = checked_add(count, prefixes.size.to_u64)
+      end
+      @root_dynamic_json_prefixes.each_value do |prefixes|
+        count = checked_add(count, prefixes.size.to_u64)
+      end
+      budget.preflight_children(count) if count > 0_u64
+      count.times { budget.charge_node }
+      @typed_dynamic_json_prefixes.each do |path, prefixes|
+        prefixes.each do |key, prefix|
+          yield :typed_dynamic, path, key, prefix
+        end
+      end
+      @root_dynamic_json_prefixes.each do |path, prefixes|
+        prefixes.each do |key, prefix|
+          yield :root_dynamic, path, key, prefix
+        end
+      end
+      nil
+    end
+
     # Capture one recursively scheduled body callback for this exact Object
     # owner. The parent tape has already authenticated the callback interval;
     # siblings are routed to their own prefix states.
@@ -214,6 +283,9 @@ module CrystalClick
 
     def nested_json_prefixes(budget : BinaryCodecBudget) : Array(ObjectDocumentInlinePrefix)
       count = 0_u64
+      @typed_dynamic_json_prefixes.each_value do |prefixes|
+        count = checked_add(count, prefixes.size.to_u64)
+      end
       @root_dynamic_json_prefixes.each_value do |prefixes|
         count = checked_add(count, prefixes.size.to_u64)
       end
@@ -222,6 +294,9 @@ module CrystalClick
       count.times { budget.charge_node }
       budget.charge_elements(count) if count > 0_u64
       nested = Array(ObjectDocumentInlinePrefix).new(count.to_i)
+      @typed_dynamic_json_prefixes.each_value do |prefixes|
+        prefixes.each_value { |prefix| nested << prefix }
+      end
       @root_dynamic_json_prefixes.each_value do |prefixes|
         prefixes.each_value { |prefix| nested << prefix }
       end
@@ -233,11 +308,17 @@ module CrystalClick
     # preserving its field-local leaf-key map.
     def each_nested_json_prefix(budget : BinaryCodecBudget, &block : ObjectDocumentInlinePrefix ->) : Nil
       count = 0_u64
+      @typed_dynamic_json_prefixes.each_value do |prefixes|
+        count = checked_add(count, prefixes.size.to_u64)
+      end
       @root_dynamic_json_prefixes.each_value do |prefixes|
         count = checked_add(count, prefixes.size.to_u64)
       end
       budget.preflight_children(count) if count > 0_u64
       count.times { budget.charge_node }
+      @typed_dynamic_json_prefixes.each_value do |prefixes|
+        prefixes.each_value { |prefix| yield prefix }
+      end
       @root_dynamic_json_prefixes.each_value do |prefixes|
         prefixes.each_value { |prefix| yield prefix }
       end

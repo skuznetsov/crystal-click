@@ -1,5 +1,5 @@
 module CrystalClick
-  # Schema-neutral reader for a complete plain Compact physical mark grid.
+  # Schema-neutral reader for a complete Compact physical mark grid.
   # It retains detached metadata, coordinates and frame headers plus a
   # borrowed, consumptive budget; payload reads still authenticate selected
   # frames through the paired physical reader.
@@ -37,35 +37,8 @@ module CrystalClick
       checksums = PartChecksums.parse(checksum_text.to_slice)
       source = PartStreamSource.new(part_path, checksums)
       metadata = PartMetadataFileReader.new(part_path, budget, source)
-
-      mark3_size = source.checksum_size_declaration("data.mrk3")
-      mark4_size = source.checksum_size_declaration("data.mrk4")
-      if mark3_size && mark4_size
-        raise CorruptPartError.new("part declares both Compact mrk3 and mrk4 files")
-      end
-
-      unsupported_marks_present = false
-      checksums.entries.each_key do |name|
-        if name.starts_with?("data.cmrk") ||
-           (name.starts_with?("data.mrk") && name != "data.mrk3" && name != "data.mrk4")
-          unsupported_marks_present = true
-          break
-        end
-      end
-      if unsupported_marks_present
-        raise UnsupportedFormatError.new("unsupported Compact mark layout")
-      end
-      unless mark3_size || mark4_size
-        raise CorruptPartError.new("part does not declare a Compact mrk3 or mrk4 file")
-      end
-
-      mode, marks_name = if mark3_size
-                           {CompactMarkFormat::Mrk3, "data.mrk3"}
-                         elsif mark4_size
-                           {CompactMarkFormat::Mrk4, "data.mrk4"}
-                         else
-                           raise CorruptPartError.new("part does not declare a Compact mrk3 or mrk4 file")
-                         end
+      mark_file = CompactMarkFileAdapter.new(part_path, checksums, source)
+      mode = mark_file.mode
 
       columns = WidePart.parse_columns_metadata(metadata.read("columns.txt"))
       row_count = WidePart.parse_count_metadata(metadata.read("count.txt", 32_i64), WidePart::MAX_ROWS)
@@ -81,13 +54,19 @@ module CrystalClick
                  CompactColumnsSubstreams.new(mode, columns)
                end
 
-      input = source.physical_input("data.bin", marks_name)
-      index = CompactMarkIndex.read(input, roster, row_count, budget)
+      input = source.physical_input("data.bin", mark_file.marks_name)
+      canonical_marks = mark_file.read_canonical_marks(input, budget)
+      index = CompactMarkIndex.read(input, roster, row_count, budget, canonical_marks)
       new(mode, row_count, roster, index, input, budget)
     end
 
     def columns : Array({String, String})
       @columns_substreams.columns
+    end
+
+    # The selected checksum identity is detached from the retained input.
+    def marks_name : String
+      String.new(@data_input.marks_name.to_slice)
     end
 
     def physical_roster : Array(CompactPhysicalSlot)

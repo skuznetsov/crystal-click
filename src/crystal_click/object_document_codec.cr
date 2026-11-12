@@ -462,6 +462,7 @@ module CrystalClick
       root_dynamic_json_object_leaf_plans : RootDynamicJsonLeafPlans = RootDynamicJsonLeafPlans.new,
       inferred_actual_root_depth : Int32 = 1_i32,
       physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader? = nil,
+      typed_dynamic_json_read_context : ObjectDocumentTypedDynamicJsonReadContext? = nil,
     ) : Array(Array(ObjectDocument))
       budget = BinaryCodecBudget.new(limits)
       decode_with_budget(
@@ -477,6 +478,7 @@ module CrystalClick
         root_dynamic_json_object_leaf_plans: root_dynamic_json_object_leaf_plans,
         inferred_actual_root_depth: inferred_actual_root_depth,
         physical_root_dynamic_json_object_leaf_loader: physical_root_dynamic_json_object_leaf_loader,
+        typed_dynamic_json_read_context: typed_dynamic_json_read_context,
       )
     end
 
@@ -493,6 +495,7 @@ module CrystalClick
       root_dynamic_json_object_leaf_plans : RootDynamicJsonLeafPlans = RootDynamicJsonLeafPlans.new,
       inferred_actual_root_depth : Int32 = 1_i32,
       physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader? = nil,
+      typed_dynamic_json_read_context : ObjectDocumentTypedDynamicJsonReadContext? = nil,
     ) : Array(Array(ObjectDocument))
       decode_core_with_budget(
         typed_schema,
@@ -509,6 +512,7 @@ module CrystalClick
         physical_root_dynamic_json_object_leaf_loader,
         nil,
         nil,
+        typed_dynamic_json_read_context,
       )
     end
 
@@ -528,6 +532,7 @@ module CrystalClick
       root_dynamic_json_object_leaf_plans : RootDynamicJsonLeafPlans = RootDynamicJsonLeafPlans.new,
       inferred_actual_root_depth : Int32 = 1_i32,
       physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader? = nil,
+      typed_dynamic_json_read_context : ObjectDocumentTypedDynamicJsonReadContext? = nil,
     ) : Array(Array(ObjectDocument))
       decode_core_with_budget(
         typed_schema,
@@ -544,6 +549,7 @@ module CrystalClick
         physical_root_dynamic_json_object_leaf_loader,
         grid,
         nil,
+        typed_dynamic_json_read_context,
       )
     end
 
@@ -584,6 +590,7 @@ module CrystalClick
       end
 
       root_json_leaf_plans = prefix.plan.root_dynamic_json_object_leaf_plans(budget)
+      typed_json_leaf_plans = prefix.plan.typed_dynamic_json_object_leaf_plans(budget)
       root_json_loader : PhysicalRootDynamicJsonObjectLeafLoader? = if root_json_leaf_plans.empty?
         nil
       else
@@ -608,13 +615,14 @@ module CrystalClick
         mark_count,
         profile,
         BinaryBulkProfile.single_stream,
-        Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+        typed_json_leaf_plans,
         prefix.typed_descriptor_root_depth,
         root_json_leaf_plans,
         prefix.inferred_actual_root_depth,
         root_json_loader,
         grid,
         prefix,
+        nil,
       )
     end
 
@@ -633,6 +641,7 @@ module CrystalClick
       physical_root_dynamic_json_object_leaf_loader : PhysicalRootDynamicJsonObjectLeafLoader?,
       occurrence_grid : StorageOccurrenceGrid?,
       inline_prefix : ObjectDocumentInlinePrefix?,
+      typed_dynamic_json_read_context : ObjectDocumentTypedDynamicJsonReadContext?,
     ) : Array(Array(ObjectDocument))
       if budget.writing?
         raise ArgumentError.new("Object document decode requires a reading budget")
@@ -645,7 +654,16 @@ module CrystalClick
         corrupt!("inferred Dynamic actual root depth exceeds the configured limit")
       end
       budget.ensure_depth(inferred_actual_root_depth)
-      validate_typed_json_binding_input!(typed_dynamic_json_object_leaf_plans, typed_schema, budget)
+      if typed_dynamic_json_read_context && !typed_dynamic_json_object_leaf_plans.empty?
+        raise CorruptPartError.new("typed-Dynamic JSON bindings were supplied both directly and through their captured read context")
+      end
+      if typed_dynamic_json_read_context && inline_prefix
+        raise CorruptPartError.new("typed-Dynamic JSON captured read context cannot be combined with inline metadata")
+      end
+      effective_typed_json_leaf_plans = typed_dynamic_json_read_context.try do |read_context|
+        read_context.leaf_plans(budget)
+      end || typed_dynamic_json_object_leaf_plans
+      validate_typed_json_binding_input!(effective_typed_json_leaf_plans, typed_schema, budget)
 
       real_marks = streams.mark_count
       if grid = occurrence_grid
@@ -684,7 +702,7 @@ module CrystalClick
         validate_variant_typed_field!(type, budget.limits, typed_descriptor_root_depth)
         validate_low_cardinality_typed_field!(type, budget.limits, typed_descriptor_root_depth)
       end
-      typed_dynamic_json_object_leaf_plans.each do |path, leaf_plans|
+      effective_typed_json_leaf_plans.each do |path, leaf_plans|
         type = typed_schema[path]?
         unless type && type.contains_dynamic? && !leaf_plans.empty?
           corrupt!("typed Dynamic JSON Object binding names an unknown or non-Dynamic field")
@@ -796,11 +814,8 @@ module CrystalClick
       typed_schema.each do |path, type|
         next unless type.contains_dynamic?
         dynamic_streams = streams.typed_dynamic_for(path)
-        json_leaf_plans = typed_dynamic_json_object_leaf_plans[path]?
+        json_leaf_plans = effective_typed_json_leaf_plans[path]?
         dynamic_plan = if prefix = inline_prefix
-                         if json_leaf_plans && !json_leaf_plans.empty?
-                           corrupt!("inline typed Dynamic JSON bindings require a nested prefix reader")
-                         end
                          prefix.typed_dynamic_plan_for(path)
                        else
                          ObjectDeclaredDynamicDeclaration.prepare_read_sites_plan(
@@ -824,6 +839,44 @@ module CrystalClick
             physical_rows_per_mark = occurrence_grid.try do |grid|
               copy_occurrence_grid_physical_rows(grid, budget)
             end
+            typed_physical_loader : Proc(
+              BinaryDynamicJsonLeafKey,
+              DynamicJsonObjectBinding,
+              StorageOccurrenceGrid,
+              BinaryCodecBudget,
+              Array(Array(ObjectDocument)),
+            )? = if nested_prefix = inline_prefix
+              ->(key : BinaryDynamicJsonLeafKey, binding : DynamicJsonObjectBinding, child_grid : StorageOccurrenceGrid, child_budget : BinaryCodecBudget) {
+                json_depth = dynamic_plan.json_object_leaf_depth(key, typed_descriptor_root_depth)
+                ObjectSharedPathJsonTapeCodec.decode_child(
+                  key,
+                  binding,
+                  child_grid,
+                  nested_prefix.typed_dynamic_json_prefixes_for(path),
+                  profile,
+                  child_budget,
+                  json_depth,
+                )
+              }
+            elsif read_context = typed_dynamic_json_read_context
+              unless read_context.has_path?(path)
+                raise CorruptPartError.new("typed-Dynamic JSON binding has no captured callback owner for its exact field")
+              end
+              ->(key : BinaryDynamicJsonLeafKey, binding : DynamicJsonObjectBinding, child_grid : StorageOccurrenceGrid, child_budget : BinaryCodecBudget) {
+                json_depth = dynamic_plan.json_object_leaf_depth(key, typed_descriptor_root_depth)
+                ObjectSharedPathJsonTapeCodec.decode_child(
+                  key,
+                  binding,
+                  child_grid,
+                  read_context.prefixes_for(path),
+                  profile,
+                  child_budget,
+                  json_depth,
+                )
+              }
+            else
+              nil
+            end
             json_object_reader = BinaryDynamicBulkJsonObjectReader.new(
               dynamic_plan,
               dynamic_streams,
@@ -831,6 +884,7 @@ module CrystalClick
               budget,
               profile,
               physical_rows_per_mark: physical_rows_per_mark,
+              physical_child_loader: typed_physical_loader,
               initial_descriptor_depth: typed_descriptor_root_depth,
               child_shared_profile: BinaryBulkProfile.single_stream,
             )

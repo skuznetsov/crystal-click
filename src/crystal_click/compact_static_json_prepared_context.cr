@@ -15,6 +15,7 @@ module CrystalClick
     @object_statistics_offsets : Array(Int32)
     @dynamic_prefixes : Array(Hash(String, Bytes))
     @dynamic_statistics_offsets : Array(Hash(String, Int32))
+    @typed_json_contexts : Array(ObjectDocumentTypedDynamicJsonReadContext?)
     @typed_descriptor_root_depth : Int32
     @inferred_actual_root_depth : Int32
 
@@ -26,6 +27,7 @@ module CrystalClick
       object_statistics_offsets : Array(Int32),
       dynamic_prefixes : Array(Hash(String, Bytes)),
       dynamic_statistics_offsets : Array(Hash(String, Int32)),
+      typed_json_contexts : Array(ObjectDocumentTypedDynamicJsonReadContext?),
       @typed_descriptor_root_depth : Int32,
       @inferred_actual_root_depth : Int32,
     )
@@ -38,7 +40,8 @@ module CrystalClick
       unless object_prefixes.size == count &&
              object_statistics_offsets.size == count &&
              dynamic_prefixes.size == count &&
-             dynamic_statistics_offsets.size == count
+             dynamic_statistics_offsets.size == count &&
+             typed_json_contexts.size == count
         raise ArgumentError.new("Compact static JSON prepared metadata differs from its mark grid")
       end
 
@@ -68,6 +71,7 @@ module CrystalClick
         end
         detached
       end
+      @typed_json_contexts = typed_json_contexts.dup
     end
 
     def mark_count : Int32
@@ -111,6 +115,7 @@ module CrystalClick
         shared_profile: BinaryBulkProfile.single_stream,
         typed_descriptor_root_depth: @typed_descriptor_root_depth,
         inferred_actual_root_depth: @inferred_actual_root_depth,
+        typed_dynamic_json_read_context: @typed_json_contexts[index]?,
       )
       expected_rows = @mark_rows[index]
       unless decoded.size == 1 && decoded[0].size.to_u64 == expected_rows
@@ -198,6 +203,15 @@ module CrystalClick
         entries.each do |name, _offset|
           bytes = checked_add(bytes, string_owner_bytes(name))
           bytes = checked_add(bytes, sizeof(Int32).to_u64)
+        end
+      end
+      bytes = checked_add(bytes, instance_sizeof(Array(ObjectDocumentTypedDynamicJsonReadContext?)).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(@typed_json_contexts.size.to_u64,
+          sizeof(Pointer(ObjectDocumentTypedDynamicJsonReadContext)).to_u64))
+      @typed_json_contexts.each do |context|
+        if owner = context
+          bytes = checked_add(bytes, owner.retained_workspace_bytes)
         end
       end
       bytes

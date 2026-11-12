@@ -92,6 +92,39 @@ module CrystalClick
       positions
     end
 
+    # Measures a complete unmarked stream without consuming the budget or
+    # allocating its physical output. Callers that also own the source buffer
+    # can preflight its frame records, decoded bytes, file bytes and retained
+    # result before asking encode_all to reserve and allocate the sidecar.
+    def self.preflight_all(
+      byte_size : Int64,
+      frame_bytes : Int,
+      budget : CompressedStreamBudget,
+    ) : Int32
+      budget.ensure_direction(true)
+      validate_frame_bytes(frame_bytes)
+      if byte_size <= 0
+        raise ArgumentError.new("compressed input size must be positive")
+      end
+      if byte_size > Int32::MAX.to_i64
+        raise UnsupportedFormatError.new("compressed input exceeds supported in-memory domain")
+      end
+
+      frame_count = frame_count_for(byte_size, frame_bytes.to_i64)
+      _measured_frame_count, physical_size, _full_frame_size = measure_frames(
+        byte_size,
+        frame_bytes.to_i64,
+        budget.limits,
+      )
+      ensure_output_domain(physical_size, "compressed data")
+
+      budget.preflight_records(frame_count)
+      budget.preflight_decoded_bytes(byte_size)
+      budget.preflight_file_bytes(physical_size)
+      budget.preflight_result_bytes(physical_size)
+      physical_size.to_i32
+    end
+
     private def self.encode_internal(
       bytes : Bytes,
       offsets : Array(UInt64),

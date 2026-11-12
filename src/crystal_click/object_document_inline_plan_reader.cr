@@ -15,6 +15,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       bare_inferred_root_json : Bool = false,
       statistics_context : ObjectDocumentCallbackPrefix::StatisticsContext = ObjectDocumentCallbackPrefix::StatisticsContext::PrefixOnly,
+      statistics_offset_observer : Proc(String, Int32, Nil)? = nil,
     ) : ObjectDocumentInlinePrefix forall T
       read_json_site_prefix(
         tape,
@@ -28,6 +29,7 @@ module CrystalClick
         budget,
         statistics_context,
         bare_inferred_root_json,
+        statistics_offset_observer,
       ).as(ObjectDocumentInlinePrefix)
     end
 
@@ -70,7 +72,27 @@ module CrystalClick
 
       structure_name = PhysicalStreamName.append_literal(physical_prefix, ".object_structure")
       structure_callback_name = PhysicalStreamName.append_literal(callback_prefix, ".object_structure")
-      object, statistics_offset, structure_bytes = if tape.responds_to?(:with_grammar_extent)
+      object, statistics_offset, structure_bytes = if tape.responds_to?(:with_physical_grammar_extent)
+                                                     unless statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+                                                       raise UnsupportedFormatError.new("Compact grammar-framed Object prefixes require complete statistics")
+                                                     end
+                                                     parsed, consumed_structure_bytes = tape.with_physical_grammar_extent(structure_name, structure_callback_name) do |bytes|
+                                                       structure_context = BinaryCodecContext.new(
+                                                         budget.limits,
+                                                         bytes,
+                                                         false,
+                                                         budget,
+                                                         false,
+                                                         false,
+                                                       )
+                                                       parsed_object, parsed_offset = ObjectStructureCodec.read_with_statistics_offset(
+                                                         structure_context,
+                                                         typed_descriptor_root_depth,
+                                                       )
+                                                       { {parsed_object, parsed_offset}, structure_context.input_offset }
+                                                     end
+                                                     {parsed[0], parsed[1], consumed_structure_bytes}
+                                                   elsif tape.responds_to?(:with_grammar_extent)
                                                      unless statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
                                                        raise UnsupportedFormatError.new("Compact grammar-framed Object prefixes require complete statistics")
                                                      end
@@ -149,7 +171,24 @@ module CrystalClick
 
       prefix_callbacks = [] of Tuple(String, Bytes)
       retain_prefix_callback!(prefix_callbacks, structure_name, structure_bytes, budget)
+      statistics_offsets = Hash(String, Int32).new
+      owner_statistics_offset_observer = if statistics_context == ObjectDocumentCallbackPrefix::StatisticsContext::Complete
+                                           ->(name : String, offset : Int32) do
+                                             if previous = statistics_offsets[name]?
+                                               unless previous == offset
+                                                 raise CorruptPartError.new("inline Object Dynamic statistics offset changed within one owner")
+                                               end
+                                             else
+                                               budget.preflight_children(1_u64)
+                                               budget.charge_node
+                                               budget.charge_wire_bytes(name.bytesize.to_u64)
+                                               statistics_offsets[String.new(name.to_slice)] = offset
+                                             end
+                                             nil
+                                           end
+                                         end
       typed_dynamic_sites = Hash(String, Hash(String, DynamicStructure)).new
+      typed_dynamic_json_prefixes = Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap).new
       root_dynamic_sites = Hash(String, Hash(String, DynamicStructure)).new
       root_dynamic_json_prefixes = Hash(String, ObjectSharedPathJsonTapeCodec::PrefixMap).new
 
@@ -158,6 +197,7 @@ module CrystalClick
         callback_field_prefix = PhysicalStreamName.append_escaped_component(callback_prefix, field)
         if type.contains_dynamic?
           local_sites = Hash(String, DynamicStructure).new
+          nested_json_prefixes = ObjectSharedPathJsonTapeCodec::PrefixMap.new
           observer = ->(site_path : String, _raw : Bytes, site : DynamicStructure) do
             retain_site!(local_sites, site_path, site, budget)
           end
@@ -175,14 +215,17 @@ module CrystalClick
             tape,
             budget,
             observer,
-            true,
+            false,
             capture,
             false,
+            nested_context: effective_nested_context,
+            json_prefixes: nested_json_prefixes,
             statistics_context: statistics_context,
             statistics_offset_observer: statistics_offset_observer,
+            owner_statistics_offset_observer: owner_statistics_offset_observer,
           )
-          reject_json_actuals!(local_sites)
           typed_dynamic_sites[field] = local_sites
+          typed_dynamic_json_prefixes[field] = nested_json_prefixes
         else
           no_dynamic_observer = ->(_site_path : String, _raw : Bytes, _site : DynamicStructure) { nil }
           capture = ->(name : String, bytes : Bytes) do
@@ -241,6 +284,7 @@ module CrystalClick
           virtual_root_dynamic: true,
           statistics_context: statistics_context,
           statistics_offset_observer: statistics_offset_observer,
+          owner_statistics_offset_observer: owner_statistics_offset_observer,
         )
         root_dynamic_sites[path] = local_sites
         root_dynamic_json_prefixes[path] = nested_json_prefixes
@@ -271,8 +315,13 @@ module CrystalClick
       end
 
       typed_dynamic_plans = Hash(String, BinaryDynamicBulkPlan).new(initial_capacity: typed_dynamic_sites.size)
+      typed_dynamic_json_leaf_plans = Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new(
+        initial_capacity: typed_dynamic_json_prefixes.size,
+      )
       typed_dynamic_sites.each do |path, sites|
         type = json_type.typed_type_for(path) || raise(CorruptPartError.new("inline typed Dynamic descriptor is missing"))
+        nested_json_bindings = json_leaf_bindings(typed_dynamic_json_prefixes[path], budget)
+        typed_dynamic_json_leaf_plans[path] = nested_json_bindings unless nested_json_bindings.empty?
         typed_dynamic_plans[path] = begin
           ObjectDeclaredDynamicDeclaration.prepare_read_sites_plan_from_structures(
             type,
@@ -280,6 +329,7 @@ module CrystalClick
             budget,
             effective_nested_context.profile,
             typed_descriptor_root_depth,
+            nested_json_bindings,
           )
         rescue ex : UnsupportedFormatError
           raise CorruptPartError.new("inline typed Dynamic prefix is invalid: #{ex.message}")
@@ -300,7 +350,7 @@ module CrystalClick
           typed_paths,
           Hash(String, DynamicStructure).new,
           typed_dynamic_sites,
-          Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+          typed_dynamic_json_leaf_plans,
           root_dynamic_json_leaf_plans,
           budget,
           inferred_actual_root_depth,
@@ -321,6 +371,7 @@ module CrystalClick
           array_level,
           effective_nested_context,
           statistics_offset,
+          statistics_offsets,
           plan,
           structure_set,
           prefix_callbacks,
@@ -330,6 +381,7 @@ module CrystalClick
           root_dynamic_plans,
           root_dynamic_json_prefixes,
           statistics_context,
+          typed_dynamic_json_prefixes,
         )
       else
         ObjectDocumentCallbackPrefix.new(
@@ -343,6 +395,7 @@ module CrystalClick
           effective_nested_context,
           statistics_offset,
           statistics_context,
+          statistics_offsets,
           plan,
           structure_set,
           prefix_callbacks,
@@ -351,6 +404,7 @@ module CrystalClick
           typed_dynamic_plans,
           root_dynamic_plans,
           root_dynamic_json_prefixes,
+          typed_dynamic_json_prefixes,
         )
       end
     end

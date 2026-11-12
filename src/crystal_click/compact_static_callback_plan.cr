@@ -24,8 +24,8 @@ module CrystalClick
       @variant_discriminator_mode.wire_value
 
       raise ArgumentError.new("Compact static column name must be nonempty") if @column_name.empty?
-      unless @profile.single_stream?
-        raise UnsupportedFormatError.new("Compact static writer requires the single-stream profile")
+      unless @profile.single_stream? || @profile.with_size_stream?
+        raise UnsupportedFormatError.new("Compact static writer requires a supported String profile")
       end
       unless input.map_basic?
         raise UnsupportedFormatError.new("Compact static writer requires BASIC Map serialization")

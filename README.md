@@ -123,9 +123,9 @@ The profiles document the ClickHouse builds and layouts used for native
 | Offline table scans and part resolution | [Offline catalog](docs/OFFLINE_CATALOG_FRONTIER.md) and [MergeTree part resolution](docs/OFFLINE_MERGETREE_PART_RESOLUTION_FRONTIER.md) |
 
 Wide readers have profiles for adaptive `.mrk2` and compressed `.cmrk2`
-marks. Compact parts share `data.bin` across columns, with qualified plain
-`.mrk3` and `.mrk4` layouts. The linked profiles give the supported
-combinations for the following type families.
+marks. Compact parts share `data.bin` across columns, with qualified
+`.mrk3`, `.mrk4`, `.cmrk3`, and `.cmrk4` layouts. The linked profiles give
+the supported combinations for the following type families.
 
 - Fixed-width signed and unsigned integers, including raw `Int128`, `UInt128`,
   `Int256`, and `UInt256` carriers, `Float32`, `Float64`, and `BFloat16`.
@@ -241,8 +241,8 @@ currently uses Darwin `renamex_np` to publish the complete part directory in
 one step.
 
 `EmbeddedMergeTreeTable` is a separate Crystal-owned local table built from
-bounded immutable parts in one partition with a sorted `UInt64` key and a
-`String` payload.
+bounded immutable parts in one partition. Use a sorted `UInt64` key with a
+`String` payload or the separate profile for declared scalar JSON paths.
 It supports insert, adjacent-part merge, reopen, and typed scans. Store it
 outside ClickHouse server data roots. Its publication also uses the Darwin
 publisher.
@@ -284,12 +284,15 @@ the build.
 CRYSTAL_FLAGS="--link-flags=-fuse-ld=ld" make example-list_atomic_catalog
 ```
 
-Run the focused catalog spec or full spec suite with Crystal.
+Run the standalone catalog spec with Crystal.
 
 ```sh
 crystal spec spec/offline_catalog_spec.cr
-crystal spec
 ```
+
+The full spec suite also requires native ClickHouse captures. See the
+[Compact JSON reader profile](docs/COMPACT_JSON_READER_FRONTIER.md) for the
+authenticated W263 fixture selected by `CRYSTAL_CLICK_W263_EVIDENCE_ROOT`.
 
 ## Architecture and further reading
 

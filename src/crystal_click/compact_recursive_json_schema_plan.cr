@@ -1,5 +1,5 @@
 module CrystalClick
-  # Immutable schema-owned callback traversal for the finite recursive
+  # Immutable schema-owned callback traversal for the bounded recursive
   # Compact JSON slice. Site IDs are structural Tuple/Array paths; physical
   # callback prefixes are independently rendered ClickHouse stream names.
   class CompactRecursiveJsonSchemaPlan
@@ -49,39 +49,239 @@ module CrystalClick
       end
     end
 
+    struct SiteShape
+      getter json_count : UInt64
+      getter array_count : UInt64
+      getter uint8_count : UInt64
+      getter bulk_count : UInt64
+      getter bulk_role_count : UInt64
+      getter bulk_role_name_bytes : UInt64
+      getter node_count : UInt64
+
+      def initialize(
+        @json_count : UInt64,
+        @array_count : UInt64,
+        @uint8_count : UInt64,
+        @bulk_count : UInt64,
+        @bulk_role_count : UInt64,
+        @bulk_role_name_bytes : UInt64,
+        @node_count : UInt64,
+      )
+      end
+    end
+
     getter root_prefix : String
 
     @schema : StorageColumnSchema
     @limits : BinaryCodecLimits
+    @profile : BinaryBulkProfile
     @json_sites : Array(JsonSite)
     @array_sites : Array(ArraySite)
     @uint8_sites : Array(UInt8Site)
+    @bulk_sites : Array(CompactRecursiveJsonBulkSite)
     @budget : BinaryCodecBudget
 
-    def self.admitted_schema?(schema : StorageColumnSchema) : Bool
-      return true if schema.object?
+    def self.admitted_schema?(
+      schema : StorageColumnSchema,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      depth : Int32 = 1_i32,
+    ) : Bool
       return false unless schema.has_json?
-
-      # This engine is qualified only for the four captured declaration
-      # topologies. In particular, two Array branches cannot share a global
-      # size-before-body phase without a separately authenticated traversal.
-      if schema.array?
-        child = schema.child_at(0)
-        return true if child.object?
-        return false unless child.tuple? && child.child_count == 2
-        return child.child_at(0).object? && uint8_leaf?(child.child_at(1))
-      end
-
-      schema.tuple? && schema.child_count == 2 &&
-        schema.child_at(0).object? && schema.child_at(1).object?
+      admitted_schema_node?(schema, limits, depth)
     rescue ex : ArgumentError | UnsupportedFormatError
       false
     end
 
-    private def self.uint8_leaf?(schema : StorageColumnSchema) : Bool
+    private def self.admitted_schema_node?(schema : StorageColumnSchema, limits : BinaryCodecLimits, depth : Int32) : Bool
+      return false if depth <= 0 || depth > limits.max_depth
+      return true if schema.object?
+      return admitted_bulk_schema?(schema, limits, depth) if schema.bulk?
+      if schema.array?
+        admitted_schema_node?(schema.child_at(0), limits, depth + 1)
+      elsif schema.tuple?
+        return false if schema.child_count == 0
+        schema.child_count.times do |index|
+          return false unless admitted_schema_node?(schema.child_at(index), limits, depth + 1)
+        end
+        true
+      else
+        false
+      end
+    end
+
+    private def self.admitted_bulk_schema?(schema : StorageColumnSchema, limits : BinaryCodecLimits, depth : Int32) : Bool
       return false unless schema.bulk?
       type = schema.bulk_type
-      type.tag == BinaryDataType::TAG_UINT8 && !type.contains_json? && !type.contains_dynamic?
+      !type.contains_json? && !type.contains_dynamic? &&
+        CompactRecursiveJsonBulkAdmission.admitted?(type, depth, limits)
+    rescue ex : ArgumentError | UnsupportedFormatError
+      false
+    end
+
+    def self.measure_shape(
+      schema : StorageColumnSchema,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : SiteShape
+      if schema.object?
+        SiteShape.new(1_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 1_u64)
+      elsif schema.bulk?
+        type = schema.bulk_type
+        if type.tag == BinaryDataType::TAG_UINT8
+          SiteShape.new(0_u64, 0_u64, 1_u64, 0_u64, 0_u64, 0_u64, 1_u64)
+        else
+          SiteShape.new(
+            0_u64,
+            0_u64,
+            0_u64,
+            1_u64,
+            CompactRecursiveJsonStaticBulkGrammar.measure_role_count(type, profile),
+            CompactRecursiveJsonStaticBulkGrammar.measure_role_name_bytes(type, profile, 4_u64),
+            1_u64,
+          )
+        end
+      elsif schema.array?
+        child = measure_shape(schema.child_at(0), profile)
+        SiteShape.new(
+          child.json_count,
+          checked_measure_add(child.array_count, 1_u64),
+          child.uint8_count,
+          child.bulk_count,
+          child.bulk_role_count,
+          child.bulk_role_name_bytes,
+          checked_measure_add(child.node_count, 1_u64),
+        )
+      elsif schema.tuple?
+        total = SiteShape.new(0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 0_u64, 1_u64)
+        schema.child_count.times do |index|
+          child = measure_shape(schema.child_at(index), profile)
+          total = SiteShape.new(
+            checked_measure_add(total.json_count, child.json_count),
+            checked_measure_add(total.array_count, child.array_count),
+            checked_measure_add(total.uint8_count, child.uint8_count),
+            checked_measure_add(total.bulk_count, child.bulk_count),
+            checked_measure_add(total.bulk_role_count, child.bulk_role_count),
+            checked_measure_add(total.bulk_role_name_bytes, child.bulk_role_name_bytes),
+            checked_measure_add(total.node_count, child.node_count),
+          )
+        end
+        total
+      else
+        raise UnsupportedFormatError.new("recursive Compact schema shape contains an unsupported node")
+      end
+    end
+
+    def self.preflight_shape!(
+      schema : StorageColumnSchema,
+      column_name : String,
+      shape : SiteShape,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      site_count = checked_measure_add(
+        checked_measure_add(shape.json_count, shape.array_count),
+        checked_measure_add(shape.uint8_count, shape.bulk_count),
+      )
+      root_bytes = PhysicalStreamName.escaped_size(column_name)
+      path_strings, path_bytes = measure_path_owners(schema, 4_u64, root_bytes, root_bytes, 0_u64)
+      path_strings = checked_measure_add(path_strings, 1_u64)
+      path_bytes = checked_measure_add(path_bytes, checked_measure_add(root_bytes, 1_u64))
+
+      # Roster arrays, all site/role owners, and all retained path strings are
+      # bounded before any proportional plan vectors or paths are allocated.
+      roster_nodes = checked_measure_add(site_count, 4_u64)
+      role_nodes = checked_measure_add(shape.bulk_role_count, shape.bulk_count)
+      nodes = checked_measure_add(checked_measure_add(roster_nodes, role_nodes), path_strings)
+      elements = checked_measure_add(site_count, checked_multiply_measure(shape.bulk_role_count, 2_u64))
+      all_wire_bytes = checked_measure_add(path_bytes, shape.bulk_role_name_bytes)
+      budget.ensure_future_nodes(nodes)
+      budget.ensure_future_elements(elements)
+      budget.ensure_wire_bytes(all_wire_bytes)
+      charged_nodes = checked_measure_add(roster_nodes, path_strings)
+      charged_nodes.times { budget.charge_node }
+      budget.charge_elements(site_count) if site_count > 0_u64
+      budget.charge_wire_bytes(path_bytes) if path_bytes > 0_u64
+      nil
+    end
+
+    private def self.measure_path_owners(
+      schema : StorageColumnSchema,
+      key_bytes : UInt64,
+      physical_bytes : UInt64,
+      callback_bytes : UInt64,
+      array_level : UInt64,
+    ) : Tuple(UInt64, UInt64)
+      strings = 0_u64
+      bytes = 0_u64
+      if schema.object?
+        strings, bytes = add_path_owner(strings, bytes, key_bytes)
+        strings, bytes = add_path_owner(strings, bytes, physical_bytes)
+        strings, bytes = add_path_owner(strings, bytes, callback_bytes)
+      elsif schema.bulk?
+        strings, bytes = add_path_owner(strings, bytes, key_bytes)
+        if schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+          strings, bytes = add_path_owner(strings, bytes, checked_measure_add(physical_bytes, 5_u64))
+        else
+          strings, bytes = add_path_owner(strings, bytes, physical_bytes)
+        end
+      elsif schema.array?
+        suffix_bytes = checked_measure_add(5_u64, decimal_digits(array_level))
+        strings, bytes = add_path_owner(strings, bytes, key_bytes)
+        strings, bytes = add_path_owner(strings, bytes, physical_bytes)
+        strings, bytes = add_path_owner(strings, bytes, checked_measure_add(callback_bytes, suffix_bytes))
+        child = measure_path_owners(
+          schema.child_at(0),
+          checked_measure_add(key_bytes, 9_u64),
+          physical_bytes,
+          callback_bytes,
+          checked_measure_add(array_level, 1_u64),
+        )
+        strings = checked_measure_add(strings, child[0])
+        bytes = checked_measure_add(bytes, child[1])
+      elsif schema.tuple?
+        schema.child_count.times do |index|
+          field = schema.named_tuple? ? schema.field_name_at(index) : (index + 1).to_s
+          escaped_field = PhysicalStreamName.escaped_size(field)
+          child = measure_path_owners(
+            schema.child_at(index),
+            checked_measure_add(key_bytes, 8_u64 + decimal_digits(index.to_u64)),
+            checked_measure_add(physical_bytes, 3_u64 + escaped_field),
+            checked_measure_add(callback_bytes, 3_u64 + escaped_field),
+            array_level,
+          )
+          strings = checked_measure_add(strings, child[0])
+          bytes = checked_measure_add(bytes, child[1])
+        end
+      end
+      {strings, bytes}
+    end
+
+    private def self.add_path_owner(strings : UInt64, bytes : UInt64, string_bytes : UInt64) : Tuple(UInt64, UInt64)
+      {
+        checked_measure_add(strings, 1_u64),
+        checked_measure_add(bytes, checked_measure_add(string_bytes, 1_u64)),
+      }
+    end
+
+    private def self.decimal_digits(value : UInt64) : UInt64
+      digits = 1_u64
+      while value >= 10_u64
+        value //= 10_u64
+        digits += 1_u64
+      end
+      digits
+    end
+
+    private def self.checked_measure_add(left : UInt64, right : UInt64) : UInt64
+      if right > UInt64::MAX - left
+        raise UnsupportedFormatError.new("recursive Compact schema site roster exceeds UInt64")
+      end
+      left + right
+    end
+
+    private def self.checked_multiply_measure(left : UInt64, right : UInt64) : UInt64
+      if left > 0_u64 && right > UInt64::MAX // left
+        raise UnsupportedFormatError.new("recursive Compact schema site roster exceeds UInt64")
+      end
+      left * right
     end
 
     def initialize(
@@ -89,16 +289,20 @@ module CrystalClick
       column_name : String,
       @limits : BinaryCodecLimits,
       @budget : BinaryCodecBudget,
+      @profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
     )
       reader_schema = !@budget.writing? && (@schema.tuple? || @schema.array?) && @schema.has_json?
-      unless self.class.admitted_schema?(@schema) && (@budget.writing? || reader_schema)
-        raise UnsupportedFormatError.new("recursive Compact JSON schema is outside the captured static-site subset")
+      unless self.class.admitted_schema?(@schema, @limits) && (@budget.writing? || reader_schema)
+        raise UnsupportedFormatError.new("recursive Compact JSON schema is outside the bounded static-site subset")
       end
+      shape = self.class.measure_shape(@schema, @profile)
+      self.class.preflight_shape!(@schema, column_name, shape, @budget)
       context = PhysicalStreamPlanContext.new(@limits)
       @root_prefix = PhysicalStreamName.escape(column_name, context)
-      @json_sites = [] of JsonSite
-      @array_sites = [] of ArraySite
-      @uint8_sites = [] of UInt8Site
+      @json_sites = Array(JsonSite).new(shape.json_count.to_i)
+      @array_sites = Array(ArraySite).new(shape.array_count.to_i)
+      @uint8_sites = Array(UInt8Site).new(shape.uint8_count.to_i)
+      @bulk_sites = Array(CompactRecursiveJsonBulkSite).new(shape.bulk_count.to_i)
       append_sites(@schema, @root_prefix, column_name, "root", 1_i32, 0_u64, context)
       if @json_sites.empty?
         raise UnsupportedFormatError.new("recursive Compact JSON schema has no static Object site")
@@ -129,6 +333,14 @@ module CrystalClick
       @uint8_sites.size
     end
 
+    def bulk_sites : Array(CompactRecursiveJsonBulkSite)
+      @bulk_sites.dup
+    end
+
+    def bulk_site_count : Int32
+      @bulk_sites.size
+    end
+
     def json_site(key : String) : JsonSite
       @json_sites.find { |site| site.key == key } ||
         raise(CorruptPartError.new("recursive Compact JSON schema plan has no such Object site"))
@@ -144,8 +356,14 @@ module CrystalClick
         raise(CorruptPartError.new("recursive Compact JSON schema plan has no such UInt8 site"))
     end
 
+    def bulk_site(key : String) : CompactRecursiveJsonBulkSite
+      @bulk_sites.find { |site| site.key == key } ||
+        raise(CorruptPartError.new("recursive Compact JSON schema plan has no such Bulk site"))
+    end
+
     # Construct the complete mrk4 callback traversal from phase-owned pieces:
-    # every Object prefix, every Array size lane, then schema-ordered bodies.
+    # every Object prefix, then the serializer-DFS body schedule with each
+    # Array size lane immediately before the body below it.
     # mrk3 has no callback labels and uses this only as a detached logical
     # schedule for per-site source validation.
     def expected_event_names(
@@ -153,12 +371,7 @@ module CrystalClick
       schedules : Hash(String, CompactJsonObjectRoleSchedule),
     ) : Array(String)
       names = Array(String).new
-      @json_sites.each do |site|
-        callbacks = prefixes[site.key]? ||
-                    raise(CorruptPartError.new("recursive Compact Object prefix schedule is missing"))
-        callbacks.each { |name| names << String.new(name.to_slice) }
-      end
-      @array_sites.each { |site| names << String.new(site.callback_name.to_slice) }
+      append_prefix_names(@schema, "root", names, prefixes)
       append_body_names(@schema, "root", names, schedules)
       names
     end
@@ -171,12 +384,7 @@ module CrystalClick
       body_pairs : Hash(String, Array(ObjectDocumentInlineCallbackOrder::CallbackPair)),
     ) : Array(String)
       names = Array(String).new
-      @json_sites.each do |site|
-        callbacks = prefixes[site.key]? ||
-                    raise(CorruptPartError.new("recursive Compact Object prefix schedule is missing"))
-        callbacks.each { |name| names << String.new(name.to_slice) }
-      end
-      @array_sites.each { |site| names << String.new(site.callback_name.to_slice) }
+      append_prefix_names(@schema, "root", names, prefixes)
       append_body_names(@schema, "root", names, body_pairs)
       names
     end
@@ -219,6 +427,9 @@ module CrystalClick
         bytes = checked_add(bytes, string_owner_bytes(site.callback_name))
         bytes = checked_add(bytes, instance_sizeof(BinaryDataType).to_u64)
       end
+      bytes = checked_add(bytes, instance_sizeof(Array(CompactRecursiveJsonBulkSite)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(@bulk_sites.size.to_u64, sizeof(Pointer(CompactRecursiveJsonBulkSite)).to_u64))
+      @bulk_sites.each { |site| bytes = checked_add(bytes, site.retained_workspace_bytes) }
       bytes
     end
 
@@ -237,23 +448,36 @@ module CrystalClick
           @budget,
           descriptor_depth,
         ) || raise(UnsupportedFormatError.new("recursive Compact JSON Object descriptor is not canonical"))
-        @budget.preflight_children(1_u64)
-        @budget.charge_node
         @json_sites << JsonSite.new(key, physical_prefix, callback_prefix, descriptor, descriptor_depth, array_level)
       elsif schema.bulk?
         type = schema.bulk_type
-        unless type.tag == BinaryDataType::TAG_UINT8 && !type.contains_json? && !type.contains_dynamic?
-          raise UnsupportedFormatError.new("recursive Compact ordinary leaves are limited to captured UInt8 callbacks")
+        unless !type.contains_json? && !type.contains_dynamic? &&
+               CompactRecursiveJsonBulkAdmission.admitted?(type, descriptor_depth, @limits)
+          raise UnsupportedFormatError.new("recursive Compact opaque Bulk subtree is outside the bounded static grammar")
         end
         bulk_plan = BinaryBulkPhysicalPlan.from_escaped_prefix(
           type,
           physical_prefix,
-          BinaryBulkProfile.single_stream,
+          @profile,
           @limits,
           context,
           array_level,
         )
-        @uint8_sites << UInt8Site.new(key, bulk_plan.stream_name_for("root.data"), type)
+        if type.tag == BinaryDataType::TAG_UINT8
+          @uint8_sites << UInt8Site.new(key, bulk_plan.stream_name_for("root.data"), type)
+        else
+          site = CompactRecursiveJsonBulkSite.new(
+            key,
+            physical_prefix,
+            descriptor_depth,
+            array_level,
+            type,
+            bulk_plan,
+            @limits,
+            @budget,
+          )
+          @bulk_sites << site
+        end
       elsif schema.array?
         array_name = PhysicalStreamName.append_literal(callback_prefix, ".size#{array_level}", context)
         @array_sites << ArraySite.new(key, physical_prefix, array_name, array_level)
@@ -323,14 +547,49 @@ module CrystalClick
       if schema.object?
         schedule = schedules[key]? ||
                    raise(CorruptPartError.new("recursive Compact Object body schedule is missing"))
-        schedule.body_pairs.each { |_canonical, callback| output << String.new(callback.to_slice) }
+        schedule.body_events.each { |_owner, _canonical, callback| output << String.new(callback.to_slice) }
       elsif schema.bulk?
-        output << String.new(uint8_site(key).callback_name.to_slice)
+        type = schema.bulk_type
+        if type.tag == BinaryDataType::TAG_UINT8
+          output << String.new(uint8_site(key).callback_name.to_slice)
+        else
+          bulk_site(key).each_role do |role|
+            output << String.new(bulk_site(key).callback_name_for(role.name).to_slice)
+          end
+        end
       elsif schema.array?
+        output << String.new(array_site(key).callback_name.to_slice)
         append_body_names(schema.child_at(0), array_child_key(key), output, schedules)
       elsif schema.tuple?
         schema.child_count.times do |index|
           append_body_names(schema.child_at(index), tuple_child_key(key, index), output, schedules)
+        end
+      end
+      nil
+    end
+
+    private def append_prefix_names(
+      schema : StorageColumnSchema,
+      key : String,
+      output : Array(String),
+      prefixes : Hash(String, Array(String)),
+    ) : Nil
+      if schema.object?
+        callbacks = prefixes[key]? ||
+                    raise(CorruptPartError.new("recursive Compact Object prefix schedule is missing"))
+        callbacks.each { |name| output << String.new(name.to_slice) }
+      elsif schema.bulk?
+        unless schema.bulk_type.tag == BinaryDataType::TAG_UINT8
+          site = bulk_site(key)
+          site.prefix_role_count.times do |index|
+            output << String.new(site.prefix_callback_name_at(index).to_slice)
+          end
+        end
+      elsif schema.array?
+        append_prefix_names(schema.child_at(0), array_child_key(key), output, prefixes)
+      elsif schema.tuple?
+        schema.child_count.times do |index|
+          append_prefix_names(schema.child_at(index), tuple_child_key(key, index), output, prefixes)
         end
       end
       nil
@@ -347,8 +606,16 @@ module CrystalClick
                 raise(CorruptPartError.new("recursive Compact Object body schedule is missing"))
         pairs.each { |_canonical, callback| output << String.new(callback.to_slice) }
       elsif schema.bulk?
-        output << String.new(uint8_site(key).callback_name.to_slice)
+        type = schema.bulk_type
+        if type.tag == BinaryDataType::TAG_UINT8
+          output << String.new(uint8_site(key).callback_name.to_slice)
+        else
+          bulk_site(key).each_role do |role|
+            output << String.new(bulk_site(key).callback_name_for(role.name).to_slice)
+          end
+        end
       elsif schema.array?
+        output << String.new(array_site(key).callback_name.to_slice)
         append_body_names(schema.child_at(0), array_child_key(key), output, body_pairs)
       elsif schema.tuple?
         schema.child_count.times do |index|
