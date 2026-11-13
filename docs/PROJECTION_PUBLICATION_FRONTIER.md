@@ -51,6 +51,8 @@ independent of the parent profile.
 The [UInt64 Sum profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-sum-projection-publication-from-a-transform-w292)
 uses the same staging path for one `sum(value)` state column and an optional
 `count()` state column in the same Wide child.
+The [UInt64 Min and Max profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-min-and-max-projection-publication-from-a-transform-w293)
+adds both extrema to that child layout through the same publication path.
 
 ## Compact and mixed projection reads (W288)
 

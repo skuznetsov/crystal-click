@@ -3,12 +3,14 @@ module CrystalClick
   # Each constructor retains its own UInt64 snapshot; the aggregate state bytes
   # are generated only when the child writer prepares its physical column.
   class WidePartProjectionAggregate
-    @argument_name : String?
+    # :nodoc:
+    getter descriptor : WidePartProjectionAggregateDescriptor
+
     @values : Array(UInt64)
     @count_total : UInt128?
 
     private def initialize(
-      @argument_name : String?,
+      @descriptor : WidePartProjectionAggregateDescriptor,
       @values : Array(UInt64),
       @count_total : UInt128?,
     )
@@ -25,19 +27,35 @@ module CrystalClick
         values << count
         total += count.to_u128
       end
-      new(nil, values, total)
+      new(WidePartProjectionAggregateDescriptor.count, values, total)
     end
 
     def self.sum_uint64(argument_name : String, sums : Slice(UInt64)) : WidePartProjectionAggregate
-      validate_column_name!(argument_name)
+      descriptor = WidePartProjectionAggregateDescriptor.sum(argument_name)
       validate_values_size!(sums.size, "sum")
       values = Array(UInt64).new(sums.size)
       sums.each { |sum| values << sum }
-      new(String.new(argument_name.to_slice), values, nil)
+      new(descriptor, values, nil)
+    end
+
+    def self.min_uint64(argument_name : String, minima : Slice(UInt64)) : WidePartProjectionAggregate
+      descriptor = WidePartProjectionAggregateDescriptor.min(argument_name)
+      validate_values_size!(minima.size, "min")
+      values = Array(UInt64).new(minima.size)
+      minima.each { |minimum| values << minimum }
+      new(descriptor, values, nil)
+    end
+
+    def self.max_uint64(argument_name : String, maxima : Slice(UInt64)) : WidePartProjectionAggregate
+      descriptor = WidePartProjectionAggregateDescriptor.max(argument_name)
+      validate_values_size!(maxima.size, "max")
+      values = Array(UInt64).new(maxima.size)
+      maxima.each { |maximum| values << maximum }
+      new(descriptor, values, nil)
     end
 
     def argument_name : String?
-      @argument_name.try { |name| String.new(name.to_slice) }
+      @descriptor.argument_name
     end
 
     # Returns a detached snapshot of the caller-computed UInt64 values.
@@ -51,7 +69,7 @@ module CrystalClick
     end
 
     def count? : Bool
-      @argument_name.nil?
+      @descriptor.count?
     end
 
     # :nodoc:
@@ -62,14 +80,6 @@ module CrystalClick
     private def self.validate_values_size!(size : Int, kind : String) : Nil
       unless size > 0 && size.to_u64 <= WidePart::MAX_ROWS
         raise ArgumentError.new("a #{kind} projection requires a bounded nonempty UInt64 value stream")
-      end
-      nil
-    end
-
-    private def self.validate_column_name!(name : String) : Nil
-      unless name.bytesize > 0 && name.bytesize <= WidePartWriter::MAX_COLUMN_NAME_BYTES &&
-             /\A[A-Za-z_][A-Za-z0-9_]*\z/.matches?(name)
-        raise ArgumentError.new("aggregate projection argument must be a bounded ASCII identifier")
       end
       nil
     end

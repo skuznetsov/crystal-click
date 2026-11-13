@@ -94,8 +94,8 @@ module CrystalClick
       )
     end
 
-    # Retains strictly sorted distinct group keys and caller-computed Count
-    # and/or UInt64 Sum states for the corresponding aggregate groups.
+    # Retains strictly sorted distinct group keys and caller-computed states
+    # for the corresponding Count, UInt64 Sum, Min, and Max aggregates.
     def self.precomputed_aggregate(
       name : String,
       key_name : String,
@@ -112,29 +112,24 @@ module CrystalClick
       if keys.empty? || keys.size.to_u64 > WidePart::MAX_ROWS
         raise ArgumentError.new("an aggregate projection requires a bounded nonempty UInt64 key stream")
       end
-      unless aggregate_columns.size > 0 && aggregate_columns.size <= 2
-        raise ArgumentError.new("an aggregate projection requires one or two aggregate columns")
+      unless aggregate_columns.size > 0 && aggregate_columns.size <= 4
+        raise ArgumentError.new("an aggregate projection requires one to four aggregate columns")
       end
 
       retained_aggregates = aggregate_columns.dup
       retained_keys = Array(UInt64).new(keys.size)
       previous_key = 0_u64
       count_total : UInt128? = nil
-      seen_count = false
-      seen_sum = false
+      seen_functions = Set(WidePartProjectionAggregateDescriptor::Function).new
       retained_aggregates.each do |aggregate|
         unless aggregate.value_count == keys.size
           raise ArgumentError.new("aggregate projection keys and values must have equal lengths")
         end
+        unless seen_functions.add?(aggregate.descriptor.function)
+          raise ArgumentError.new("aggregate projection may contain each admitted function only once")
+        end
         if aggregate.count?
-          if seen_count
-            raise ArgumentError.new("aggregate projection count column must be unique")
-          end
-          seen_count = true
           count_total = aggregate.count_total
-        else
-          raise ArgumentError.new("aggregate projection may contain one sum column") if seen_sum
-          seen_sum = true
         end
       end
 

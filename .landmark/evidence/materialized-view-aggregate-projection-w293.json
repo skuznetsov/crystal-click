@@ -1,0 +1,421 @@
+{
+  "format": "crystal_click_materialized_view_aggregate_projection_w293_evidence_v1",
+  "date": "2026-11-12",
+  "baseline_revision": "75ca1c92c7745867bcbc88cfd5179088db7cbcd5",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the caller-precomputed UInt64 profile and the two exercised native pairs.",
+    "scope": "One plain UInt64 key with at most one each of count(), sum(value), min(value) and max(value), in SELECT aggregate order. Each argument is a plain UInt64 column. Aggregate children are Wide and parents are Wide or Compact.",
+    "remaining": "The callback computes the states for the transformed rows. Single-extremum projections and distinct extrema arguments in Crystal output were exercised in Crystal specs. Compact aggregate children and other argument or key types require separate qualification."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "A part attaches and passes integrity checks while its projection changes grouped query results.",
+    "guards": [
+      "Reject invalid DDL before the callback and mismatched precomputed owners before publishing.",
+      "Preserve Count conservation and require a valid key stream for mixed Count reads, including selection of Count alone.",
+      "Check literal state bytes, uneven group sizes, exact ClickHouse plans, and parent-derived values for both layouts.",
+      "Compare all original file hashes before and after attachment and reopen byte-identical copies through the offline catalog."
+    ],
+    "rollback": "Revert the feature commit. Parent and child share a single staged publication rename."
+  },
+  "verification": {
+    "toolchain": "Crystal 1.22.1, LLVM 23.1.4, aarch64-apple-darwin25.6.0",
+    "baseline_debug": {
+      "signal": "The baseline refuses the min/max DDL before the transform callback sentinel.",
+      "manifest": {
+        "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-baseline-diagnostic.json",
+        "bytes": 1287,
+        "sha256": "c0df3970856194ecc98e3988189d8d9a4000c7aa602c9f7e2f33fec7e55535a6"
+      }
+    },
+    "specs": {
+      "paths_per_mode": 25,
+      "cohorts": {
+        "focused": [
+          "spec/offline_materialized_view_minmax_projection_w293_spec.cr",
+          "spec/offline_materialized_view_sum_projection_w292_spec.cr",
+          "spec/offline_materialized_view_aggregate_projection_w291_spec.cr",
+          "spec/offline_materialized_view_projection_transform_w290_spec.cr",
+          "spec/aggregate_count_physical_names_w219_spec.cr",
+          "spec/aggregate_count_w176_writer_spec.cr"
+        ],
+        "transform": [
+          "spec/offline_materialized_view_transform_w257_spec.cr",
+          "spec/offline_materialized_view_compact_transform_w286_spec.cr",
+          "spec/wide_part_schema_binding_w257_spec.cr"
+        ],
+        "publication": [
+          "spec/compact_projection_writer_spec.cr",
+          "spec/compact_projection_reader_spec.cr",
+          "spec/projection_checksum_binding_w287_spec.cr",
+          "spec/projection_publication_w256_spec.cr",
+          "spec/offline_projection_window_w229_spec.cr",
+          "spec/projection_specialized_consumers_w217_spec.cr"
+        ],
+        "catalog": [
+          "spec/offline_materialized_view_w228_spec.cr",
+          "spec/offline_mv_materialization_w88_spec.cr",
+          "spec/offline_catalog_projection_w87_spec.cr"
+        ],
+        "states": [
+          "spec/aggregate_count_w176_reader_spec.cr",
+          "spec/aggregate_count_consumers_w177_admission_spec.cr",
+          "spec/aggregate_sum_w223_bulk_spec.cr",
+          "spec/aggregate_sum_w223_consumers_spec.cr"
+        ],
+        "extrema": [
+          "spec/aggregate_minmax_w237_core_spec.cr",
+          "spec/aggregate_minmax_w237_physical_spec.cr",
+          "spec/aggregate_minmax_w237_adversary_spec.cr"
+        ]
+      },
+      "modes": {
+        "debug": {
+          "examples": {
+            "focused": 34,
+            "transform": 22,
+            "publication": 39,
+            "catalog": 36,
+            "states": 12,
+            "extrema": 25,
+            "total": 168
+          },
+          "manifests": {
+            "focused": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-debug-focused-final.json",
+              "bytes": 2374,
+              "sha256": "e8da06cee7352a836c44dd2dcbafeb4a040dd65e613f4eb465e8bfe519f80bab"
+            },
+            "transform": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-debug-transform-final.json",
+              "bytes": 1766,
+              "sha256": "ddc930d36731c97030c6c5c070290043384c9efd5bb895055b0516a48c0bb653"
+            },
+            "publication": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-debug-publication-final.json",
+              "bytes": 2216,
+              "sha256": "24731cea78adf6a087116cf5b82054dbd32977ad9d84eb4769ccb2555e178f84"
+            },
+            "catalog": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-debug-catalog-final.json",
+              "bytes": 1710,
+              "sha256": "81179687a3f57986420b923d19ce18c16f7100c21899059b37b907bf14bec189"
+            },
+            "states": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-debug-states-final.json",
+              "bytes": 1875,
+              "sha256": "b20888279202e6c6a9f53383b5d8c67857af4e47d9471091e1d81b34baf5c464"
+            },
+            "extrema": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-debug-extrema-final.json",
+              "bytes": 1704,
+              "sha256": "78be048375639f604f56a7e50fb14a2aa06481f92b598d381852d6a0579ba827"
+            }
+          }
+        },
+        "release": {
+          "examples": {
+            "focused": 34,
+            "transform": 22,
+            "publication": 39,
+            "catalog": 36,
+            "states": 12,
+            "extrema": 25,
+            "total": 168
+          },
+          "manifests": {
+            "focused": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-release-focused.json",
+              "bytes": 2409,
+              "sha256": "29dff564fca9dd9965dd633a05fe7b3d6c2e09745f7dde8f78ebfe75b19d8678"
+            },
+            "transform": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-release-transform.json",
+              "bytes": 1801,
+              "sha256": "e4e1a0980c6a965f4b8ea221f36e858f4ac8103507617dcb3c90a64efe20dd33"
+            },
+            "publication": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-release-publication.json",
+              "bytes": 2251,
+              "sha256": "a96fad5f802ad5497aae7df975f5961609b183fcd13f1a2399fe4e6491f1b959"
+            },
+            "catalog": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-release-catalog.json",
+              "bytes": 1745,
+              "sha256": "18d1d5ae7f8189b8e70768105a897a8fc355d42c97d0b940de2df4d88f36e414"
+            },
+            "states": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-release-states.json",
+              "bytes": 1910,
+              "sha256": "e415bf8bece89979e76c0263c5eebc27e885290df8121ed303e11c1243135db4"
+            },
+            "extrema": {
+              "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-release-extrema.json",
+              "bytes": 1739,
+              "sha256": "51de3daaecafd5a183258cfe386f1d2d9cd1aee5890bd59f8f3b47b2517bfb04"
+            }
+          }
+        }
+      }
+    },
+    "guard": {
+      "sha256": "fbfa0fd9d717eb24c1a3f829d464188110e505c7ae311eee2e95cbe7cefab011",
+      "minimum_system_memory_free_percent": 50,
+      "crystal_process_tree_memory_mib": 12288,
+      "native_process_tree_memory_mib": 2048,
+      "clickhouse_max_memory_usage_bytes": 536870912
+    },
+    "input_seals": {
+      "production": {
+        "files": 637,
+        "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/production.source.json",
+        "bytes": 80571,
+        "sha256": "98af3f18200e3b6a921c70e49adcda22629c384b7af320740681e5593598ec90"
+      },
+      "qualified": {
+        "files": 3367,
+        "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/qualified.source.json",
+        "bytes": 440119,
+        "sha256": "dd6babc4bb5392a5c857702fb4dc6c81143fb542e2c0cf9b62d25f2fede1519b"
+      }
+    },
+    "native": {
+      "entry_point": "clickhouse local",
+      "runner": "scripts/verify_materialized_view_aggregate_projection_w293.rb",
+      "runner_sha256": "a80cdbdce3517f94647855309e9c1d87ef903d95bd2b30123cbe1ee9aaf1496f",
+      "helper_source": "scripts/check_materialized_view_aggregate_projection_w293.cr",
+      "version": "26.10.1.1201",
+      "revision": 54515,
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "full_executable_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "source_reference": {
+        "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "state": "src/AggregateFunctions/SingleValueData.h:84-108",
+        "schema": "src/Interpreters/InterpreterSelectQuery.cpp:1360-1388",
+        "child_layout": "src/Storages/MergeTree/MergeTreeDataWriter.cpp:1184-1218"
+      },
+      "stock_control": {
+        "scenario": "A stock-produced Wide child with distinct extrema arguments and the group key omitted from SELECT.",
+        "physical_columns": [
+          [
+            "group_key",
+            "UInt64"
+          ],
+          [
+            "max(other)",
+            "AggregateFunction(max, UInt64)"
+          ],
+          [
+            "min(value)",
+            "AggregateFunction(min, UInt64)"
+          ],
+          [
+            "count()",
+            "AggregateFunction(count)"
+          ],
+          [
+            "sum(value)",
+            "AggregateFunction(sum, UInt64)"
+          ]
+        ],
+        "state_rowbinary_hex": "0100000000000000010807060504030201010100000000000000020000000000000000020000000000000001ffffffffffffffff010000000000000000020807060504030201",
+        "setup_sql": {
+          "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/stock-probe/setup.sql",
+          "bytes": 521,
+          "sha256": "0873c89caf670c740efe3a4757ac00b61372d8ae1a0ac18fbd4d2e06d276d98c"
+        },
+        "read_sql": {
+          "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/stock-probe/read.sql",
+          "bytes": 101,
+          "sha256": "ee95134062745be730e3c526f42f107553368cd39bc832a5e51ed591cdac210e"
+        }
+      },
+      "stock_function_names": {
+        "scenario": "Stock ClickHouse normalizes MIN and MaX in persisted projection DDL.",
+        "query": {
+          "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/stock-case-probe/query.sql",
+          "bytes": 415,
+          "sha256": "e517e0f90eb2d109850482e7ad917cebe6ea964626ad8132d292dfc4ef9abea9"
+        },
+        "output": {
+          "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/stock-case-probe/stdout",
+          "bytes": 459,
+          "sha256": "bfb48946912c272ee44e49d52d08222ada1586b867f21cc19ab6fdae9c06daf2"
+        }
+      },
+      "stock_source_rows": 9,
+      "stock_source_rowbinary_sha256": "18efa8ec6dfd2b3d5de6de172ce2f7f9cbc4c247a3c0d16112f41923c322deb9",
+      "invocations_per_mode": 33,
+      "helper_invocations_per_mode": 2,
+      "pairs_by_parent_layout": {
+        "Compact": {
+          "original_files_compared": 24,
+          "attached_files_compared": 25,
+          "parent_grid_with_terminal": [
+            2,
+            2,
+            2,
+            2,
+            1,
+            0
+          ],
+          "child_grid_with_terminal": [
+            2,
+            1,
+            0
+          ],
+          "columns": [
+            [
+              "group_key",
+              "UInt64"
+            ],
+            [
+              "min(value)",
+              "AggregateFunction(min, UInt64)"
+            ],
+            [
+              "max(value)",
+              "AggregateFunction(max, UInt64)"
+            ]
+          ],
+          "groups_key_min_max_count_sum": [
+            [
+              10,
+              0,
+              18446744073709551615,
+              3,
+              0
+            ],
+            [
+              20,
+              17,
+              72623859790382856,
+              4,
+              72623859790382995
+            ],
+            [
+              30,
+              42,
+              72623859790382856,
+              2,
+              72623859790382898
+            ]
+          ],
+          "state_rowbinary_hex": "0a0000000000000001000000000000000001ffffffffffffffff14000000000000000111000000000000000108070605040302011e00000000000000012a00000000000000010807060504030201",
+          "parent_rowbinary_sha256": "52de8a0150f3f7919dbcc9f02ec377070567615608d9d4c936553bc1a8424a20",
+          "grouped_output_sha256": "f9d9844e8b41c2f38dd4c4a46f85b45bee6e388942769188d3fd92db4586b62f",
+          "forced_read_description": "by_group",
+          "forced_explain_sha256": "d361b48b52ebcab9ce34f37197248cbfbbf2849ffa295b379882da9ed7bae05c"
+        },
+        "Wide": {
+          "original_files_compared": 32,
+          "attached_files_compared": 33,
+          "parent_grid_with_terminal": [
+            2,
+            2,
+            2,
+            2,
+            1,
+            0
+          ],
+          "child_grid_with_terminal": [
+            2,
+            1,
+            0
+          ],
+          "columns": [
+            [
+              "group_key",
+              "UInt64"
+            ],
+            [
+              "max(value)",
+              "AggregateFunction(max, UInt64)"
+            ],
+            [
+              "count()",
+              "AggregateFunction(count)"
+            ],
+            [
+              "min(value)",
+              "AggregateFunction(min, UInt64)"
+            ],
+            [
+              "sum(value)",
+              "AggregateFunction(sum, UInt64)"
+            ]
+          ],
+          "groups_key_min_max_count_sum": [
+            [
+              10,
+              0,
+              18446744073709551615,
+              3,
+              0
+            ],
+            [
+              20,
+              17,
+              72623859790382856,
+              4,
+              72623859790382995
+            ],
+            [
+              30,
+              42,
+              72623859790382856,
+              2,
+              72623859790382898
+            ]
+          ],
+          "state_rowbinary_hex": "0a0000000000000001ffffffffffffffff03010000000000000000000000000000000014000000000000000108070605040302010401110000000000000093070605040302011e0000000000000001080706050403020102012a000000000000003207060504030201",
+          "parent_rowbinary_sha256": "52de8a0150f3f7919dbcc9f02ec377070567615608d9d4c936553bc1a8424a20",
+          "grouped_output_sha256": "aa0208a8d450af075c5a997352401beb98f3a7b59ce7b636612038140ea6e65e",
+          "forced_read_description": "by_group",
+          "forced_explain_sha256": "d361b48b52ebcab9ce34f37197248cbfbbf2849ffa295b379882da9ed7bae05c"
+        }
+      },
+      "observations": "Both modes passed ATTACH PART and CHECK TABLE. Each forced plan reads by_group and matches the parent-only result. Crystal reopened both attached pairs in full and in parent [1, 6) and child [1, 3) windows.",
+      "reports": {
+        "debug": {
+          "helper_build": {
+            "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-debug-helper-retry1.json",
+            "bytes": 1498,
+            "sha256": "e7d05c54fb4e083d5234fedfcfbd7f5ba8b42edec8e9ed1f6c4ee66a00dabfe3"
+          },
+          "helper_sha256": "df46c8264ecf107e956dcd5178f09e6a43b534ec5e6ea3b0d8abed1a5e3aa98c",
+          "summary": {
+            "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/native-debug-final/summary.json",
+            "bytes": 123851,
+            "sha256": "862218e1447807ad85e87bac35eac8ef5694170b56b37ad01e7a8d35acb73028"
+          },
+          "audit": {
+            "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/independent-debug.json",
+            "bytes": 3515,
+            "sha256": "b2301ca218f7aa164396f8a0e19ce40655a62ff18f384cccec9e215546f7ce6f"
+          }
+        },
+        "release": {
+          "helper_build": {
+            "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/manifests/w293-release-helper.json",
+            "bytes": 1534,
+            "sha256": "f2fc14915b03c14555888eabd7835eb1930614e7c4a81085f4e86e704a8d18fc"
+          },
+          "helper_sha256": "04c3136bb3843f68b10b2f84d1791b11bbcb43db5c06f0962f40085c4b7c1a07",
+          "summary": {
+            "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/native-release-final/summary.json",
+            "bytes": 124112,
+            "sha256": "c14ca11de9741e14670f2fed721daf541410bc63b61333aa37504731e3c241b1"
+          },
+          "audit": {
+            "path": "/opt/mldata_ssd/cache/crystal-click-w293.h4y8yq2b/independent-release.json",
+            "bytes": 3515,
+            "sha256": "3a9a7b53dbab17221feb4dfcfc4f3f214659b0e866368d4b62ca4b03e35eef2f"
+          }
+        }
+      }
+    }
+  },
+  "refresh_when": "Repeat the guarded specs and native runs after changes to DDL binding, state serialization, staging or readback, part layouts, the toolchain or the ClickHouse pin."
+}

@@ -13,40 +13,51 @@ module CrystalClick
         prepare_with_profile(name, type, granules, context, context.profile, false)
       end
 
-      def self.prepare_count_projection(
-        counts : Array(UInt64),
+      def self.prepare_projection_aggregate(
+        aggregate : WidePartProjectionAggregate,
         context : WidePartOperationContext,
       ) : WidePartPreparedColumn
-        type = BinaryDataType.aggregate_count
-        rows_per_mark = context.rows_per_mark
-        if rows_per_mark.to_u64 > WideAggregateCountStoragePlan::MAX_MARK_RANGE_ROWS
-          raise ArgumentError.new("count projection rows_per_mark is outside the admitted range")
+        descriptor = aggregate.descriptor
+        type = descriptor.type
+        if descriptor.count?
+          if context.rows_per_mark.to_u64 > WideAggregateCountStoragePlan::MAX_MARK_RANGE_ROWS
+            raise ArgumentError.new("count projection rows_per_mark is outside the admitted range")
+          end
+        else
+          plan = BinaryAggregateFunctionStatePlan.for_type(type)
+          if descriptor.sum?
+            unless plan.state_width == sizeof(UInt64)
+              raise UnsupportedFormatError.new("sum projection requires the fixed UInt64 AggregateFunction state")
+            end
+          elsif descriptor.minmax?
+            layout = plan.minmax_layout ||
+                     raise UnsupportedFormatError.new("min/max projection requires the existing fixed-value state plan")
+            unless layout.input_type.tag == BinaryDataType::TAG_UINT64 && layout.state_kind.fixed? && !plan.nullable_argument?
+              raise UnsupportedFormatError.new("min/max projection requires the present UInt64 SingleValueData state")
+            end
+          else
+            raise UnsupportedFormatError.new("aggregate projection function is outside the admitted profile")
+          end
         end
 
-        granules = aggregate_projection_granules(counts, rows_per_mark, "count") do |count|
-          BinaryValue.aggregate_count_state(type, count)
+        granules = aggregate_projection_granules(
+          aggregate.values, context.rows_per_mark, descriptor.function_name
+        ) do |value|
+          if descriptor.count?
+            BinaryValue.aggregate_count_state(type, value)
+          else
+            presence_bytes = descriptor.minmax? ? 1 : 0
+            state_bytes = Bytes.new(presence_bytes + sizeof(UInt64))
+            if presence_bytes == 1
+              state_bytes[0] = 1_u8
+            end
+            IO::ByteFormat::LittleEndian.encode(value, state_bytes[presence_bytes, sizeof(UInt64)])
+            BinaryValue.aggregate_function_state(type, state_bytes)
+          end
         end
         prepare_with_profile(
-          "count()", type, granules, context, BinaryBulkProfile.with_size_stream, true
-        )
-      end
-
-      def self.prepare_sum_projection(
-        argument_name : String,
-        sums : Array(UInt64),
-        context : WidePartOperationContext,
-      ) : WidePartPreparedColumn
-        type = BinaryDataType.aggregate_function("sum", BinaryDataType.primitive("UInt64"))
-        unless BinaryAggregateFunctionStatePlan.for_type(type).state_width == sizeof(UInt64)
-          raise UnsupportedFormatError.new("sum projection requires the fixed UInt64 AggregateFunction state")
-        end
-        granules = aggregate_projection_granules(sums, context.rows_per_mark, "sum") do |sum|
-          state_bytes = Bytes.new(sizeof(UInt64))
-          IO::ByteFormat::LittleEndian.encode(sum, state_bytes)
-          BinaryValue.aggregate_function_state(type, state_bytes)
-        end
-        prepare_with_profile(
-          "sum(#{argument_name})", type, granules, context, BinaryBulkProfile.with_size_stream, false
+          descriptor.column_name, type, granules, context,
+          BinaryBulkProfile.with_size_stream, descriptor.count?
         )
       end
 

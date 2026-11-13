@@ -67,13 +67,7 @@ module CrystalClick
         aggregate_columns = projection.aggregate_columns
         if !aggregate_columns.empty?
           aggregate_columns.each do |aggregate|
-            if argument_name = aggregate.argument_name
-              prepared_columns << StaticWidePartColumnInput.prepare_sum_projection(
-                argument_name, aggregate.values, context
-              )
-            else
-              prepared_columns << StaticWidePartColumnInput.prepare_count_projection(aggregate.values, context)
-            end
+            prepared_columns << StaticWidePartColumnInput.prepare_projection_aggregate(aggregate, context)
           end
         else
           projection.columns.each do |column|

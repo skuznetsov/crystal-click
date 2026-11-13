@@ -137,7 +137,8 @@ module CrystalClick
       selected = select_list.split(',')
       columns = [{key.name, key.type}] of Tuple(String, String)
       aliases = Array(String).new
-      sum_argument = nil.as(String?)
+      aggregate_arguments = Set(String).new
+      aggregate_functions = Set(WidePartProjectionAggregateDescriptor::Function).new
       count_seen = false
       key_seen = false
       selected.each do |raw_token|
@@ -151,13 +152,14 @@ module CrystalClick
         end
 
         if count = /\Acount\s*\(\s*\)(?:\s+(?i:AS)\s+([\s\S]+))?\z/.match(token)
-          if count_seen
+          descriptor = WidePartProjectionAggregateDescriptor.count
+          unless aggregate_functions.add?(descriptor.function)
             raise UnsupportedFormatError.new("transform aggregate projection may contain count() only once")
           end
           count_seen = true
-          columns << {"count()", WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME}
+          columns << {descriptor.column_name, descriptor.type_name}
           if alias_token = count[1]?
-            aliases << aggregate_alias!(alias_token, "count")
+            aliases << aggregate_alias!(alias_token, descriptor.function_name)
           end
           next
         end
@@ -166,30 +168,34 @@ module CrystalClick
           raise UnsupportedFormatError.new("transform count projection SELECT must contain count() and optionally its group key")
         end
 
-        if sum = /\Asum\s*\(\s*([\s\S]+?)\s*\)(?:\s+(?i:AS)\s+([\s\S]+))?\z/.match(token)
-          if sum_argument
-            raise UnsupportedFormatError.new("transform aggregate projection may contain one sum(argument) only")
-          end
-          argument_name = parse_identifier(sum[1])
+        if aggregate = /\A(sum|min|max)\s*\(\s*([\s\S]+?)\s*\)(?:\s+(?i:AS)\s+([\s\S]+))?\z/.match(token)
+          argument_name = parse_identifier(aggregate[2])
           argument = argument_name.try { |name| target_columns.find { |column| column.name == name } }
           unless argument && !argument.alias_column && argument.key_candidate_column && argument.type == "UInt64"
-            raise UnsupportedFormatError.new("transform sum projection requires one plain UInt64 target column")
+            raise UnsupportedFormatError.new("transform #{aggregate[1]} projection requires one plain UInt64 target column")
           end
-          sum_argument = argument.name
-          columns << {"sum(#{argument.name})", "AggregateFunction(sum, UInt64)"}
-          if alias_token = sum[2]?
-            aliases << aggregate_alias!(alias_token, "sum")
+          unless argument.name.bytesize <= WidePartWriter::MAX_COLUMN_NAME_BYTES
+            raise UnsupportedFormatError.new("transform aggregate projection argument exceeds the writer column-name limit")
+          end
+          descriptor = WidePartProjectionAggregateDescriptor.for_function(aggregate[1], argument.name)
+          unless aggregate_functions.add?(descriptor.function)
+            raise UnsupportedFormatError.new("transform aggregate projection may contain each admitted function only once")
+          end
+          aggregate_arguments.add(argument.name)
+          columns << {descriptor.column_name, descriptor.type_name}
+          if alias_token = aggregate[3]?
+            aliases << aggregate_alias!(alias_token, descriptor.function_name)
           end
           next
         end
 
-        raise UnsupportedFormatError.new("transform aggregate projection SELECT supports only count() and sum(argument)")
+        raise UnsupportedFormatError.new("transform aggregate projection SELECT supports only count(), sum(argument), min(argument), and max(argument)")
       end
 
-      unless count_seen || sum_argument
-        raise UnsupportedFormatError.new("transform aggregate projection SELECT requires count() or sum(argument)")
+      unless aggregate_functions.size > 0
+        raise UnsupportedFormatError.new("transform aggregate projection SELECT requires at least one admitted aggregate")
       end
-      validate_aggregate_aliases!(aliases, key.name, sum_argument)
+      validate_aggregate_aliases!(aliases, key.name, aggregate_arguments)
       {PartSchemaBinding.new(key.name, columns, "projection"), count_seen}
     end
 
@@ -204,11 +210,11 @@ module CrystalClick
     private def validate_aggregate_aliases!(
       aliases : Array(String),
       key_name : String,
-      sum_argument : String?,
+      aggregate_arguments : Set(String),
     ) : Nil
       seen = Set(String).new
       aliases.each do |name|
-        unless seen.add?(name) && name != key_name && name != sum_argument
+        unless seen.add?(name) && name != key_name && !aggregate_arguments.includes?(name)
           raise UnsupportedFormatError.new("transform aggregate projection aliases must be unique and cannot shadow the key or aggregate arguments")
         end
       end

@@ -2,6 +2,19 @@
 
 ## Current qualification
 
+### W293 UInt64 Min and Max projection publication from a materialized-view transform
+
+The callback supplies one UInt64 `GROUP BY` key and the precomputed
+`min(value)` and `max(value)` states, each over a plain UInt64 column.
+Each extremum can appear on its own or alongside the other supported
+aggregates. The writer stages the Wide child with its Wide or Compact
+parent. Debug and Release each passed 168 examples. On ClickHouse
+26.10.1.1201, both parent layouts passed ATTACH, CHECK, exact state reads,
+forced projection grouping and offline full and cross-mark scans in both
+modes. See the
+[Min and Max projection profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-min-and-max-projection-publication-from-a-transform-w293)
+and [W293 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w293.json).
+
 ### W292 UInt64 Sum projection publication from a materialized-view transform
 
 The callback can supply `sum(value)` over one plain UInt64 target column,
@@ -4747,9 +4760,10 @@ source/runtime identities and executed evidence.
    detached output for an ordinary unpartitioned target with one ascending
    UInt64 key. W290 binds caller-precomputed Wide and Compact projection
    children to the transform target's plain column projection declarations.
-   W291 and W292 add Wide aggregate projection children under either parent
-   layout with one UInt64 group key and `count()`, `sum(value)` over UInt64,
-   or both.
+   W291 through W293 add Wide aggregate projection children under either
+   parent layout with one UInt64 group key and any combination of
+   `count()`, `sum(value)`, `min(value)`, and `max(value)` over the
+   supported UInt64 arguments.
    General keys and partitions, additional projection declarations, remaining
    layouts/types and automatic materialization remain open.
 4. **General table writing.** The detached-part writers and small
@@ -4908,9 +4922,9 @@ retains the implementation checkpoints and responsibility boundaries.
    W257 and W286 qualify one-part caller-run transformations into schema-bound
    detached Wide and Compact targets. W287 and W288 check selected projection
    manifests and qualify mixed Wide/Compact child reads. W290 combines these
-   paths for plain projection declarations. W291 and W292 qualify aggregate
-   projections with a single UInt64 group key and `count()` or UInt64
-   `sum(value)`, including both states in one projection. The next steps are
+   paths for plain projection declarations. W291 through W293 qualify
+   aggregate projections with a single UInt64 group key, `count()`, and
+   UInt64 `sum(value)`, `min(value)`, and `max(value)` states. The next steps are
    general key and partition derivation, additional projection declarations,
    and bounded output appenders.
 4. Only then reopen memory/performance work. No current claim of stock-reader
@@ -4918,7 +4932,7 @@ retains the implementation checkpoints and responsibility boundaries.
 
 ## Source reference
 
-W286 through W292 compare the relevant MergeTree paths against the pinned shallow
+W286 through W293 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

@@ -1,5 +1,60 @@
 # Caller-run materialized-view transform frontier
 
+## UInt64 Min and Max projection publication from a transform (W293)
+
+This profile extends `75ca1c9`. One plain UInt64 `GROUP BY` key admits
+`min(value)` and `max(value)` over plain UInt64 target columns. A
+projection can use either state on its own or combine them with the
+existing `count()` and `sum(value)` states, with at most one of each
+function. The physical schema starts with the group key, followed by the
+canonical aggregate column names in SELECT order. SQL aliases must be
+unique and must not shadow the key or an aggregate argument.
+
+- The callback supplies sorted distinct group keys and one state per
+  key and selected aggregate through
+  `WidePartProjection.precomputed_aggregate`. The new state constructors
+  are `WidePartProjectionAggregate.min_uint64` and `.max_uint64`.
+  A present UInt64 extremum uses one byte of value presence followed by
+  eight little-endian bytes. The existing aggregate codec owns the state
+  grammar. Each function can use a different UInt64 column. The callback
+  computes the states from the transformed rows.
+- The existing writer stages the Wide child under a Wide or Compact
+  parent and validates the exact schema and mark grid before publication.
+  Count state values must be positive and sum to the parent row count
+  whenever Count is present. A mixed Count projection uses the
+  manifest-bound typed projection reader and validates the UInt64 key
+  even when it is absent from the selection.
+- Reject computed or non-UInt64 arguments, repeated aggregate functions,
+  multiple group keys, incompatible aliases, and mismatched state owners.
+  Compact aggregate children and automatic aggregation of transformed
+  rows are outside this profile.
+
+The failure to catch is a part that passes ATTACH and CHECK but returns
+different extrema when the query chooses the projection. Reproduce the
+old DDL refusal before the callback. Run the focused, publication, and
+state codec regressions in Debug and Release. With pinned ClickHouse,
+compare the literal state bytes and grouped results against the parent
+and require a forced plan that names the projection for both parent
+layouts. Reopen both attachments and scan through a child mark boundary.
+Revert the feature commit to roll back the API.
+
+### Qualification
+
+Debug and Release each passed 168 examples across 25 spec files. The
+Crystal specs cover each extremum on its own, mixed aggregate order,
+invalid bindings, the Count total, and exact state bytes across marks.
+
+ClickHouse 26.10.1.1201 attached and checked a Compact MRK4 parent with a
+Wide MRK2 `min, max` child, and a Wide MRK2 parent with a Wide MRK2
+`max, count, min, sum` child. Both forced plans read `by_group`, and the
+results matched grouping the same nine rows with projection optimization
+disabled. The three groups had counts `[3, 4, 2]`. The exact RowBinary
+checks include zero, `UInt64::MAX`, an asymmetric value and wrapped Sum.
+Crystal reopened byte-identical copies of both attachments and read the
+parent and child columns in full and across marks. See the
+[native witness runner](../scripts/verify_materialized_view_aggregate_projection_w293.rb)
+and [W293 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w293.json).
+
 ## UInt64 Sum projection publication from a transform (W292)
 
 This profile extends `45b55f2`. The target can declare one plain UInt64

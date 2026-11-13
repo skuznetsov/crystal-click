@@ -1,5 +1,21 @@
 # Crystal Click landmarks
 
+## UInt64 Min and Max projection publication from a materialized-view transform — W293
+
+- A caller supplies sorted UInt64 group keys and a state for each selected
+  aggregate in SELECT aggregate order. The existing aggregate codec stores
+  a present UInt64 extremum as `01` followed by eight little-endian bytes.
+  The writer publishes the Wide child together with its Wide or Compact
+  parent and checks the Count total whenever Count is present.
+- Debug and Release each passed 168 affected examples. ClickHouse
+  26.10.1.1201 attached and checked both parent layouts and read the exact
+  states and grouped results with `by_group` forced. Crystal reopened both
+  pairs and read through a child mark boundary. Refresh
+  after changes to DDL binding, the state codec, part publication or layout,
+  or the native pin. See the
+  [W293 profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-min-and-max-projection-publication-from-a-transform-w293)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w293.json).
+
 ## UInt64 Sum projection publication from a materialized-view transform — W292
 
 - One plain UInt64 group key admits one `sum(value)` over a plain UInt64

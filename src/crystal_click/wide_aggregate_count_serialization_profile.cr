@@ -1,7 +1,7 @@
 module CrystalClick
-  # Narrow serializer-metadata law for the paired UInt64 key + top-level
-  # AggregateFunction(count) part. This deliberately does not widen the
-  # generic raw-integer or Object serializer profiles.
+  # Narrow serializer-metadata law for ordinary Count parts and exact
+  # Count-bearing projection children. This does not widen generic raw-integer
+  # or Object serializer profiles.
   class WideAggregateCountSerializationProfile
     REQUIRED_FIELDS = Set{
       "version",
@@ -24,7 +24,7 @@ module CrystalClick
       count_column : String,
       count_type_name : String,
       row_count : UInt64,
-      allow_projection_count_sum : Bool = false,
+      allow_projection_aggregate_roster : Bool = false,
     ) : String
       plan = WideAggregateCountStoragePlan.for_type_name(count_type_name) ||
              raise(UnsupportedFormatError.new("unsupported AggregateFunction(count) descriptor"))
@@ -37,8 +37,8 @@ module CrystalClick
                      end
                      raise CorruptPartError.new("AggregateFunction(count) part column names are not unique") unless part_columns.map(&.[0]).to_set.size == 2
                      key_columns[0][0]
-                   elsif allow_projection_count_sum
-                     validate_projection_count_sum_roster!(part_columns, count_column, count_type_name)
+                   elsif allow_projection_aggregate_roster
+                     validate_projection_aggregate_roster!(part_columns, count_column, count_type_name)
                    else
                      raise UnsupportedFormatError.new("AggregateFunction(count) requires one UInt64 key and one state column")
                    end
@@ -90,36 +90,38 @@ module CrystalClick
       raise CorruptPartError.new("serialization.json is malformed")
     end
 
-    private def self.validate_projection_count_sum_roster!(
+    private def self.validate_projection_aggregate_roster!(
       part_columns : Array({String, String}),
       count_column : String,
       count_type_name : String,
     ) : String
-      unless part_columns.size == 3 && part_columns[0][1] == "UInt64"
-        raise UnsupportedFormatError.new("projection AggregateFunction(count) requires a first UInt64 key and exactly two aggregate columns")
+      unless part_columns.size >= 3 && part_columns.size <= 5 && part_columns[0][1] == "UInt64"
+        raise UnsupportedFormatError.new("projection AggregateFunction(count) requires a first UInt64 key and one to four aggregate columns")
       end
-      unless part_columns.map(&.[0]).to_set.size == 3
+      unless part_columns.map(&.[0]).to_set.size == part_columns.size
         raise CorruptPartError.new("AggregateFunction(count) part column names are not unique")
       end
       unless count_column == "count()" && count_type_name == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
-        raise UnsupportedFormatError.new("projection Count and Sum requires the exact count() state")
+        raise UnsupportedFormatError.new("projection aggregate roster requires the exact count() state")
       end
 
       aggregates = part_columns[1..]
-      count_columns = aggregates.select do |name, type|
-        name == "count()" && type == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
+      seen_functions = Set(WidePartProjectionAggregateDescriptor::Function).new
+      count_seen = false
+      aggregates.each do |name, type|
+        descriptor = WidePartProjectionAggregateDescriptor.for_column(name, type)
+        unless descriptor
+          raise UnsupportedFormatError.new("projection AggregateFunction(count) roster contains an unsupported aggregate declaration")
+        end
+        unless seen_functions.add?(descriptor.function)
+          raise UnsupportedFormatError.new("projection AggregateFunction(count) roster repeats an aggregate function")
+        end
+        count_seen ||= descriptor.count?
       end
-      sum_columns = aggregates.select do |name, type|
-        type == "AggregateFunction(sum, UInt64)" && ascii_sum_column_name?(name)
-      end
-      unless count_columns.size == 1 && sum_columns.size == 1 && aggregates.size == 2
-        raise UnsupportedFormatError.new("projection AggregateFunction(count) requires one count() and one sum(UInt64) state")
+      unless count_seen
+        raise UnsupportedFormatError.new("projection AggregateFunction(count) roster requires one count() and at most one of each admitted function")
       end
       part_columns[0][0]
-    end
-
-    private def self.ascii_sum_column_name?(name : String) : Bool
-      /\Asum\([A-Za-z_][A-Za-z0-9_]*\)\z/.matches?(name)
     end
   end
 end

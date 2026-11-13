@@ -284,26 +284,14 @@ module CrystalClick
       ) : Nil
         if aggregate_projection_child
           expected_stream = PhysicalStreamName.escape(column.column_name)
-          case column.column_name
-          when "count()"
-            unless column.declaration == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
-              raise UnsupportedFormatError.new("count projection must use its exact AggregateFunction(count) type")
-            end
-            unless column.stream_names == [expected_stream]
-              raise UnsupportedFormatError.new("count projection must use its exact one-stream physical roster")
-            end
-            return nil
-          when /\Asum\([A-Za-z_][A-Za-z0-9_]*\)\z/
-            unless column.declaration == "AggregateFunction(sum, UInt64)"
-              raise UnsupportedFormatError.new("sum projection must use its exact AggregateFunction(sum, UInt64) type")
-            end
-            unless column.stream_names == [expected_stream]
-              raise UnsupportedFormatError.new("sum projection must use its exact one-stream physical roster")
-            end
-            return nil
-          else
-            raise UnsupportedFormatError.new("aggregate projection must use exact count() or sum(argument) expression names")
+          descriptor = WidePartProjectionAggregateDescriptor.for_column(column.column_name, column.declaration)
+          unless descriptor
+            raise UnsupportedFormatError.new("aggregate projection must use an exact admitted function expression and UInt64 state type")
           end
+          unless column.stream_names == [expected_stream]
+            raise UnsupportedFormatError.new("aggregate projection must use its exact one-stream physical roster")
+          end
+          return nil
         end
         validate_column_name!(column.column_name)
       end

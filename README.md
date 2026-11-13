@@ -277,6 +277,35 @@ child = CrystalClick::WidePartProjection.precomputed_aggregate(
 UInt64, so `&+` matches ClickHouse's wraparound. See the
 [Sum projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-sum-projection-publication-from-a-transform-w292).
 
+For `PROJECTION by_group (SELECT min(value), max(value) GROUP BY group_key)`,
+compute the extrema in the same callback using the aligned UInt64 columns
+`group_keys` and `values`. Each state column follows the same sorted group
+keys.
+
+```crystal
+minima = Hash(UInt64, UInt64).new(UInt64::MAX)
+maxima = Hash(UInt64, UInt64).new(0_u64)
+group_keys.each_with_index do |key, index|
+  value = values[index]
+  minima[key] = Math.min(minima[key], value)
+  maxima[key] = Math.max(maxima[key], value)
+end
+keys = minima.keys.sort!
+min_states = keys.map { |key| minima[key] }
+max_states = keys.map { |key| maxima[key] }
+child = CrystalClick::WidePartProjection.precomputed_aggregate(
+  "by_group", "group_key", keys.to_unsafe.to_slice(keys.size),
+  [
+    CrystalClick::WidePartProjectionAggregate.min_uint64("value", min_states.to_unsafe.to_slice(min_states.size)),
+    CrystalClick::WidePartProjectionAggregate.max_uint64("value", max_states.to_unsafe.to_slice(max_states.size)),
+  ],
+)
+```
+
+Pass the Wide child through `projections:` for either parent layout.
+Each extremum can appear alone or with the other supported aggregates.
+See the [Min and Max projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-min-and-max-projection-publication-from-a-transform-w293).
+
 `OfflineTable#projections` exposes declared projection metadata. For a table
 with a physical Wide or Compact projection `p` containing a `UInt64` column
 `pk`, call `scan_projection_typed_window` with the projection name and row
