@@ -12,6 +12,7 @@ module CrystalClick
       getter logical_names : Array(String)
       getter lane_bindings : Array(WidePartLaneBinding)
       getter projection_entries : Array(String)
+      getter secondary_key_name : String?
       getter checksum_entry_count : Int32
 
       def initialize(
@@ -24,6 +25,7 @@ module CrystalClick
         @logical_names : Array(String),
         @lane_bindings : Array(WidePartLaneBinding),
         @projection_entries : Array(String) = [] of String,
+        @secondary_key_name : String? = nil,
       )
         @checksum_entry_count = @lane_bindings.size * 2 + 5 + @projection_entries.size
       end
@@ -35,7 +37,8 @@ module CrystalClick
         target, parent = WidePartPublicationInput.validate_destination!(destination)
         WidePartPublicationInput.new(
           target, parent, @key_name, @mark_count, @expected_files,
-          @expected_rows, @logical_names, @lane_bindings, @projection_entries
+          @expected_rows, @logical_names, @lane_bindings, @projection_entries,
+          @secondary_key_name
         )
       end
 
@@ -49,9 +52,18 @@ module CrystalClick
         projection_names : Array(String) = [] of String,
         defer_destination_check : Bool = false,
         aggregate_projection : Bool = false,
+        secondary_key_name : String? = nil,
       ) : WidePartPublicationInput
         ensure_supported_platform!
         validate_column_name!(key_name)
+        if second_key_name = secondary_key_name
+          validate_column_name!(second_key_name)
+          unless defer_destination_check && aggregate_projection && second_key_name != key_name &&
+                 columns.size >= 2 && columns.first.column_name == second_key_name &&
+                 columns.first.declaration == "UInt64"
+            raise ArgumentError.new("a second projection key requires a distinct aggregate-child key lane")
+          end
+        end
         raise ArgumentError.new("metadata version must be nonnegative") if metadata_version < 0
         unless rows_per_mark > 0 && rows_per_mark <= WidePartWriter::MAX_ROWS_PER_MARK
           raise ArgumentError.new("rows_per_mark is outside the admitted range")
@@ -74,7 +86,15 @@ module CrystalClick
         end
         expected_rows = validate_parent_rows!(keys.size, first.parent_rows, rows_per_mark)
         columns.each do |column|
-          validate_value_column_name!(column, defer_destination_check && aggregate_projection)
+          second_key_column = secondary_key_name == column.column_name
+          if second_key_column
+            expected_stream = PhysicalStreamName.escape(column.column_name)
+            unless column.declaration == "UInt64" && column.stream_names == [expected_stream]
+              raise UnsupportedFormatError.new("second aggregate projection key must use the exact plain UInt64 lane")
+            end
+          else
+            validate_value_column_name!(column, defer_destination_check && aggregate_projection)
+          end
           raise ArgumentError.new("key and value column names must differ") if column.column_name == key_name
           unless column.parent_rows == first.parent_rows
             raise ArgumentError.new("all value columns must use the same parent mark grid")
@@ -82,7 +102,7 @@ module CrystalClick
         end
         validate_unique_columns!(columns)
         validate_keys!(keys)
-        validate_key_physical_sizes!(keys.size, rows_per_mark, first.parent_rows)
+        validate_key_physical_sizes!(keys.size, rows_per_mark, first.parent_rows, !secondary_key_name.nil?)
 
         total_streams = 1
         columns.each do |column|
@@ -157,7 +177,8 @@ module CrystalClick
 
         new(
           target, parent, key_name, first.parent_rows.size.to_i32,
-          names, expected_rows, logical_names, lane_bindings, projection_entries
+          names, expected_rows, logical_names, lane_bindings, projection_entries,
+          secondary_key_name,
         )
       end
 
@@ -241,13 +262,15 @@ module CrystalClick
         row_count : Int,
         rows_per_mark : Int32,
         parent_rows : Array(Int32),
+        compound : Bool = false,
       ) : Nil
         mark_count = parent_rows.size
         mark_size = (mark_count.to_i64 + 1_i64) * CompressedMarkWriter::MARK_RECORD_SIZE
         if mark_size > WidePart::MAX_MARK_FILE_BYTES || mark_size > Int32::MAX
           raise ArgumentError.new("key mark file exceeds reader limit")
         end
-        index_size = (mark_count.to_i64 + 1_i64) * 8_i64
+        index_width = compound ? 16_i64 : 8_i64
+        index_size = (mark_count.to_i64 + 1_i64) * index_width
         if index_size > WidePartWriter::MAX_PRIMARY_INDEX_BYTES || index_size > Int32::MAX
           raise ArgumentError.new("primary index exceeds reader limit")
         end

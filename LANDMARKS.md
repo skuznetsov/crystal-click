@@ -1,5 +1,21 @@
 # Crystal Click landmarks
 
+## Two UInt64 group keys in an aggregate projection — W294
+
+- Both writers stage a Wide aggregate child with its parent. The child
+  stores keys in GROUP BY order, followed by states in SELECT aggregate
+  order. The compound `primary.idx` contains each mark's first pair and
+  the final pair. A typed Count scan checks declarations, file sizes, and
+  mark grids for both key lanes even when it selects only the state.
+- Both tested parent layouts passed native ATTACH, CHECK, literal index
+  and state comparisons, and offline full and window reads. In each key
+  order, ClickHouse read two of four granules with the leading key and
+  one of four with both keys. Refresh after changes to DDL binding,
+  index or state serialization, publication or typed admission, or the
+  ClickHouse pin. See the
+  [W294 profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-an-aggregate-projection-w294)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w294.json).
+
 ## UInt64 Min and Max projection publication from a materialized-view transform — W293
 
 - A caller supplies sorted UInt64 group keys and a state for each selected

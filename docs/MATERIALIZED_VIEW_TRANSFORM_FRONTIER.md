@@ -1,5 +1,62 @@
 # Caller-run materialized-view transform frontier
 
+## Two UInt64 group keys in an aggregate projection (W294)
+
+This profile extends `8bc4a36` to two distinct plain UInt64 `GROUP BY`
+columns. A Wide aggregate child under either parent layout stores the keys
+in GROUP BY order, even when SELECT omits or reorders them. It then stores
+the canonical `count()`, `sum(value)`, `min(value)`, and `max(value)` state
+columns in SELECT aggregate order, with at most one of each function.
+The callback supplies both aligned key columns with strictly ascending
+lexicographic pairs and one state per pair for each aggregate. Equal
+first keys and resets in the second key are valid. The Count total
+continues to cover the parent.
+
+The child writes uncompressed `primary.idx` entries as two consecutive
+little-endian UInt64 values for each data mark's first row and the final
+row. Before publication, the writer checks the staged keys and index
+against the callback's key columns. A manifest-bound typed Count read
+checks the physical declarations, file sizes, and mark grids of both key
+columns even when the selection omits them. The existing single-key path
+serves ordinary parts and single-key projections.
+
+Reject duplicate, computed, non-UInt64, or additional keys, mismatched
+key order, and duplicate or descending key pairs. This profile covers the
+existing single-key parents and Wide aggregate children.
+
+The decisive failure is a part that attaches but answers a compound-key
+range incorrectly. The baseline rejects the second key before invoking
+caller code. Compare the literal primary-index entries with stock
+ClickHouse, including the terminal pair and a reset in the second key.
+Require forced `by_group` plans for both parent layouts. Compare full and
+key-filtered groups with projection-disabled queries, and the granules
+selected by both predicates with those selected by the leading key alone.
+Reopen both attachments and scan through a child mark boundary. Run
+focused and single-key regression specs in Debug and Release. Revert the
+feature commit to roll back this profile.
+
+### Qualification
+
+Debug and Release each passed 187 examples across 27 spec files. The
+Crystal specs cover invalid key rosters, mismatched Count totals,
+caller-owned key snapshots, and a truncated unselected second key.
+
+On ClickHouse 26.10.1.1201, both Crystal build modes produced a Compact
+MRK4 parent with a Wide MRK2 child containing all four aggregate states,
+and a Wide MRK2 parent with a Wide MRK2 Count-only child. The two cases
+use opposite group-key orders. ClickHouse attached and checked both
+pairs. The five entries of each compound index, including the final row
+pair, matched the index of a stock projection byte for byte.
+
+The forced plans read `by_group`, and full and filtered results matched
+the parent queries with projection optimization disabled. A leading-key
+predicate read two of four child granules. Adding the second key
+predicate reduced the read to one of four in both cases. Crystal
+reopened both attachments and scanned the parent and child in full and
+across marks, including selection of `count()` alone. See the
+[native witness runner](../scripts/verify_materialized_view_aggregate_projection_w294.rb)
+and [W294 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w294.json).
+
 ## UInt64 Min and Max projection publication from a transform (W293)
 
 This profile extends `75ca1c9`. One plain UInt64 `GROUP BY` key admits

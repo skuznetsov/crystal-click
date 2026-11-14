@@ -26,22 +26,36 @@ module CrystalClick
       row_count : UInt64,
       allow_projection_aggregate_roster : Bool = false,
     ) : String
+      validate_key_names!(
+        text, part_columns, count_column, count_type_name, row_count,
+        allow_projection_aggregate_roster
+      ).first
+    end
+
+    def self.validate_key_names!(
+      text : String,
+      part_columns : Array({String, String}),
+      count_column : String,
+      count_type_name : String,
+      row_count : UInt64,
+      allow_projection_aggregate_roster : Bool = false,
+    ) : Array(String)
       plan = WideAggregateCountStoragePlan.for_type_name(count_type_name) ||
              raise(UnsupportedFormatError.new("unsupported AggregateFunction(count) descriptor"))
-      key_column = if part_columns.size == 2
-                     matching_count = part_columns.count { |name, type| name == count_column && type == plan.type_name }
-                     raise CorruptPartError.new("AggregateFunction(count) column does not match its exact part declaration") unless matching_count == 1
-                     key_columns = part_columns.select { |name, _type| name != count_column }
-                     unless key_columns.size == 1 && key_columns[0][1] == "UInt64" && key_columns[0][0] != count_column
-                       raise UnsupportedFormatError.new("AggregateFunction(count) requires exactly one UInt64 key column")
-                     end
-                     raise CorruptPartError.new("AggregateFunction(count) part column names are not unique") unless part_columns.map(&.[0]).to_set.size == 2
-                     key_columns[0][0]
-                   elsif allow_projection_aggregate_roster
-                     validate_projection_aggregate_roster!(part_columns, count_column, count_type_name)
-                   else
-                     raise UnsupportedFormatError.new("AggregateFunction(count) requires one UInt64 key and one state column")
-                   end
+      key_names = if part_columns.size == 2
+                    matching_count = part_columns.count { |name, type| name == count_column && type == plan.type_name }
+                    raise CorruptPartError.new("AggregateFunction(count) column does not match its exact part declaration") unless matching_count == 1
+                    key_columns = part_columns.select { |name, _type| name != count_column }
+                    unless key_columns.size == 1 && key_columns[0][1] == "UInt64" && key_columns[0][0] != count_column
+                      raise UnsupportedFormatError.new("AggregateFunction(count) requires exactly one UInt64 key column")
+                    end
+                    raise CorruptPartError.new("AggregateFunction(count) part column names are not unique") unless part_columns.map(&.[0]).to_set.size == 2
+                    [String.new(key_columns[0][0].to_slice)] of String
+                  elsif allow_projection_aggregate_roster
+                    validate_projection_aggregate_roster!(part_columns, count_column, count_type_name)
+                  else
+                    raise UnsupportedFormatError.new("AggregateFunction(count) requires one UInt64 key and one state column")
+                  end
 
       info = JSON.parse(text).as_h
       unless info.keys.to_set == REQUIRED_FIELDS
@@ -61,31 +75,41 @@ module CrystalClick
 
       serializers = info["columns"]?.try(&.as_a) ||
                     raise(CorruptPartError.new("serialization column metadata is missing or malformed"))
-      # The paired Crystal writer emits this exact normalized empty-list form.
-      # Stock ClickHouse emits a pk-only Default statistics record; it does
-      # not emit an AggregateFunction(count) serializer record.
-      return key_column if serializers.empty?
-      unless serializers.size == 1
-        raise UnsupportedFormatError.new("AggregateFunction(count) serializer metadata must be empty or one stock UInt64-key record")
+      # The paired Crystal writer emits an empty normalized list. Stock
+      # ClickHouse emits one Default statistics record per UInt64 key, in
+      # alphabetical order rather than physical GROUP BY order.
+      return key_names if serializers.empty?
+      unless serializers.size == key_names.size
+        if key_names.size == 1
+          raise UnsupportedFormatError.new("AggregateFunction(count) serializer metadata must be empty or one stock UInt64-key record")
+        end
+        raise UnsupportedFormatError.new("AggregateFunction(count) serializer metadata must be empty or contain every UInt64-key record")
       end
 
-      serializer = serializers[0].as_h
-      unless serializer.keys.to_set == STOCK_DEFAULT_FIELDS
-        raise UnsupportedFormatError.new("unsupported AggregateFunction(count) stock serializer fields")
-      end
-      kind = serializer["kind"]?.try(&.as_s) || raise(CorruptPartError.new("serializer kind is missing or malformed"))
-      name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("serializer name is missing or malformed"))
-      defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("serializer default count is missing or malformed"))
-      rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("serializer row count is missing or malformed"))
-      exact = serializer["exact_num_defaults"]?.try(&.as_bool) || raise(CorruptPartError.new("serializer exact-default flag is missing or malformed"))
+      seen_serializer_names = Set(String).new
+      serializers.each do |serialized|
+        serializer = serialized.as_h
+        unless serializer.keys.to_set == STOCK_DEFAULT_FIELDS
+          raise UnsupportedFormatError.new("unsupported AggregateFunction(count) stock serializer fields")
+        end
+        kind = serializer["kind"]?.try(&.as_s) || raise(CorruptPartError.new("serializer kind is missing or malformed"))
+        name = serializer["name"]?.try(&.as_s) || raise(CorruptPartError.new("serializer name is missing or malformed"))
+        defaults = serializer["num_defaults"]?.try(&.as_i) || raise(CorruptPartError.new("serializer default count is missing or malformed"))
+        rows = serializer["num_rows"]?.try(&.as_i) || raise(CorruptPartError.new("serializer row count is missing or malformed"))
+        exact = serializer["exact_num_defaults"]?.try(&.as_bool) ||
+                raise(CorruptPartError.new("serializer exact-default flag is missing or malformed"))
 
-      unless kind == "Default" && name == key_column && exact
-        raise UnsupportedFormatError.new("AggregateFunction(count) accepts only the stock UInt64-key Default serializer")
+        unless kind == "Default" && key_names.includes?(name) && seen_serializer_names.add?(name) && exact == true
+          if key_names.size == 1
+            raise UnsupportedFormatError.new("AggregateFunction(count) accepts only the stock UInt64-key Default serializer")
+          end
+          raise UnsupportedFormatError.new("AggregateFunction(count) accepts only one stock UInt64-key Default serializer per key")
+        end
+        if defaults < 0 || rows < 0 || defaults > rows || rows.to_u64 != row_count
+          raise CorruptPartError.new("AggregateFunction(count) stock serializer counts differ from the part")
+        end
       end
-      if defaults < 0 || rows < 0 || defaults > rows || rows.to_u64 != row_count
-        raise CorruptPartError.new("AggregateFunction(count) stock serializer counts differ from the part")
-      end
-      key_column
+      key_names
     rescue ex : JSON::ParseException | TypeCastError | OverflowError
       raise CorruptPartError.new("serialization.json is malformed")
     end
@@ -94,9 +118,13 @@ module CrystalClick
       part_columns : Array({String, String}),
       count_column : String,
       count_type_name : String,
-    ) : String
-      unless part_columns.size >= 3 && part_columns.size <= 5 && part_columns[0][1] == "UInt64"
-        raise UnsupportedFormatError.new("projection AggregateFunction(count) requires a first UInt64 key and one to four aggregate columns")
+    ) : Array(String)
+      key_count = 0
+      while key_count < part_columns.size && part_columns[key_count][1] == "UInt64"
+        key_count += 1
+      end
+      unless (key_count == 1 || key_count == 2) && part_columns.size > key_count && part_columns.size <= key_count + 4
+        raise UnsupportedFormatError.new("projection AggregateFunction(count) requires one or two leading UInt64 keys and one to four aggregate columns")
       end
       unless part_columns.map(&.[0]).to_set.size == part_columns.size
         raise CorruptPartError.new("AggregateFunction(count) part column names are not unique")
@@ -105,7 +133,8 @@ module CrystalClick
         raise UnsupportedFormatError.new("projection aggregate roster requires the exact count() state")
       end
 
-      aggregates = part_columns[1..]
+      key_names = part_columns[0, key_count].map { |name, _type| String.new(name.to_slice) }
+      aggregates = part_columns[key_count..]
       seen_functions = Set(WidePartProjectionAggregateDescriptor::Function).new
       count_seen = false
       aggregates.each do |name, type|
@@ -121,7 +150,7 @@ module CrystalClick
       unless count_seen
         raise UnsupportedFormatError.new("projection AggregateFunction(count) roster requires one count() and at most one of each admitted function")
       end
-      part_columns[0][0]
+      key_names
     end
   end
 end

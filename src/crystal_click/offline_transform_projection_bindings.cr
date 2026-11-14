@@ -66,7 +66,12 @@ module CrystalClick
           raise UnsupportedFormatError.new("transform projection output roster does not match target DDL")
         end
         binding = schema[:binding]
-        unless projection.key_name == binding.key_name
+        key_names_match = if wide = projection.as?(WidePartProjection)
+                            wide.key_names == binding.key_names
+                          else
+                            projection.key_name == binding.key_name
+                          end
+        unless key_names_match
           raise UnsupportedFormatError.new("transform projection output key does not match target schema")
         end
         aggregate_child = projection.is_a?(WidePartProjection) && projection.aggregate_projection?
@@ -126,28 +131,40 @@ module CrystalClick
 
     private def parse_aggregate_schema(
       select_list : String,
-      group_key : String,
+      group_keys_sql : String,
       target_columns : Array(OfflineColumn),
     ) : Tuple(PartSchemaBinding, Bool)
-      key = plain_target_column(group_key, target_columns)
-      unless key.type == "UInt64"
-        raise UnsupportedFormatError.new("transform aggregate projection GROUP BY requires one plain UInt64 key")
+      group_keys = group_keys_sql.split(',').map { |token| plain_target_column(token, target_columns) }
+      unless group_keys.size == 1 || group_keys.size == 2
+        raise UnsupportedFormatError.new("transform aggregate projection GROUP BY requires one or two plain UInt64 keys")
+      end
+      unless group_keys.map(&.name).to_set.size == group_keys.size
+        raise UnsupportedFormatError.new("transform aggregate projection GROUP BY keys must be distinct")
+      end
+      unless group_keys.all? { |key| key.type == "UInt64" }
+        message = group_keys.size == 1 ? "transform aggregate projection GROUP BY requires one plain UInt64 key" : "transform aggregate projection GROUP BY requires two plain UInt64 keys"
+        raise UnsupportedFormatError.new(message)
       end
 
       selected = select_list.split(',')
-      columns = [{key.name, key.type}] of Tuple(String, String)
+      key_names = group_keys.map(&.name)
+      columns = group_keys.map { |key| {key.name, key.type} }
       aliases = Array(String).new
       aggregate_arguments = Set(String).new
       aggregate_functions = Set(WidePartProjectionAggregateDescriptor::Function).new
       count_seen = false
-      key_seen = false
+      selected_keys = Set(String).new
       selected.each do |raw_token|
         token = raw_token.strip
         if selected_key = parse_identifier(token)
-          unless selected_key == key.name && !key_seen
-            raise UnsupportedFormatError.new("transform aggregate projection SELECT must contain only its GROUP BY key and admitted aggregates")
+          unless key_names.includes?(selected_key) && selected_keys.add?(selected_key)
+            message = if key_names.size == 1
+                        "transform aggregate projection SELECT must contain only its GROUP BY key and admitted aggregates"
+                      else
+                        "transform aggregate projection SELECT may list each GROUP BY key at most once and only with admitted aggregates"
+                      end
+            raise UnsupportedFormatError.new(message)
           end
-          key_seen = true
           next
         end
 
@@ -195,8 +212,13 @@ module CrystalClick
       unless aggregate_functions.size > 0
         raise UnsupportedFormatError.new("transform aggregate projection SELECT requires at least one admitted aggregate")
       end
-      validate_aggregate_aliases!(aliases, key.name, aggregate_arguments)
-      {PartSchemaBinding.new(key.name, columns, "projection"), count_seen}
+      validate_aggregate_aliases!(aliases, key_names, aggregate_arguments)
+      binding = if group_keys.size == 1
+                  PartSchemaBinding.new(group_keys[0].name, columns, "projection")
+                else
+                  PartSchemaBinding.new({group_keys[0].name, group_keys[1].name}, columns, "projection")
+                end
+      {binding, count_seen}
     end
 
     private def aggregate_alias!(token : String, function_name : String) : String
@@ -209,13 +231,18 @@ module CrystalClick
 
     private def validate_aggregate_aliases!(
       aliases : Array(String),
-      key_name : String,
+      key_names : Array(String),
       aggregate_arguments : Set(String),
     ) : Nil
       seen = Set(String).new
       aliases.each do |name|
-        unless seen.add?(name) && name != key_name && !aggregate_arguments.includes?(name)
-          raise UnsupportedFormatError.new("transform aggregate projection aliases must be unique and cannot shadow the key or aggregate arguments")
+        unless seen.add?(name) && !key_names.includes?(name) && !aggregate_arguments.includes?(name)
+          message = if key_names.size == 1
+                      "transform aggregate projection aliases must be unique and cannot shadow the key or aggregate arguments"
+                    else
+                      "transform aggregate projection aliases must be unique and cannot shadow a key or aggregate argument"
+                    end
+          raise UnsupportedFormatError.new(message)
         end
       end
       nil

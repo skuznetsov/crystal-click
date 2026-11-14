@@ -368,7 +368,7 @@ describe "W293 caller-run UInt64 min/max aggregate projections" do
       "SELECT min(value) AS id, max(id) GROUP BY group_key",
       "SELECT min(value) AS group_key, group_key GROUP BY group_key",
       "SELECT min(value), count(value) GROUP BY group_key",
-      "SELECT min(value) GROUP BY group_key, id",
+      "SELECT min(value) GROUP BY group_key, id, value",
     ].each do |ddl|
       root = File.tempname("crystal-click-w293-unsupported-minmax-")
       begin

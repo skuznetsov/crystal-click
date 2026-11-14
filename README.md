@@ -306,6 +306,28 @@ Pass the Wide child through `projections:` for either parent layout.
 Each extremum can appear alone or with the other supported aggregates.
 See the [Min and Max projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-min-and-max-projection-publication-from-a-transform-w293).
 
+For `PROJECTION by_group (SELECT count() GROUP BY region, day)`, pass
+the two UInt64 key columns in GROUP BY order. Here `regions` and `days`
+are aligned arrays from the transformed rows.
+
+```crystal
+counts = Hash(Tuple(UInt64, UInt64), UInt64).new(0_u64)
+regions.each_with_index { |region, index| counts[{region, days[index]}] += 1_u64 }
+pairs = counts.keys.sort!
+region_keys = pairs.map { |pair| pair[0] }
+day_keys = pairs.map { |pair| pair[1] }
+states = pairs.map { |pair| counts[pair] }
+child = CrystalClick::WidePartProjection.precomputed_aggregate(
+  "by_group", {"region", "day"},
+  {region_keys.to_unsafe.to_slice(region_keys.size), day_keys.to_unsafe.to_slice(day_keys.size)},
+  [CrystalClick::WidePartProjectionAggregate.count(states.to_unsafe.to_slice(states.size))],
+)
+```
+
+The pairs must be distinct and lexicographically sorted. The same Wide child
+API accepts `sum(value)`, `min(value)`, and `max(value)` states. See the
+[two-key projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-an-aggregate-projection-w294).
+
 `OfflineTable#projections` exposes declared projection metadata. For a table
 with a physical Wide or Compact projection `p` containing a `UInt64` column
 `pk`, call `scan_projection_typed_window` with the projection name and row

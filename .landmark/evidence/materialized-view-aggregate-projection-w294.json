@@ -1,0 +1,164 @@
+{
+  "format": "crystal_click_materialized_view_aggregate_projection_w294_evidence_v1",
+  "date": "2026-11-13",
+  "baseline_revision": "8bc4a3628409ea4388982b6bff0bc725d47c6d0b",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the two-key UInt64 profile and the exercised native parent/child pairs.",
+    "scope": "Caller-supplied distinct ordered UInt64 key pairs and up to one each of count(), sum(value), min(value), and max(value) in a Wide aggregate child of a Wide or Compact parent.",
+    "remaining": "The callback computes group states. Native results cover Count under a Wide parent and all four states under a Compact parent. Compound index pruning is qualified in ClickHouse."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "An attached projection passes CHECK while its compound index prunes a valid group or its physical keys label the wrong aggregate states.",
+    "guards": [
+      "Bind the exact GROUP BY key names and SELECT aggregate order. Check aligned snapshots, strict pair order, and Count conservation.",
+      "Check each index pair against staged key data and require the final row pair. Recompute grouped results from the parent and compare with projection-disabled and forced reads.",
+      "Reject a truncated unselected second key before any Count callback, including when the two checksum manifests still agree."
+    ],
+    "rollback": "Revert the feature commit. Parent and child share a single staged publication rename."
+  },
+  "verification": {
+    "toolchain": "Crystal 1.22.1, LLVM 23.1.4, aarch64-apple-darwin25.6.0",
+    "baseline_debug": "The original DDL admission refuses the two-key projection before the callback sentinel. The feature reaches the caller and reads Count from native two-key projections.",
+    "spec_paths_per_mode": 27,
+    "examples_per_mode": {
+      "debug": 187,
+      "release": 187
+    },
+    "guard": {
+      "sha256": "fbfa0fd9d717eb24c1a3f829d464188110e505c7ae311eee2e95cbe7cefab011",
+      "minimum_system_memory_free_percent": 50,
+      "crystal_process_tree_memory_mib": 12288,
+      "native_process_tree_memory_mib": 2048,
+      "clickhouse_max_memory_usage_bytes": 536870912
+    },
+    "input_seals": {
+      "production": {
+        "path": "/opt/mldata_ssd/cache/crystal-click-w294.KD603g98/manifests/production.source.json",
+        "bytes": 80571,
+        "sha256": "73eaf9c21958bc514e743acd3e1715e6181f579d8d762457e0c6b4f9e3d505cc",
+        "files": 637
+      },
+      "qualified": {
+        "path": "/opt/mldata_ssd/cache/crystal-click-w294.KD603g98/manifests/qualified.source.json",
+        "bytes": 440524,
+        "sha256": "da810adf8e795c894f99b87ec990a33e6b3f521ef5ba7c90ec51a4bf489db9c8",
+        "files": 3370
+      }
+    },
+    "native": {
+      "runner": "scripts/verify_materialized_view_aggregate_projection_w294.rb",
+      "helper": "scripts/check_materialized_view_aggregate_projection_w294.cr",
+      "version": "26.10.1.1201",
+      "revision": "54515",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "binary_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "source_reference": {
+        "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "files": [
+          "src/Storages/ProjectionsDescription.cpp",
+          "src/Interpreters/InterpreterSelectQuery.cpp",
+          "src/Storages/MergeTree/MergeTreeDataPartWriterOnDisk.cpp"
+        ]
+      },
+      "per_mode": "Both pairs passed ATTACH, CHECK, byte-identical stock primary-index and state checks, forced and disabled query comparisons, and full, window, and Count-only offline reads.",
+      "observed": {
+        "input_rows": 18,
+        "output_groups": 8,
+        "child_data_marks": 4,
+        "stock_and_written_index_entries": 5,
+        "leading_key_marks_read": 2,
+        "compound_key_marks_read": 1,
+        "original_files_preserved_per_pair": 30,
+        "pairs": [
+          {
+            "parent": "Compact MRK4",
+            "child": "Wide MRK2",
+            "group_key_order": [
+              "key_a",
+              "key_b"
+            ],
+            "aggregates": [
+              "count()",
+              "sum(value)",
+              "min(value)",
+              "max(value)"
+            ]
+          },
+          {
+            "parent": "Wide MRK2",
+            "child": "Wide MRK2",
+            "group_key_order": [
+              "key_b",
+              "key_a"
+            ],
+            "aggregates": [
+              "count()"
+            ]
+          }
+        ]
+      }
+    },
+    "evidence_index": {
+      "path": "/opt/mldata_ssd/cache/crystal-click-w294.KD603g98/verification-summary.json",
+      "bytes": 7883,
+      "sha256": "d905a49acaf613bf3d0eb91f4fad78dd09c766a55385ab55b0d557207b590a26"
+    }
+  },
+  "boundaries": {
+    "allowed_paths": [
+      ".landmark/evidence/materialized-view-aggregate-projection-w294.json",
+      "LANDMARKS.md",
+      "README.md",
+      "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+      "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "scripts/check_materialized_view_aggregate_projection_w294.cr",
+      "scripts/verify_materialized_view_aggregate_projection_w294.rb",
+      "spec/offline_materialized_view_minmax_projection_w293_spec.cr",
+      "spec/offline_materialized_view_sum_projection_w292_spec.cr",
+      "spec/offline_materialized_view_two_key_projection_w294_spec.cr",
+      "src/crystal_click/offline_transform_projection_bindings.cr",
+      "src/crystal_click/part_schema_binding.cr",
+      "src/crystal_click/part_writer_infrastructure/primary_index_writer.cr",
+      "src/crystal_click/wide_aggregate_count_serialization_profile.cr",
+      "src/crystal_click/wide_part.cr",
+      "src/crystal_click/wide_part_projection.cr",
+      "src/crystal_click/wide_part_table.cr",
+      "src/crystal_click/wide_part_table/aggregate_count_pair_admission.cr",
+      "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr",
+      "src/crystal_click/wide_part_writer/wide_part_prepared_projection.cr",
+      "src/crystal_click/wide_part_writer/wide_part_publication_input.cr",
+      "src/crystal_click/wide_part_writer/wide_part_publisher.cr",
+      "src/crystal_click/wide_part_writer/wide_part_schema_binding.cr"
+    ]
+  },
+  "changed_paths": [
+    ".landmark/evidence/materialized-view-aggregate-projection-w294.json",
+    "LANDMARKS.md",
+    "README.md",
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "scripts/check_materialized_view_aggregate_projection_w294.cr",
+    "scripts/verify_materialized_view_aggregate_projection_w294.rb",
+    "spec/offline_materialized_view_minmax_projection_w293_spec.cr",
+    "spec/offline_materialized_view_sum_projection_w292_spec.cr",
+    "spec/offline_materialized_view_two_key_projection_w294_spec.cr",
+    "src/crystal_click/offline_transform_projection_bindings.cr",
+    "src/crystal_click/part_schema_binding.cr",
+    "src/crystal_click/part_writer_infrastructure/primary_index_writer.cr",
+    "src/crystal_click/wide_aggregate_count_serialization_profile.cr",
+    "src/crystal_click/wide_part.cr",
+    "src/crystal_click/wide_part_projection.cr",
+    "src/crystal_click/wide_part_table.cr",
+    "src/crystal_click/wide_part_table/aggregate_count_pair_admission.cr",
+    "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr",
+    "src/crystal_click/wide_part_writer/wide_part_prepared_projection.cr",
+    "src/crystal_click/wide_part_writer/wide_part_publication_input.cr",
+    "src/crystal_click/wide_part_writer/wide_part_publisher.cr",
+    "src/crystal_click/wide_part_writer/wide_part_schema_binding.cr"
+  ],
+  "refresh_when": "Rerun both Crystal modes and both native pairs after changes to DDL binding, the key/index or aggregate codec paths, part publication or admission, or the ClickHouse pin."
+}

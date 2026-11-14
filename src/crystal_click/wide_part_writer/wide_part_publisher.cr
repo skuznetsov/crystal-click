@@ -14,10 +14,23 @@ module CrystalClick
         transport_limits : CompressedStreamLimits,
         validation_transport_budget : CompressedStreamBudget? = nil,
         projections : Array(ProjectionPreparedPart) = [] of ProjectionPreparedPart,
+        secondary_index_keys : Slice(UInt64)? = nil,
         &validate_value : String -> Nil
       ) : String
         unless keys.size.to_u64 == input.expected_rows.sum(0_u64)
           raise ArgumentError.new("shared writer keys differ from its preflighted parent grid")
+        end
+        if secondary_key_name = input.secondary_key_name
+          secondary_keys = secondary_index_keys ||
+                           raise ArgumentError.new("compound projection index is missing its second UInt64 key")
+          expected_second_stream = PhysicalStreamName.escape(secondary_key_name)
+          unless secondary_keys.size == keys.size && input.lane_bindings.any? { |binding|
+                   binding.column_name == secondary_key_name && binding.logical_name == expected_second_stream
+                 }
+            raise ArgumentError.new("compound projection index differs from its prepared second-key lane")
+          end
+        elsif secondary_index_keys
+          raise ArgumentError.new("a second primary-index key requires the admitted aggregate-child route")
         end
         if rows_per_mark <= 0 || rows_per_mark > MAX_ROWS_PER_MARK
           raise ArgumentError.new("rows_per_mark is outside the admitted range")
@@ -44,7 +57,11 @@ module CrystalClick
             File.write(File.join(stage, lane.binding.marks_filename), lane.marks)
           end
 
-          records << PrimaryIndexWriter.write(stage, keys, rows_per_mark)
+          if secondary_keys = secondary_index_keys
+            records << PrimaryIndexWriter.write_compound(stage, keys, secondary_keys, rows_per_mark)
+          else
+            records << PrimaryIndexWriter.write(stage, keys, rows_per_mark)
+          end
           records << write_checksummed_file(stage, "count.txt", metadata.count)
           records << write_checksummed_file(stage, "serialization.json", metadata.serialization)
           File.write(File.join(stage, "columns.txt"), metadata.columns)
@@ -56,7 +73,7 @@ module CrystalClick
 
           validate_staged_part!(
             stage, input, keys, metadata, records, transport_limits,
-            validation_transport_budget, projections
+            validation_transport_budget, projections, secondary_index_keys
           )
           validate_value.call(stage)
           PartDirectoryPublisher.publish_exclusively(stage, input.target)
@@ -199,6 +216,7 @@ module CrystalClick
         transport_limits : CompressedStreamLimits,
         validation_transport_budget : CompressedStreamBudget?,
         projections : Array(ProjectionPreparedPart),
+        secondary_index_keys : Slice(UInt64)?,
       ) : Nil
         unless Dir.children(stage).sort == input.expected_files
           raise CorruptPartError.new("staged part file roster differs from preflight")
@@ -223,9 +241,21 @@ module CrystalClick
         end
         validate_metadata_files!(stage, metadata)
 
-        primary = PrimaryKeyIndex.open(stage, input.mark_count, checksums, verify_recorded_hash: true)
-        unless primary.keys.size == input.mark_count + 1
-          raise CorruptPartError.new("staged primary index has the wrong mark count")
+        primary = nil.as(PrimaryKeyIndex?)
+        if secondary_keys = secondary_index_keys
+          unless input.secondary_key_name
+            raise CorruptPartError.new("compound primary index has no bound second key")
+          end
+          PrimaryIndexWriter.validate_compound!(stage, input.expected_rows, keys, secondary_keys, checksums)
+        else
+          if input.secondary_key_name
+            raise CorruptPartError.new("bound second key has no compound primary index")
+          end
+          opened = PrimaryKeyIndex.open(stage, input.mark_count, checksums, verify_recorded_hash: true)
+          unless opened.keys.size == input.mark_count + 1
+            raise CorruptPartError.new("staged primary index has the wrong mark count")
+          end
+          primary = opened
         end
 
         key_part = WidePart.open(stage, input.key_name)
@@ -235,8 +265,10 @@ module CrystalClick
         end
         key_start = 0
         input.expected_rows.each_with_index do |rows, mark|
-          unless primary.keys[mark] == keys[key_start]
-            raise CorruptPartError.new("staged primary index differs from key parent marks")
+          if scalar_primary = primary
+            unless scalar_primary.keys[mark] == keys[key_start]
+              raise CorruptPartError.new("staged primary index differs from key parent marks")
+            end
           end
           actual = key_part.read_uint64_mark_range(input.key_name, mark, 1)
           unless actual.size.to_u64 == rows
@@ -249,8 +281,13 @@ module CrystalClick
           end
           key_start += rows.to_i
         end
-        unless key_start == keys.size && primary.keys.last == keys.last
-          raise CorruptPartError.new("staged primary index terminal differs from the final key")
+        unless key_start == keys.size
+          raise CorruptPartError.new("staged key marks do not consume the complete key stream")
+        end
+        if scalar_primary = primary
+          unless scalar_primary.keys.last == keys.last
+            raise CorruptPartError.new("staged primary index terminal differs from the final key")
+          end
         end
 
         validate_value_grids!(stage, input, checksums, transport_limits, validation_transport_budget)

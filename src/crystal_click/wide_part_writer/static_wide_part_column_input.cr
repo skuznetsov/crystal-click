@@ -61,6 +61,20 @@ module CrystalClick
         )
       end
 
+      def self.prepare_projection_uint64_key(
+        name : String,
+        values : Array(UInt64),
+        context : WidePartOperationContext,
+      ) : WidePartPreparedColumn
+        type = BinaryDataType.primitive("UInt64")
+        granules = aggregate_projection_granules(
+          values, context.rows_per_mark, "UInt64 projection key"
+        ) { |value| BinaryValue.uint64(value) }
+        prepare_with_profile(
+          name, type, granules, context, BinaryBulkProfile.with_size_stream, false
+        )
+      end
+
       private def self.aggregate_projection_granules(
         values : Array(UInt64),
         rows_per_mark : Int32,

@@ -2,6 +2,19 @@
 
 ## Current qualification
 
+### W294 Two UInt64 group keys in an aggregate projection
+
+The callback supplies strictly ascending UInt64 key pairs and one state
+per pair for each selected aggregate. Both parent layouts publish a Wide
+child with the keys in GROUP BY order and a compound primary index. Debug
+and Release each passed 187 examples. On ClickHouse 26.10.1.1201, both pairs
+passed ATTACH, CHECK, exact state and index comparisons, and forced
+projection queries. The second-key filter reduced the projection read
+from two to one of four granules in each case. Crystal reopened each pair
+for full and cross-mark reads. See the
+[two-key projection profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-an-aggregate-projection-w294)
+and [W294 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w294.json).
+
 ### W293 UInt64 Min and Max projection publication from a materialized-view transform
 
 The callback supplies one UInt64 `GROUP BY` key and the precomputed
@@ -4760,8 +4773,8 @@ source/runtime identities and executed evidence.
    detached output for an ordinary unpartitioned target with one ascending
    UInt64 key. W290 binds caller-precomputed Wide and Compact projection
    children to the transform target's plain column projection declarations.
-   W291 through W293 add Wide aggregate projection children under either
-   parent layout with one UInt64 group key and any combination of
+   W291 through W294 add Wide aggregate projection children under either
+   parent layout with one or two plain UInt64 group keys and any combination of
    `count()`, `sum(value)`, `min(value)`, and `max(value)` over the
    supported UInt64 arguments.
    General keys and partitions, additional projection declarations, remaining
@@ -4922,8 +4935,8 @@ retains the implementation checkpoints and responsibility boundaries.
    W257 and W286 qualify one-part caller-run transformations into schema-bound
    detached Wide and Compact targets. W287 and W288 check selected projection
    manifests and qualify mixed Wide/Compact child reads. W290 combines these
-   paths for plain projection declarations. W291 through W293 qualify
-   aggregate projections with a single UInt64 group key, `count()`, and
+   paths for plain projection declarations. W291 through W294 qualify
+   aggregate projections with one or two plain UInt64 group keys, `count()`, and
    UInt64 `sum(value)`, `min(value)`, and `max(value)` states. The next steps are
    general key and partition derivation, additional projection declarations,
    and bounded output appenders.
@@ -4932,7 +4945,7 @@ retains the implementation checkpoints and responsibility boundaries.
 
 ## Source reference
 
-W286 through W293 compare the relevant MergeTree paths against the pinned shallow
+W286 through W294 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

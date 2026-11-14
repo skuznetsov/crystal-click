@@ -53,6 +53,9 @@ uses the same staging path for one `sum(value)` state column and an optional
 `count()` state column in the same Wide child.
 The [UInt64 Min and Max profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-min-and-max-projection-publication-from-a-transform-w293)
 adds both extrema to that child layout through the same publication path.
+The [two-key profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-an-aggregate-projection-w294)
+writes both UInt64 group keys and their compound `primary.idx` within
+the same Wide child publication.
 
 ## Compact and mixed projection reads (W288)
 

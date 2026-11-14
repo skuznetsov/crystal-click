@@ -3,37 +3,65 @@ module CrystalClick
   # Wide and Compact transforms. It retains canonical declarations without
   # reparsing them or serializing another metadata representation.
   class PartSchemaBinding
-    @key_name : String
+    @key_names : Array(String)
     @columns : Array(Tuple(String, String))
 
     def initialize(key_name : String, columns : Array(Tuple(String, String)), context : String = "part")
-      unless columns.size >= 2 && columns.size <= WidePart::MAX_METADATA_COLUMNS
-        raise ArgumentError.new("bound #{context} schema must contain a key and bounded value columns")
+      initialize([key_name] of String, columns, context)
+    end
+
+    def initialize(key_names : Tuple(String, String), columns : Array(Tuple(String, String)), context : String = "part")
+      initialize([key_names[0], key_names[1]], columns, context)
+    end
+
+    private def initialize(key_names : Array(String), columns : Array(Tuple(String, String)), context : String)
+      unless key_names.size == 1 || key_names.size == 2
+        raise ArgumentError.new("bound #{context} schema must contain one or two UInt64 keys")
+      end
+      if columns.size <= key_names.size || columns.size > WidePart::MAX_METADATA_COLUMNS
+        message = key_names.size == 1 ? "bound #{context} schema must contain a key and bounded value columns" : "bound #{context} schema must contain keys and bounded value columns"
+        raise ArgumentError.new(message)
       end
 
-      first = columns.first
-      unless first[0] == key_name && first[1] == "UInt64"
-        raise ArgumentError.new("bound #{context} schema must begin with its UInt64 key column")
+      retained_keys = Array(String).new(key_names.size)
+      key_seen = Set(String).new
+      key_names.each do |name|
+        if name.empty? || !key_seen.add?(name)
+          raise ArgumentError.new("bound #{context} key names must be nonempty and unique")
+        end
+        retained_keys << String.new(name.to_slice)
       end
 
-      names = Set(String).new
+      column_seen = Set(String).new
       retained = Array(Tuple(String, String)).new(columns.size)
-      columns.each do |name, declaration|
+      columns.each_with_index do |(name, declaration), index|
         if name.empty? || declaration.empty?
           raise ArgumentError.new("bound #{context} schema names and declarations must be nonempty")
         end
-        unless names.add?(name)
+        unless column_seen.add?(name)
           raise ArgumentError.new("bound #{context} schema column names must be unique")
+        end
+        if index < retained_keys.size && (name != retained_keys[index] || declaration != "UInt64")
+          message = if retained_keys.size == 1
+                      "bound #{context} schema must begin with its UInt64 key column"
+                    else
+                      "bound #{context} schema must begin with its ordered UInt64 key columns"
+                    end
+          raise ArgumentError.new(message)
         end
         retained << {String.new(name.to_slice), String.new(declaration.to_slice)}
       end
 
-      @key_name = String.new(key_name.to_slice)
+      @key_names = retained_keys
       @columns = retained
     end
 
     def key_name : String
-      String.new(@key_name.to_slice)
+      String.new(@key_names.first.to_slice)
+    end
+
+    def key_names : Array(String)
+      @key_names.map { |name| String.new(name.to_slice) }
     end
 
     # Returns a detached, ordered key-plus-value roster.
@@ -63,13 +91,17 @@ module CrystalClick
     # exposes one canonical owner tuple at a time, avoiding a second roster
     # serialization or copy.
     def validate_values!(key_name : String, value_count : Int32, context : String, &value_at : Int32 -> Tuple(String, String)) : Nil
-      unless key_name == @key_name && value_count + 1 == @columns.size
+      validate_values!([key_name] of String, value_count, context) { |index| yield index }
+    end
+
+    def validate_values!(key_names : Array(String), value_count : Int32, context : String, &value_at : Int32 -> Tuple(String, String)) : Nil
+      unless key_names == @key_names && value_count + key_names.size == @columns.size
         raise UnsupportedFormatError.new("prepared #{context} columns do not match the bound target schema")
       end
 
       value_count.times do |index|
         name, declaration = yield index
-        target_name, target_declaration = @columns[index + 1]
+        target_name, target_declaration = @columns[index + key_names.size]
         unless name == target_name && declaration == target_declaration
           raise UnsupportedFormatError.new("prepared #{context} columns do not match the bound target schema")
         end

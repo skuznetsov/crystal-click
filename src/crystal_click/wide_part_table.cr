@@ -80,7 +80,6 @@ module CrystalClick
       getter row_count : UInt64
       getter mark_row_counts : Array(UInt64)
       getter readers : Array(ColumnReader)
-      getter aggregate_count_key_reader : ColumnReader?
       getter object_readers : Array(ObjectColumnReaderEntry)
       getter array_object_readers : Array(ArrayObjectColumnReaderEntry)
       getter recursive_readers : Array(RecursiveColumnReaderEntry)
@@ -95,7 +94,6 @@ module CrystalClick
         @row_count : UInt64,
         @mark_row_counts : Array(UInt64),
         @readers : Array(ColumnReader),
-        @aggregate_count_key_reader : ColumnReader?,
         @object_readers : Array(ObjectColumnReaderEntry),
         @array_object_readers : Array(ArrayObjectColumnReaderEntry),
         @recursive_readers : Array(RecursiveColumnReaderEntry),
@@ -4699,7 +4697,7 @@ module CrystalClick
       total_marks = 0_u64
       expected_column_types = nil.as(Array(String)?)
       expected_column_sources = nil.as(Array({String, String, String})?)
-      expected_aggregate_count_key_name = nil.as(String?)
+      expected_aggregate_count_key_names = nil.as(Array(String)?)
 
       # selected_parts remains in caller order. The parsed identities above
       # are used only for the overlap guard; they do not imply Active status.
@@ -4708,8 +4706,7 @@ module CrystalClick
         name = selected_part[1]
         path = selected_read_paths[part_index]
         readers = Array(ColumnReader).new(@columns.size)
-        aggregate_count_key_reader = nil.as(ColumnReader?)
-        aggregate_count_key_name = nil.as(String?)
+        aggregate_count_key_names = nil.as(Array(String)?)
         object_readers = Array(ObjectColumnReaderEntry).new
         array_object_readers = Array(ArrayObjectColumnReaderEntry).new
         recursive_readers = Array(RecursiveColumnReaderEntry).new
@@ -4843,12 +4840,17 @@ module CrystalClick
                 MAX_MARKS_PER_READER,
                 MAX_MARK_ROWS
               )
-              count_key_name = count_pair.key_name
-              if prior_key_name = aggregate_count_key_name
-                raise CorruptPartError.new("selected AggregateFunction(count) columns disagree on their UInt64 sibling") unless prior_key_name == count_key_name
+              count_key_names = count_pair.key_names
+              if prior_key_names = aggregate_count_key_names
+                unless prior_key_names == count_key_names
+                  if prior_key_names.size == 1 && count_key_names.size == 1
+                    raise CorruptPartError.new("selected AggregateFunction(count) columns disagree on their UInt64 sibling")
+                  else
+                    raise CorruptPartError.new("selected AggregateFunction(count) columns disagree on their UInt64 sibling roster")
+                  end
+                end
               end
-              aggregate_count_key_name = count_key_name
-              aggregate_count_key_reader = ColumnReader.new(count_key_name, count_pair.key_reader)
+              aggregate_count_key_names = count_key_names
             end
             readers << ColumnReader.new(column, reader)
           end
@@ -4887,18 +4889,24 @@ module CrystalClick
         else
           expected_column_sources = current_column_sources
         end
-        if count_key_name = aggregate_count_key_name
-          if expected_key_name = expected_aggregate_count_key_name
-            raise CorruptPartError.new("AggregateFunction(count) UInt64 sibling name differs across parts") unless count_key_name == expected_key_name
+        if count_key_names = aggregate_count_key_names
+          if expected_key_names = expected_aggregate_count_key_names
+            unless count_key_names == expected_key_names
+              if count_key_names.size == 1 && expected_key_names.size == 1
+                raise CorruptPartError.new("AggregateFunction(count) UInt64 sibling name differs across parts")
+              else
+                raise CorruptPartError.new("AggregateFunction(count) UInt64 sibling roster differs across parts")
+              end
+            end
           else
-            expected_aggregate_count_key_name = count_key_name
+            expected_aggregate_count_key_names = count_key_names
           end
         end
 
         row_count = expected_row_count || raise(CorruptPartError.new("selected part has no readers"))
         mark_row_counts = expected_mark_rows || raise(CorruptPartError.new("selected part has no mark rows"))
         total_rows = checked_total_rows(total_rows, row_count)
-        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, aggregate_count_key_reader, object_readers, array_object_readers, recursive_readers, dynamic_bulk_readers, binary_bulk_readers, current_column_types, current_column_sources)
+        @entries << PartEntry.new(name, parent_path, row_count, mark_row_counts, readers, object_readers, array_object_readers, recursive_readers, dynamic_bulk_readers, binary_bulk_readers, current_column_types, current_column_sources)
       end
 
       @part_count = @entries.size.to_i32

@@ -14,6 +14,7 @@ module CrystalClick
       end
 
       @keys : Array(UInt64)
+      @secondary_keys : Array(UInt64)?
       @rows_per_mark : Int32
       @context : WidePartOperationContext
       @columns : Array(WidePartPreparedColumn)
@@ -24,6 +25,7 @@ module CrystalClick
       private def initialize(
         @entry_name : String,
         @keys : Array(UInt64),
+        @secondary_keys : Array(UInt64)?,
         @rows_per_mark : Int32,
         @context : WidePartOperationContext,
         @columns : Array(WidePartPreparedColumn),
@@ -49,6 +51,19 @@ module CrystalClick
           raise ArgumentError.new("projection child path exceeds reader limit")
         end
         key_name = projection.key_name
+        key_names = projection.key_names
+        secondary_key_name = projection.secondary_key_name
+        secondary_keys = projection.secondary_keys
+        if second_name = secondary_key_name
+          unless secondary_keys && secondary_keys.not_nil!.size == projection.row_count
+            raise UnsupportedFormatError.new("two-key aggregate projection lost its aligned second key stream")
+          end
+          if second_name == key_name
+            raise UnsupportedFormatError.new("aggregate projection key names must be distinct")
+          end
+        elsif secondary_keys
+          raise UnsupportedFormatError.new("aggregate projection has second key values without a second key name")
+        end
         if count_total = projection.count_total
           unless parent_row_count && count_total == parent_row_count.to_u128
             raise UnsupportedFormatError.new("count projection counts must sum to the parent row count")
@@ -64,6 +79,12 @@ module CrystalClick
         context = parent_context.with_rows_per_mark(rows_per_mark)
 
         prepared_columns = Array(WidePartPreparedColumn).new
+        if second_name = secondary_key_name
+          values = secondary_keys.not_nil!
+          prepared_columns << StaticWidePartColumnInput.prepare_projection_uint64_key(
+            second_name, values, context
+          )
+        end
         aggregate_columns = projection.aggregate_columns
         if !aggregate_columns.empty?
           aggregate_columns.each do |aggregate|
@@ -75,7 +96,7 @@ module CrystalClick
           end
         end
         projection.schema_binding.try do |binding|
-          binding.validate!(key_name, prepared_columns)
+          binding.validate!(key_names, prepared_columns)
         end
 
         # The actual parent stage is intentionally not created during
@@ -85,7 +106,8 @@ module CrystalClick
           placeholder, key_name, keys.to_unsafe.to_slice(keys.size), prepared_columns,
           rows_per_mark, context.metadata_version,
           defer_destination_check: true,
-          aggregate_projection: projection.aggregate_projection?
+          aggregate_projection: projection.aggregate_projection?,
+          secondary_key_name: secondary_key_name,
         )
         metadata_columns = Array(Tuple(String, String, Array(String))).new(prepared_columns.size)
         prepared_columns.each do |column|
@@ -101,7 +123,7 @@ module CrystalClick
         )
 
         new(
-          entry_name, keys, rows_per_mark, context, prepared_columns,
+          entry_name, keys, secondary_keys, rows_per_mark, context, prepared_columns,
           input, WidePartMetadataEnvelope.new(metadata)
         )
       end
@@ -131,7 +153,8 @@ module CrystalClick
         input = @input.bind_destination(child_path)
         WidePartPublisher.write(
           input, @keys.to_unsafe.to_slice(@keys.size), @metadata, encoded, @rows_per_mark,
-          @context.limits, @context.read_transport_limits, @context.read_transport_budget
+          @context.limits, @context.read_transport_limits, @context.read_transport_budget,
+          secondary_index_keys: @secondary_keys.try { |keys| keys.to_unsafe.to_slice(keys.size) },
         ) do |stage|
           @columns.each do |column|
             column.validate(stage, @context.read_codec_budget, @context.read_transport_budget)
