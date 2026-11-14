@@ -6,6 +6,7 @@ module MaterializedViewAggregateProjectionW298
 
   FORMAT               = "materialized_view_aggregate_projection_w298_helper_v1"
   W299_FORMAT          = "materialized_view_aggregate_projection_w299_helper_v1"
+  W300_FORMAT          = "materialized_view_aggregate_projection_w300_helper_v1"
   DATABASE             = "lab"
   PROJECTION           = "by_group"
   SOURCE_PART          = "all_1_1_0"
@@ -21,24 +22,38 @@ module MaterializedViewAggregateProjectionW298
   alias Row = Array(UInt64)
   alias Group = NamedTuple(keys: Array(UInt64), count: UInt64, sum: UInt64, minimum: UInt64, maximum: UInt64)
   alias Target = NamedTuple(name: String, uuid: String, view: String, control: String, control_uuid: String,
-    part: String, parent_format: String, child_format: String, order: Array(String))
+    part: String, parent_format: String, child_format: String, order: Array(String), compress_marks: Bool)
 
   KEY_NAMES = ["key_a", "key_b", "key_c", "key_d"]
   TARGETS   = [
     {name: "target_ww", uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788010", view: "view_ww", control: "control_ww",
      control_uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788020", part: SOURCE_PART, parent_format: "Wide",
-     child_format: "Wide", order: ["key_a", "key_b", "key_c", "key_d"]},
+     child_format: "Wide", order: ["key_a", "key_b", "key_c", "key_d"], compress_marks: false},
     {name: "target_wc", uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788011", view: "view_wc", control: "control_wc",
      control_uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788021", part: SOURCE_PART, parent_format: "Wide",
-     child_format: "Compact", order: ["key_d", "key_c", "key_b", "key_a"]},
+     child_format: "Compact", order: ["key_d", "key_c", "key_b", "key_a"], compress_marks: false},
     {name: "target_cw", uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788012", view: "view_cw", control: "control_cw",
      control_uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788022", part: SOURCE_PART, parent_format: "Compact",
-     child_format: "Wide", order: ["key_b", "key_d", "key_a", "key_c"]},
+     child_format: "Wide", order: ["key_b", "key_d", "key_a", "key_c"], compress_marks: false},
     {name: "target_cc", uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788013", view: "view_cc", control: "control_cc",
      control_uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788023", part: SOURCE_PART, parent_format: "Compact",
-     child_format: "Compact", order: ["key_c", "key_a", "key_d", "key_b"]},
+     child_format: "Compact", order: ["key_c", "key_a", "key_d", "key_b"], compress_marks: false},
   ] of Target
   W299_TARGETS = TARGETS.select { |target| target[:child_format] == "Wide" }
+  W300_TARGETS = [
+    {name: "target_ww", uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788040", view: "view_ww", control: "control_ww",
+     control_uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788050", part: SOURCE_PART, parent_format: "Wide",
+     child_format: "Wide", order: ["key_a", "key_b", "key_c", "key_d"], compress_marks: false},
+    {name: "target_ww_cm", uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788041", view: "view_ww_cm", control: "control_ww_cm",
+     control_uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788051", part: SOURCE_PART, parent_format: "Wide",
+     child_format: "Wide", order: ["key_a", "key_b", "key_c", "key_d"], compress_marks: true},
+    {name: "target_cw", uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788042", view: "view_cw", control: "control_cw",
+     control_uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788052", part: SOURCE_PART, parent_format: "Compact",
+     child_format: "Wide", order: ["key_b", "key_d", "key_a", "key_c"], compress_marks: false},
+    {name: "target_cw_cm", uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788043", view: "view_cw_cm", control: "control_cw_cm",
+     control_uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788053", part: SOURCE_PART, parent_format: "Compact",
+     child_format: "Wide", order: ["key_b", "key_d", "key_a", "key_c"], compress_marks: true},
+  ] of Target
 
   SOURCE_ROWS = [
     [1_u64, 6_u64, 10_u64, 5_u64, 100_u64, 0_u64],
@@ -61,8 +76,8 @@ module MaterializedViewAggregateProjectionW298
   PARENT_ROWS = SOURCE_ROWS.map { |row| row.map_with_index { |value, index| index == 0 ? value + 100_u64 : value } }
 
   def run(catalog_root : String, action : String, profile : String = "w298") : JSON::Any
-    unless profile == "w298" || profile == "w299"
-      raise ArgumentError.new("W298 helper profile must be w298 or w299")
+    unless profile == "w298" || profile == "w299" || profile == "w300"
+      raise ArgumentError.new("W298 helper profile must be w298, w299 or w300")
     end
     case action
     when "publish" then publish(catalog_root, profile)
@@ -83,7 +98,7 @@ module MaterializedViewAggregateProjectionW298
       raise CrystalClick::CorruptPartError.new("W298 source candidate or schema differs")
     end
 
-    targets = profile == "w299" ? W299_TARGETS : TARGETS
+    targets = targets_for(profile)
     results = targets.map do |target|
       path = if target[:parent_format] == "Wide"
                catalog.transform_materialized_view_part(
@@ -92,17 +107,18 @@ module MaterializedViewAggregateProjectionW298
                  profile: CrystalClick::BinaryBulkProfile.with_size_stream,
                ) do |input|
                  rows = transform_rows(input)
-                 wide_output(target, rows, profile == "w299")
+                 wide_output(target, rows, profile)
                end
              else
                catalog.transform_materialized_view_part(
                  DATABASE, target[:view], SOURCE_PART, SOURCE_COLUMNS, target[:part],
                  mark_format: CrystalClick::CompactMarkFormat::Mrk4,
                  rows_per_mark: PARENT_ROWS_PER_MARK, batch_rows: PARENT_ROWS_PER_MARK,
-                 profile: CrystalClick::BinaryBulkProfile.with_size_stream, compress_marks: true,
+                 profile: CrystalClick::BinaryBulkProfile.with_size_stream,
+                 compress_marks: profile == "w300" ? target[:compress_marks] : true,
                ) do |input|
                  rows = transform_rows(input)
-                 compact_output(target, rows, profile == "w299")
+                 compact_output(target, rows, profile)
                end
              end
       expected_path = target_path(catalog_root, target[:uuid], "detached", target[:part])
@@ -134,7 +150,7 @@ module MaterializedViewAggregateProjectionW298
 
   private def reopen(catalog_root : String, profile : String) : JSON::Any
     catalog = CrystalClick::OfflineCatalog.open(catalog_root)
-    targets = profile == "w299" ? W299_TARGETS : TARGETS
+    targets = targets_for(profile)
     results = targets.flat_map do |target|
       [target[:control], target[:name]].map do |table_name|
         expected_part = table_name == target[:control] ? SOURCE_PART : target[:part]
@@ -208,8 +224,205 @@ module MaterializedViewAggregateProjectionW298
     if profile == "w299"
       method = table_name == target[:control] ? CrystalClick::CompressedBlock::METHOD_ZSTD : CrystalClick::CompressedBlock::METHOD_LZ4
       result["mark_witness"] = compressed_wide_mark_witness(File.join(part.path, "#{PROJECTION}.proj"), method)
+    elsif profile == "w300"
+      is_control = table_name == target[:control]
+      child_path = File.join(part.path, "#{PROJECTION}.proj")
+      result["primary_index_witness"] = primary_index_witness(
+        child_path, child_primary_tuples(target), true, target[:order].size
+      )
+      result["parent_primary_index_witness"] = primary_index_witness(
+        part.path, parent_primary_tuples, is_control, 1
+      )
+      expected_method = if target[:compress_marks]
+                          is_control ? CrystalClick::CompressedBlock::METHOD_ZSTD : CrystalClick::CompressedBlock::METHOD_LZ4
+                        else
+                          nil
+                        end
+      result["mark_witness"] = wide_mark_witness(child_path, target[:compress_marks], expected_method)
     end
     JSON::Any.new(result)
+  end
+
+  private def primary_index_witness(
+    part_path : String,
+    expected_tuples : Array(Array(UInt64)),
+    compressed : Bool,
+    tuple_width : Int32,
+  ) : JSON::Any
+    raise CrystalClick::CorruptPartError.new("W300 primary index tuple width is invalid") if tuple_width <= 0
+    expected_raw = primary_index_bytes(expected_tuples)
+    raw_name = "primary.idx"
+    compressed_name = "primary.cidx"
+    name = compressed ? compressed_name : raw_name
+    other = compressed ? raw_name : compressed_name
+    if !File.file?(File.join(part_path, name)) || File.symlink?(File.join(part_path, name)) || File.exists?(File.join(part_path, other))
+      raise CrystalClick::CorruptPartError.new("W300 primary index sidecar selection differs")
+    end
+
+    checksums = CrystalClick::PartChecksums.open(part_path)
+    entry = checksums.entry(name) || raise CrystalClick::CorruptPartError.new("W300 primary index is absent from checksums")
+    checksums.validate_selected_entries(part_path, name)
+    physical = File.read(File.join(part_path, name)).to_slice
+    unless entry.compressed == compressed && entry.physical_size == physical.size.to_u64 &&
+           entry.file_hash == CrystalClick::CityHashV1.file_hash(physical)
+      raise CrystalClick::CorruptPartError.new("W300 primary index checksum or representation differs")
+    end
+    canonical = if compressed
+                  if entry.uncompressed_size != expected_raw.size.to_u64
+                    raise CrystalClick::CorruptPartError.new("W300 primary index uncompressed size differs")
+                  end
+                  CrystalClick::CompressedBlock.decode_all(physical, 8_i64 * 1024_i64 * 1024_i64,
+                    8_i64 * 1024_i64 * 1024_i64, 8_i64 * 1024_i64 * 1024_i64)
+                else
+                  if entry.uncompressed_size
+                    raise CrystalClick::CorruptPartError.new("W300 raw primary index declares compressed size")
+                  end
+                  physical
+                end
+    unless canonical == expected_raw
+      raise CrystalClick::CorruptPartError.new("W300 decoded primary tuples differ from the independent schedule")
+    end
+    if compressed
+      uncompressed_hash = entry.uncompressed_hash || raise CrystalClick::CorruptPartError.new("W300 compressed primary index has no raw hash")
+      unless uncompressed_hash == CrystalClick::CityHashV1.file_hash(canonical)
+        raise CrystalClick::CorruptPartError.new("W300 primary index decoded hash differs")
+      end
+    elsif entry.uncompressed_hash
+      raise CrystalClick::CorruptPartError.new("W300 raw primary index unexpectedly declares a decoded hash")
+    end
+    tuples = [] of Array(UInt64)
+    offset = 0
+    while offset < canonical.size
+      tuple = [] of UInt64
+      tuple_width.times do
+        tuple << read_u64_le(canonical, offset)
+        offset += sizeof(UInt64)
+      end
+      tuples << tuple
+    end
+    unless tuples == expected_tuples
+      raise CrystalClick::CorruptPartError.new("W300 parsed primary tuples differ")
+    end
+
+    method = compressed ? physical[CrystalClick::CompressedBlock::CHECKSUM_SIZE] : 0_u8
+    JSON::Any.new({
+      "file"                 => JSON::Any.new(name),
+      "path"                 => JSON::Any.new(File.join(part_path, name)),
+      "compressed"           => JSON::Any.new(compressed),
+      "method"               => JSON::Any.new(method.to_i),
+      "codec"                => JSON::Any.new(compressed ? codec_name(method) : "none"),
+      "tuple_width"          => JSON::Any.new(tuple_width),
+      "tuple_count"          => JSON::Any.new(tuples.size),
+      "tuples"               => nested_u64_json(tuples),
+      "physical_bytes"       => JSON::Any.new(physical.size),
+      "decoded_bytes"        => JSON::Any.new(canonical.size),
+      "physical_cityhash_v1" => hash_json(entry.file_hash),
+      "decoded_cityhash_v1"  => entry.uncompressed_hash ? hash_json(entry.uncompressed_hash.not_nil!) : hash_json(entry.file_hash),
+    } of String => JSON::Any)
+  end
+
+  private def primary_index_bytes(tuples : Array(Array(UInt64))) : Bytes
+    output = IO::Memory.new
+    tuples.each do |tuple|
+      tuple.each { |value| output.write_bytes(value, IO::ByteFormat::LittleEndian) }
+    end
+    output.to_slice
+  end
+
+  private def read_u64_le(bytes : Bytes, offset : Int32) : UInt64
+    raise CrystalClick::CorruptPartError.new("W300 primary tuple is truncated") if offset < 0 || offset > bytes.size - sizeof(UInt64)
+    IO::ByteFormat::LittleEndian.decode(UInt64, bytes[offset, sizeof(UInt64)])
+  end
+
+  private def codec_name(method : UInt8) : String
+    case method
+    when CrystalClick::CompressedBlock::METHOD_LZ4      then "LZ4"
+    when CrystalClick::CompressedBlock::METHOD_ZSTD     then "ZSTD"
+    when CrystalClick::CompressedBlock::METHOD_MULTIPLE then "MULTIPLE"
+    else                                                     "unknown"
+    end
+  end
+
+  private def hash_json(hash : {UInt64, UInt64}) : JSON::Any
+    JSON::Any.new([JSON::Any.new(hash[0].to_s), JSON::Any.new(hash[1].to_s)])
+  end
+
+  private def child_primary_tuples(target : Target) : Array(Array(UInt64))
+    groups = ordered_groups(target[:order])
+    tuples = groups.each_slice(CHILD_ROWS_PER_MARK).map { |slice| slice.first[:keys].dup }.to_a
+    tuples << groups.last[:keys].dup
+    tuples
+  end
+
+  private def parent_primary_tuples : Array(Array(UInt64))
+    tuples = PARENT_ROWS.each_slice(PARENT_ROWS_PER_MARK).map { |slice| [slice.first[0]] }.to_a
+    tuples << [PARENT_ROWS.last[0]]
+    tuples
+  end
+
+  private def wide_mark_witness(child_path : String, compressed : Bool, expected_method : UInt8?) : JSON::Any
+    if compressed
+      method = expected_method || raise CrystalClick::CorruptPartError.new("W300 compressed mark codec is unspecified")
+      existing = compressed_wide_mark_witness(child_path, method).as_h
+      lanes = existing["lanes"].as_a.map do |entry|
+        lane = entry.as_h.dup
+        lane["codec"] = JSON::Any.new(codec_name(method))
+        JSON::Any.new(lane)
+      end
+      return JSON::Any.new({
+        "compressed"               => JSON::Any.new(true),
+        "mark_files"               => existing["mark_files"],
+        "lane_count"               => existing["lane_count"],
+        "canonical_bytes_per_lane" => existing["canonical_bytes_per_lane"],
+        "expected_method"          => existing["method"],
+        "lanes"                    => JSON::Any.new(lanes),
+      } of String => JSON::Any)
+    end
+
+    plain_wide_mark_witness(child_path)
+  end
+
+  private def plain_wide_mark_witness(child_path : String) : JSON::Any
+    names = Dir.children(child_path).sort!
+    marks = names.select { |name| name.ends_with?(".mrk2") || name.ends_with?(".cmrk2") }
+    if marks.size != 8 || marks.any? { |name| !name.ends_with?(".mrk2") } ||
+       marks.any? { |name| !/\A[0-9a-f]{32}\.c?mrk2\z/.matches?(name) }
+      raise CrystalClick::CorruptPartError.new("W300 Wide child mark roster differs")
+    end
+
+    checksums = CrystalClick::PartChecksums.open(child_path)
+    lanes = marks.map do |name|
+      physical = File.read(File.join(child_path, name)).to_slice
+      entry = checksums.entry(name) || raise CrystalClick::CorruptPartError.new("W300 mark lane is absent from checksums")
+      canonical = physical
+      method = 0_u8
+      unless !entry.compressed && entry.physical_size == physical.size.to_u64 &&
+             entry.file_hash == CrystalClick::CityHashV1.file_hash(physical) &&
+             canonical.size == 8 * CrystalClick::CompressedMarkWriter::MARK_RECORD_SIZE
+        raise CrystalClick::CorruptPartError.new("W300 mark lane checksum or grid differs")
+      end
+      if entry.uncompressed_size || entry.uncompressed_hash
+        raise CrystalClick::CorruptPartError.new("W300 plain mark lane declares compression")
+      end
+      JSON::Any.new({
+        "name"                  => JSON::Any.new(name),
+        "physical_bytes"        => JSON::Any.new(physical.size),
+        "method"                => JSON::Any.new(method.to_i),
+        "codec"                 => JSON::Any.new("none"),
+        "canonical_bytes"       => JSON::Any.new(canonical.size),
+        "records"               => JSON::Any.new(canonical.size // CrystalClick::CompressedMarkWriter::MARK_RECORD_SIZE),
+        "physical_cityhash_v1"  => hash_json(entry.file_hash),
+        "canonical_cityhash_v1" => entry.uncompressed_hash ? hash_json(entry.uncompressed_hash.not_nil!) : hash_json(entry.file_hash),
+      } of String => JSON::Any)
+    end
+    JSON::Any.new({
+      "compressed"               => JSON::Any.new(false),
+      "mark_files"               => JSON::Any.new(marks.map { |name| JSON::Any.new(name) }),
+      "lane_count"               => JSON::Any.new(lanes.size),
+      "canonical_bytes_per_lane" => JSON::Any.new(8 * CrystalClick::CompressedMarkWriter::MARK_RECORD_SIZE),
+      "expected_method"          => JSON::Any.new(0),
+      "lanes"                    => JSON::Any.new(lanes),
+    } of String => JSON::Any)
   end
 
   private def compressed_wide_mark_witness(child_path : String, expected_method : UInt8) : JSON::Any
@@ -234,11 +447,15 @@ module MaterializedViewAggregateProjectionW298
         raise CrystalClick::CorruptPartError.new("W299 compressed Wide child mark codec, checksum or 192-byte lane differs")
       end
       JSON::Any.new({
-        "name"            => JSON::Any.new(name),
-        "physical_size"   => JSON::Any.new(physical.size),
-        "method"          => JSON::Any.new(method.to_i),
-        "canonical_bytes" => JSON::Any.new(canonical.size),
-        "records"         => JSON::Any.new(canonical.size // CrystalClick::CompressedMarkWriter::MARK_RECORD_SIZE),
+        "name"                  => JSON::Any.new(name),
+        "physical_size"         => JSON::Any.new(physical.size),
+        "physical_bytes"        => JSON::Any.new(physical.size),
+        "method"                => JSON::Any.new(method.to_i),
+        "codec"                 => JSON::Any.new(codec_name(method)),
+        "canonical_bytes"       => JSON::Any.new(canonical.size),
+        "records"               => JSON::Any.new(canonical.size // CrystalClick::CompressedMarkWriter::MARK_RECORD_SIZE),
+        "physical_cityhash_v1"  => hash_json(entry.file_hash),
+        "canonical_cityhash_v1" => hash_json(entry.uncompressed_hash.not_nil!),
       } of String => JSON::Any)
     end
     JSON::Any.new({
@@ -276,9 +493,10 @@ module MaterializedViewAggregateProjectionW298
     output
   end
 
-  private def wide_output(target : Target, rows : Array(Row), compress_wide_marks : Bool) : CrystalClick::WidePartTransformOutput
+  private def wide_output(target : Target, rows : Array(Row), profile : String) : CrystalClick::WidePartTransformOutput
     groups = ordered_groups(target[:order], rows)
-    projection = projection_output(target, groups, compress_wide_marks)
+    compress_wide_marks = profile == "w299" || profile == "w300" && target[:compress_marks]
+    projection = projection_output(target, groups, compress_wide_marks, profile == "w300")
     ids = rows.map(&.[0])
     columns = Array(CrystalClick::WidePartColumn).new
     PARENT_COLUMNS.each_with_index do |name, index|
@@ -291,9 +509,10 @@ module MaterializedViewAggregateProjectionW298
     )
   end
 
-  private def compact_output(target : Target, rows : Array(Row), compress_wide_marks : Bool) : CrystalClick::CompactPartTransformOutput
+  private def compact_output(target : Target, rows : Array(Row), profile : String) : CrystalClick::CompactPartTransformOutput
     groups = ordered_groups(target[:order], rows)
-    projection = projection_output(target, groups, compress_wide_marks)
+    compress_wide_marks = profile == "w299" || profile == "w300" && target[:compress_marks]
+    projection = projection_output(target, groups, compress_wide_marks, profile == "w300")
     ids = rows.map(&.[0])
     columns = Array(CrystalClick::CompactPartColumn).new
     PARENT_COLUMNS.each_with_index do |name, index|
@@ -310,11 +529,13 @@ module MaterializedViewAggregateProjectionW298
     target : Target,
     groups : Array(Group),
     compress_wide_marks : Bool,
+    compress_primary_key : Bool,
   ) : CrystalClick::WidePartProjection | CrystalClick::CompactPartProjection
     if target[:child_format] == "Wide"
       CrystalClick::WidePartProjection.precomputed_aggregate(
         PROJECTION, target[:order], key_slices(groups, target[:order]), aggregate_columns(groups),
         rows_per_mark: CHILD_ROWS_PER_MARK, compress_marks: compress_wide_marks,
+        compress_primary_key: compress_primary_key,
       )
     else
       CrystalClick::CompactPartProjection.precomputed_aggregate(
@@ -325,7 +546,15 @@ module MaterializedViewAggregateProjectionW298
   end
 
   private def helper_format(profile : String) : String
-    profile == "w299" ? W299_FORMAT : FORMAT
+    profile == "w300" ? W300_FORMAT : profile == "w299" ? W299_FORMAT : FORMAT
+  end
+
+  private def targets_for(profile : String) : Array(Target)
+    case profile
+    when "w300" then W300_TARGETS
+    when "w299" then W299_TARGETS
+    else             TARGETS
+    end
   end
 
   private class AggregateStats
@@ -595,8 +824,8 @@ module MaterializedViewAggregateProjectionW298
 end
 
 if !(2..3).includes?(ARGV.size) || !["publish", "reopen"].includes?(ARGV[1]) ||
-   (ARGV.size == 3 && !["w298", "w299"].includes?(ARGV[2]))
-  STDERR.puts "usage: w298-helper CATALOG_ROOT publish|reopen [w298|w299]"
+   (ARGV.size == 3 && !["w298", "w299", "w300"].includes?(ARGV[2]))
+  STDERR.puts "usage: w298-helper CATALOG_ROOT publish|reopen [w298|w299|w300]"
   exit 2
 end
 

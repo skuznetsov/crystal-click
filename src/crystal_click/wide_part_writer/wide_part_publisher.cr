@@ -75,7 +75,13 @@ module CrystalClick
             File.write(File.join(stage, lane.binding.marks_filename), lane.marks)
           end
 
-          if index_keys = compound_key_columns
+          if input.compress_primary_key
+            budget = write_transport_budget || raise ArgumentError.new("compressed primary indexes require a shared write budget")
+            index_keys = compound_key_columns || [keys] of Slice(UInt64)
+            records << PrimaryIndexWriter.write_compound_compressed(
+              stage, index_keys, rows_per_mark, frame_bytes, budget
+            )
+          elsif index_keys = compound_key_columns
             records << PrimaryIndexWriter.write_compound(stage, index_keys, rows_per_mark)
           else
             records << PrimaryIndexWriter.write(stage, keys, rows_per_mark)
@@ -298,7 +304,16 @@ module CrystalClick
         validate_metadata_files!(stage, metadata)
 
         primary = nil.as(PrimaryKeyIndex?)
-        if index_keys = compound_key_columns
+        if input.compress_primary_key
+          index_keys = compound_key_columns || [keys] of Slice(UInt64)
+          unless input.additional_key_names.size + 1 == index_keys.size
+            raise CorruptPartError.new("compressed primary index key count differs from its bound roster")
+          end
+          budget = validation_transport_budget || raise ArgumentError.new("compressed primary index validation requires a shared read budget")
+          expected_size = PrimaryIndexWriter.compound_size(input.mark_count, index_keys.size)
+          decoded = ProjectionPrimaryIndex.read_compressed(stage, expected_size, checksums, budget)
+          PrimaryIndexWriter.validate_compressed!(decoded, input.expected_rows, index_keys)
+        elsif index_keys = compound_key_columns
           unless input.additional_key_names.size + 1 == index_keys.size
             raise CorruptPartError.new("compound primary index key count differs from its bound roster")
           end

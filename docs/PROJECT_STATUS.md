@@ -2,6 +2,17 @@
 
 ## Current qualification
 
+### W300 Compressed Wide aggregate projection indexes
+
+Wide aggregate children use `primary.cidx` when the callback sets
+`compress_primary_key: true`. Both parent layouts support either Wide
+child mark format. The reader checks both index checksums and compares
+the ordered UInt64 mark-start and terminal tuples with the key streams
+before yielding a window. All four parent and mark combinations pass
+`ATTACH PART` and `CHECK TABLE` on ClickHouse 26.10.1.1201 with both
+Crystal build modes. See the
+[compressed index profile](PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-indexes-w300).
+
 ### W299 Compressed Wide aggregate projection marks
 
 Wide aggregate children use adaptive `.cmrk2` marks when the callback
@@ -4837,7 +4848,8 @@ source/runtime identities and executed evidence.
    for a Compact MRK4 child with one or two plain UInt64 group keys under either
    parent layout. W298 accepts an ordered array of plain UInt64 group keys
    for either child layout. W299 qualifies `.cmrk2` marks for Wide
-   aggregate children under both parent layouts.
+   aggregate children under both parent layouts. W300 qualifies
+   `primary.cidx` indexes with either Wide child mark format.
    General keys and partitions, additional projection declarations, remaining
    layouts/types and automatic materialization remain open.
 4. **General table writing.** The detached-part writers and small
@@ -5001,8 +5013,9 @@ retains the implementation checkpoints and responsibility boundaries.
    UInt64 `sum(value)`, `min(value)`, and `max(value)` states in Wide children.
    W295 through W297 qualify the same states in Compact MRK4 children with
    one or two UInt64 group keys. W298 generalizes the number of UInt64 keys
-   in the aggregate children. W299 qualifies compressed adaptive marks for
-   Wide aggregate children. More group key and state types, general key and
+   in the aggregate children. W299 qualifies compressed adaptive marks and
+   W300 qualifies compressed primary indexes for Wide aggregate children.
+   More group key and state types, general key and
    partition derivation, additional projection declarations, and bounded
    output appenders remain open.
 4. Only then reopen memory/performance work. No current claim of stock-reader
@@ -5010,7 +5023,7 @@ retains the implementation checkpoints and responsibility boundaries.
 
 ## Source reference
 
-W286 through W299 compare the relevant MergeTree paths against the pinned shallow
+W286 through W300 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

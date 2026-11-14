@@ -1,5 +1,54 @@
 # Physical projection reads and publication
 
+## Compressed Wide aggregate projection indexes (W300)
+
+A Wide aggregate child of a Wide or Compact part can carry `primary.cidx`
+with adaptive `.mrk2` or `.cmrk2` marks. The profile covers ordered plain
+UInt64 group keys, Count and UInt64 Sum, Min and Max states. A compressed
+index stores the same little-endian key tuples as `primary.idx`, one at
+each data mark start plus the tuple at the last row. The manifest records
+both the physical and decoded sizes and hashes.
+
+`compress_primary_key: true` opts into `.cidx` on
+`WidePartProjection.precomputed_aggregate` and `.precomputed_count`.
+The default writes `primary.idx`. The mark format and the parent's index
+format are independent. Compressed indexes on Compact children and
+additional key and state types are outside this profile.
+
+For a compressed index, preflight checks the file and manifest agree on
+one representation and that every index tuple agrees with its key streams.
+The reader checks each key lane's physical mark spans and streams its
+keys before the first callback, including for a state-only selection or
+an empty window at EOF. Both the encoded and decoded index are capped
+at 8 MiB. The writer emits LZ4 literal frames and uses the existing
+parent transaction and transport budgets. Reverting the feature restores
+the previous publisher. Published parts are left on disk.
+
+The acceptance check runs the focused projection and index specs and the
+W300 native helper against the pinned ClickHouse 26.10.1.1201 build. It
+requires matching decoded index tuples, stock and attached catalog reads,
+and native `ATTACH PART`, `CHECK TABLE` and forced projection results for
+both parent layouts. The corruption check rewrites a later or terminal key
+tuple and refreshes its frame checksum, manifest and parent summary so the
+tuple check must detect the mismatch. A separate check shifts an interior
+plain mark offset while preserving row counts and refreshing the hashes.
+
+In Debug and Release, 275 Crystal spec examples pass per build. ClickHouse
+26.10.1.1201 accepts `ATTACH PART` and reports `1` from `CHECK TABLE` for
+each combination of Wide or Compact parent and `.mrk2` or `.cmrk2` child.
+Queries with projection use forced or disabled agree with the expected
+groups. Extending the tested three-key prefix with a fourth key reduces
+selection from two of seven granules to one. Crystal reads every stock and
+attached child in full and through the `[1, 6)` window in the offline
+catalog. The witness copies stock DDL as written by ClickHouse and uses
+the admitted layout settings in the offline transform target metadata.
+
+The ClickHouse compressor independently decodes both the stock ZSTD and
+the generated LZ4 child index to the expected 256 bytes of ordered keys.
+The attached parent carries `primary.idx` in every cell. The fixture's
+stock index takes 98–107 bytes, and the literal LZ4 index takes 283 bytes.
+See the [W300 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w300.json).
+
 ## Compressed Wide aggregate projection marks (W299)
 
 Wide aggregate projections under Wide and Compact parents can use adaptive
@@ -17,8 +66,7 @@ decoded sizes and hashes, and validates the decoded mark grid against the
 data frame index. Hidden key spans and selected state spans are checked
 across all granules, including for an empty row window at EOF. The fixed-width
 lanes have exact span sizes. Count spans are bounded by the possible sizes of
-their VarUInt rows, and selected Count payloads are decoded on read. Compressed
-primary indexes and additional state types remain open.
+their VarUInt rows, and selected Count payloads are decoded on read.
 
 The writer uses the existing LZ4 frame writer and checks the staged mark
 grid, index and values before publishing the parent and child. This work

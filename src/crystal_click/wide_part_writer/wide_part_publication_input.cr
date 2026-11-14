@@ -14,6 +14,7 @@ module CrystalClick
       getter projection_entries : Array(String)
       getter additional_key_names : Array(String)
       getter compress_marks : Bool
+      getter compress_primary_key : Bool
       getter checksum_entry_count : Int32
 
       def initialize(
@@ -28,6 +29,7 @@ module CrystalClick
         @projection_entries : Array(String) = [] of String,
         @additional_key_names : Array(String) = [] of String,
         @compress_marks : Bool = false,
+        @compress_primary_key : Bool = false,
       )
         @checksum_entry_count = @lane_bindings.size * 2 + 5 + @projection_entries.size
       end
@@ -40,7 +42,7 @@ module CrystalClick
         WidePartPublicationInput.new(
           target, parent, @key_name, @mark_count, @expected_files,
           @expected_rows, @logical_names, @lane_bindings, @projection_entries,
-          @additional_key_names, @compress_marks
+          @additional_key_names, @compress_marks, @compress_primary_key
         )
       end
 
@@ -56,6 +58,7 @@ module CrystalClick
         aggregate_projection : Bool = false,
         additional_key_names : Array(String) = [] of String,
         compress_marks : Bool = false,
+        compress_primary_key : Bool = false,
       ) : WidePartPublicationInput
         ensure_supported_platform!
         validate_column_name!(key_name)
@@ -65,6 +68,9 @@ module CrystalClick
         end
         if compress_marks && (!defer_destination_check || !aggregate_projection)
           raise UnsupportedFormatError.new("compressed Wide marks are limited to aggregate projection children")
+        end
+        if compress_primary_key && (!defer_destination_check || !aggregate_projection)
+          raise UnsupportedFormatError.new("compressed Wide primary indexes are limited to aggregate projection children")
         end
         unless keys.size > 0 && keys.size.to_u64 <= WidePart::MAX_ROWS
           raise ArgumentError.new("a Wide part requires a bounded nonempty key stream")
@@ -158,8 +164,9 @@ module CrystalClick
         key_base = StreamName.hash(key_name)
         names << PhysicalStreamName.append_literal(key_base, ".bin")
         names << PhysicalStreamName.append_literal(key_base, marks_suffix)
+        primary_index_name = compress_primary_key ? "primary.cidx" : "primary.idx"
         names.concat([
-          "primary.idx", "count.txt", "serialization.json", "columns.txt",
+          primary_index_name, "count.txt", "serialization.json", "columns.txt",
           "columns_substreams.txt", "default_compression_codec.txt",
           "metadata_version.txt", "checksums.txt",
         ])
@@ -177,7 +184,7 @@ module CrystalClick
         new(
           target, parent, key_name, first.parent_rows.size.to_i32,
           names, expected_rows, logical_names, lane_bindings, projection_entries,
-          retained_additional_key_names, compress_marks,
+          retained_additional_key_names, compress_marks, compress_primary_key,
         )
       end
 

@@ -1,7 +1,7 @@
 module CrystalClick
   module PartWriterInfrastructure
-    # Writes the shared raw primary.idx representation used by Wide and
-    # Compact complete-part publishers.
+    # Writes scalar and compound primary-index representations shared by
+    # complete-part publishers.
     class PrimaryIndexWriter
       def self.write(stage : String, keys : Slice(UInt64), rows_per_mark : Int32) : ChecksumRecord
         bytes = IO::Memory.new
@@ -37,6 +37,29 @@ module CrystalClick
           raise ArgumentError.new("compound primary index exceeds reader limit")
         end
         entries * bytes_per_entry
+      end
+
+      # Checks compressed physical, decoded, and retained-result bounds before
+      # a child stage is created. The writer repeats this after other siblings
+      # consume from the shared transaction budget.
+      def self.preflight_compressed_output(
+        raw_size : Int64,
+        frame_bytes : Int,
+        budget : CompressedStreamBudget,
+      ) : Int64
+        budget.ensure_direction(true)
+        if raw_size <= 0 || raw_size > PrimaryKeyIndex::MAX_INDEX_FILE_BYTES
+          raise ArgumentError.new("primary index exceeds reader limit")
+        end
+        physical_size = CompressedMarkWriter.preflight_all(raw_size, frame_bytes, budget).to_i64
+        if physical_size > PrimaryKeyIndex::MAX_INDEX_FILE_BYTES || physical_size > Int32::MAX
+          raise UnsupportedFormatError.new("compressed primary index exceeds reader limit")
+        end
+        if raw_size > Int64::MAX - physical_size
+          raise UnsupportedFormatError.new("compressed primary index result size overflows")
+        end
+        budget.preflight_result_bytes(raw_size + physical_size)
+        physical_size
       end
 
       # Visits each mark-start tuple followed by the terminal tuple. The same
@@ -75,6 +98,31 @@ module CrystalClick
         ChecksumRecord.new("primary.idx", raw.size.to_u64, CityHashV1.file_hash(raw), false)
       end
 
+      # Writes compound mark-start tuples followed by the final tuple using
+      # the same traversal as the raw compound index path.
+      def self.write_compound_compressed(
+        stage : String,
+        key_columns : Indexable(Slice(UInt64)),
+        rows_per_mark : Int32,
+        frame_bytes : Int,
+        budget : CompressedStreamBudget,
+      ) : ChecksumRecord
+        row_count = validate_compound_columns!(key_columns, rows_per_mark)
+        mark_count = mark_count_for(row_count, rows_per_mark)
+        raw_size = compound_size(mark_count, key_columns.size)
+
+        write_compressed_bytes(stage, raw_size, frame_bytes, budget) do |raw|
+          offset = 0
+          each_compound_entry(key_columns, rows_per_mark) do |entry|
+            entry.copy_to(raw[offset, entry.size])
+            offset += entry.size
+          end
+          unless offset == raw.size
+            raise UnsupportedFormatError.new("compound compressed primary index differs from its planned size")
+          end
+        end
+      end
+
       # Compatibility wrapper for callers that still hold a key pair.
       def self.write_compound(
         stage : String,
@@ -93,18 +141,7 @@ module CrystalClick
         key_columns : Indexable(Slice(UInt64)),
         checksums : PartChecksums,
       ) : Nil
-        if expected_rows.empty? || key_columns.empty?
-          raise CorruptPartError.new("compound primary index keys do not share a bounded row grid")
-        end
-        row_count = key_columns[0].size
-        key_columns.each do |column|
-          unless column.size == row_count
-            raise CorruptPartError.new("compound primary index keys do not share a bounded row grid")
-          end
-        end
-        unless row_count > 0 && row_count.to_u64 <= WidePart::MAX_ROWS
-          raise CorruptPartError.new("compound primary index keys do not share a bounded row grid")
-        end
+        row_count = validate_index_grid_shape!(expected_rows, key_columns, "compound primary index")
 
         expected_size = begin
           compound_size(expected_rows.size, key_columns.size)
@@ -129,36 +166,29 @@ module CrystalClick
           raise CorruptPartError.new("compound primary index file hash does not match checksums.txt")
         end
 
-        row_start = 0_u64
-        index_entry = 0
-        expected_rows.each do |rows|
-          if rows == 0 || rows > row_count.to_u64 - row_start
-            raise CorruptPartError.new("compound primary index row grid exceeds its key streams")
-          end
-          byte_offset = index_entry * key_columns.size * sizeof(UInt64)
-          key_columns.each_with_index do |column, lane|
-            actual = IO::ByteFormat::LittleEndian.decode(UInt64, raw[byte_offset + lane * sizeof(UInt64), sizeof(UInt64)])
-            unless actual == column[row_start.to_i]
-              raise CorruptPartError.new("compound primary index differs from the ordered key marks")
-            end
-          end
-          row_start += rows
-          index_entry += 1
-        end
-        unless row_start == row_count.to_u64
-          raise CorruptPartError.new("compound primary index row grid does not consume its key streams")
-        end
-        byte_offset = index_entry * key_columns.size * sizeof(UInt64)
-        key_columns.each_with_index do |column, lane|
-          actual = IO::ByteFormat::LittleEndian.decode(UInt64, raw[byte_offset + lane * sizeof(UInt64), sizeof(UInt64)])
-          unless actual == column[row_count - 1]
-            message = key_columns.size == 2 ? "compound primary index terminal differs from the final key pair" : "compound primary index terminal differs from the final key tuple"
-            raise CorruptPartError.new(message)
-          end
-        end
-        nil
+        validate_index_grid_bytes!(
+          raw, expected_rows, key_columns, row_count, expected_size, "compound primary index"
+        )
       rescue ex : IO::Error
         raise InvalidPartError.new(ex.message || "cannot read compound primary index")
+      end
+
+      # Authenticates the decompressed cidx bytes against the exact same
+      # ordered key columns and mark grid used during publication.
+      def self.validate_compressed!(
+        decoded : Bytes,
+        expected_rows : Array(UInt64),
+        key_columns : Indexable(Slice(UInt64)),
+      ) : Nil
+        row_count = validate_index_grid_shape!(expected_rows, key_columns, "compressed primary index")
+        expected_size = begin
+          compound_size(expected_rows.size, key_columns.size)
+        rescue ex : ArgumentError
+          raise CorruptPartError.new("staged compressed primary index exceeds reader limit")
+        end
+        validate_index_grid_bytes!(
+          decoded, expected_rows, key_columns, row_count, expected_size, "compressed primary index"
+        )
       end
 
       # Compatibility wrapper for callers that still hold a key pair.
@@ -190,6 +220,104 @@ module CrystalClick
         end
         compound_size(mark_count_for(row_count, rows_per_mark), key_columns.size)
         row_count
+      end
+
+      private def self.write_compressed_bytes(
+        stage : String,
+        raw_size : Int64,
+        frame_bytes : Int,
+        budget : CompressedStreamBudget,
+        &block : Bytes -> Nil
+      ) : ChecksumRecord
+        budget.ensure_direction(true)
+        physical_size = PrimaryIndexWriter.preflight_compressed_output(raw_size, frame_bytes, budget)
+        budget.reserve_result_bytes(raw_size)
+
+        raw = Bytes.new(raw_size.to_i)
+        yield raw
+        physical = CompressedMarkWriter.encode_all(raw, frame_bytes, budget)
+        unless physical.size.to_i64 == physical_size
+          raise UnsupportedFormatError.new("compressed primary index differs from its preflighted size")
+        end
+        File.write(File.join(stage, "primary.cidx"), physical)
+        ChecksumRecord.new(
+          "primary.cidx", physical.size.to_u64, CityHashV1.file_hash(physical), true,
+          raw.size.to_u64, CityHashV1.file_hash(raw)
+        )
+      end
+
+      private def self.validate_index_grid_bytes!(
+        decoded : Bytes,
+        expected_rows : Array(UInt64),
+        key_columns : Indexable(Slice(UInt64)),
+        row_count : Int,
+        expected_size : Int64,
+        representation : String,
+      ) : Nil
+        unless decoded.size.to_i64 == expected_size
+          raise CorruptPartError.new("staged #{representation} size differs from its mark grid")
+        end
+
+        row_start = 0_u64
+        entry_index = 0
+        expected_rows.each do |rows|
+          if rows == 0 || row_start > row_count.to_u64 || rows > row_count.to_u64 - row_start
+            raise CorruptPartError.new("#{representation} row grid exceeds its key streams")
+          end
+          validate_index_tuple!(decoded, entry_index, key_columns, row_start.to_i, representation)
+          row_start += rows
+          entry_index += 1
+        end
+        unless row_start == row_count.to_u64
+          raise CorruptPartError.new("#{representation} row grid does not consume its key streams")
+        end
+        terminal_error = if representation == "compound primary index"
+                           key_columns.size == 2 ? "compound primary index terminal differs from the final key pair" : "compound primary index terminal differs from the final key tuple"
+                         else
+                           "compressed primary index terminal differs from the final key tuple"
+                         end
+        validate_index_tuple!(decoded, entry_index, key_columns, row_count - 1, representation, terminal_error)
+        nil
+      end
+
+      private def self.validate_index_grid_shape!(
+        expected_rows : Array(UInt64),
+        key_columns : Indexable(Slice(UInt64)),
+        representation : String,
+      ) : Int
+        if expected_rows.empty? || key_columns.empty?
+          raise CorruptPartError.new("#{representation} keys do not share a bounded row grid")
+        end
+        row_count = key_columns[0].size
+        key_columns.each do |column|
+          unless column.size == row_count
+            raise CorruptPartError.new("#{representation} keys do not share a bounded row grid")
+          end
+        end
+        unless row_count > 0 && row_count.to_u64 <= WidePart::MAX_ROWS
+          raise CorruptPartError.new("#{representation} keys do not share a bounded row grid")
+        end
+        row_count
+      end
+
+      private def self.validate_index_tuple!(
+        decoded : Bytes,
+        entry_index : Int,
+        key_columns : Indexable(Slice(UInt64)),
+        row : Int,
+        representation : String,
+        mismatch_message : String? = nil,
+      ) : Nil
+        byte_offset = entry_index * key_columns.size * sizeof(UInt64)
+        key_columns.each_with_index do |column, lane|
+          actual = IO::ByteFormat::LittleEndian.decode(
+            UInt64, decoded[byte_offset + lane * sizeof(UInt64), sizeof(UInt64)]
+          )
+          unless actual == column[row]
+            raise CorruptPartError.new(mismatch_message || "#{representation} differs from the ordered key marks")
+          end
+        end
+        nil
       end
 
       private def self.mark_count_for(row_count : Int, rows_per_mark : Int) : Int64

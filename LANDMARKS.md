@@ -1,5 +1,22 @@
 # Crystal Click landmarks
 
+## Compressed Wide aggregate projection indexes — W300
+
+- Wide aggregate projection callbacks independently opt into `primary.cidx`
+  through `compress_primary_key: true`. Both parent layouts share the
+  staged index writer and operation budgets. One index representation is
+  bound to the child by its manifest. The compressed entry records physical
+  and decoded sizes and hashes.
+- The offline reader checks each UInt64 key lane's mark spans and compares
+  every mark-start tuple and the final key tuple before the first callback.
+- ClickHouse 26.10.1.1201 attached and checked both parent layouts with
+  both mark formats in Debug and Release. Its compressor decoded stock
+  ZSTD and generated LZ4 indexes to the same scheduled key tuples.
+  Refresh after changes to index framing, checksums, key or mark grids,
+  schema binding, publication, typed admission, or the ClickHouse pin.
+  See the [compressed index profile](docs/PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-indexes-w300)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w300.json).
+
 ## Compressed Wide aggregate projection marks — W299
 
 - A Wide aggregate child independently opts into `.cmrk2` through

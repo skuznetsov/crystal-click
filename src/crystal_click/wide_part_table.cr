@@ -4705,6 +4705,7 @@ module CrystalClick
       expected_column_types = nil.as(Array(String)?)
       expected_column_sources = nil.as(Array({String, String, String})?)
       expected_aggregate_count_key_names = nil.as(Array(String)?)
+      expected_projection_key_names = nil.as(Array(String)?)
 
       # selected_parts remains in caller order. The parsed identities above
       # are used only for the overlap guard; they do not imply Active status.
@@ -4907,28 +4908,70 @@ module CrystalClick
           total_marks = checked_total_marks(total_marks, mark_rows.size.to_u64)
         end
 
-        if compressed_projection_aggregate_selected && aggregate_count_key_names.nil?
-          selected_projection_name = projection_name ||
-                                     raise(CorruptPartError.new("compressed projection aggregate name is missing"))
-          key_names = WidePart.projection_group_key_column_names(path)
-          key_names.each do |key_name|
-            next if @columns.includes?(key_name)
-            key_reader = WidePart.open_projection_child_typed(
-              path,
-              key_name,
-              selected_projection_name,
-              true,
-            )
+        if selected_projection_name = projection_name
+          compressed_index_signal = ProjectionPrimaryIndex.file_signal?(path, checksums, "primary.cidx")
+          projection_key_names = if compressed_index_signal
+                                   ProjectionPrimaryIndex.aggregate_group_key_column_names(path, checksums)
+                                 else
+                                   nil
+                                 end
+          if key_names = projection_key_names
+            if prior_key_names = expected_projection_key_names
+              unless prior_key_names == key_names
+                raise CorruptPartError.new("selected aggregate projection key roster differs across cidx children")
+              end
+            else
+              expected_projection_key_names = key_names
+            end
+
+            if key_names.empty?
+              raise CorruptPartError.new("keyless aggregate projection has an unexpected compressed primary index")
+            end
             expected_rows = expected_row_count ||
                             raise(CorruptPartError.new("selected part has no aggregate row count"))
             expected_marks = expected_mark_rows ||
                              raise(CorruptPartError.new("selected part has no aggregate mark grid"))
-            unless key_reader.column_type == "UInt64" && key_reader.row_count == expected_rows &&
-                   key_reader.mark_row_counts == expected_marks
-              raise CorruptPartError.new("compressed projection hidden key grid differs from its selected aggregate state")
+            selected_key_readers = Hash(String, WidePart).new
+            readers.each do |selected_reader|
+              if key_names.includes?(selected_reader.name)
+                selected_key_readers[selected_reader.name] = selected_reader.reader
+              end
             end
-            key_reader.selected_checksum_names.each do |checksum_name|
-              checksums.validate_selected_entries(path, checksum_name)
+            ProjectionPrimaryIndex.validate_child!(
+              path,
+              selected_projection_name,
+              key_names,
+              expected_rows,
+              expected_marks,
+              selected_key_readers,
+              checksums,
+              compressed_projection_child,
+              CompressedStreamBudget.read_default,
+            )
+          elsif compressed_projection_aggregate_selected && aggregate_count_key_names.nil?
+            # Preserve the W299 legacy raw-index admission exactly. Its hidden
+            # key grid check remains limited to aggregate state selection
+            # under compressed projection marks.
+            key_names = WidePart.projection_group_key_column_names(path)
+            key_names.each do |key_name|
+              next if @columns.includes?(key_name)
+              key_reader = WidePart.open_projection_child_typed(
+                path,
+                key_name,
+                selected_projection_name,
+                true,
+              )
+              expected_rows = expected_row_count ||
+                              raise(CorruptPartError.new("selected part has no aggregate row count"))
+              expected_marks = expected_mark_rows ||
+                               raise(CorruptPartError.new("selected part has no aggregate mark grid"))
+              unless key_reader.column_type == "UInt64" && key_reader.row_count == expected_rows &&
+                     key_reader.mark_row_counts == expected_marks
+                raise CorruptPartError.new("compressed projection hidden key grid differs from its selected aggregate state")
+              end
+              key_reader.selected_checksum_names.each do |checksum_name|
+                checksums.validate_selected_entries(path, checksum_name)
+              end
             end
           end
         end

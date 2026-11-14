@@ -343,6 +343,11 @@ keys and states in the Wide child. The default is `.mrk2`. Either parent
 layout can use either Wide child mark format. See the
 [compressed Wide mark profile](docs/PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-marks-w299).
 
+Pass `compress_primary_key: true` to either Wide aggregate constructor
+to write the child's `primary.cidx`. It works with either mark format
+and either parent layout. The default writes `primary.idx`. See the
+[compressed Wide index profile](docs/PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-indexes-w300).
+
 `OfflineTable#projections` exposes declared projection metadata. For a table
 with a physical Wide or Compact projection `p` containing a `UInt64` column
 `pk`, call `scan_projection_typed_window` with the projection name and row

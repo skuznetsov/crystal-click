@@ -124,6 +124,7 @@ module CrystalClick
           aggregate_projection: projection.aggregate_projection?,
           additional_key_names: key_names[1..],
           compress_marks: projection.compress_marks,
+          compress_primary_key: projection.compress_primary_key,
         )
         metadata_columns = Array(Tuple(String, String, Array(String))).new(prepared_columns.size)
         prepared_columns.each do |column|
@@ -161,6 +162,7 @@ module CrystalClick
           end
         end
         preflight_compressed_marks!
+        preflight_compressed_primary_key!
         @encoded_files = encoded
         nil
       end
@@ -215,6 +217,17 @@ module CrystalClick
         budget.preflight_decoded_bytes(raw_size * lane_count)
         budget.preflight_file_bytes(physical_size * lane_count)
         budget.preflight_result_bytes(physical_size * lane_count)
+        nil
+      end
+
+      private def preflight_compressed_primary_key! : Nil
+        return nil unless @input.compress_primary_key
+
+        budget = @context.transport_budget
+        raw_size = PrimaryIndexWriter.compound_size(
+          @input.mark_count, @additional_key_columns.size + 1
+        )
+        PrimaryIndexWriter.preflight_compressed_output(raw_size, @context.frame_bytes, budget)
         nil
       end
     end

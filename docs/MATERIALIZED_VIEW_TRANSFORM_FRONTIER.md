@@ -12,11 +12,14 @@ through staging and readback.
 
 The Wide child constructors accept `compress_marks: true` for the
 [compressed mark profile](PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-marks-w299).
-The callback uses the same key and state inputs for either mark format.
+They also accept `compress_primary_key: true` for the
+[compressed index profile](PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-indexes-w300).
+The callback uses the same key and state inputs with either option.
 
 Both parent layouts can publish either a Wide child or a Compact MRK4
-child. The uncompressed `primary.idx` contains a little-endian UInt64
-for each key in each mark-start tuple, followed by the final row's tuple.
+child. The primary index contains a little-endian UInt64 for each key in
+each mark-start tuple, followed by the final row's tuple. `primary.idx`
+is the default and the supported Compact child representation.
 The array overload snapshots the key names and UInt64 cells up to a
 64 MiB logical payload bound. For three or more keys, Wide publication
 charges the detached arrays and value carriers to the shared write budget
@@ -24,7 +27,7 @@ before expanding the key lanes. Compact construction caps the additional
 key carriers at 64 MiB of logical workspace. The column caps include the
 states and are 4,096 for Wide and 16 for Compact publication. The mark
 and index limits also apply. Other key types, additional state families,
-compressed primary indexes and Compact MRK3 children remain open.
+and compressed indexes or MRK3 marks on Compact children remain open.
 
 Compact typed state scans check the index shape, hidden key spans and
 fixed-width state spans. Wide Count scans and mixed-layout state scans
