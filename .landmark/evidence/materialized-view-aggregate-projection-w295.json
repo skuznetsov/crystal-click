@@ -1,0 +1,144 @@
+{
+  "format": "crystal_click_materialized_view_aggregate_projection_w295_evidence_v1",
+  "date": "2026-11-13",
+  "baseline_revision": "11d5f5661fb4fc98bb384b3c6d5b05f8fa321ab0",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the exact one-key Compact MRK4 Count projection profile and the exercised native pairs.",
+    "scope": "Caller-supplied ordered, distinct UInt64 keys and positive count() states in a Compact MRK4 child of a Wide or Compact parent. Typed full, window, and mixed-child Count scans.",
+    "remaining": "The callback computes group states. Child scope is one UInt64 key, no-argument Count, and an uncompressed primary index. Additional states, compound keys, MRK3 aggregate children, and ordinary Compact AggregateFunction columns are outside this profile. Hidden-key validation checks callbacks and byte spans."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "An attached Compact Count projection passes CHECK while misaligning a key or state or pruning a valid group.",
+    "guards": [
+      "Bind the exact DDL shape; validate immutable group keys, positive states, and conservation of the parent row count before publication.",
+      "Reject mismatched hidden key names across selected children and a shortened later-mark UInt64 lane before the first Count-only callback.",
+      "Independently reconstruct grouped counts from parent rows and compare decoded callback bytes, the terminal primary-index entry, stock child states, and forced native results.",
+      "The raw audit rejects a same-size off-by-one mutation of the middle index entry and passes after restoring the original bytes."
+    ],
+    "rollback": "Revert the feature commit. The parent and child are validated and published by one existing staged rename."
+  },
+  "verification": {
+    "toolchain": "Crystal 1.22.3, LLVM 23.1.5, aarch64-apple-darwin25.6.0",
+    "baseline_debug": [
+      "The original Compact projection admission rejects a typed Count-only scan of a stock MRK4 child.",
+      "Before the key-span guard, a short Count-only window accepts an empty UInt64 key lane in a later mark. The final spec requires rejection before any callback."
+    ],
+    "spec_paths_per_mode": 41,
+    "examples_per_mode": {
+      "debug": 281,
+      "release": 281
+    },
+    "stock_read_examples_per_mode": {
+      "debug": 1,
+      "release": 1
+    },
+    "guard": {
+      "sha256": "fbfa0fd9d717eb24c1a3f829d464188110e505c7ae311eee2e95cbe7cefab011",
+      "minimum_system_memory_free_percent_exclusive": 50,
+      "crystal_process_tree_memory_mib": 12288,
+      "native_process_tree_memory_mib": 2048,
+      "clickhouse_max_memory_usage_bytes": 536870912
+    },
+    "input_seals": {
+      "production": {
+        "path": "/opt/mldata_ssd/cache/crystal-click-w295.PNe61qI1/manifests/production.source.json",
+        "bytes": 80706,
+        "sha256": "e6ca3a77630d28a3fbce975e0e32c0d383afe8d753b8181eb7cddfd831ab7f65",
+        "files": 638
+      },
+      "qualified": {
+        "path": "/opt/mldata_ssd/cache/crystal-click-w295.PNe61qI1/manifests/qualified.source.json",
+        "bytes": 441070,
+        "sha256": "1c7811338b872e4e9328e861b9c6e5570f2bf866e2722822a128823dfea609df",
+        "files": 3374
+      }
+    },
+    "native": {
+      "runner": "scripts/verify_materialized_view_aggregate_projection_w295.rb",
+      "helper": "scripts/check_materialized_view_aggregate_projection_w295.cr",
+      "version": "26.10.1.1201",
+      "revision": "54515",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "binary_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "source_reference": {
+        "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "files": [
+          "src/Storages/MergeTree/MergeTreeDataWriter.cpp",
+          "src/Storages/MergeTree/MergeTreeData.cpp",
+          "src/Storages/MergeTree/MergeTreeSettings.cpp",
+          "src/AggregateFunctions/AggregateFunctionCount.h"
+        ]
+      },
+      "per_mode": "Both pairs passed ATTACH, CHECK, exact stock index and state comparisons, full and filtered forced queries, and offline full and cross-mark readback. A separate raw audit verified the mark grids, decoded key and Count callback bytes, and file preservation.",
+      "guarded_processes_per_mode": {
+        "debug": 56,
+        "release": 56
+      },
+      "observed": {
+        "input_rows": 143,
+        "output_groups": 5,
+        "count_values_in_key_order": [
+          1,
+          130,
+          2,
+          7,
+          3
+        ],
+        "child_data_mark_rows": [
+          2,
+          2,
+          1
+        ],
+        "child_index_entries_including_terminal": 4,
+        "pairs": [
+          {
+            "parent_layout": "Wide",
+            "child_marks": "data.mrk4",
+            "original_files_preserved": 24,
+            "key_filtered_granules_read": 1
+          },
+          {
+            "parent_layout": "Compact",
+            "child_marks": "data.cmrk4",
+            "original_files_preserved": 20,
+            "key_filtered_granules_read": 1
+          }
+        ]
+      }
+    },
+    "evidence_index": {
+      "path": "/opt/mldata_ssd/cache/crystal-click-w295.PNe61qI1/verification-summary.json",
+      "bytes": 15885,
+      "sha256": "0316d80808106cce1a796d9fce1cd71ae3a8fe73e7f6e8b3b930f381f56a372d"
+    }
+  },
+  "changed_paths": [
+    ".landmark/evidence/materialized-view-aggregate-projection-w295.json",
+    "LANDMARKS.md",
+    "README.md",
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "scripts/check_materialized_view_aggregate_projection_w295.cr",
+    "scripts/verify_materialized_view_aggregate_projection_w295.rb",
+    "spec/offline_materialized_view_compact_count_projection_w295_spec.cr",
+    "src/crystal_click.cr",
+    "src/crystal_click/compact_aggregate_count_reader_admission.cr",
+    "src/crystal_click/compact_binary_bulk_column_reader.cr",
+    "src/crystal_click/compact_binary_bulk_normalizer.cr",
+    "src/crystal_click/compact_part_physical_context.cr",
+    "src/crystal_click/compact_part_projection.cr",
+    "src/crystal_click/compact_part_table.cr",
+    "src/crystal_click/compact_part_writer/compact_part_operation.cr",
+    "src/crystal_click/compact_part_writer/compact_part_prepared_projection.cr",
+    "src/crystal_click/compact_static_callback_plan.cr",
+    "src/crystal_click/compact_static_write_plan.cr",
+    "src/crystal_click/offline_transform_projection_bindings.cr",
+    "src/crystal_click/typed_part_table.cr",
+    "src/crystal_click/wide_part_table.cr",
+    "src/crystal_click/wide_part_writer/wide_part_operation.cr"
+  ],
+  "refresh_when": "Rerun both Crystal build modes and both native pairs after changes to DDL, Count encoding, Compact marks, publication, typed admission, or the ClickHouse pin."
+}

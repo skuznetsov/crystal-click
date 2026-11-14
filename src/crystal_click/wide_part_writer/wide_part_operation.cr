@@ -63,7 +63,10 @@ module CrystalClick
                       input.target, projection, context, parent_row_count: keys.size.to_u64
                     )
                   else
-                    CompactPartPreparedProjection.prepare(input.target, projection, context.projection_budgets)
+                    CompactPartPreparedProjection.prepare(
+                      input.target, projection, context.projection_budgets,
+                      parent_row_count: keys.size.to_u64,
+                    )
                   end
           combined_entries += child.checksum_entry_count.to_i64
           combined_files += child.file_count.to_i64

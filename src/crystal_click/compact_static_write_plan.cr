@@ -16,6 +16,8 @@ module CrystalClick
       limits : BinaryCodecLimits,
       @mark_format : CompactMarkFormat = CompactMarkFormat::Mrk3,
       @variant_discriminator_mode : CompactVariantDiscriminatorMode = CompactVariantDiscriminatorMode::Compact,
+      *,
+      allow_projection_count_state : Bool = false,
     )
       @limits = limits
       @variant_discriminator_mode.wire_value
@@ -38,7 +40,10 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact static column names are invalid or duplicated")
         end
 
-        plan = CompactStaticCallbackPlan.new(column, limits, @variant_discriminator_mode)
+        plan = CompactStaticCallbackPlan.new(
+          column, limits, @variant_discriminator_mode,
+          allow_projection_count_state && name == "count()",
+        )
         names = plan.callback_names
         if names.empty?
           raise UnsupportedFormatError.new("Compact static column has no physical callbacks")

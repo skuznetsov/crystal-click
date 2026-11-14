@@ -56,6 +56,9 @@ adds both extrema to that child layout through the same publication path.
 The [two-key profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-an-aggregate-projection-w294)
 writes both UInt64 group keys and their compound `primary.idx` within
 the same Wide child publication.
+The [Compact Count profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-count-projection-publication-from-a-transform-w295)
+uses `CompactPartProjection.precomputed_count` for a Compact MRK4 child with
+one UInt64 group key and `count()` under either parent layout.
 
 ## Compact and mixed projection reads (W288)
 
@@ -69,9 +72,11 @@ and path, and source offsets count rows from the selected children in order.
 
 The reader checks every child's presence, manifest binding and selected
 schema before callbacks, including short and EOF windows. It inherits the
-selected reader's format, type and payload-validation policy. The catalog
-recognizes the persisted `WITH SETTINGS (...)` suffix with simple literals
-and retains the SELECT body as the projection definition.
+selected reader's format, type and payload-validation policy. W295 adds a
+Compact MRK4 Count profile, with the same hidden group-key roster
+required across all selected children. The catalog recognizes the persisted
+`WITH SETTINGS (...)` suffix with simple literals and retains the SELECT
+body as the projection definition.
 
 The behavioral baseline routed a Compact child through the Wide reader and
 failed on the Wide `columns_substreams.txt` requirement. A second baseline

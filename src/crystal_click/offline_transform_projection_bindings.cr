@@ -7,6 +7,7 @@ module CrystalClick
       binding: PartSchemaBinding,
       aggregate: Bool,
       aggregate_count: Bool,
+      aggregate_count_only: Bool,
     )
 
     @schema_by_name : Hash(String, ProjectionSchema)
@@ -75,10 +76,16 @@ module CrystalClick
           raise UnsupportedFormatError.new("transform projection output key does not match target schema")
         end
         aggregate_child = projection.is_a?(WidePartProjection) && projection.aggregate_projection?
-        count_child = projection.is_a?(WidePartProjection) && !projection.count_total.nil?
+        count_child = !projection.count_total.nil?
         if schema[:aggregate_count]
           unless count_child
-            raise UnsupportedFormatError.new("transform count projection requires a Wide count child")
+            raise UnsupportedFormatError.new("transform count projection requires a Wide count child or an exact Compact Count child")
+          end
+          if compact = projection.as?(CompactPartProjection)
+            bound_keys = binding.key_names
+            unless schema[:aggregate_count_only] && bound_keys.size == 1 && bound_keys[0] == compact.key_name
+              raise UnsupportedFormatError.new("transform Compact Count child requires one UInt64 GROUP BY key and canonical count() only")
+            end
           end
         elsif schema[:aggregate]
           unless aggregate_child
@@ -88,7 +95,7 @@ module CrystalClick
             raise UnsupportedFormatError.new("transform aggregate projection roster does not match target DDL")
           end
         else
-          if aggregate_child
+          if aggregate_child || count_child
             raise UnsupportedFormatError.new("transform plain projection requires a non-aggregate child")
           end
           unless projection.row_count == parent_rows
@@ -103,8 +110,13 @@ module CrystalClick
 
     private def parse_schema(definition : String, target_columns : Array(OfflineColumn)) : ProjectionSchema
       if grouped = /\ASELECT\s+([\s\S]+?)\s+GROUP\s+BY\s+([\s\S]+)\z/i.match(definition)
-        binding, aggregate_count = parse_aggregate_schema(grouped[1], grouped[2], target_columns)
-        return {binding: binding, aggregate: true, aggregate_count: aggregate_count}
+        binding, aggregate_count, aggregate_count_only = parse_aggregate_schema(grouped[1], grouped[2], target_columns)
+        return {
+          binding:              binding,
+          aggregate:            true,
+          aggregate_count:      aggregate_count,
+          aggregate_count_only: aggregate_count_only,
+        }
       end
 
       plain = /\ASELECT\b([\s\S]*?)\s+ORDER\s+BY\s+([\s\S]+)\z/i.match(definition)
@@ -126,14 +138,19 @@ module CrystalClick
         raise UnsupportedFormatError.new("transform projection ORDER BY must match its first selected UInt64 key")
       end
       columns = selected_columns.map { |column| {column.name, column.type} }
-      {binding: PartSchemaBinding.new(key.name, columns, "projection"), aggregate: false, aggregate_count: false}
+      {
+        binding:              PartSchemaBinding.new(key.name, columns, "projection"),
+        aggregate:            false,
+        aggregate_count:      false,
+        aggregate_count_only: false,
+      }
     end
 
     private def parse_aggregate_schema(
       select_list : String,
       group_keys_sql : String,
       target_columns : Array(OfflineColumn),
-    ) : Tuple(PartSchemaBinding, Bool)
+    ) : Tuple(PartSchemaBinding, Bool, Bool)
       group_keys = group_keys_sql.split(',').map { |token| plain_target_column(token, target_columns) }
       unless group_keys.size == 1 || group_keys.size == 2
         raise UnsupportedFormatError.new("transform aggregate projection GROUP BY requires one or two plain UInt64 keys")
@@ -218,7 +235,8 @@ module CrystalClick
                 else
                   PartSchemaBinding.new({group_keys[0].name, group_keys[1].name}, columns, "projection")
                 end
-      {binding, count_seen}
+      count_only = group_keys.size == 1 && count_seen && aggregate_functions.size == 1
+      {binding, count_seen, count_only}
     end
 
     private def aggregate_alias!(token : String, function_name : String) : String

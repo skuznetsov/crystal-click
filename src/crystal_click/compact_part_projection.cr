@@ -15,6 +15,7 @@ module CrystalClick
     @keys : Array(UInt64)
     @columns : Array(CompactPartColumn)
     @schema_binding : PartSchemaBinding?
+    @count_total : UInt128?
 
     private def initialize(
       @name : String,
@@ -28,6 +29,7 @@ module CrystalClick
       @compress_marks : Bool,
       @profile : BinaryBulkProfile,
       @schema_binding : PartSchemaBinding? = nil,
+      @count_total : UInt128? = nil,
     )
     end
 
@@ -74,6 +76,79 @@ module CrystalClick
       )
     end
 
+    # Retains sorted distinct group keys and positive caller-computed states
+    # for one nominal AggregateFunction(count) output. This profile fixes the
+    # Compact child to MRK4 and String serialization version 1.
+    def self.precomputed_count(
+      name : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      counts : Slice(UInt64),
+      *,
+      rows_per_mark : Int32 = 8192,
+      frame_bytes : Int = 4096,
+      compress_marks : Bool = false,
+    ) : CompactPartProjection
+      validate_projection_name!(name)
+      validate_column_name!(key_name)
+      unless rows_per_mark > 0 && rows_per_mark <= WidePartWriter::MAX_ROWS_PER_MARK &&
+             rows_per_mark <= WidePartTable::MAX_MARK_ROWS
+        raise ArgumentError.new("projection rows_per_mark is outside the Compact reader limit")
+      end
+      unless frame_bytes > 0 && frame_bytes <= Int32::MAX
+        raise ArgumentError.new("projection frame_bytes is outside the Compact writer limit")
+      end
+      if keys.empty? || keys.size.to_u64 > WidePart::MAX_ROWS
+        raise ArgumentError.new("a count projection requires a bounded nonempty UInt64 key stream")
+      end
+      unless counts.size == keys.size
+        raise ArgumentError.new("count projection keys and counts must have equal lengths")
+      end
+
+      retained_keys = Array(UInt64).new(keys.size)
+      retained_counts = Array(UInt64).new(counts.size)
+      total = 0_u128
+      keys.each_with_index do |key, index|
+        if index > 0 && key <= retained_keys[index - 1]
+          raise ArgumentError.new("count projection keys must be strictly increasing")
+        end
+        retained_keys << key
+
+        count = counts[index]
+        if count == 0_u64
+          raise ArgumentError.new("count projection values must be positive")
+        end
+        count128 = count.to_u128
+        if count128 > UInt128::MAX - total
+          raise ArgumentError.new("count projection total overflows UInt128")
+        end
+        retained_counts << count
+        total += count128
+      end
+
+      count_type = BinaryDataType.aggregate_count
+      mark_count = (retained_counts.size - 1) // rows_per_mark + 1
+      count_granules = Array(Array(BinaryValue)).new(mark_count)
+      offset = 0
+      while offset < retained_counts.size
+        rows = {rows_per_mark, retained_counts.size - offset}.min
+        granule = Array(BinaryValue).new(rows)
+        rows.times do |row|
+          granule << BinaryValue.aggregate_count_state(count_type, retained_counts[offset + row])
+        end
+        count_granules << granule
+        offset += rows
+      end
+      count_column = CompactPartColumn.binary_bulk("count()", count_type, count_granules)
+
+      new(
+        String.new(name.to_slice), String.new(key_name.to_slice), retained_keys,
+        [count_column] of CompactPartColumn, rows_per_mark, frame_bytes.to_i32,
+        CompactMarkFormat::Mrk4, CompactVariantDiscriminatorMode::Compact,
+        compress_marks, BinaryBulkProfile.with_size_stream, nil, total,
+      )
+    end
+
     def name : String
       String.new(@name.to_slice)
     end
@@ -111,13 +186,18 @@ module CrystalClick
         source.@name, source.@key_name, source.@keys, source.@columns,
         source.@rows_per_mark, source.@frame_bytes, source.@mark_format,
         source.@variant_discriminator_mode, source.@compress_marks, source.@profile,
-        binding,
+        binding, source.@count_total,
       )
     end
 
     # :nodoc:
     def schema_binding : PartSchemaBinding?
       @schema_binding
+    end
+
+    # :nodoc:
+    def count_total : UInt128?
+      @count_total
     end
 
     private def self.validate_projection_name!(name : String) : Nil

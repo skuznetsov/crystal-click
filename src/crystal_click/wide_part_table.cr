@@ -110,6 +110,7 @@ module CrystalClick
     @numeric_mode : Bool
     @typed_mode : Bool
     @flattened_context : FlattenedNestedTableContext?
+    @aggregate_count_key_names : Array(String)?
 
     def self.open_selected(parts : Array(String), columns : Array(String)) : WidePartTable
       new(parts, columns, false, false)
@@ -177,6 +178,12 @@ module CrystalClick
           {column.dup, source_name.dup, source_type.dup}
         end
       end
+    end
+
+    # Detached UInt64 sibling roster retained from the existing Wide Count
+    # pair admission. Ordinary selections expose no hidden Count key.
+    def aggregate_count_key_names : Array(String)?
+      @aggregate_count_key_names.try { |names| names.map { |name| String.new(name.to_slice) } }
     end
 
     # Return each selected part's data-mark row counts in physical part order.
@@ -4912,6 +4919,9 @@ module CrystalClick
       @part_count = @entries.size.to_i32
       @total_row_count = total_rows
       @checksum_verification = ChecksumVerification::SizeChecked
+      @aggregate_count_key_names = expected_aggregate_count_key_names.try do |names|
+        names.map { |name| String.new(name.to_slice) }
+      end
     end
 
     private def array_array_uint64_materialized_bytes(values : Array(Array(Array(UInt64)))) : UInt64

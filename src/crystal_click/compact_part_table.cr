@@ -134,13 +134,33 @@ module CrystalClick
           next
         end
 
-        type = dynamic_type || StaticBinaryBulkColumnDeclaration.parse(source_type) ||
-               raise(UnsupportedFormatError.new("selected Compact declaration is outside static or Dynamic BinaryBulk admission"))
-        if dynamic_type.nil? && !BinaryValueTypedBatchAdapter.admitted?(type)
+        projection_count_plan = WideAggregateCountStoragePlan.for_type_name(source_type)
+        if count_plan = projection_count_plan
+          unless projection_name && column == "count()" &&
+                 count_plan.type_name == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
+            raise UnsupportedFormatError.new("Compact AggregateFunction(count) is admitted only for the literal projection count() child")
+          end
+        end
+
+        type = if count_plan = projection_count_plan
+                 count_plan.data_type
+               else
+                 dynamic_type || StaticBinaryBulkColumnDeclaration.parse(source_type) ||
+                   raise(UnsupportedFormatError.new("selected Compact declaration is outside static or Dynamic BinaryBulk admission"))
+               end
+        if dynamic_type.nil? && projection_count_plan.nil? && !BinaryValueTypedBatchAdapter.admitted?(type)
           raise UnsupportedFormatError.new("selected Compact declaration has no established typed batch carrier")
         end
 
-        reader : CompactColumnReader = if dynamic_type
+        reader : CompactColumnReader = if count_plan = projection_count_plan
+          count_reader = CompactBinaryBulkColumnReader.open_projection_count(
+            @part_path,
+            transport_budget: budget,
+          )
+          count_reader.aggregate_count_key_names ||
+            raise(CorruptPartError.new("Compact projection Count reader omitted its hidden key roster"))
+          count_reader
+        elsif dynamic_type
           CompactDynamicBulkColumnReader.open(
             @part_path,
             column,
@@ -212,6 +232,18 @@ module CrystalClick
       @column_sources.map do |name, source_name, source_type|
         {String.new(name.to_slice), String.new(source_name.to_slice), String.new(source_type.to_slice)}
       end
+    end
+
+    # Detached UInt64 sibling roster for projection-only Count selections.
+    # Ordinary Compact selections expose no hidden Count key.
+    def aggregate_count_key_names : Array(String)?
+      @readers.each do |entry|
+        if reader = entry[3].as?(CompactBinaryBulkColumnReader)
+          names = reader.aggregate_count_key_names
+          return names if names
+        end
+      end
+      nil
     end
 
     def part_mark_row_counts : Array(Array(UInt64))
@@ -498,10 +530,15 @@ module CrystalClick
           next if entry[2].contains_dynamic?
           values = values_by_column[column_index]
           slice = Slice.new(values.to_unsafe + cursor.to_i, slice_rows.to_i)
-          estimated = BinaryValueTypedBatchAdapter.estimated_materialization_bytes(entry[2], slice)
-          unless estimated
-            raise UnsupportedFormatError.new("Compact selected mark has no bounded typed carrier estimate")
-          end
+          estimated = if WideAggregateCountStoragePlan.for_type(entry[2])
+                        WideAggregateCountTableMaterializer.preflight(
+                          slice_rows,
+                          remaining_bytes - carrier_bytes,
+                        )
+                      else
+                        BinaryValueTypedBatchAdapter.estimated_materialization_bytes(entry[2], slice) ||
+                          raise(UnsupportedFormatError.new("Compact selected mark has no bounded typed carrier estimate"))
+                      end
           if estimated > remaining_bytes - carrier_bytes
             raise CorruptPartError.new("Compact typed carriers exceed aggregate materialization limit")
           end
@@ -608,7 +645,9 @@ module CrystalClick
           entry = @readers[reader_index]
           values = values_by_column[reader_index]
           slice = Slice.new(values.to_unsafe + row_offset.to_i, rows.to_i)
-          if entry[2].contains_dynamic?
+          if WideAggregateCountStoragePlan.for_type(entry[2])
+            batch.install_aggregate_count_states(entry[0], slice, rows.to_i32)
+          elsif entry[2].contains_dynamic?
             batch.install_dynamic_bulk_values(entry[0], slice, rows.to_i32)
           else
             BinaryValueTypedBatchAdapter.install(

@@ -1,5 +1,50 @@
 # Caller-run materialized-view transform frontier
 
+## Compact Count projection publication from a transform (W295)
+
+This profile admits a Compact MRK4 child with an uncompressed `primary.idx`
+for one plain UInt64 `GROUP BY` key and `count()` under either parent layout.
+The callback supplies strictly ascending group keys and positive counts
+through `CompactPartProjection.precomputed_count`. The child's exact physical
+columns are the key and `count()` of type `AggregateFunction(count)`.
+The shared Compact writer encodes the Count state through BinaryBulk and
+checks it on readback. Publication requires the counts to sum to the
+parent's rows and uses the existing parent staging and checksum summary.
+
+The typed projection scan uses the existing Count batch accessor and
+checks the key's callback name and exact UInt64 span in every data mark
+even when the selection omits the key. Mixed Wide and Compact Count
+scans require the same ordered group key names in every selected child.
+Compact MRK3, compressed primary indexes, more group keys, additional
+aggregate states, and ordinary Compact Count inputs remain outside this
+profile.
+
+The compatibility failure to catch is a child that attaches yet returns
+incorrect grouped counts. The baseline scans a stock Compact Count child
+through the existing selection entry point. The new checks require exact
+state and primary-index comparisons with stock ClickHouse, full and
+filtered forced-projection queries against projection-disabled controls,
+and full and cross-mark Crystal scans of both attached parent layouts.
+They also exercise a rejected count total, a shortened key interval in a
+later mark, and a mismatched hidden key across children before a callback
+can consume rows. Revert the feature commit to roll back this profile.
+
+### Qualification
+
+Debug and Release each passed 281 examples across 41 spec files and a
+separate typed scan of a stock Compact Count child. The specs also
+exercise a Count-only window that spans Wide and Compact children.
+
+ClickHouse 26.10.1.1201 attached and checked a Wide parent with a
+`data.mrk4` child and a Compact parent with a `data.cmrk4` child in both
+build modes. The state reads and primary indexes matched the stock
+controls, including the terminal index entry. Forced `by_group` queries
+matched queries with projections disabled. Filtering by `group_key = 42`
+read one of three child granules. Crystal reopened both attachments and
+scanned the children in full and across marks. See the
+[native witness runner](../scripts/verify_materialized_view_aggregate_projection_w295.rb)
+and [W295 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w295.json).
+
 ## Two UInt64 group keys in an aggregate projection (W294)
 
 This profile extends `8bc4a36` to two distinct plain UInt64 `GROUP BY`

@@ -16,12 +16,19 @@ module CrystalClick
     # Validate only the nominal static declaration owner. Catalog preflight
     # uses this before invoking caller code; value grids and physical callback
     # schedules remain owned by the eventual write plan.
-    def self.validate_declaration!(type : BinaryDataType, limits : BinaryCodecLimits) : Nil
+    def self.validate_declaration!(
+      type : BinaryDataType,
+      limits : BinaryCodecLimits,
+      allow_projection_count_state : Bool = false,
+    ) : Nil
       if type.contains_dynamic?
         raise UnsupportedFormatError.new("Compact static writer does not admit Dynamic state")
       end
       if type.contains_json?
         raise UnsupportedFormatError.new("Compact static writer does not admit JSON state")
+      end
+      if allow_projection_count_state && type == BinaryDataType.aggregate_count
+        return nil
       end
       unless BinaryValueTypedBatchAdapter.admitted?(type)
         raise UnsupportedFormatError.new("Compact selected type has no established typed batch carrier")
@@ -37,6 +44,7 @@ module CrystalClick
       input : CompactStaticColumnInput,
       limits : BinaryCodecLimits,
       @variant_discriminator_mode : CompactVariantDiscriminatorMode = CompactVariantDiscriminatorMode::Compact,
+      allow_projection_count_state : Bool = false,
     )
       @type = input.type
       @profile = input.profile
@@ -50,7 +58,11 @@ module CrystalClick
       unless input.map_basic?
         raise UnsupportedFormatError.new("Compact static writer requires BASIC Map serialization")
       end
-      self.class.validate_declaration!(@type, limits)
+      if allow_projection_count_state &&
+         (@column_name != "count()" || @type != BinaryDataType.aggregate_count)
+        raise UnsupportedFormatError.new("Compact projection Count requires its exact nominal count() column")
+      end
+      self.class.validate_declaration!(@type, limits, allow_projection_count_state)
 
       physical = BinaryBulkPhysicalPlan.new(@type, @column_name, @profile, limits)
       normalizer = CompactBinaryBulkNormalizer.new(@type, @column_name, @profile, limits)

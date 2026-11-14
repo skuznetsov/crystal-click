@@ -1,5 +1,23 @@
 # Crystal Click landmarks
 
+## Compact Count projection publication from a transform — W295
+
+- The callback supplies one strictly ascending UInt64 group key and positive
+  Count states through `CompactPartProjection.precomputed_count`. Both parent
+  writers use the same staged Compact MRK4 child writer after validating the
+  Count total against the parent row count. The physical state callback is
+  `count%28%29`, and BinaryBulk owns its canonical VarUInt encoding.
+- A typed Count scan checks the hidden key's callback and exact byte width
+  in every data mark before yielding a window. The mixed-layout reader
+  checks the ordered hidden key names across the selected children.
+- Both parent layouts passed native ATTACH, CHECK, exact index and state
+  reads, forced projection queries, and offline full and window scans.
+  The key filter read one of three child granules for each tested pair.
+  Refresh after changes to DDL binding, Count encoding, Compact marks,
+  publication, typed admission, or the ClickHouse pin. See the
+  [Compact Count profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-count-projection-publication-from-a-transform-w295)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w295.json).
+
 ## Two UInt64 group keys in an aggregate projection — W294
 
 - Both writers stage a Wide aggregate child with its parent. The child

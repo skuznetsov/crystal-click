@@ -11,6 +11,8 @@ module CrystalClick
     @part_path : String
     @column_name : String
     @type : BinaryDataType
+    @projection_count_reader : Bool
+    @aggregate_count_key_names : Array(String)?
     @limits : BinaryCodecLimits
     @transport_limits : CompressedStreamLimits
     @codec_budget : BinaryCodecBudget?
@@ -43,6 +45,30 @@ module CrystalClick
       )
     end
 
+    # Narrow stock projection route for the literal count() state column. This
+    # retains BinaryBulk's nominal Count decoder while keeping Count outside
+    # the ordinary static typed-carrier admission.
+    def self.open_projection_count(
+      part_path : String,
+      limits : BinaryCodecLimits = BinaryBulkCodec::DEFAULT_LIMITS,
+      transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
+      codec_budget : BinaryCodecBudget? = nil,
+      transport_budget : CompressedStreamBudget? = nil,
+    ) : CompactBinaryBulkColumnReader
+      effective_transport_budget = transport_budget || CompressedStreamBudget.new(transport_limits)
+      reader = new(
+        part_path,
+        "count()",
+        BinaryDataType.aggregate_count,
+        limits,
+        transport_limits,
+        codec_budget,
+        effective_transport_budget,
+        true,
+      )
+      reader
+    end
+
     private def initialize(
       part_path : String,
       column_name : String,
@@ -51,6 +77,7 @@ module CrystalClick
       @transport_limits : CompressedStreamLimits,
       codec_budget : BinaryCodecBudget?,
       transport_budget : CompressedStreamBudget?,
+      @projection_count_reader : Bool = false,
     )
       StorageReadBudgetValidator.validate!(
         codec_budget,
@@ -60,6 +87,7 @@ module CrystalClick
         "Compact BinaryBulk reader codec budget differs from its read limits",
         "Compact BinaryBulk reader transport budget differs from its read limits",
       )
+      @aggregate_count_key_names = nil
       @codec_budget = codec_budget
       @transport_budget = transport_budget
 
@@ -76,17 +104,29 @@ module CrystalClick
       name_budget.charge_wire_bytes(canonical.bytesize.to_u64)
       @schema_declaration = String.new(canonical.to_slice)
 
-      declaration = StaticBinaryBulkColumnDeclaration.new(@type, @limits)
-      unless declaration.declaration == canonical
-        raise CorruptPartError.new("Compact selected declaration differs from its canonical descriptor")
+      if @projection_count_reader
+        plan = WideAggregateCountStoragePlan.for_type(@type) ||
+               raise(UnsupportedFormatError.new("Compact projection reader requires an exact AggregateFunction(count) descriptor"))
+        unless @column_name == "count()" && plan.type_name == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME &&
+               canonical == plan.type_name
+          raise UnsupportedFormatError.new("Compact projection reader admits only the literal count() AggregateFunction(count) child")
+        end
+      else
+        declaration = StaticBinaryBulkColumnDeclaration.new(@type, @limits)
+        unless declaration.declaration == canonical
+          raise CorruptPartError.new("Compact selected declaration differs from its canonical descriptor")
+        end
       end
-      unless BinaryValueTypedBatchAdapter.admitted?(@type)
+      unless @projection_count_reader || BinaryValueTypedBatchAdapter.admitted?(@type)
         raise UnsupportedFormatError.new("Compact selected type has no established typed batch carrier")
       end
 
       operation_transport_budget = transport_budget || CompressedStreamBudget.new(@transport_limits)
       @transport_budget = operation_transport_budget
       @context = CompactPartPhysicalContext.open(@part_path, operation_transport_budget)
+      if @projection_count_reader && @context.mode != CompactMarkFormat::Mrk4
+        raise UnsupportedFormatError.new("Compact projection Count requires MRK4 child marks")
+      end
       if @context.row_count == 0_u64 || @context.row_count > WidePartTable::MAX_TOTAL_ROWS
         raise CorruptPartError.new("Compact row count is outside the typed reader bound")
       end
@@ -160,6 +200,13 @@ module CrystalClick
       @source_declaration = String.new(canonical.to_slice)
       @selected_checksum_names = ["data.bin", @context.marks_name]
       @logical_read_bytes = @context.logical_bytes_for(@column_name)
+      if @projection_count_reader
+        @aggregate_count_key_names = CompactAggregateCountReaderAdmission.validate_projection_count!(
+          @part_path,
+          self,
+          operation_transport_budget,
+        )
+      end
     end
 
     def schema_declaration : String
@@ -182,6 +229,51 @@ module CrystalClick
       copy_strings(@selected_checksum_names)
     end
 
+    # Detached hidden UInt64 sibling roster for the projection-only Count
+    # route. Ordinary Compact columns return nil.
+    def aggregate_count_key_names : Array(String)?
+      @aggregate_count_key_names.try { |names| copy_strings(names) }
+    end
+
+    # Validates the projection's hidden leading key against the same Compact
+    # columns, callback roster, and global mark grid already retained for the
+    # Count state. The key is not selected for materialization.
+    def projection_count_sibling_key_names! : Array(String)
+      unless @projection_count_reader && @context.mode == CompactMarkFormat::Mrk4 &&
+             @column_name == "count()" && @type == BinaryDataType.aggregate_count
+        raise UnsupportedFormatError.new("Compact sibling key inspection requires the exact projection Count reader")
+      end
+
+      columns = @context.columns
+      unless columns.size == 2 &&
+             columns[1] == {"count()", WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME} &&
+             columns[0][1] == "UInt64" && columns[0][0] != "count()"
+        raise UnsupportedFormatError.new("Compact projection Count requires one leading UInt64 key and literal count() state")
+      end
+
+      key_name = columns[0][0]
+      key_type = BinaryDataType.primitive("UInt64")
+      key_normalizer = CompactBinaryBulkNormalizer.new(
+        key_type,
+        key_name,
+        BinaryBulkProfile.single_stream,
+        @limits,
+      )
+      expected_callbacks = key_normalizer.expected_physical_callback_roster
+      unless expected_callbacks.size == 1
+        raise CorruptPartError.new("Compact UInt64 sibling key does not have one exact callback")
+      end
+      key_slots = @context.physical_roster.select { |slot| slot.column_name == key_name }
+      observed_callbacks = key_slots.map do |slot|
+        slot.stream_name || raise(CorruptPartError.new("Compact projection UInt64 key callback has no stream name"))
+      end
+      unless observed_callbacks == expected_callbacks
+        raise CorruptPartError.new("Compact projection UInt64 key callback differs from its exact physical plan")
+      end
+      @context.validate_uint64_single_callback_spans!(key_name, expected_callbacks[0])
+      [String.new(key_name.to_slice)] of String
+    end
+
     # Retained physical mark-coordinate and parent-row arrays. The mark index
     # stores every global slot coordinate plus the explicit terminal record.
     def retained_grid_workspace_bytes : UInt64
@@ -201,6 +293,9 @@ module CrystalClick
       bytes = checked_add(bytes, string_owner_bytes(@source_declaration))
       bytes = checked_add(bytes, string_array_bytes(@physical_stream_names))
       bytes = checked_add(bytes, string_array_bytes(@selected_checksum_names))
+      if key_names = @aggregate_count_key_names
+        bytes = checked_add(bytes, string_array_bytes(key_names))
+      end
       bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
       checked_add(bytes, checked_multiply(@mark_row_counts.size.to_u64, sizeof(UInt64).to_u64))
     end
@@ -266,6 +361,9 @@ module CrystalClick
         mark_values.each do |value|
           unless value.type == @type
             raise CorruptPartError.new("Compact BinaryBulk decoder returned a mismatched value type")
+          end
+          if @projection_count_reader && value.count_state == 0_u64
+            raise CorruptPartError.new("Compact projection AggregateFunction(count) state is zero")
           end
         end
       end

@@ -67,6 +67,7 @@ module CrystalClick
       @part_mark_row_counts = Array(Array(UInt64)).new(selected.size)
       expected_types = nil.as(Array({String, String})?)
       expected_sources = nil.as(Array({String, String, String})?)
+      expected_aggregate_count_key_names = nil.as(Array(String)?)
       total_rows = 0_u64
       total_marks = 0_u64
       checksum_state = ChecksumVerification::SizeChecked
@@ -122,6 +123,13 @@ module CrystalClick
           end
         else
           expected_sources = detached_sources(current_sources)
+        end
+
+        current_count_key_names = reader.aggregate_count_key_names
+        if part_index == 0
+          expected_aggregate_count_key_names = current_count_key_names
+        elsif current_count_key_names != expected_aggregate_count_key_names
+          raise CorruptPartError.new("selected parts have different hidden AggregateFunction(count) sibling group key rosters")
         end
 
         marks_by_part = reader.part_mark_row_counts

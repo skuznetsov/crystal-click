@@ -2,6 +2,19 @@
 
 ## Current qualification
 
+### W295 Compact Count projection publication from a materialized-view transform
+
+The callback can supply one plain UInt64 group key and `count()` through
+`CompactPartProjection.precomputed_count`. Both parent layouts publish a
+Compact MRK4 child. Debug and Release each passed 281 affected examples
+and a separate stock-child scan. On ClickHouse 26.10.1.1201, both parent
+layouts passed ATTACH, CHECK, exact state and index comparisons, and
+forced projection queries. The key filter read one of three child
+granules in both cases. Crystal reads across marks and across Wide and
+Compact children. See the
+[Compact Count profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-count-projection-publication-from-a-transform-w295)
+and [W295 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w295.json).
+
 ### W294 Two UInt64 group keys in an aggregate projection
 
 The callback supplies strictly ascending UInt64 key pairs and one state
@@ -146,9 +159,9 @@ S0/S1 and V3 statistics matrix. See the
 
 ## Remaining work
 
-1. **Projections.** Qualify Compact aggregate children, additional aggregate
-   declarations, and further layout and type combinations for projection
-   reads and writes. See the
+1. **Projections.** Extend the Compact Count profile with more aggregate
+   states, compound group keys, and further layout and type combinations
+   for projection reads and writes. See the
    [projection publication frontier](PROJECTION_PUBLICATION_FRONTIER.md).
 2. **Type and layout compatibility.** Pair reader and writer admission for
    remaining physical profiles of JSON/Object and legal recursive products
@@ -4446,8 +4459,8 @@ source/runtime identities and executed evidence.
   `batch.aggregate_count_states_for(column, expected_type)` for nominal
   BinaryValue states; the batch Slice is callback-borrowed, copied state
   handles and `.values` are owned. Transformed `nothingUInt64`, other aggregate
-  functions, unqualified outer/storage products and Count projection payloads
-  remain refused. See
+  functions and unqualified outer/storage products remain outside W178. The
+  later transform profiles qualify selected Count projection payloads. See
   [the W178 frontier](AGGREGATE_COUNT_ARGUMENTS_FRONTIER.md).
 - `BinaryDataType.dynamic` and `BinaryValue.dynamic` provide nominal-cap
   identity and paired generic logical Dynamic values. W153 preserves selected
@@ -4776,7 +4789,8 @@ source/runtime identities and executed evidence.
    W291 through W294 add Wide aggregate projection children under either
    parent layout with one or two plain UInt64 group keys and any combination of
    `count()`, `sum(value)`, `min(value)`, and `max(value)` over the
-   supported UInt64 arguments.
+   supported UInt64 arguments. W295 adds a Compact MRK4 child under either
+   parent layout for one plain UInt64 group key with `count()`.
    General keys and partitions, additional projection declarations, remaining
    layouts/types and automatic materialization remain open.
 4. **General table writing.** The detached-part writers and small
@@ -4937,15 +4951,17 @@ retains the implementation checkpoints and responsibility boundaries.
    manifests and qualify mixed Wide/Compact child reads. W290 combines these
    paths for plain projection declarations. W291 through W294 qualify
    aggregate projections with one or two plain UInt64 group keys, `count()`, and
-   UInt64 `sum(value)`, `min(value)`, and `max(value)` states. The next steps are
-   general key and partition derivation, additional projection declarations,
-   and bounded output appenders.
+   UInt64 `sum(value)`, `min(value)`, and `max(value)` states in Wide children.
+   W295 qualifies one UInt64 group key with `count()` in a Compact MRK4 child.
+   Compact children with more group keys or aggregate states, general key and
+   partition derivation, additional projection declarations, and bounded
+   output appenders remain open.
 4. Only then reopen memory/performance work. No current claim of stock-reader
    speed parity or a quantified percentage of complete ClickHouse support.
 
 ## Source reference
 
-W286 through W294 compare the relevant MergeTree paths against the pinned shallow
+W286 through W295 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

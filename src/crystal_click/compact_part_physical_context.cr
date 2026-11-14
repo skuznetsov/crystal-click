@@ -295,6 +295,53 @@ module CrystalClick
       total
     end
 
+    # Internal metadata-only guard for the hidden UInt64 sibling used by the
+    # Compact projection Count reader. Its one callback must span exactly
+    # eight bytes per parent row on every mark, including marks outside a
+    # selected value window.
+    def validate_uint64_single_callback_spans!(column_name : String, expected_stream_name : String) : Nil
+      unless @mode.mrk4?
+        raise UnsupportedFormatError.new("Compact UInt64 key span validation requires MRK4")
+      end
+
+      slot_count = @columns_substreams.slot_count_for(column_name)
+      unless slot_count == 1
+        raise CorruptPartError.new("Compact UInt64 key span requires exactly one physical callback")
+      end
+      @budget.preflight_records(slot_count.to_i64)
+      @budget.reserve_records(slot_count.to_i64)
+
+      slots = @columns_substreams.slots_for(column_name)
+      unless slots.size == 1
+        raise CorruptPartError.new("Compact UInt64 key span descriptor differs from its bounded slot count")
+      end
+      slot = slots[0]
+      unless slot.stream_name == expected_stream_name
+        raise CorruptPartError.new("Compact UInt64 key callback identity differs from its expected span")
+      end
+
+      @mark_index.mark_count.times do |mark|
+        rows = @mark_index.row_count_at(mark)
+        if rows > UInt64::MAX // 8_u64
+          raise CorruptPartError.new("Compact UInt64 key span row width overflows")
+        end
+        expected_bytes = rows * 8_u64
+        start = @mark_index.position_at(mark, slot.index)
+        finish = if slot.index + 1 < @mark_index.slot_count
+                   @mark_index.position_at(mark, slot.index + 1)
+                 else
+                   @mark_index.position_at(mark + 1, 0)
+                 end
+        if finish < start
+          raise CorruptPartError.new("Compact UInt64 key span has descending coordinates")
+        end
+        unless (finish - start).to_u64 == expected_bytes
+          raise CorruptPartError.new("Compact UInt64 key span differs from its exact row width")
+        end
+      end
+      nil
+    end
+
     def read_window(
       column_name : String,
       first_mark : Int,

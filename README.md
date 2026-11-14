@@ -245,9 +245,11 @@ child = CrystalClick::WidePartProjection.precomputed_count(
 )
 ```
 
-The Wide child stores one `AggregateFunction(count)` state per group. The
-writer checks that the counts add up to the parent row count. See the
-[count projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#count-projection-publication-from-a-transform-w291).
+The child stores one `AggregateFunction(count)` state per group. The writer
+checks that the counts add up to the parent row count. Use
+`CompactPartProjection.precomputed_count` with the same arguments to write
+a Compact MRK4 child. See the [Wide Count profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#count-projection-publication-from-a-transform-w291)
+and [Compact Count profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-count-projection-publication-from-a-transform-w295).
 
 For `PROJECTION by_group (SELECT group_key, count(), sum(value) GROUP BY
 group_key)`, let `values` hold the UInt64 `value` column aligned with
