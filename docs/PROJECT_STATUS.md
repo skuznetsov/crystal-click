@@ -2,6 +2,18 @@
 
 ## Current qualification
 
+### W298 Ordered UInt64 group keys in aggregate projections
+
+Both child writers accept an ordered list of plain UInt64 `GROUP BY`
+keys with caller-computed Count, Sum, Min and Max states. ClickHouse
+26.10.1.1201 attached and checked all four Wide/Compact parent and child
+pairings with four keys. In the tested Wide child of a Wide parent, the
+fourth key reduced selection from two of seven granules to one. Crystal
+reopened stock and attached children and validated hidden key spans in
+the Compact reader. See the
+[ordered-key profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#ordered-uint64-group-keys-in-aggregate-projections-w298)
+and [W298 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w298.json).
+
 ### W297 Two UInt64 group keys in a Compact aggregate projection
 
 Both parent layouts publish Compact MRK4 children with two plain UInt64
@@ -184,9 +196,8 @@ S0/S1 and V3 statistics matrix. See the
 
 ## Remaining work
 
-1. **Projections.** Extend the Compact aggregate profile with compound
-   group keys, additional state types, and further layout combinations
-   for projection reads and writes. See the
+1. **Projections.** Extend the aggregate profile to other group key types,
+   additional state types, and further physical layouts. See the
    [projection publication frontier](PROJECTION_PUBLICATION_FRONTIER.md).
 2. **Type and layout compatibility.** Pair reader and writer admission for
    remaining physical profiles of JSON/Object and legal recursive products
@@ -4816,7 +4827,8 @@ source/runtime identities and executed evidence.
    `count()`, `sum(value)`, `min(value)`, and `max(value)` over the
    supported UInt64 arguments. W295 through W297 add the same aggregate functions
    for a Compact MRK4 child with one or two plain UInt64 group keys under either
-   parent layout.
+   parent layout. W298 accepts an ordered array of plain UInt64 group keys
+   for either child layout.
    General keys and partitions, additional projection declarations, remaining
    layouts/types and automatic materialization remain open.
 4. **General table writing.** The detached-part writers and small
@@ -4979,7 +4991,8 @@ retains the implementation checkpoints and responsibility boundaries.
    aggregate projections with one or two plain UInt64 group keys, `count()`, and
    UInt64 `sum(value)`, `min(value)`, and `max(value)` states in Wide children.
    W295 through W297 qualify the same states in Compact MRK4 children with
-   one or two UInt64 group keys. More group keys or state types, general key and
+   one or two UInt64 group keys. W298 generalizes the number of UInt64 keys
+   in the aggregate children. More group key and state types, general key and
    partition derivation, additional projection declarations, and bounded
    output appenders remain open.
 4. Only then reopen memory/performance work. No current claim of stock-reader
@@ -4987,7 +5000,7 @@ retains the implementation checkpoints and responsibility boundaries.
 
 ## Source reference
 
-W286 through W297 compare the relevant MergeTree paths against the pinned shallow
+W286 through W298 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

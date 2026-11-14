@@ -14,24 +14,31 @@ module CrystalClick
         transport_limits : CompressedStreamLimits,
         validation_transport_budget : CompressedStreamBudget? = nil,
         projections : Array(ProjectionPreparedPart) = [] of ProjectionPreparedPart,
-        secondary_index_keys : Slice(UInt64)? = nil,
+        additional_index_keys : Array(Slice(UInt64)) = [] of Slice(UInt64),
         &validate_value : String -> Nil
       ) : String
         unless keys.size.to_u64 == input.expected_rows.sum(0_u64)
           raise ArgumentError.new("shared writer keys differ from its preflighted parent grid")
         end
-        if secondary_key_name = input.secondary_key_name
-          secondary_keys = secondary_index_keys ||
-                           raise ArgumentError.new("compound projection index is missing its second UInt64 key")
-          expected_second_stream = PhysicalStreamName.escape(secondary_key_name)
-          unless secondary_keys.size == keys.size && input.lane_bindings.any? { |binding|
-                   binding.column_name == secondary_key_name && binding.logical_name == expected_second_stream
-                 }
-            raise ArgumentError.new("compound projection index differs from its prepared second-key lane")
-          end
-        elsif secondary_index_keys
-          raise ArgumentError.new("a second primary-index key requires the admitted aggregate-child route")
+        unless additional_index_keys.size == input.additional_key_names.size
+          raise ArgumentError.new("compound projection index key count differs from its prepared key roster")
         end
+        input.additional_key_names.each_with_index do |name, index|
+          expected_stream = PhysicalStreamName.escape(name)
+          unless additional_index_keys[index].size == keys.size && input.lane_bindings.any? { |binding|
+                   binding.column_name == name && binding.logical_name == expected_stream
+                 }
+            raise ArgumentError.new("compound projection index differs from its prepared UInt64 key lanes")
+          end
+        end
+        compound_key_columns = if additional_index_keys.empty?
+                                 nil
+                               else
+                                 columns = Array(Slice(UInt64)).new(additional_index_keys.size + 1)
+                                 columns << keys
+                                 additional_index_keys.each { |key_column| columns << key_column }
+                                 columns
+                               end
         if rows_per_mark <= 0 || rows_per_mark > MAX_ROWS_PER_MARK
           raise ArgumentError.new("rows_per_mark is outside the admitted range")
         end
@@ -57,8 +64,8 @@ module CrystalClick
             File.write(File.join(stage, lane.binding.marks_filename), lane.marks)
           end
 
-          if secondary_keys = secondary_index_keys
-            records << PrimaryIndexWriter.write_compound(stage, keys, secondary_keys, rows_per_mark)
+          if index_keys = compound_key_columns
+            records << PrimaryIndexWriter.write_compound(stage, index_keys, rows_per_mark)
           else
             records << PrimaryIndexWriter.write(stage, keys, rows_per_mark)
           end
@@ -73,7 +80,7 @@ module CrystalClick
 
           validate_staged_part!(
             stage, input, keys, metadata, records, transport_limits,
-            validation_transport_budget, projections, secondary_index_keys
+            validation_transport_budget, projections, compound_key_columns
           )
           validate_value.call(stage)
           PartDirectoryPublisher.publish_exclusively(stage, input.target)
@@ -216,7 +223,7 @@ module CrystalClick
         transport_limits : CompressedStreamLimits,
         validation_transport_budget : CompressedStreamBudget?,
         projections : Array(ProjectionPreparedPart),
-        secondary_index_keys : Slice(UInt64)?,
+        compound_key_columns : Array(Slice(UInt64))?,
       ) : Nil
         unless Dir.children(stage).sort == input.expected_files
           raise CorruptPartError.new("staged part file roster differs from preflight")
@@ -242,14 +249,14 @@ module CrystalClick
         validate_metadata_files!(stage, metadata)
 
         primary = nil.as(PrimaryKeyIndex?)
-        if secondary_keys = secondary_index_keys
-          unless input.secondary_key_name
-            raise CorruptPartError.new("compound primary index has no bound second key")
+        if index_keys = compound_key_columns
+          unless input.additional_key_names.size + 1 == index_keys.size
+            raise CorruptPartError.new("compound primary index key count differs from its bound roster")
           end
-          PrimaryIndexWriter.validate_compound!(stage, input.expected_rows, keys, secondary_keys, checksums)
+          PrimaryIndexWriter.validate_compound!(stage, input.expected_rows, index_keys, checksums)
         else
-          if input.secondary_key_name
-            raise CorruptPartError.new("bound second key has no compound primary index")
+          unless input.additional_key_names.empty?
+            raise CorruptPartError.new("bound compound keys have no compound primary index")
           end
           opened = PrimaryKeyIndex.open(stage, input.mark_count, checksums, verify_recorded_hash: true)
           unless opened.keys.size == input.mark_count + 1

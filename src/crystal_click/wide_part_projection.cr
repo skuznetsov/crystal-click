@@ -11,8 +11,8 @@ module CrystalClick
     @count_total : UInt128?
     @aggregate_columns : Array(WidePartProjectionAggregate)
     @schema_binding : WidePartSchemaBinding?
-    @secondary_key_name : String?
-    @secondary_keys : Array(UInt64)?
+    @additional_key_names : Array(String)
+    @additional_key_columns : Array(Array(UInt64))
 
     private def initialize(
       @name : String,
@@ -23,8 +23,8 @@ module CrystalClick
       @count_total : UInt128? = nil,
       @schema_binding : WidePartSchemaBinding? = nil,
       @aggregate_columns : Array(WidePartProjectionAggregate) = [] of WidePartProjectionAggregate,
-      @secondary_key_name : String? = nil,
-      @secondary_keys : Array(UInt64)? = nil,
+      @additional_key_names : Array(String) = [] of String,
+      @additional_key_columns : Array(Array(UInt64)) = [] of Array(UInt64),
     )
     end
 
@@ -184,7 +184,52 @@ module CrystalClick
         String.new(name.to_slice), String.new(key_names[0].to_slice),
         retained_first_keys, [] of WidePartColumn, rows_per_mark,
         count_total, nil, retained_aggregates,
-        String.new(key_names[1].to_slice), retained_second_keys,
+        [String.new(key_names[1].to_slice)] of String, [retained_second_keys] of Array(UInt64),
+      )
+    end
+
+    # Retains ordered UInt64 group-key columns and caller-computed aggregate
+    # states. The returned primary-index tuple follows key_names order.
+    def self.precomputed_aggregate(
+      name : String,
+      key_names : Array(String),
+      keys : Array(Slice(UInt64)),
+      aggregate_columns : Array(WidePartProjectionAggregate),
+      *,
+      rows_per_mark : Int32 = 8192,
+    ) : WidePartProjection
+      validate_projection_name!(name)
+      key_names.each { |key_name| validate_column_name!(key_name) }
+      unless rows_per_mark > 0 && rows_per_mark <= WidePartWriter::MAX_ROWS_PER_MARK
+        raise ArgumentError.new("projection rows_per_mark is outside the admitted range")
+      end
+      unless key_names.size > 0 && key_names.size == keys.size && !keys.empty?
+        raise ArgumentError.new("aggregate projection key names and columns must share one nonempty roster")
+      end
+      if keys[0].empty? || keys[0].size.to_u64 > WidePart::MAX_ROWS
+        raise ArgumentError.new("an aggregate projection requires a bounded nonempty UInt64 key stream")
+      end
+
+      retained_aggregates, count_total = retain_aggregate_columns(aggregate_columns, keys[0].size)
+      retained_names, retained_key_columns = ProjectionUInt64Keys.snapshot(
+        key_names,
+        keys,
+        rows_per_mark,
+        retained_aggregates.size,
+        WidePart::MAX_METADATA_COLUMNS,
+        WidePartWriter::MAX_MARKS,
+      )
+      additional_names = Array(String).new(retained_names.size - 1) do |index|
+        retained_names[index + 1]
+      end
+      additional_keys = Array(Array(UInt64)).new(retained_key_columns.size - 1) do |index|
+        retained_key_columns[index + 1]
+      end
+
+      new(
+        String.new(name.to_slice), retained_names[0], retained_key_columns[0],
+        [] of WidePartColumn, rows_per_mark, count_total, nil, retained_aggregates,
+        additional_names, additional_keys,
       )
     end
 
@@ -202,20 +247,22 @@ module CrystalClick
     # report their original one-key roster.
     def key_names : Array(String)
       names = [String.new(@key_name.to_slice)] of String
-      if second = @secondary_key_name
-        names << String.new(second.to_slice)
-      end
+      @additional_key_names.each { |name| names << String.new(name.to_slice) }
       names
+    end
+
+    def additional_key_columns : Array(Array(UInt64))
+      @additional_key_columns.map(&.dup)
     end
 
     # :nodoc:
     def secondary_key_name : String?
-      @secondary_key_name.try { |name| String.new(name.to_slice) }
+      @additional_key_names.first?.try { |name| String.new(name.to_slice) }
     end
 
     # :nodoc:
     def secondary_keys : Array(UInt64)?
-      @secondary_keys.try(&.dup)
+      @additional_key_columns.first?.try(&.dup)
     end
 
     def keys : Array(UInt64)
@@ -267,7 +314,7 @@ module CrystalClick
         source.@name, source.@key_name, source.@keys, source.@columns,
         source.@rows_per_mark, source.@count_total,
         WidePartSchemaBinding.new(binding), source.@aggregate_columns,
-        source.@secondary_key_name, source.@secondary_keys,
+        source.@additional_key_names, source.@additional_key_columns,
       )
     end
 

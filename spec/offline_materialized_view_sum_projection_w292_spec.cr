@@ -226,7 +226,7 @@ describe "W292 caller-run Sum aggregate projections" do
       "SELECT sum(value), sum(id) GROUP BY group_key",
       "SELECT sum(value), count(value) GROUP BY group_key",
       "SELECT sum(value) AS n, count() AS n GROUP BY group_key",
-      "SELECT sum(value) GROUP BY group_key, id, value",
+      "SELECT sum(value) GROUP BY group_key, id, label",
     ].each do |ddl|
       root = File.tempname("crystal-click-w292-unsupported-sum-")
       begin

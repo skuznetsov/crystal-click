@@ -17,8 +17,8 @@ module CrystalClick
     @aggregate_columns : Array(WidePartProjectionAggregate)
     @schema_binding : PartSchemaBinding?
     @count_total : UInt128?
-    @secondary_key_name : String?
-    @secondary_keys : Array(UInt64)?
+    @additional_key_names : Array(String)
+    @additional_key_columns : Array(Array(UInt64))
 
     private def initialize(
       @name : String,
@@ -34,8 +34,8 @@ module CrystalClick
       @schema_binding : PartSchemaBinding? = nil,
       @count_total : UInt128? = nil,
       @aggregate_columns : Array(WidePartProjectionAggregate) = [] of WidePartProjectionAggregate,
-      @secondary_key_name : String? = nil,
-      @secondary_keys : Array(UInt64)? = nil,
+      @additional_key_names : Array(String) = [] of String,
+      @additional_key_columns : Array(Array(UInt64)) = [] of Array(UInt64),
     )
     end
 
@@ -228,7 +228,69 @@ module CrystalClick
         retained_first_keys, retained_columns, rows_per_mark, frame_bytes.to_i32,
         CompactMarkFormat::Mrk4, CompactVariantDiscriminatorMode::Compact,
         compress_marks, BinaryBulkProfile.with_size_stream, nil, count_total,
-        retained_aggregates, String.new(key_names[1].to_slice), retained_second_keys,
+        retained_aggregates, [String.new(key_names[1].to_slice)] of String,
+        [retained_second_keys] of Array(UInt64),
+      )
+    end
+
+    # Retains ordered UInt64 group-key columns and caller-computed aggregate
+    # states in the Compact MRK4 projection profile.
+    def self.precomputed_aggregate(
+      name : String,
+      key_names : Array(String),
+      keys : Array(Slice(UInt64)),
+      aggregates : Array(WidePartProjectionAggregate),
+      *,
+      rows_per_mark : Int32 = 8192,
+      frame_bytes : Int = 4096,
+      compress_marks : Bool = false,
+    ) : CompactPartProjection
+      validate_aggregate_projection_options!(name, rows_per_mark, frame_bytes)
+      key_names.each { |key_name| validate_column_name!(key_name) }
+      unless key_names.size > 0 && key_names.size == keys.size && !keys.empty?
+        raise ArgumentError.new("aggregate projection key names and columns must share one nonempty roster")
+      end
+      if keys[0].empty? || keys[0].size.to_u64 > WidePart::MAX_ROWS
+        raise ArgumentError.new("an aggregate projection requires a bounded nonempty UInt64 key stream")
+      end
+
+      retained_aggregates, count_total = retain_aggregate_columns(aggregates, keys[0].size)
+      if keys.size > 2
+        ProjectionUInt64Keys.preflight_additional_key_carriers!(
+          keys[0].size, keys.size - 1, rows_per_mark, WidePartTable::MAX_MARKS_PER_READER
+        )
+      end
+      retained_names, retained_key_columns = ProjectionUInt64Keys.snapshot(
+        key_names,
+        keys,
+        rows_per_mark,
+        retained_aggregates.size,
+        WidePartTable::MAX_COLUMNS,
+        WidePartTable::MAX_MARKS_PER_READER,
+      )
+      additional_names = Array(String).new(retained_names.size - 1) do |index|
+        retained_names[index + 1]
+      end
+      additional_keys = Array(Array(UInt64)).new(retained_key_columns.size - 1) do |index|
+        retained_key_columns[index + 1]
+      end
+
+      retained_columns = Array(CompactPartColumn).new(additional_keys.size + retained_aggregates.size)
+      additional_keys.each_with_index do |key_values, index|
+        retained_columns << build_uint64_key_column(
+          retained_names[index + 1], key_values, rows_per_mark, "compound aggregate"
+        )
+      end
+      build_aggregate_columns(retained_aggregates, rows_per_mark).each do |column|
+        retained_columns << column
+      end
+
+      new(
+        String.new(name.to_slice), retained_names[0], retained_key_columns[0],
+        retained_columns, rows_per_mark, frame_bytes.to_i32,
+        CompactMarkFormat::Mrk4, CompactVariantDiscriminatorMode::Compact,
+        compress_marks, BinaryBulkProfile.with_size_stream, nil, count_total,
+        retained_aggregates, additional_names, additional_keys,
       )
     end
 
@@ -244,20 +306,22 @@ module CrystalClick
     # report their original one-key roster.
     def key_names : Array(String)
       names = [String.new(@key_name.to_slice)] of String
-      if second = @secondary_key_name
-        names << String.new(second.to_slice)
-      end
+      @additional_key_names.each { |name| names << String.new(name.to_slice) }
       names
+    end
+
+    def additional_key_columns : Array(Array(UInt64))
+      @additional_key_columns.map(&.dup)
     end
 
     # :nodoc:
     def secondary_key_name : String?
-      @secondary_key_name.try { |name| String.new(name.to_slice) }
+      @additional_key_names.first?.try { |name| String.new(name.to_slice) }
     end
 
     # :nodoc:
     def secondary_keys : Array(UInt64)?
-      @secondary_keys.try(&.dup)
+      @additional_key_columns.first?.try(&.dup)
     end
 
     def keys : Array(UInt64)
@@ -300,7 +364,7 @@ module CrystalClick
         source.@rows_per_mark, source.@frame_bytes, source.@mark_format,
         source.@variant_discriminator_mode, source.@compress_marks, source.@profile,
         binding, source.@count_total, source.@aggregate_columns,
-        source.@secondary_key_name, source.@secondary_keys,
+        source.@additional_key_names, source.@additional_key_columns,
       )
     end
 
@@ -386,22 +450,13 @@ module CrystalClick
       name : String,
       keys : Array(UInt64),
       rows_per_mark : Int32,
+      aggregate_name : String = "two-key aggregate",
     ) : CompactPartColumn
-      mark_count = (keys.size.to_i64 + rows_per_mark.to_i64 - 1_i64) // rows_per_mark.to_i64
-      unless mark_count > 0 && mark_count <= WidePartTable::MAX_MARKS_PER_READER
-        raise ArgumentError.new("two-key aggregate projection mark count is outside the writer limit")
-      end
-
-      granules = Array(Array(BinaryValue)).new(mark_count.to_i32)
-      offset = 0
-      while offset < keys.size
-        rows = Math.min(rows_per_mark, keys.size - offset)
-        values = Array(BinaryValue).new(rows)
-        rows.times { |row| values << BinaryValue.uint64(keys[offset + row]) }
-        granules << values
-        offset += rows
-      end
-      CompactPartColumn.binary_bulk(name, BinaryDataType.primitive("UInt64"), granules)
+      type = BinaryDataType.primitive("UInt64")
+      granules = ProjectionUInt64Keys.uint64_granules(
+        keys, rows_per_mark, WidePartTable::MAX_MARKS_PER_READER, type, aggregate_name
+      )
+      CompactPartColumn.binary_bulk(name, type, granules)
     end
 
     private def self.validate_compound_index_size!(row_count : Int, rows_per_mark : Int32) : Nil

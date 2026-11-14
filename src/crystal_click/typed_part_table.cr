@@ -210,8 +210,7 @@ module CrystalClick
 
     # Mixed no-Count projection parity is checked only after an admitted
     # Compact aggregate child has supplied its hidden key roster. The Wide
-    # child metadata may describe one or two leading UInt64 group keys; this
-    # guard compares that existing roster without narrowing Wide admission.
+    # child metadata provides the ordered leading UInt64 group keys.
     private def wide_projection_group_key_names!(
       path : String,
       expected_rows : UInt64,
@@ -231,8 +230,8 @@ module CrystalClick
       while key_count < columns.size && columns[key_count][1] == "UInt64"
         key_count += 1
       end
-      unless key_count == 1 || key_count == 2
-        raise CorruptPartError.new("Wide projection aggregate has no one- or two-column UInt64 group key roster")
+      if key_count == 0
+        raise CorruptPartError.new("Wide projection aggregate has no UInt64 group key roster")
       end
       key_names = columns.first(key_count).map { |name, _type| String.new(name.to_slice) }
       unless key_names.to_set.size == key_names.size

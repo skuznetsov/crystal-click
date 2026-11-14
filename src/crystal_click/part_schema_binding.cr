@@ -14,10 +14,8 @@ module CrystalClick
       initialize([key_names[0], key_names[1]], columns, context)
     end
 
-    private def initialize(key_names : Array(String), columns : Array(Tuple(String, String)), context : String)
-      unless key_names.size == 1 || key_names.size == 2
-        raise ArgumentError.new("bound #{context} schema must contain one or two UInt64 keys")
-      end
+    def initialize(key_names : Array(String), columns : Array(Tuple(String, String)), context : String)
+      raise ArgumentError.new("bound #{context} schema must contain UInt64 keys") if key_names.empty?
       if columns.size <= key_names.size || columns.size > WidePart::MAX_METADATA_COLUMNS
         message = key_names.size == 1 ? "bound #{context} schema must contain a key and bounded value columns" : "bound #{context} schema must contain keys and bounded value columns"
         raise ArgumentError.new(message)

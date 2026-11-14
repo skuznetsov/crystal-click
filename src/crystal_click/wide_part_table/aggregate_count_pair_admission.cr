@@ -26,10 +26,11 @@ module CrystalClick
       end
 
       key_names = count_reader.aggregate_count_key_column_names
-      unless (key_names.size == 1 || key_names.size == 2) && key_names.to_set.size == key_names.size
-        raise CorruptPartError.new("AggregateFunction(count) sibling roster is not one or two distinct UInt64 keys")
+      if key_names.empty? || key_names.to_set.size != key_names.size
+        raise CorruptPartError.new("AggregateFunction(count) sibling roster requires distinct UInt64 keys")
       end
 
+      count_mark_rows = count_reader.mark_row_counts
       key_reader = nil.as(WidePart?)
       key_names.each do |key_name|
         reader = WidePart.open_typed(path, key_name)
@@ -38,7 +39,7 @@ module CrystalClick
         end
 
         key_mark_rows = reader.mark_row_counts
-        unless reader.row_count == count_reader.row_count && key_mark_rows == count_reader.mark_row_counts
+        unless reader.row_count == count_reader.row_count && key_mark_rows == count_mark_rows
           raise CorruptPartError.new("AggregateFunction(count) sibling row-mark axes differ")
         end
         raise BoundsError.new("AggregateFunction(count) sibling mark count exceeds per-reader limit") if key_mark_rows.size > max_marks

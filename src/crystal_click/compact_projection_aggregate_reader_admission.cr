@@ -1,6 +1,6 @@
 module CrystalClick
   # Projection-only admission for Compact aggregate states. It binds the
-  # hidden UInt64 key through the Compact context so declaration, callback
+  # hidden UInt64 keys through the Compact context so declaration, callback
   # identity, checksums, and global row/mark axes share one physical owner.
   private class CompactProjectionAggregateReaderAdmission
     FIXED_CHECKSUM_MANIFEST = Set{
@@ -66,8 +66,8 @@ module CrystalClick
       while key_count < columns.size && columns[key_count][1] == "UInt64"
         key_count += 1
       end
-      unless (key_count == 1 || key_count == 2) && columns.size > key_count && columns.size <= key_count + 4
-        raise UnsupportedFormatError.new("Compact projection aggregate requires one or two leading UInt64 keys and one to four states")
+      unless key_count > 0 && columns.size > key_count && columns.size <= key_count + 4
+        raise UnsupportedFormatError.new("Compact projection aggregate requires leading UInt64 keys and one to four states")
       end
       unless columns.map(&.[0]).to_set.size == columns.size
         raise CorruptPartError.new("Compact projection aggregate column names are not unique")
@@ -144,6 +144,10 @@ module CrystalClick
       expected_manifest << mark_name
       unless checksums.entries.keys.to_set == expected_manifest
         raise UnsupportedFormatError.new("Compact projection physical manifest is outside the admitted MRK4 child profile")
+      end
+      compressed_index = File.join(path, "primary.cidx")
+      if File.exists?(compressed_index) || File.symlink?(compressed_index)
+        raise CorruptPartError.new("Compact projection has ambiguous raw and compressed primary indexes")
       end
       checksums.entries.each_key do |name|
         checksums.validate_selected_entries(path, name)

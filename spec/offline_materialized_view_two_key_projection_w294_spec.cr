@@ -482,7 +482,7 @@ describe "W294 caller-run two-key UInt64 aggregate projections" do
     [
       "SELECT count() GROUP BY region, label",
       "SELECT count() GROUP BY region, region",
-      "SELECT count() GROUP BY region, day, id",
+      "SELECT count() GROUP BY region, day, label",
       "SELECT count() GROUP BY region + 1, day",
     ].each do |ddl|
       root = File.tempname("crystal-click-w294-invalid-ddl-")

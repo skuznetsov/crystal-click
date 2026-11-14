@@ -38,33 +38,15 @@ module CrystalClick
         context : WidePartOperationContext,
       ) : WidePartPreparedColumn
         type = BinaryDataType.primitive("UInt64")
-        granules = aggregate_projection_granules(
-          values, context.rows_per_mark, "UInt64 projection key"
-        ) { |value| BinaryValue.uint64(value) }
+        # WidePartPreparedProjection precharged the complete compound-key
+        # workspace to the shared operation budget before detaching lanes.
+        granules = ProjectionUInt64Keys.uint64_granules(
+          values, context.rows_per_mark, WidePartWriter::MAX_MARKS,
+          type, "UInt64 projection key"
+        )
         prepare_with_profile(
           name, type, granules, context, BinaryBulkProfile.with_size_stream, false
         )
-      end
-
-      private def self.aggregate_projection_granules(
-        values : Array(UInt64),
-        rows_per_mark : Int32,
-        aggregate_name : String,
-        &encode : UInt64 -> BinaryValue
-      ) : Array(Array(BinaryValue))
-        # Bound the child grid before expanding the UInt64 inputs into states.
-        mark_count = (values.size.to_i64 + rows_per_mark.to_i64 - 1_i64) // rows_per_mark.to_i64
-        unless mark_count > 0 && mark_count <= WidePartWriter::MAX_MARKS
-          raise ArgumentError.new("#{aggregate_name} projection mark count is outside the writer limit")
-        end
-        granules = Array(Array(BinaryValue)).new(mark_count.to_i32)
-        offset = 0
-        while offset < values.size
-          rows = Math.min(rows_per_mark, values.size - offset)
-          granules << Array(BinaryValue).new(rows) { |row| yield values[offset + row] }
-          offset += rows
-        end
-        granules
       end
 
       private def self.prepare_with_profile(

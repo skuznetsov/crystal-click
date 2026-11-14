@@ -29,12 +29,12 @@ module CrystalClick
     end
 
     def validate!(key_names : Array(String), prepared : Array(WidePartWriter::WidePartPreparedColumn)) : Nil
-      value_offset = 0
-      if key_names.size == 2
-        if prepared.empty? || prepared.first.column_name != key_names[1] || prepared.first.declaration != "UInt64"
-          raise UnsupportedFormatError.new("prepared Wide columns do not begin with the bound second UInt64 key")
+      value_offset = key_names.size - 1
+      value_offset.times do |index|
+        column = prepared[index]?
+        unless column && column.column_name == key_names[index + 1] && column.declaration == "UInt64"
+          raise UnsupportedFormatError.new("prepared Wide columns do not begin with the bound UInt64 keys")
         end
-        value_offset = 1
       end
       value_count = prepared.size - value_offset
       @binding.validate_values!(key_names, value_count, "Wide") do |index|

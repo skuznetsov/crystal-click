@@ -76,8 +76,8 @@ module CrystalClick
       serializers = info["columns"]?.try(&.as_a) ||
                     raise(CorruptPartError.new("serialization column metadata is missing or malformed"))
       # The paired Crystal writer emits an empty normalized list. Stock
-      # ClickHouse emits one Default statistics record per UInt64 key, in
-      # alphabetical order rather than physical GROUP BY order.
+      # ClickHouse emits one Default statistics record per UInt64 key,
+      # alphabetically by name.
       return key_names if serializers.empty?
       unless serializers.size == key_names.size
         if key_names.size == 1
@@ -123,8 +123,8 @@ module CrystalClick
       while key_count < part_columns.size && part_columns[key_count][1] == "UInt64"
         key_count += 1
       end
-      unless (key_count == 1 || key_count == 2) && part_columns.size > key_count && part_columns.size <= key_count + 4
-        raise UnsupportedFormatError.new("projection AggregateFunction(count) requires one or two leading UInt64 keys and one to four aggregate columns")
+      unless key_count > 0 && part_columns.size > key_count && part_columns.size <= key_count + 4
+        raise UnsupportedFormatError.new("projection AggregateFunction(count) requires leading UInt64 keys and one to four aggregate columns")
       end
       unless part_columns.map(&.[0]).to_set.size == part_columns.size
         raise CorruptPartError.new("AggregateFunction(count) part column names are not unique")

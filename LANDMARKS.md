@@ -1,5 +1,20 @@
 # Crystal Click landmarks
 
+## Ordered UInt64 group keys in aggregate projections — W298
+
+- The callback supplies ordered UInt64 columns through either
+  `precomputed_aggregate` constructor. Both layouts write keys in
+  GROUP BY order and compare every staged index tuple with the key
+  data. Compact typed scans check hidden key spans and raw index shape
+  before yielding a row window.
+- ClickHouse attached and checked all four Wide/Compact parent and child
+  pairings. Extending the tested Wide child prefix with a fourth key
+  reduced selection from two of seven granules to one. Refresh after
+  changes to DDL binding, primary indexes, state serialization, marks,
+  publication, typed scans, or the native pin. See the
+  [ordered-key profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#ordered-uint64-group-keys-in-aggregate-projections-w298)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w298.json).
+
 ## Two UInt64 group keys in a Compact aggregate projection — W297
 
 - Both parent layouts publish Compact MRK4 children with lexicographically

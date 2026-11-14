@@ -1,5 +1,67 @@
 # Caller-run materialized-view transform frontier
 
+## Ordered UInt64 group keys in aggregate projections (W298)
+
+The projection declaration and callback bind an ordered list of distinct,
+plain UInt64 group keys. SELECT may omit or reorder these keys. The
+physical child starts with the keys in GROUP BY order and has one to four
+of the existing Count, Sum, Min and Max state columns in SELECT aggregate
+order. The grouped rows must be strictly increasing lexicographically.
+Every key lane has the same row count and remains paired with its state
+through staging and readback.
+
+Both parent layouts can publish either a Wide child or a Compact MRK4
+child. The uncompressed `primary.idx` contains a little-endian UInt64
+for each key in each mark-start tuple, followed by the final row's tuple.
+The array overload snapshots the key names and UInt64 cells up to a
+64 MiB logical payload bound. For three or more keys, Wide publication
+charges the detached arrays and value carriers to the shared write budget
+before expanding the key lanes. Compact construction caps the additional
+key carriers at 64 MiB of logical workspace. The column caps include the
+states and are 4,096 for Wide and 16 for Compact publication. The mark
+and index limits also apply. Other key types, additional state families,
+compressed primary indexes and Compact MRK3 children remain open.
+
+Compact typed state scans check the index shape, hidden key spans and
+fixed-width state spans. Wide Count scans and mixed-layout state scans
+also preflight the relevant key roster and mark axes. Crystal's typed
+scan takes a row window. The staged writer verifies every index cell
+against the key data. The native witness checks the attached bytes and
+ClickHouse's granule selection.
+
+The failure mode is an attachable child that loses or misattributes a
+group when a later key is used for pruning. Read a stock three-key child,
+then compare mark-start and terminal tuples and state bytes against stock
+for both child layouts under both parent layouts. Compare forced and
+projection-disabled grouping and check selection by a prefix extended with
+a later key. Test repeated prefixes, duplicate tuples, out-of-order keys,
+different hidden key rosters and invalid later-mark spans before callbacks.
+Run the affected Crystal specs and native comparison in Debug and Release.
+Revert the feature commit to roll it back.
+
+### Qualification
+
+Debug and Release each passed 304 examples across 44 affected spec files
+and a separate read of a stock Compact child with three group keys.
+
+ClickHouse 26.10.1.1201 attached and checked each Wide/Compact parent
+and child pairing with four group keys. Each pair matched the stock
+mark-start and terminal index tuples, aggregate state bytes, and grouped
+results. Crystal reopened both the stock and attached children for full
+and cross-mark scans. In the tested Wide child of a Wide parent, extending
+a three-key prefix with the fourth key reduced selection from two of
+seven granules to one.
+
+The Wide children used plain MRK2 marks. The Compact children exercised
+plain and compressed MRK4 marks. The Compact-parent/Wide-child stock
+control used plain marks so Crystal could reopen the Wide aggregate
+transport. The attachment used a compressed Compact parent and a plain
+Wide child. The Crystal catalog consumed a copy of the target DDL with
+`compress_marks`, `compress_primary_key` and
+`replace_long_file_name_to_hash` removed from table settings. The native
+target kept those settings through ATTACH and query execution. See the
+[W298 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w298.json).
+
 ## Two UInt64 group keys in a Compact aggregate projection (W297)
 
 Extend the Compact MRK4 aggregate child to two distinct plain UInt64

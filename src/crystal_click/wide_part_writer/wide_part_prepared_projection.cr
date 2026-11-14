@@ -14,7 +14,7 @@ module CrystalClick
       end
 
       @keys : Array(UInt64)
-      @secondary_keys : Array(UInt64)?
+      @additional_key_columns : Array(Array(UInt64))
       @rows_per_mark : Int32
       @context : WidePartOperationContext
       @columns : Array(WidePartPreparedColumn)
@@ -25,7 +25,7 @@ module CrystalClick
       private def initialize(
         @entry_name : String,
         @keys : Array(UInt64),
-        @secondary_keys : Array(UInt64)?,
+        @additional_key_columns : Array(Array(UInt64)),
         @rows_per_mark : Int32,
         @context : WidePartOperationContext,
         @columns : Array(WidePartPreparedColumn),
@@ -52,17 +52,14 @@ module CrystalClick
         end
         key_name = projection.key_name
         key_names = projection.key_names
-        secondary_key_name = projection.secondary_key_name
-        secondary_keys = projection.secondary_keys
-        if second_name = secondary_key_name
-          unless secondary_keys && secondary_keys.not_nil!.size == projection.row_count
-            raise UnsupportedFormatError.new("two-key aggregate projection lost its aligned second key stream")
-          end
-          if second_name == key_name
-            raise UnsupportedFormatError.new("aggregate projection key names must be distinct")
-          end
-        elsif secondary_keys
-          raise UnsupportedFormatError.new("aggregate projection has second key values without a second key name")
+        rows_per_mark = projection.rows_per_mark
+        context = parent_context.with_rows_per_mark(rows_per_mark)
+        unless !key_names.empty? && key_names.first == key_name &&
+               key_names.to_set.size == key_names.size
+          raise UnsupportedFormatError.new("aggregate projection key roster differs from its ordered UInt64 streams")
+        end
+        if key_names.size > 1 && !projection.aggregate_projection?
+          raise UnsupportedFormatError.new("compound projection keys require the admitted aggregate-child route")
         end
         if count_total = projection.count_total
           unless parent_row_count && count_total == parent_row_count.to_u128
@@ -74,15 +71,31 @@ module CrystalClick
             raise UnsupportedFormatError.new("aggregate projection row count must be bounded by the parent row count")
           end
         end
+
+        # Only the newly introduced arities consume this extra logical-workspace
+        # charge. The one- and two-key writer paths preserve their prior budget
+        # behavior. Charge all retained lane copies and BinaryValue carrier
+        # grids before asking the projection to detach either representation.
+        if key_names.size > 2
+          workspace_bytes = ProjectionUInt64Keys.compound_writer_workspace_bytes(
+            projection.row_count, key_names.size, rows_per_mark, WidePartWriter::MAX_MARKS
+          )
+          context.transport_budget.reserve_result_bytes(workspace_bytes)
+        end
+        additional_key_columns = projection.additional_key_columns
+        unless key_names.size == additional_key_columns.size + 1
+          raise UnsupportedFormatError.new("aggregate projection key roster differs from its ordered UInt64 streams")
+        end
         keys = projection.keys
-        rows_per_mark = projection.rows_per_mark
-        context = parent_context.with_rows_per_mark(rows_per_mark)
 
         prepared_columns = Array(WidePartPreparedColumn).new
-        if second_name = secondary_key_name
-          values = secondary_keys.not_nil!
+        additional_key_columns.each_with_index do |values, index|
+          unless values.size == projection.row_count
+            raise UnsupportedFormatError.new("compound aggregate projection key stream lost its aligned row count")
+          end
+          key_lane_name = key_names[index + 1]
           prepared_columns << StaticWidePartColumnInput.prepare_projection_uint64_key(
-            second_name, values, context
+            key_lane_name, values, context
           )
         end
         aggregate_columns = projection.aggregate_columns
@@ -107,7 +120,7 @@ module CrystalClick
           rows_per_mark, context.metadata_version,
           defer_destination_check: true,
           aggregate_projection: projection.aggregate_projection?,
-          secondary_key_name: secondary_key_name,
+          additional_key_names: key_names[1..],
         )
         metadata_columns = Array(Tuple(String, String, Array(String))).new(prepared_columns.size)
         prepared_columns.each do |column|
@@ -123,7 +136,8 @@ module CrystalClick
         )
 
         new(
-          entry_name, keys, secondary_keys, rows_per_mark, context, prepared_columns,
+          entry_name, keys, additional_key_columns,
+          rows_per_mark, context, prepared_columns,
           input, WidePartMetadataEnvelope.new(metadata)
         )
       end
@@ -151,10 +165,13 @@ module CrystalClick
         encoded = @encoded_files || raise UnsupportedFormatError.new("projection child was not encoded")
         child_path = File.join(parent_stage, @entry_name)
         input = @input.bind_destination(child_path)
+        additional_index_keys = @additional_key_columns.map do |key_column|
+          key_column.to_unsafe.to_slice(key_column.size)
+        end
         WidePartPublisher.write(
           input, @keys.to_unsafe.to_slice(@keys.size), @metadata, encoded, @rows_per_mark,
           @context.limits, @context.read_transport_limits, @context.read_transport_budget,
-          secondary_index_keys: @secondary_keys.try { |keys| keys.to_unsafe.to_slice(keys.size) },
+          additional_index_keys: additional_index_keys,
         ) do |stage|
           @columns.each do |column|
             column.validate(stage, @context.read_codec_budget, @context.read_transport_budget)

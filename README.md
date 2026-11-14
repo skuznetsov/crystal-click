@@ -312,30 +312,30 @@ SELECT order. Read Sum and extrema through `batch.binary_bulk_values_for`.
 See the [Wide Min and Max profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-min-and-max-projection-publication-from-a-transform-w293)
 and [Compact aggregate profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-uint64-aggregate-projection-publication-from-a-transform-w296).
 
-For `PROJECTION by_group (SELECT count() GROUP BY region, day)`, pass
-the two UInt64 key columns in GROUP BY order. Here `regions` and `days`
-are aligned arrays from the transformed rows.
+For `PROJECTION by_group (SELECT count() GROUP BY region, day, bucket)`,
+pass the UInt64 key columns in GROUP BY order. Here `regions`, `days`
+and `buckets` are aligned arrays from the transformed rows.
 
 ```crystal
-counts = Hash(Tuple(UInt64, UInt64), UInt64).new(0_u64)
-regions.each_with_index { |region, index| counts[{region, days[index]}] += 1_u64 }
-pairs = counts.keys.sort!
-region_keys = pairs.map { |pair| pair[0] }
-day_keys = pairs.map { |pair| pair[1] }
-states = pairs.map { |pair| counts[pair] }
+counts = Hash(Tuple(UInt64, UInt64, UInt64), UInt64).new(0_u64)
+regions.each_with_index do |region, index|
+  counts[{region, days[index], buckets[index]}] += 1_u64
+end
+groups = counts.keys.sort!
+key_columns = [groups.map(&.[0]), groups.map(&.[1]), groups.map(&.[2])]
+states = groups.map { |group| counts[group] }
 child = CrystalClick::WidePartProjection.precomputed_aggregate(
-  "by_group", {"region", "day"},
-  {region_keys.to_unsafe.to_slice(region_keys.size), day_keys.to_unsafe.to_slice(day_keys.size)},
+  "by_group", ["region", "day", "bucket"],
+  key_columns.map { |keys| keys.to_unsafe.to_slice(keys.size) },
   [CrystalClick::WidePartProjectionAggregate.count(states.to_unsafe.to_slice(states.size))],
 )
 ```
 
-The pairs must be distinct and lexicographically sorted. The API also accepts
-`sum(value)`, `min(value)`, and `max(value)` states. Use
+The groups must be distinct and lexicographically sorted. The API also
+accepts `sum(value)`, `min(value)`, and `max(value)` states. Use
 `CompactPartProjection.precomputed_aggregate` with the same arguments to write
-a Compact MRK4 child under either parent layout. See the
-[Wide two-key profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-an-aggregate-projection-w294)
-and [Compact two-key profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-a-compact-aggregate-projection-w297).
+a Compact MRK4 child. Both child layouts work under either parent layout.
+See the [ordered UInt64 key profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#ordered-uint64-group-keys-in-aggregate-projections-w298).
 
 `OfflineTable#projections` exposes declared projection metadata. For a table
 with a physical Wide or Compact projection `p` containing a `UInt64` column

@@ -1,0 +1,414 @@
+{
+  "format": "crystal_click_materialized_view_aggregate_projection_w298_evidence_v1",
+  "date": "2026-11-14",
+  "baseline_revision": "933270aefd53838dd5a58fe7235fac5ab0c3fd0e",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Ordered, distinct plain UInt64 GROUP BY keys in aggregate projections with one to four caller-computed Count, Sum, Min and Max states. Plain Wide MRK2 and Compact MRK4 children with either parent layout and raw compound primary indexes.",
+    "adversary": "ROBUST for the four native layout pairings and the staged writer and admission cases below.",
+    "remaining": "Crystal typed scans use row windows. The Compact reader checks index shape and hidden lane spans. The staged writer checks index values, and the native audit checks both values and ClickHouse pruning. The exercised Wide aggregate transport uses plain MRK2 marks."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "A child passes ATTACH and CHECK but a later key points at the wrong state or prunes a valid group.",
+    "guards": [
+      "Compare each mark-start tuple and the terminal tuple with the key lanes. Mutate a fourth key cell in a middle tuple and in the terminal tuple, regenerate the checksum and require both to fail staged validation.",
+      "Reject wrong GROUP BY order, duplicate and descending tuples distinguished by their last key, bad hidden key spans outside a selected window, mixed siblings with different ordered key rosters even at EOF, and a simultaneous primary.cidx.",
+      "Check detached snapshots and reject an insufficient shared write budget before preparing Wide key carriers.",
+      "Recompute group states, index values, query rows, and mark counters from native captures. Reopen stock and attached parts in Crystal."
+    ],
+    "rollback": "Revert the feature commit. Parent and child staging share a single atomic publication."
+  },
+  "verification": {
+    "toolchain": {
+      "crystal": "1.22.3",
+      "llvm": "23.1.5",
+      "target": "aarch64-apple-darwin25.6.0",
+      "ruby": "4.0.9"
+    },
+    "guard": {
+      "sha256": "fbfa0fd9d717eb24c1a3f829d464188110e505c7ae311eee2e95cbe7cefab011",
+      "minimum_system_memory_free_percent_exclusive": 40,
+      "crystal": {
+        "process_tree_memory_mib": 12288,
+        "timeout_seconds": 600
+      },
+      "native_helper_and_clickhouse": {
+        "process_tree_memory_mib": 2048,
+        "timeout_seconds": 90
+      },
+      "clickhouse_max_memory_usage_bytes": 536870912,
+      "single_worker": true
+    },
+    "input_seals": {
+      "production.source.json": {
+        "sha256": "a00a6e61ed25042470e29d7cc54de46f94b535dd90ef82fbe17ed6137f0f278d",
+        "files": 638
+      },
+      "core-qualification.source.json": {
+        "sha256": "3d190612ce00c6884c5325cb286b0bd24f6c208d2c9fc908d556a1309bff0c22",
+        "files": 729
+      }
+    },
+    "specs": {
+      "command_per_cohort": "crystal spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color <cohort paths>",
+      "release_flags": "--release --no-debug",
+      "paths_per_mode": 44,
+      "examples_per_mode": {
+        "debug": 304,
+        "release": 304
+      },
+      "examples_by_cohort_per_mode": {
+        "focused": 73,
+        "transform": 34,
+        "publication": 39,
+        "catalog": 36,
+        "states": 26,
+        "extrema": 25,
+        "compact": 30,
+        "compact_read": 41,
+        "stock": 1
+      },
+      "cohorts": {
+        "focused": [
+          "spec/offline_materialized_view_aggregate_projection_w298_spec.cr",
+          "spec/offline_materialized_view_compact_two_key_projection_w297_spec.cr",
+          "spec/offline_materialized_view_compact_aggregate_projection_w296_spec.cr",
+          "spec/offline_materialized_view_compact_count_projection_w295_spec.cr",
+          "spec/offline_materialized_view_two_key_projection_w294_spec.cr",
+          "spec/offline_materialized_view_minmax_projection_w293_spec.cr",
+          "spec/offline_materialized_view_sum_projection_w292_spec.cr",
+          "spec/offline_materialized_view_aggregate_projection_w291_spec.cr",
+          "spec/offline_materialized_view_projection_transform_w290_spec.cr",
+          "spec/aggregate_count_physical_names_w219_spec.cr",
+          "spec/aggregate_count_w176_writer_spec.cr"
+        ],
+        "transform": [
+          "spec/offline_materialized_view_transform_w257_spec.cr",
+          "spec/offline_materialized_view_compact_transform_w286_spec.cr",
+          "spec/wide_part_schema_binding_w257_spec.cr",
+          "spec/embedded_merge_tree_pk_range_spec.cr"
+        ],
+        "publication": [
+          "spec/compact_projection_writer_spec.cr",
+          "spec/compact_projection_reader_spec.cr",
+          "spec/projection_checksum_binding_w287_spec.cr",
+          "spec/projection_publication_w256_spec.cr",
+          "spec/offline_projection_window_w229_spec.cr",
+          "spec/projection_specialized_consumers_w217_spec.cr"
+        ],
+        "catalog": [
+          "spec/offline_materialized_view_w228_spec.cr",
+          "spec/offline_mv_materialization_w88_spec.cr",
+          "spec/offline_catalog_projection_w87_spec.cr"
+        ],
+        "states": [
+          "spec/aggregate_count_w176_reader_spec.cr",
+          "spec/aggregate_count_consumers_w177_admission_spec.cr",
+          "spec/aggregate_sum_w223_bulk_spec.cr",
+          "spec/aggregate_sum_w223_consumers_spec.cr",
+          "spec/aggregate_count_w175_core_spec.cr",
+          "spec/aggregate_count_w176_admission_spec.cr",
+          "spec/aggregate_count_table_w177_spec.cr",
+          "spec/aggregate_count_offline_w177_spec.cr"
+        ],
+        "extrema": [
+          "spec/aggregate_minmax_w237_core_spec.cr",
+          "spec/aggregate_minmax_w237_physical_spec.cr",
+          "spec/aggregate_minmax_w237_adversary_spec.cr"
+        ],
+        "compact": [
+          "spec/compact_mark_file_adapter_w274_entry_spec.cr",
+          "spec/compact_part_writer_w264_spec.cr",
+          "spec/compact_part_writer_w265_publication_spec.cr",
+          "spec/compact_part_writer_w283_entry_spec.cr",
+          "spec/compact_mark_file_adapter_w274_adversary_spec.cr"
+        ],
+        "compact_read": [
+          "spec/compact_typed_w260_spec.cr",
+          "spec/compact_typed_w260_adversary_spec.cr",
+          "spec/compact_dynamic_w262_spec.cr",
+          "spec/compact_dynamic_w262_adversary_spec.cr"
+        ]
+      },
+      "log_sha256": {
+        "debug": {
+          "focused": "5f662e9df29919c319a977f682b62fcdeeaf8d4119b5787c43a91a2699eebcbb",
+          "transform": "cdcb545a5df948427da2b323e61b646ac416122dc13b60d82a331873cfff8e22",
+          "publication": "c9af8c5fdf2d8f96a0521dac762e043b5223334fe2891fdafb554ea7c7c23184",
+          "catalog": "5576f7b7abba73ee4ae37349e330b731324bc13c1fa649d90e3ff6aab959c830",
+          "states": "36c8aadf7042fd9a7653e6ce4f742bb10049bfd738b22bdbb3abd031426da3ba",
+          "extrema": "ea32a1a0b5be3d2113ad966891bee5e9e7fc1e7348afc8ea7fb579a7277c0a50",
+          "compact": "89b7a53d64791681dfb5a393273fbc3b1ac171f769de2aa1237dedcc38b9d89c",
+          "compact_read": "2c7051f5cc45c57687267ae5ef25cc96d0b897847fbade63c5008352dcb9eadc",
+          "stock": "943f783ce98594171e396388e15232d78a3b812c0f8bb1932155e0be3ac47f56"
+        },
+        "release": {
+          "focused": "d4e65b59d709f97ce9275c4c75d0dab0d42279c2b1dca22859c47688397aec07",
+          "transform": "e241bbc89f0a7b2c31dcda67d79bbda9602dfb213ae6bf3ad045ab42edffa41c",
+          "publication": "78cc9a72526b589abf3e6387ea4da69e11f080b7ce83f222aa5f83af5921f622",
+          "catalog": "55a01df8da17e9b3ac197098021bf0d2fca3f68d6059ab807551abf75c8014d1",
+          "states": "c482302583e5f193a3f1adb009cba093ad2a0fdccdd6e34ec60780b9db1c88d5",
+          "extrema": "ab1900cd17a69885d1a09405af2f7d38e23f3d300e2c063d7148422462e30047",
+          "compact": "d00b0a9f125a98c18957d9caff371515ff4028341a9a6440399917e5e976f4e3",
+          "compact_read": "7f96d8716645440479e448d5c2ea8ed9dda7fd4bc9db24ec57ae49c768f4b7c4",
+          "stock": "bbf4762fac08653314c2173b8223fdeaf71273575fd61047a829a3656eded4a9"
+        }
+      },
+      "stock_three_key_compact": {
+        "baseline": "Typed state-only read exits 1 because admission limits the leading key roster to two UInt64 columns.",
+        "qualified": "One example per mode reads Sum and Count across a mark boundary from the same ClickHouse part. The exact index contains three mark-start tuples and the final group, including a UInt64::MAX lane.",
+        "group_rows": 5,
+        "raw_primary_index_sha256": "343cc4ba344a87bafe32e02823b4436bc127c5f41df496550337e82b78976407",
+        "fixture_sql_sha256": "b54a5cfb7ba9e93c351011a62fbea7bdb0b06c4443f8235dad081deebd3e94ef",
+        "spec_sha256": "c8f30ab626ee0311e9f5b3f86a815badb72c91f85b239da87caf4c014fa75dc2",
+        "baseline_debug_log_sha256": "65681e4e9822b13c2df0a8050a030fcec117efb8c0f8145858e65c59518323d1"
+      },
+      "readme_example": "The three-key Count example ran with two groups, including a repeated tuple, and produced the expected aligned lanes and count total."
+    },
+    "native": {
+      "runner": "scripts/verify_materialized_view_aggregate_projection_w298.rb",
+      "runner_sha256": "61632bc1c4a2eeb7aab9f2dc5eaca6f2ea3a03205babc4911c2394174b55654e",
+      "helper": "scripts/check_materialized_view_aggregate_projection_w298.cr",
+      "helper_source_sha256": "819baa1b3c6c563bb13ee2dc0abb14857fd7001ff22681066851b4afd150d352",
+      "build_command": "crystal build --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color scripts/check_materialized_view_aggregate_projection_w298.cr -o \"$helper\"",
+      "release_flags": "--release --no-debug",
+      "command": "ruby scripts/verify_materialized_view_aggregate_projection_w298.rb --binary \"$clickhouse\" --run-safe \"$run_safe\" --helper \"$helper\" --evidence-root \"$fresh_ssd_directory\"",
+      "version": "26.10.1.1201",
+      "revision": "54515",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "binary_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "source_reference": {
+        "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "files": [
+          "src/Storages/MergeTree/MergeTreeDataPartWriterOnDisk.cpp",
+          "src/Storages/ProjectionsDescription.cpp"
+        ]
+      },
+      "fixture": {
+        "parent_rows": 16,
+        "output_groups": 13,
+        "child_mark_rows": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          1
+        ],
+        "index_entries_including_terminal": 8,
+        "primary_index_bytes": 256,
+        "stock_and_attached_offline_window": [
+          1,
+          6
+        ],
+        "aggregates": [
+          "count()",
+          "sum(value)",
+          "min(value)",
+          "max(value)"
+        ],
+        "settings_removed_in_offline_catalog_copy": [
+          "compress_marks",
+          "compress_primary_key",
+          "replace_long_file_name_to_hash"
+        ],
+        "compact_wide_stock_marks": "Plain table-level marks allow Crystal reopening. The matching attachment uses a compressed Compact parent and plain Wide child. The native targets retain their original file-format settings."
+      },
+      "per_mode": {
+        "debug": {
+          "summary_sha256": "4c1a10b11a25b017a7382b2883ab47a5323c5ce5bdbdac4941e2b95e83cab912",
+          "helper_binary_sha256": "14701aa7ebedb4e0dc1608060ab7b6fe8eefb89f70f800937cd450e1385e6a57",
+          "guarded_processes": {
+            "ClickHouse local": 88,
+            "prebuilt Crystal helper": 2
+          }
+        },
+        "release": {
+          "summary_sha256": "56ffc7d7dc025e7fe2d677ffd87bd0bc23e6e43df9dfb35ee513b802f0a02851",
+          "helper_binary_sha256": "d51b29de9fc1463e4f659e142997fa879a860f76e29db678db9eee15b23e164d",
+          "guarded_processes": {
+            "ClickHouse local": 88,
+            "prebuilt Crystal helper": 2
+          }
+        }
+      },
+      "observed": {
+        "Wide/Wide": {
+          "key_order": [
+            "key_a",
+            "key_b",
+            "key_c",
+            "key_d"
+          ],
+          "marks": ".mrk2",
+          "parent_marks": ".mrk2",
+          "check_status": 1,
+          "preserved_files": 44,
+          "granules": {
+            "multi_key_prefix": [
+              2,
+              7
+            ],
+            "uint64_max_boundary": [
+              2,
+              7
+            ],
+            "fourth_key_refinement": [
+              1,
+              7
+            ]
+          },
+          "index_sha256": "5831179645a31c42397dfe7cfce455be5d866356e04b674ba2641c7aee576621",
+          "state_rowbinary_sha256": "bda29098ab769ae3e7c20259ae1bb9df75e23f68ee291d3b9881956a05d55527"
+        },
+        "Wide/Compact": {
+          "key_order": [
+            "key_d",
+            "key_c",
+            "key_b",
+            "key_a"
+          ],
+          "marks": ".mrk4",
+          "parent_marks": ".mrk2",
+          "check_status": 1,
+          "preserved_files": 30,
+          "granules": {
+            "multi_key_prefix": [
+              1,
+              7
+            ],
+            "uint64_max_boundary": [
+              2,
+              7
+            ]
+          },
+          "index_sha256": "4716783d25f238e8a1a564ce4e511cdffed559c4c00b496f65f20fd5d8358ef6",
+          "state_rowbinary_sha256": "bec009b6b39bdfbb3df3c73c058b20121971253359a0ca263481746296277438"
+        },
+        "Compact/Wide": {
+          "key_order": [
+            "key_b",
+            "key_d",
+            "key_a",
+            "key_c"
+          ],
+          "marks": ".mrk2",
+          "parent_marks": ".cmrk4",
+          "check_status": 1,
+          "preserved_files": 34,
+          "granules": {
+            "multi_key_prefix": [
+              2,
+              7
+            ],
+            "uint64_max_boundary": [
+              2,
+              7
+            ]
+          },
+          "index_sha256": "91c1c18b4b6d41a9d0d9a844aa13a6dcaaa9542ec06c81d534c5e0d365715ba5",
+          "state_rowbinary_sha256": "64131629dd84f03dcb648785629d5fa2132c7357e48c1cf4a979d42750eba21f"
+        },
+        "Compact/Compact": {
+          "key_order": [
+            "key_c",
+            "key_a",
+            "key_d",
+            "key_b"
+          ],
+          "marks": ".cmrk4",
+          "parent_marks": ".cmrk4",
+          "check_status": 1,
+          "preserved_files": 20,
+          "granules": {
+            "multi_key_prefix": [
+              1,
+              7
+            ],
+            "uint64_max_boundary": [
+              2,
+              7
+            ]
+          },
+          "index_sha256": "40b7ce224fdec92a4b0b9708e6e8edd95a02873aef4847d2f3b91441b65fc0ac",
+          "state_rowbinary_sha256": "d253adb1ab6b05119e01eb1e25f2cce4dab3c143ab18cef17a6438ed9671d659"
+        }
+      },
+      "independent_audit_sha256": "92f44340f00319ace107e29e5a4cdc63c9ae745f6f7379e39680b3cc12b50117"
+    },
+    "artifact_availability": "The checked-in witness and spec paths reproduce the four-layout matrix and repository tests. The separate stock three-key baseline and pass are recorded as historical observations. Scratch stores, manifests, and logs are removed after verification."
+  },
+  "boundaries": {
+    "allowed_paths": [
+      ".landmark/evidence/materialized-view-aggregate-projection-w298.json",
+      "LANDMARKS.md",
+      "README.md",
+      "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+      "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "scripts/check_materialized_view_aggregate_projection_w298.cr",
+      "scripts/verify_materialized_view_aggregate_projection_w298.rb",
+      "spec/offline_materialized_view_aggregate_projection_w298_spec.cr",
+      "spec/offline_materialized_view_minmax_projection_w293_spec.cr",
+      "spec/offline_materialized_view_sum_projection_w292_spec.cr",
+      "spec/offline_materialized_view_two_key_projection_w294_spec.cr",
+      "src/crystal_click.cr",
+      "src/crystal_click/compact_part_projection.cr",
+      "src/crystal_click/compact_part_writer/compact_part_operation.cr",
+      "src/crystal_click/compact_projection_aggregate_reader_admission.cr",
+      "src/crystal_click/offline_transform_projection_bindings.cr",
+      "src/crystal_click/part_schema_binding.cr",
+      "src/crystal_click/part_writer_infrastructure/primary_index_writer.cr",
+      "src/crystal_click/projection_uint64_keys.cr",
+      "src/crystal_click/typed_part_table.cr",
+      "src/crystal_click/wide_aggregate_count_serialization_profile.cr",
+      "src/crystal_click/wide_part_projection.cr",
+      "src/crystal_click/wide_part_table/aggregate_count_pair_admission.cr",
+      "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr",
+      "src/crystal_click/wide_part_writer/wide_part_prepared_projection.cr",
+      "src/crystal_click/wide_part_writer/wide_part_publication_input.cr",
+      "src/crystal_click/wide_part_writer/wide_part_publisher.cr",
+      "src/crystal_click/wide_part_writer/wide_part_schema_binding.cr"
+    ]
+  },
+  "changed_paths": [
+    ".landmark/evidence/materialized-view-aggregate-projection-w298.json",
+    "LANDMARKS.md",
+    "README.md",
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "scripts/check_materialized_view_aggregate_projection_w298.cr",
+    "scripts/verify_materialized_view_aggregate_projection_w298.rb",
+    "spec/offline_materialized_view_aggregate_projection_w298_spec.cr",
+    "spec/offline_materialized_view_minmax_projection_w293_spec.cr",
+    "spec/offline_materialized_view_sum_projection_w292_spec.cr",
+    "spec/offline_materialized_view_two_key_projection_w294_spec.cr",
+    "src/crystal_click.cr",
+    "src/crystal_click/compact_part_projection.cr",
+    "src/crystal_click/compact_part_writer/compact_part_operation.cr",
+    "src/crystal_click/compact_projection_aggregate_reader_admission.cr",
+    "src/crystal_click/offline_transform_projection_bindings.cr",
+    "src/crystal_click/part_schema_binding.cr",
+    "src/crystal_click/part_writer_infrastructure/primary_index_writer.cr",
+    "src/crystal_click/projection_uint64_keys.cr",
+    "src/crystal_click/typed_part_table.cr",
+    "src/crystal_click/wide_aggregate_count_serialization_profile.cr",
+    "src/crystal_click/wide_part_projection.cr",
+    "src/crystal_click/wide_part_table/aggregate_count_pair_admission.cr",
+    "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr",
+    "src/crystal_click/wide_part_writer/wide_part_prepared_projection.cr",
+    "src/crystal_click/wide_part_writer/wide_part_publication_input.cr",
+    "src/crystal_click/wide_part_writer/wide_part_publisher.cr",
+    "src/crystal_click/wide_part_writer/wide_part_schema_binding.cr"
+  ],
+  "links": [
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "LANDMARKS.md"
+  ],
+  "refresh_when": "Rerun both Crystal modes and all four native pairs after changes to group-key binding, key or state serialization, mark layout, publication, typed admission, or the native pin."
+}

@@ -156,20 +156,26 @@ module CrystalClick
       group_keys_sql : String,
       target_columns : Array(OfflineColumn),
     ) : Tuple(PartSchemaBinding, Bool)
-      group_keys = group_keys_sql.split(',').map { |token| plain_target_column(token, target_columns) }
-      unless group_keys.size == 1 || group_keys.size == 2
-        raise UnsupportedFormatError.new("transform aggregate projection GROUP BY requires one or two plain UInt64 keys")
+      group_tokens = group_keys_sql.split(',')
+      if group_tokens.empty? || group_tokens.size >= WidePart::MAX_METADATA_COLUMNS
+        raise UnsupportedFormatError.new("transform aggregate projection GROUP BY requires a bounded list of plain UInt64 keys")
       end
-      unless group_keys.map(&.name).to_set.size == group_keys.size
+      group_keys = group_tokens.map { |token| plain_target_column(token, target_columns) }
+      key_names = group_keys.map(&.name)
+      key_name_set = key_names.to_set
+      unless key_name_set.size == group_keys.size
         raise UnsupportedFormatError.new("transform aggregate projection GROUP BY keys must be distinct")
       end
       unless group_keys.all? { |key| key.type == "UInt64" }
-        message = group_keys.size == 1 ? "transform aggregate projection GROUP BY requires one plain UInt64 key" : "transform aggregate projection GROUP BY requires two plain UInt64 keys"
+        message = case group_keys.size
+                  when 1 then "transform aggregate projection GROUP BY requires one plain UInt64 key"
+                  when 2 then "transform aggregate projection GROUP BY requires two plain UInt64 keys"
+                  else        "transform aggregate projection GROUP BY requires plain UInt64 keys"
+                  end
         raise UnsupportedFormatError.new(message)
       end
 
       selected = select_list.split(',')
-      key_names = group_keys.map(&.name)
       columns = group_keys.map { |key| {key.name, key.type} }
       aliases = Array(String).new
       aggregate_arguments = Set(String).new
@@ -179,7 +185,7 @@ module CrystalClick
       selected.each do |raw_token|
         token = raw_token.strip
         if selected_key = parse_identifier(token)
-          unless key_names.includes?(selected_key) && selected_keys.add?(selected_key)
+          unless key_name_set.includes?(selected_key) && selected_keys.add?(selected_key)
             message = if key_names.size == 1
                         "transform aggregate projection SELECT must contain only its GROUP BY key and admitted aggregates"
                       else
@@ -234,13 +240,11 @@ module CrystalClick
       unless aggregate_functions.size > 0
         raise UnsupportedFormatError.new("transform aggregate projection SELECT requires at least one admitted aggregate")
       end
+      if columns.size > WidePart::MAX_METADATA_COLUMNS
+        raise UnsupportedFormatError.new("transform aggregate projection column count exceeds the writer limit")
+      end
       validate_aggregate_aliases!(aliases, key_names, aggregate_arguments)
-      binding = if group_keys.size == 1
-                  PartSchemaBinding.new(group_keys[0].name, columns, "projection")
-                else
-                  PartSchemaBinding.new({group_keys[0].name, group_keys[1].name}, columns, "projection")
-                end
-      {binding, count_seen}
+      {PartSchemaBinding.new(key_names, columns, "projection"), count_seen}
     end
 
     private def aggregate_alias!(token : String, function_name : String) : String

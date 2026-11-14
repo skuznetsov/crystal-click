@@ -66,6 +66,9 @@ layout. The child retains the SELECT aggregate order.
 The [Compact two-key profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-a-compact-aggregate-projection-w297)
 adds a second UInt64 key in GROUP BY order and writes both key values at
 every mark start and at the terminal row in `primary.idx`.
+The [ordered UInt64 key profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#ordered-uint64-group-keys-in-aggregate-projections-w298)
+accepts key column arrays for either child layout. The child writes the
+entire ordered tuple at each mark start and at the terminal row.
 
 ## Compact and mixed projection reads (W288)
 
