@@ -1,5 +1,20 @@
 # Crystal Click landmarks
 
+## Compressed Wide aggregate projection marks — W299
+
+- A Wide aggregate child independently opts into `.cmrk2` through
+  `compress_marks: true`. Both parent layouts use the staged Wide writer
+  and share its operation budgets. Each compressed sidecar records both
+  its physical and decoded checksums. The typed reader checks hidden key
+  and selected state spans over the full granule grid.
+- ClickHouse 26.10.1.1201 attached and checked both parent layouts in
+  Debug and Release. Crystal reopened stock ZSTD and generated LZ4
+  children. Their state bytes and raw compound indexes matched. Refresh
+  after changes to mark framing, checksum binding, key or state grids,
+  publication, typed admission, or the native pin. See the
+  [compressed mark profile](docs/PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-marks-w299)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w299.json).
+
 ## Ordered UInt64 group keys in aggregate projections — W298
 
 - The callback supplies ordered UInt64 columns through either

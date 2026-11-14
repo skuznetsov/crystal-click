@@ -5,6 +5,7 @@ module MaterializedViewAggregateProjectionW298
   extend self
 
   FORMAT               = "materialized_view_aggregate_projection_w298_helper_v1"
+  W299_FORMAT          = "materialized_view_aggregate_projection_w299_helper_v1"
   DATABASE             = "lab"
   PROJECTION           = "by_group"
   SOURCE_PART          = "all_1_1_0"
@@ -37,6 +38,7 @@ module MaterializedViewAggregateProjectionW298
      control_uuid: "f2980000-7b7f-4e2f-9e44-dc13a8788023", part: SOURCE_PART, parent_format: "Compact",
      child_format: "Compact", order: ["key_c", "key_a", "key_d", "key_b"]},
   ] of Target
+  W299_TARGETS = TARGETS.select { |target| target[:child_format] == "Wide" }
 
   SOURCE_ROWS = [
     [1_u64, 6_u64, 10_u64, 5_u64, 100_u64, 0_u64],
@@ -58,15 +60,18 @@ module MaterializedViewAggregateProjectionW298
   ] of Row
   PARENT_ROWS = SOURCE_ROWS.map { |row| row.map_with_index { |value, index| index == 0 ? value + 100_u64 : value } }
 
-  def run(catalog_root : String, action : String) : JSON::Any
+  def run(catalog_root : String, action : String, profile : String = "w298") : JSON::Any
+    unless profile == "w298" || profile == "w299"
+      raise ArgumentError.new("W298 helper profile must be w298 or w299")
+    end
     case action
-    when "publish" then publish(catalog_root)
-    when "reopen"  then reopen(catalog_root)
+    when "publish" then publish(catalog_root, profile)
+    when "reopen"  then reopen(catalog_root, profile)
     else                raise ArgumentError.new("W298 helper action must be publish or reopen")
     end
   end
 
-  private def publish(catalog_root : String) : JSON::Any
+  private def publish(catalog_root : String, profile : String) : JSON::Any
     catalog = CrystalClick::OfflineCatalog.open(catalog_root)
     source = catalog.table(DATABASE, "source")
     candidate = source.part_candidates.find { |part| part.name == SOURCE_PART } ||
@@ -78,7 +83,8 @@ module MaterializedViewAggregateProjectionW298
       raise CrystalClick::CorruptPartError.new("W298 source candidate or schema differs")
     end
 
-    results = TARGETS.map do |target|
+    targets = profile == "w299" ? W299_TARGETS : TARGETS
+    results = targets.map do |target|
       path = if target[:parent_format] == "Wide"
                catalog.transform_materialized_view_part(
                  DATABASE, target[:view], SOURCE_PART, SOURCE_COLUMNS, target[:part],
@@ -86,7 +92,7 @@ module MaterializedViewAggregateProjectionW298
                  profile: CrystalClick::BinaryBulkProfile.with_size_stream,
                ) do |input|
                  rows = transform_rows(input)
-                 wide_output(target, rows)
+                 wide_output(target, rows, profile == "w299")
                end
              else
                catalog.transform_materialized_view_part(
@@ -96,7 +102,7 @@ module MaterializedViewAggregateProjectionW298
                  profile: CrystalClick::BinaryBulkProfile.with_size_stream, compress_marks: true,
                ) do |input|
                  rows = transform_rows(input)
-                 compact_output(target, rows)
+                 compact_output(target, rows, profile == "w299")
                end
              end
       expected_path = target_path(catalog_root, target[:uuid], "detached", target[:part])
@@ -118,7 +124,7 @@ module MaterializedViewAggregateProjectionW298
       } of String => JSON::Any
     end
     JSON::Any.new({
-      "format"           => JSON::Any.new(FORMAT),
+      "format"           => JSON::Any.new(helper_format(profile)),
       "action"           => JSON::Any.new("publish"),
       "status"           => JSON::Any.new("ok"),
       "source_row_count" => JSON::Any.new(SOURCE_ROWS.size),
@@ -126,16 +132,17 @@ module MaterializedViewAggregateProjectionW298
     } of String => JSON::Any)
   end
 
-  private def reopen(catalog_root : String) : JSON::Any
+  private def reopen(catalog_root : String, profile : String) : JSON::Any
     catalog = CrystalClick::OfflineCatalog.open(catalog_root)
-    results = TARGETS.flat_map do |target|
+    targets = profile == "w299" ? W299_TARGETS : TARGETS
+    results = targets.flat_map do |target|
       [target[:control], target[:name]].map do |table_name|
         expected_part = table_name == target[:control] ? SOURCE_PART : target[:part]
-        reopen_pair(catalog, catalog_root, table_name, expected_part, target)
+        reopen_pair(catalog, catalog_root, table_name, expected_part, target, profile)
       end
     end
     JSON::Any.new({
-      "format" => JSON::Any.new(FORMAT),
+      "format" => JSON::Any.new(helper_format(profile)),
       "action" => JSON::Any.new("reopen"),
       "status" => JSON::Any.new("ok"),
       "pairs"  => JSON::Any.new(results),
@@ -148,6 +155,7 @@ module MaterializedViewAggregateProjectionW298
     table_name : String,
     part_name : String,
     target : Target,
+    profile : String,
   ) : JSON::Any
     table = catalog.table(DATABASE, table_name)
     candidates = table.part_candidates
@@ -183,7 +191,7 @@ module MaterializedViewAggregateProjectionW298
            parent_identity == identity_for(part) && child_identity == identity_for(part)
       raise CrystalClick::CorruptPartError.new("W298 #{table_name} offline parent, child, window, or state bytes differ")
     end
-    JSON::Any.new({
+    result = {
       "table"                   => JSON::Any.new(table_name),
       "parent_format"           => JSON::Any.new(target[:parent_format]),
       "child_format"            => JSON::Any.new(target[:child_format]),
@@ -196,6 +204,49 @@ module MaterializedViewAggregateProjectionW298
       "window_parent_mark_rows" => int_array_json(parent_window_grid),
       "window_child_mark_rows"  => int_array_json(child_window_grid),
       "path"                    => JSON::Any.new(part.path),
+    } of String => JSON::Any
+    if profile == "w299"
+      method = table_name == target[:control] ? CrystalClick::CompressedBlock::METHOD_ZSTD : CrystalClick::CompressedBlock::METHOD_LZ4
+      result["mark_witness"] = compressed_wide_mark_witness(File.join(part.path, "#{PROJECTION}.proj"), method)
+    end
+    JSON::Any.new(result)
+  end
+
+  private def compressed_wide_mark_witness(child_path : String, expected_method : UInt8) : JSON::Any
+    names = Dir.children(child_path).sort!
+    marks = names.select(&.ends_with?(".cmrk2"))
+    if marks.size != 8 || marks.any? { |name| !/\A[0-9a-f]{32}\.cmrk2\z/.matches?(name) } ||
+       names.any?(&.ends_with?(".mrk2"))
+      raise CrystalClick::CorruptPartError.new("W299 compressed Wide child has a mixed or incomplete mark roster")
+    end
+
+    checksums = CrystalClick::PartChecksums.open(child_path)
+    lanes = marks.map do |name|
+      physical = File.read(File.join(child_path, name)).to_slice
+      canonical = CrystalClick::CompressedBlock.decode_all(physical)
+      entry = checksums.entry(name).not_nil!
+      method = physical[CrystalClick::CompressedBlock::CHECKSUM_SIZE]
+      unless method == expected_method && entry.compressed && entry.physical_size == physical.size.to_u64 &&
+             entry.file_hash == CrystalClick::CityHashV1.file_hash(physical) &&
+             entry.uncompressed_size == canonical.size.to_u64 &&
+             entry.uncompressed_hash == CrystalClick::CityHashV1.file_hash(canonical) &&
+             canonical.size == 8 * CrystalClick::CompressedMarkWriter::MARK_RECORD_SIZE
+        raise CrystalClick::CorruptPartError.new("W299 compressed Wide child mark codec, checksum or 192-byte lane differs")
+      end
+      JSON::Any.new({
+        "name"            => JSON::Any.new(name),
+        "physical_size"   => JSON::Any.new(physical.size),
+        "method"          => JSON::Any.new(method.to_i),
+        "canonical_bytes" => JSON::Any.new(canonical.size),
+        "records"         => JSON::Any.new(canonical.size // CrystalClick::CompressedMarkWriter::MARK_RECORD_SIZE),
+      } of String => JSON::Any)
+    end
+    JSON::Any.new({
+      "mark_files"               => JSON::Any.new(marks.map { |name| JSON::Any.new(name) }),
+      "lane_count"               => JSON::Any.new(lanes.size),
+      "canonical_bytes_per_lane" => JSON::Any.new(8 * CrystalClick::CompressedMarkWriter::MARK_RECORD_SIZE),
+      "method"                   => JSON::Any.new(expected_method.to_i),
+      "lanes"                    => JSON::Any.new(lanes),
     } of String => JSON::Any)
   end
 
@@ -225,9 +276,9 @@ module MaterializedViewAggregateProjectionW298
     output
   end
 
-  private def wide_output(target : Target, rows : Array(Row)) : CrystalClick::WidePartTransformOutput
+  private def wide_output(target : Target, rows : Array(Row), compress_wide_marks : Bool) : CrystalClick::WidePartTransformOutput
     groups = ordered_groups(target[:order], rows)
-    projection = projection_output(target, groups)
+    projection = projection_output(target, groups, compress_wide_marks)
     ids = rows.map(&.[0])
     columns = Array(CrystalClick::WidePartColumn).new
     PARENT_COLUMNS.each_with_index do |name, index|
@@ -240,9 +291,9 @@ module MaterializedViewAggregateProjectionW298
     )
   end
 
-  private def compact_output(target : Target, rows : Array(Row)) : CrystalClick::CompactPartTransformOutput
+  private def compact_output(target : Target, rows : Array(Row), compress_wide_marks : Bool) : CrystalClick::CompactPartTransformOutput
     groups = ordered_groups(target[:order], rows)
-    projection = projection_output(target, groups)
+    projection = projection_output(target, groups, compress_wide_marks)
     ids = rows.map(&.[0])
     columns = Array(CrystalClick::CompactPartColumn).new
     PARENT_COLUMNS.each_with_index do |name, index|
@@ -258,11 +309,12 @@ module MaterializedViewAggregateProjectionW298
   private def projection_output(
     target : Target,
     groups : Array(Group),
+    compress_wide_marks : Bool,
   ) : CrystalClick::WidePartProjection | CrystalClick::CompactPartProjection
     if target[:child_format] == "Wide"
       CrystalClick::WidePartProjection.precomputed_aggregate(
         PROJECTION, target[:order], key_slices(groups, target[:order]), aggregate_columns(groups),
-        rows_per_mark: CHILD_ROWS_PER_MARK,
+        rows_per_mark: CHILD_ROWS_PER_MARK, compress_marks: compress_wide_marks,
       )
     else
       CrystalClick::CompactPartProjection.precomputed_aggregate(
@@ -270,6 +322,10 @@ module MaterializedViewAggregateProjectionW298
         rows_per_mark: CHILD_ROWS_PER_MARK, frame_bytes: 4096, compress_marks: target[:parent_format] == "Compact",
       )
     end
+  end
+
+  private def helper_format(profile : String) : String
+    profile == "w299" ? W299_FORMAT : FORMAT
   end
 
   private class AggregateStats
@@ -538,14 +594,16 @@ module MaterializedViewAggregateProjectionW298
   end
 end
 
-if ARGV.size != 2 || !["publish", "reopen"].includes?(ARGV[1])
-  STDERR.puts "usage: w298-helper CATALOG_ROOT publish|reopen"
+if !(2..3).includes?(ARGV.size) || !["publish", "reopen"].includes?(ARGV[1]) ||
+   (ARGV.size == 3 && !["w298", "w299"].includes?(ARGV[2]))
+  STDERR.puts "usage: w298-helper CATALOG_ROOT publish|reopen [w298|w299]"
   exit 2
 end
 
 begin
-  puts MaterializedViewAggregateProjectionW298.run(ARGV[0], ARGV[1]).to_json
+  profile = ARGV[2]? || "w298"
+  puts MaterializedViewAggregateProjectionW298.run(ARGV[0], ARGV[1], profile).to_json
 rescue error
-  STDERR.puts "W298 helper failed: #{error.class}: #{error.message}"
+  STDERR.puts "W298/W299 helper failed: #{error.class}: #{error.message}"
   exit 1
 end

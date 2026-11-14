@@ -3,6 +3,7 @@ module CrystalClick
   # physical rows only; it makes no claim about a SQL SELECT or freshness.
   class WidePartProjection
     getter rows_per_mark : Int32
+    getter compress_marks : Bool
 
     @name : String
     @key_name : String
@@ -25,6 +26,7 @@ module CrystalClick
       @aggregate_columns : Array(WidePartProjectionAggregate) = [] of WidePartProjectionAggregate,
       @additional_key_names : Array(String) = [] of String,
       @additional_key_columns : Array(Array(UInt64)) = [] of Array(UInt64),
+      @compress_marks : Bool = false,
     )
     end
 
@@ -69,6 +71,7 @@ module CrystalClick
       counts : Slice(UInt64),
       *,
       rows_per_mark : Int32 = 8192,
+      compress_marks : Bool = false,
     ) : WidePartProjection
       validate_projection_name!(name)
       validate_column_name!(key_name)
@@ -95,6 +98,7 @@ module CrystalClick
         String.new(name.to_slice), String.new(key_name.to_slice),
         retained_keys, [] of WidePartColumn, rows_per_mark,
         count_aggregate.count_total, nil, [count_aggregate] of WidePartProjectionAggregate,
+        compress_marks: compress_marks,
       )
     end
 
@@ -107,6 +111,7 @@ module CrystalClick
       aggregate_columns : Array(WidePartProjectionAggregate),
       *,
       rows_per_mark : Int32 = 8192,
+      compress_marks : Bool = false,
     ) : WidePartProjection
       validate_projection_name!(name)
       validate_column_name!(key_name)
@@ -132,6 +137,7 @@ module CrystalClick
         String.new(name.to_slice), String.new(key_name.to_slice),
         retained_keys, [] of WidePartColumn, rows_per_mark,
         count_total, nil, retained_aggregates,
+        compress_marks: compress_marks,
       )
     end
 
@@ -144,6 +150,7 @@ module CrystalClick
       aggregate_columns : Array(WidePartProjectionAggregate),
       *,
       rows_per_mark : Int32 = 8192,
+      compress_marks : Bool = false,
     ) : WidePartProjection
       validate_projection_name!(name)
       validate_column_name!(key_names[0])
@@ -185,6 +192,7 @@ module CrystalClick
         retained_first_keys, [] of WidePartColumn, rows_per_mark,
         count_total, nil, retained_aggregates,
         [String.new(key_names[1].to_slice)] of String, [retained_second_keys] of Array(UInt64),
+        compress_marks: compress_marks,
       )
     end
 
@@ -197,6 +205,7 @@ module CrystalClick
       aggregate_columns : Array(WidePartProjectionAggregate),
       *,
       rows_per_mark : Int32 = 8192,
+      compress_marks : Bool = false,
     ) : WidePartProjection
       validate_projection_name!(name)
       key_names.each { |key_name| validate_column_name!(key_name) }
@@ -230,6 +239,7 @@ module CrystalClick
         String.new(name.to_slice), retained_names[0], retained_key_columns[0],
         [] of WidePartColumn, rows_per_mark, count_total, nil, retained_aggregates,
         additional_names, additional_keys,
+        compress_marks: compress_marks,
       )
     end
 
@@ -315,6 +325,7 @@ module CrystalClick
         source.@rows_per_mark, source.@count_total,
         WidePartSchemaBinding.new(binding), source.@aggregate_columns,
         source.@additional_key_names, source.@additional_key_columns,
+        compress_marks: source.@compress_marks,
       )
     end
 

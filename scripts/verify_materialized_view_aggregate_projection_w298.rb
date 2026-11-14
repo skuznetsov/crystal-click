@@ -16,6 +16,8 @@ module VerifyMaterializedViewAggregateProjectionW298
   REPO_ROOT = File.expand_path('..', __dir__).freeze
   FORMAT = 'materialized_view_aggregate_projection_w298_native_v1'.freeze
   HELPER_FORMAT = 'materialized_view_aggregate_projection_w298_helper_v1'.freeze
+  W299_FORMAT = 'materialized_view_aggregate_projection_w299_native_v1'.freeze
+  W299_HELPER_FORMAT = 'materialized_view_aggregate_projection_w299_helper_v1'.freeze
   BINARY = '/opt/mldata_ssd/cache/crystal-click-w283.PDWAiK/recovery/runtime/clickhouse'.freeze
   BINARY_SHA256 = '5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae'.freeze
   VERSION = '26.10.1.1201'.freeze
@@ -61,6 +63,7 @@ module VerifyMaterializedViewAggregateProjectionW298
     {table: 'target_cw', control: 'control_cw', uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788012', control_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788022', view: 'view_cw', view_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788032', part: SOURCE_PART, parent_format: 'Compact', child_format: 'Wide', order: %w[key_b key_d key_a key_c]},
     {table: 'target_cc', control: 'control_cc', uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788013', control_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788023', view: 'view_cc', view_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788033', part: SOURCE_PART, parent_format: 'Compact', child_format: 'Compact', order: %w[key_c key_a key_d key_b]},
   ].map(&:freeze).freeze
+  W299_TARGETS = TARGETS.select { |target| target.fetch(:child_format) == 'Wide' }.freeze
   MEMORY_BYTES = 536_870_912
   PROCESS_MEMORY_MIB = 2048
   PROCESS_TIMEOUT_SECONDS = 90
@@ -82,6 +85,11 @@ module VerifyMaterializedViewAggregateProjectionW298
       @binary_arg = options.fetch(:binary)
       @helper_arg = options.fetch(:helper)
       @run_safe_arg = options.fetch(:run_safe)
+      @w299 = options.fetch(:w299, false)
+      @targets = @w299 ? W299_TARGETS : TARGETS
+      @format = @w299 ? W299_FORMAT : FORMAT
+      @helper_format = @w299 ? W299_HELPER_FORMAT : HELPER_FORMAT
+      @profile = @w299 ? 'w299' : 'w298'
       @processes = []
       @metadata = {}
       @native_paths = {}
@@ -111,20 +119,22 @@ module VerifyMaterializedViewAggregateProjectionW298
       validate_reopen!(reopened)
       validate_inputs_unchanged!
       write_summary(
-        status: 'four_parent_child_layout_pairings_attached_checked_and_offline_scanned',
+        status: @w299 ? 'w299_stock_and_generated_compressed_wide_children_attached_checked_and_offline_scanned' :
+                        'four_parent_child_layout_pairings_attached_checked_and_offline_scanned',
         binary: {path: @binary, sha256: @binary_sha, version: VERSION, revision: REVISION},
         helper: {path: @helper, sha256: @helper_sha}, run_safe: {path: @run_safe, sha256: @guard_sha},
         source: @source_part, stock_controls: stock_control_summary, published: publish, generated: @generated,
         attached: @attached, native_checks: native_checks, offline_reopen: reopened,
         invocations: @processes, evidence_root: @root,
       )
-      puts "W298 four-layout N-key projection witness passed; evidence=#{@root}"
+      puts(@w299 ? "W299 compressed Wide child witness passed; evidence=#{@root}" :
+                    "W298 four-layout N-key projection witness passed; evidence=#{@root}")
       true
     rescue StandardError => error
       @fatal_error = "#{error.class}: #{error.message}"
       write_summary(status: 'witness_failure_or_observations_differ', fatal_error: @fatal_error,
                     evidence_root: @root) rescue nil
-      warn "W298 probe failure (process failure is not native format evidence): #{@fatal_error}"
+      warn "#{@profile.upcase} probe failure (process failure is not native format evidence): #{@fatal_error}"
       false
     end
 
@@ -202,12 +212,12 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def create_targets_and_controls!
-      sql = TARGETS.map do |target|
+      sql = @targets.map do |target|
         table_sql(target, target.fetch(:table), target.fetch(:uuid), materialized_view: true) +
           table_sql(target, target.fetch(:control), target.fetch(:control_uuid), materialized_view: false)
       end.join("\n")
       native('create_targets_and_controls', sql.b)
-      TARGETS.each do |target|
+      @targets.each do |target|
         fail!("#{target.fetch(:table)} target was not empty") unless
           query("empty_#{target.fetch(:table)}", "SELECT toString(count()) FROM system.parts WHERE database='#{DATABASE}' AND table='#{target.fetch(:table)}' AND active FORMAT TSVRaw;").strip == '0'
       end
@@ -217,11 +227,10 @@ module VerifyMaterializedViewAggregateProjectionW298
       keys = target.fetch(:order)
       child_threshold = target.fetch(:child_format) == 'Wide' ? 0 : 1000
       parent_threshold = target.fetch(:parent_format) == 'Wide' ? 0 : 1000
-      compressed = target.fetch(:parent_format) == 'Compact' ? 1 : 0
-      # The offline Object-stream reader intentionally rejects compressed MRK2.
-      # Keep this one stock Compact-parent/Wide-child control readable while
-      # retaining compressed marks in the Compact/Compact stock cell.
-      if !materialized_view && target.fetch(:parent_format) == 'Compact' && target.fetch(:child_format) == 'Wide'
+      compressed = (@w299 || target.fetch(:parent_format) == 'Compact') ? 1 : 0
+      # W298 retains its original plain-mark control for the Compact/Wide cell.
+      # W299 intentionally keeps native compressed marks enabled in both cells.
+      if !@w299 && !materialized_view && target.fetch(:parent_format) == 'Compact' && target.fetch(:child_format) == 'Wide'
         compressed = 0
       end
       projection = "PROJECTION #{PROJECTION} (SELECT #{(keys + AGGREGATES).join(', ')} GROUP BY #{keys.join(', ')}) WITH SETTINGS (min_rows_for_wide_part = #{child_threshold}, index_granularity = 2)"
@@ -243,14 +252,14 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def insert_controls!
-      sql = TARGETS.map do |target|
+      sql = @targets.map do |target|
         "INSERT INTO #{DATABASE}.#{target.fetch(:control)} SELECT source_id + 100, key_a, key_b, key_c, key_d, value FROM #{DATABASE}.source;"
       end.join("\n")
       native('insert_controls', sql.b)
     end
 
     def discover_native_parts!
-      names = ['source'] + TARGETS.flat_map { |target| [target.fetch(:table), target.fetch(:control), target.fetch(:view)] }
+      names = ['source'] + @targets.flat_map { |target| [target.fetch(:table), target.fetch(:control), target.fetch(:view)] }
       sql = <<~SQL
         SELECT '__TABLES__' FORMAT TSVRaw;
         SELECT name, base64Encode(metadata_path), arrayElement(data_paths, 1)
@@ -258,7 +267,7 @@ module VerifyMaterializedViewAggregateProjectionW298
         ORDER BY name FORMAT TSVRaw;
         SELECT '__PARTS__' FORMAT TSVRaw;
         SELECT table, name, part_type, toString(rows), toString(marks), path FROM system.parts
-        WHERE database='#{DATABASE}' AND active AND table IN (#{(['source'] + TARGETS.map { |target| target.fetch(:control) }).map { |name| "'#{name}'" }.join(',')})
+        WHERE database='#{DATABASE}' AND active AND table IN (#{(['source'] + @targets.map { |target| target.fetch(:control) }).map { |name| "'#{name}'" }.join(',')})
         ORDER BY table FORMAT TSVRaw;
         SELECT '__PROJECTIONS__' FORMAT TSVRaw;
         SELECT table, name, parent_name, part_type, parent_part_type, toString(rows), toString(marks), path
@@ -307,7 +316,7 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def verify_stock_controls!
-      expected_control_names = TARGETS.map { |target| target.fetch(:control) }
+      expected_control_names = @targets.map { |target| target.fetch(:control) }
       fail!('source active part identity or axes differ') unless @parts['source'] == {
         name: SOURCE_PART, format: 'Wide', rows: SOURCE_ROWS.size, marks: PARENT_ROWS.size / 2 + 1,
         path: File.join(@native_paths.fetch('source'), SOURCE_PART),
@@ -317,7 +326,7 @@ module VerifyMaterializedViewAggregateProjectionW298
       raw_source = query('source_rows', "SELECT source_id, key_a, key_b, key_c, key_d, value FROM #{DATABASE}.source ORDER BY source_id FORMAT RowBinary;")
       assert_bytes!(raw_source, SOURCE_ROWS.map { |row| row.pack('Q<' * row.size) }.join.b, 'stock source RowBinary')
       fail!('stock source row format is not Wide') unless @parts.fetch('source').fetch(:format) == 'Wide'
-      TARGETS.each do |target|
+      @targets.each do |target|
         table = target.fetch(:control)
         part = @parts.fetch(table)
         expected_marks = (PARENT_ROWS.size / 2) + 1
@@ -333,8 +342,11 @@ module VerifyMaterializedViewAggregateProjectionW298
         child_path = File.join(parent_path, "#{PROJECTION}.proj")
         fail!("#{table} stock projection path differs") unless child.fetch(:path) == child_path
         stock_compressed = stock_control_marks_compressed?(target)
-        assert_format!(parent_path, target.fetch(:parent_format), "#{table} stock parent", compressed: stock_compressed)
-        assert_format!(child_path, target.fetch(:child_format), "#{table} stock projection", compressed: stock_compressed)
+        assert_format!(parent_path, target.fetch(:parent_format), "#{table} stock parent", compressed: stock_compressed,
+                       compression_method: @w299 && stock_compressed ? 0x90 : nil)
+        assert_format!(child_path, target.fetch(:child_format), "#{table} stock projection", compressed: stock_compressed,
+                       compression_method: @w299 && stock_compressed ? 0x90 : nil,
+                       expected_mark_files: @w299 ? 8 : nil)
         schema = child_schema(table)
         expected_schema = target.fetch(:order).map { |name| [name, 'UInt64'] } + [
           ['count()', 'AggregateFunction(count)'], ['sum(value)', 'AggregateFunction(sum, UInt64)'],
@@ -364,7 +376,7 @@ module VerifyMaterializedViewAggregateProjectionW298
       FileUtils.mkdir_p(File.join(@catalog_root, 'metadata'), mode: 0o700)
       write_new(File.join(@catalog_root, 'metadata', 'lab.sql'), "ATTACH DATABASE _ UUID '#{DATABASE_UUID}'\nENGINE = Atomic\n")
       catalog_tables = {'source' => [SOURCE_UUID, 'TABLE']}
-      TARGETS.each do |target|
+      @targets.each do |target|
         catalog_tables[target.fetch(:table)] = [target.fetch(:uuid), 'TABLE']
         catalog_tables[target.fetch(:control)] = [target.fetch(:control_uuid), 'TABLE']
         catalog_tables[target.fetch(:view)] = [target.fetch(:view_uuid), 'MATERIALIZED VIEW']
@@ -375,13 +387,13 @@ module VerifyMaterializedViewAggregateProjectionW298
         table_path = uuid_path(uuid)
         FileUtils.mkdir_p(table_path, mode: 0o700)
         write_new(File.join(table_path, 'format_version.txt'), "1\n") unless kind == 'MATERIALIZED VIEW'
-        FileUtils.mkdir_p(File.join(table_path, 'detached'), mode: 0o700) if TARGETS.any? { |target| target.fetch(:table) == name }
+        FileUtils.mkdir_p(File.join(table_path, 'detached'), mode: 0o700) if @targets.any? { |target| target.fetch(:table) == name }
         metadata = File.realpath(File.expand_path(@metadata.fetch(name), @native_store))
         fail!("#{name} metadata path escaped native store") unless metadata.start_with?(File.realpath(@native_store) + File::SEPARATOR)
         ddl = File.binread(metadata)
         fail!("#{name} persisted metadata is oversized or invalid UTF-8") if ddl.bytesize > 1_048_576 || !ddl.dup.force_encoding(Encoding::UTF_8).valid_encoding?
         fail!("#{name} persisted metadata identity differs") unless /\A\s*ATTACH\s+#{Regexp.escape(kind)}\s+_\s+UUID\s+'#{Regexp.escape(uuid)}'/im.match?(ddl)
-        if target = TARGETS.find { |entry| entry.fetch(:table) == name }
+        if target = @targets.find { |entry| entry.fetch(:table) == name }
           ddl = sanitize_catalog_target_ddl!(target, ddl)
         end
         write_new(File.join(database_path, "#{name}.sql"), ddl)
@@ -389,13 +401,13 @@ module VerifyMaterializedViewAggregateProjectionW298
       source_copy = File.join(uuid_path(SOURCE_UUID), SOURCE_PART)
       copy_tree(@parts.fetch('source').fetch(:path), source_copy)
       fail!('OfflineCatalog source copy differs') unless inventory(source_copy) == @source_part.fetch(:inventory)
-      TARGETS.each do |target|
+      @targets.each do |target|
         control = target.fetch(:control)
         destination = File.join(uuid_path(target.fetch(:control_uuid)), SOURCE_PART)
         copy_tree(@parts.fetch(control).fetch(:path), destination)
         fail!("#{control} stock copy differs") unless inventory(destination) == @stock.fetch(control).fetch(:inventory)
       end
-      {root: @catalog_root, source_copy: source_copy, controls: TARGETS.map { |target| target.fetch(:control) }}
+      {root: @catalog_root, source_copy: source_copy, controls: @targets.map { |target| target.fetch(:control) }}
     end
 
     def sanitize_catalog_target_ddl!(target, ddl)
@@ -421,7 +433,7 @@ module VerifyMaterializedViewAggregateProjectionW298
         'index_granularity' => '2',
         'min_rows_for_wide_part' => target.fetch(:parent_format) == 'Wide' ? '0' : '1000',
         'min_bytes_for_wide_part' => '0',
-        'compress_marks' => target.fetch(:parent_format) == 'Compact' ? '1' : '0',
+        'compress_marks' => (@w299 || target.fetch(:parent_format) == 'Compact') ? '1' : '0',
         'compress_primary_key' => '0',
         'replace_long_file_name_to_hash' => '0',
       }
@@ -434,11 +446,11 @@ module VerifyMaterializedViewAggregateProjectionW298
 
     def validate_publish!(report)
       fail!('publish helper format/action/status differs') unless report.is_a?(Hash) &&
-        report['format'] == HELPER_FORMAT && report['action'] == 'publish' && report['status'] == 'ok'
+        report['format'] == @helper_format && report['action'] == 'publish' && report['status'] == 'ok'
       fail!('publish source row count differs') unless report['source_row_count'] == SOURCE_ROWS.size
       targets = Array(report['targets']).to_h { |entry| [entry.fetch('table'), entry] }
-      fail!('publish helper target roster differs') unless targets.keys.sort == TARGETS.map { |target| target.fetch(:table) }.sort
-      TARGETS.each do |target|
+      fail!('publish helper target roster differs') unless targets.keys.sort == @targets.map { |target| target.fetch(:table) }.sort
+      @targets.each do |target|
         entry = targets.fetch(target.fetch(:table))
         expected_rows = expected_child_rows(target).map { |row| row.map(&:to_s) }
         fail!("#{target.fetch(:table)} published rows or formats differ") unless
@@ -456,14 +468,18 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def verify_generated_parts!
-      TARGETS.each do |target|
+      @targets.each do |target|
         table = target.fetch(:table)
         child_path = File.join(@generated.fetch(table).fetch(:path), "#{PROJECTION}.proj")
-        assert_format!(@generated.fetch(table).fetch(:path), target.fetch(:parent_format), "#{table} generated parent", compressed: target.fetch(:parent_format) == 'Compact')
-        # Native ClickHouse projections inherit the parent's mark compression
-        # setting. Crystal's Wide projection writer emits plain marks; Compact
-        # children use the explicit child option selected in the helper.
-        assert_format!(child_path, target.fetch(:child_format), "#{table} generated child", compressed: generated_child_marks_compressed?(target))
+        assert_format!(@generated.fetch(table).fetch(:path), target.fetch(:parent_format), "#{table} generated parent",
+                       compressed: target.fetch(:parent_format) == 'Compact',
+                       compression_method: @w299 && target.fetch(:parent_format) == 'Compact' ? 0x82 : nil)
+        # W298 preserves its plain Wide child. W299 opts both Wide child lanes
+        # into LZ4-compressed marks while the native stock child uses ZSTD.
+        assert_format!(child_path, target.fetch(:child_format), "#{table} generated child",
+                       compressed: generated_child_marks_compressed?(target),
+                       compression_method: @w299 && generated_child_marks_compressed?(target) ? 0x82 : nil,
+                       expected_mark_files: @w299 ? 8 : nil)
         index = File.binread(File.join(child_path, 'primary.idx'))
         assert_bytes!(index, expected_primary_index(target), "#{table} generated primary.idx vs literal schedule")
         assert_bytes!(index, @stock.fetch(target.fetch(:control)).fetch(:primary_index), "#{table} generated primary.idx vs stock")
@@ -472,7 +488,7 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def copy_to_detached!
-      TARGETS.each do |target|
+      @targets.each do |target|
         table = target.fetch(:table)
         detached = File.join(@native_paths.fetch(table), 'detached')
         if File.exist?(detached) || File.symlink?(detached)
@@ -488,7 +504,7 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def attach_and_check!
-      TARGETS.each do |target|
+      @targets.each do |target|
         table = target.fetch(:table)
         native("attach_#{table}", "ALTER TABLE #{DATABASE}.#{table} ATTACH PART '#{target.fetch(:part)}';\n".b)
         check = query("check_#{table}", "CHECK TABLE #{DATABASE}.#{table} FORMAT TSV;")
@@ -511,15 +527,20 @@ module VerifyMaterializedViewAggregateProjectionW298
         expected_inventory = @generated.fetch(table).fetch(:inventory)
         attached_inventory = inventory(parent_path)
         assert_attached_files_preserved!(expected_inventory, attached_inventory, table, parent_path)
-        assert_format!(parent_path, target.fetch(:parent_format), "#{table} attached parent", compressed: target.fetch(:parent_format) == 'Compact')
-        assert_format!(child_path, target.fetch(:child_format), "#{table} attached child", compressed: generated_child_marks_compressed?(target))
+        assert_format!(parent_path, target.fetch(:parent_format), "#{table} attached parent",
+                       compressed: target.fetch(:parent_format) == 'Compact',
+                       compression_method: @w299 && target.fetch(:parent_format) == 'Compact' ? 0x82 : nil)
+        assert_format!(child_path, target.fetch(:child_format), "#{table} attached child",
+                       compressed: generated_child_marks_compressed?(target),
+                       compression_method: @w299 && generated_child_marks_compressed?(target) ? 0x82 : nil,
+                       expected_mark_files: @w299 ? 8 : nil)
         @attached[table] = {part: parent[0], parent_path: parent_path, child_path: child_path,
                             inventory: attached_inventory, primary_index_hex: File.binread(File.join(child_path, 'primary.idx')).unpack1('H*')}
       end
     end
 
     def verify_native_reads!
-      TARGETS.to_h do |target|
+      @targets.to_h do |target|
         table = target.fetch(:table)
         control = target.fetch(:control)
         keys = target.fetch(:order)
@@ -709,7 +730,7 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def copy_attached_to_catalog!
-      TARGETS.each do |target|
+      @targets.each do |target|
         table = target.fetch(:table)
         source = @attached.fetch(table).fetch(:parent_path)
         destination = File.join(uuid_path(target.fetch(:uuid)), target.fetch(:part))
@@ -721,11 +742,11 @@ module VerifyMaterializedViewAggregateProjectionW298
 
     def validate_reopen!(report)
       fail!('reopen helper format/action/status differs') unless report.is_a?(Hash) &&
-        report['format'] == HELPER_FORMAT && report['action'] == 'reopen' && report['status'] == 'ok'
+        report['format'] == @helper_format && report['action'] == 'reopen' && report['status'] == 'ok'
       pairs = Array(report['pairs']).to_h { |pair| [pair.fetch('table'), pair] }
-      expected_names = TARGETS.flat_map { |target| [target.fetch(:control), target.fetch(:table)] }.sort
+      expected_names = @targets.flat_map { |target| [target.fetch(:control), target.fetch(:table)] }.sort
       fail!('offline reopen table roster differs') unless pairs.keys.sort == expected_names
-      TARGETS.each do |target|
+      @targets.each do |target|
         [target.fetch(:control), target.fetch(:table)].each do |table|
           pair = pairs.fetch(table)
           rows = expected_child_rows(target).map { |row| row.map(&:to_s) }
@@ -740,12 +761,32 @@ module VerifyMaterializedViewAggregateProjectionW298
             pair['child_window_rows'] == expected_window_rows && pair['child_window_state_hex'] == expected_window_states &&
             pair['parent_mark_rows'] == PARENT_MARK_ROWS && pair['child_mark_rows'] == child_mark_rows &&
             pair['window_parent_mark_rows'] == [1, 2, 2] && pair['window_child_mark_rows'] == [1, 2, 2]
+          assert_w299_mark_witness!(pair, table, target) if @w299
           expected_path = table == target.fetch(:control) ?
             File.join(uuid_path(target.fetch(:control_uuid)), SOURCE_PART) : @attached.fetch(table).fetch(:catalog_copy)
           fail!("#{table} offline part path differs") unless pair['path'] == expected_path
         end
       end
       report
+    end
+
+    def assert_w299_mark_witness!(pair, table, target)
+      witness = pair.fetch('mark_witness')
+      expected_method = table == target.fetch(:control) ? 0x90 : 0x82
+      files = Array(witness.fetch('mark_files'))
+      lanes = Array(witness.fetch('lanes'))
+      names = lanes.map { |lane| lane.fetch('name') }
+      fail!("#{table} W299 compressed mark roster differs") unless
+        witness.fetch('lane_count') == 8 && files.size == 8 && lanes.size == 8 &&
+        files == names.sort && names.uniq.size == 8 && names.all? { |name| /\A[0-9a-f]{32}\.cmrk2\z/.match?(name) }
+      fail!("#{table} W299 compressed mark method or decoded size differs") unless
+        witness.fetch('method') == expected_method && witness.fetch('canonical_bytes_per_lane') == 192 &&
+        lanes.all? do |lane|
+          lane.fetch('method') == expected_method && lane.fetch('canonical_bytes') == 192 &&
+            lane.fetch('records') == 8 && lane.fetch('physical_size').positive?
+        end
+    rescue KeyError, NoMethodError => error
+      fail!("#{table} W299 mark witness is incomplete: #{error.message}")
     end
 
     def validate_inputs_unchanged!
@@ -778,7 +819,9 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def helper(action)
-      output = run_process("helper_#{action}", @helper, [@catalog_root, action], ''.b, 'prebuilt Crystal helper')
+      args = [@catalog_root, action]
+      args << @profile if @w299
+      output = run_process("helper_#{action}", @helper, args, ''.b, 'prebuilt Crystal helper')
       fail!("helper #{action} must emit one JSON line") unless output.lines.size == 1
       JSON.parse(output)
     rescue JSON::ParserError => error
@@ -851,23 +894,38 @@ module VerifyMaterializedViewAggregateProjectionW298
       {files: files.sort_by { |entry| entry.fetch(:relative_path) }, total_bytes: bytes}
     end
 
-    def assert_format!(path, format, label, compressed:)
+    def assert_format!(path, format, label, compressed:, compression_method: nil, expected_mark_files: nil)
       names = Dir.children(path)
       wide = names.grep(/\.(?:c?mrk2)\z/)
       compact = names.grep(/\.(?:c?mrk4)\z/)
       actual = if !wide.empty? && compact.empty? then 'Wide' elsif !compact.empty? && wide.empty? then 'Compact' else 'ambiguous' end
       fail!("#{label} marker family is #{actual}, expected #{format}") unless actual == format
       marks = format == 'Wide' ? wide : compact
-      fail!("#{label} compressed mark choice differs") unless !marks.empty? && marks.all? { |name| name.include?('.cmrk') } == compressed
+      fail!("#{label} mark lane roster count differs") if expected_mark_files && marks.size != expected_mark_files
+      compressed_marks = marks.select { |name| name.include?('.cmrk') }
+      if compressed
+        fail!("#{label} compressed mark inventory is mixed or incomplete") unless !marks.empty? && compressed_marks.size == marks.size
+      else
+        expected_extension = format == 'Wide' ? '.mrk2' : '.mrk4'
+        fail!("#{label} plain mark inventory is mixed or incomplete") unless !marks.empty? && compressed_marks.empty? && marks.all? { |name| name.end_with?(expected_extension) }
+      end
+      if method = compression_method
+        marks.each do |name|
+          bytes = File.binread(File.join(path, name))
+          fail!("#{label} compressed mark is too short for its native frame header") if bytes.bytesize <= 16
+          fail!("#{label} compressed mark codec differs for #{name}") unless bytes.getbyte(16) == method
+        end
+      end
       fail!("#{label} primary.idx missing or compressed") unless File.file?(File.join(path, 'primary.idx')) && !File.exist?(File.join(path, 'primary.cidx'))
     end
 
     def generated_child_marks_compressed?(target)
-      target.fetch(:child_format) == 'Compact' && target.fetch(:parent_format) == 'Compact'
+      @w299 ? target.fetch(:child_format) == 'Wide' :
+        target.fetch(:child_format) == 'Compact' && target.fetch(:parent_format) == 'Compact'
     end
 
     def stock_control_marks_compressed?(target)
-      target.fetch(:child_format) == 'Compact' && target.fetch(:parent_format) == 'Compact'
+      @w299 || target.fetch(:child_format) == 'Compact' && target.fetch(:parent_format) == 'Compact'
     end
 
     def copy_tree(source, destination)
@@ -943,7 +1001,8 @@ module VerifyMaterializedViewAggregateProjectionW298
 
     def write_summary(values)
       return unless @root && File.directory?(@root)
-      payload = {format: FORMAT, repository_head: @revision, fatal_error: @fatal_error}.merge(values)
+      payload = {format: @format, repository_head: @revision, fatal_error: @fatal_error}.merge(values)
+      payload[:profile] = @profile if @w299
       File.write(File.join(@root, 'summary.json'), JSON.pretty_generate(payload) + "\n", mode: 'w', perm: 0o600)
     end
 
@@ -959,11 +1018,12 @@ module VerifyMaterializedViewAggregateProjectionW298
   def self.run(argv = ARGV)
     options = {binary: BINARY}
     parser = OptionParser.new do |args|
-      args.banner = 'Usage: ruby scripts/verify_materialized_view_aggregate_projection_w298.rb --evidence-root PATH --helper PREBUILT --run-safe PATH [--binary PATH]'
+      args.banner = 'Usage: ruby scripts/verify_materialized_view_aggregate_projection_w298.rb --evidence-root PATH --helper PREBUILT --run-safe PATH [--binary PATH] [--w299]'
       args.on('--evidence-root PATH', 'Fresh directory below an existing non-system-volume parent') { |value| options[:evidence_root] = value }
       args.on('--helper PATH', 'Prebuilt executable W298 Crystal helper') { |value| options[:helper] = value }
       args.on('--run-safe PATH', 'Pinned process resource guard') { |value| options[:run_safe] = value }
       args.on('--binary PATH', 'Pinned stock ClickHouse executable') { |value| options[:binary] = value }
+      args.on('--w299', 'Run the two-parent compressed Wide child projection witness') { options[:w299] = true }
     end
     parser.parse!(argv)
     Driver.new(options).run ? 0 : 1

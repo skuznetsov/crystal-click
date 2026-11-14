@@ -1,5 +1,51 @@
 # Physical projection reads and publication
 
+## Compressed Wide aggregate projection marks (W299)
+
+Wide aggregate projections under Wide and Compact parents can use adaptive
+`.cmrk2` sidecars with ordered plain UInt64 keys, Count, UInt64 Sum, Min and
+Max states, and a raw `primary.idx`.
+`compress_marks: true` on an aggregate child selects compressed sidecars
+for every key and state lane. The default is `.mrk2`. The child and parent
+choose their mark formats independently.
+
+Each adaptive record contains the compressed data offset, the offset inside
+that frame, and the granule row count as three little-endian UInt64 values.
+Compressed marks carry the same records in ClickHouse compressed frames.
+The reader binds the sidecar to the declared stream, checks its physical and
+decoded sizes and hashes, and validates the decoded mark grid against the
+data frame index. Hidden key spans and selected state spans are checked
+across all granules, including for an empty row window at EOF. The fixed-width
+lanes have exact span sizes. Count spans are bounded by the possible sizes of
+their VarUInt rows, and selected Count payloads are decoded on read. Compressed
+primary indexes and additional state types remain open.
+
+The writer uses the existing LZ4 frame writer and checks the staged mark
+grid, index and values before publishing the parent and child. This work
+uses the parent operation budgets. A failed staged readback removes the
+unpublished directory.
+
+At `8b26b1a`, stock `.cmrk2` children failed to open selected Sum, Min,
+and Max states under both parent layouts. The same selections read with
+`.mrk2`. The adversary shifts late marks in a selected state or hidden
+key while preserving the ordinary grid and recomputing the mark entry and
+the parent projection summary. The regressions exercise that case, stale
+physical and decoded hashes, truncated frames, and mixed suffixes before
+the first callback.
+
+With ClickHouse 26.10.1.1201, both Crystal build modes pass `ATTACH PART`
+and `CHECK TABLE` with a Wide child under each parent layout. The stock
+children carry ZSTD marks and the library writes LZ4-framed marks. Each
+child has four key lanes and four state lanes, with eight mark records per
+lane including the terminal record. The state RowBinary and 256-byte
+compound `primary.idx` match the stock parts. Forced projection queries
+return the same groups as queries with projection use disabled. Adding a
+fourth-key condition to the tested prefix reduces the selection from two
+of seven granules to one. Crystal reads the full stock and attached
+children and the `[1, 6)` window through the offline catalog.
+
+See the [W299 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w299.json).
+
 ## Compact and mixed projection publication (W289)
 
 `WidePartWriter.write_uint64_columns` and

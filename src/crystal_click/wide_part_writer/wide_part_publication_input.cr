@@ -13,6 +13,7 @@ module CrystalClick
       getter lane_bindings : Array(WidePartLaneBinding)
       getter projection_entries : Array(String)
       getter additional_key_names : Array(String)
+      getter compress_marks : Bool
       getter checksum_entry_count : Int32
 
       def initialize(
@@ -26,6 +27,7 @@ module CrystalClick
         @lane_bindings : Array(WidePartLaneBinding),
         @projection_entries : Array(String) = [] of String,
         @additional_key_names : Array(String) = [] of String,
+        @compress_marks : Bool = false,
       )
         @checksum_entry_count = @lane_bindings.size * 2 + 5 + @projection_entries.size
       end
@@ -38,7 +40,7 @@ module CrystalClick
         WidePartPublicationInput.new(
           target, parent, @key_name, @mark_count, @expected_files,
           @expected_rows, @logical_names, @lane_bindings, @projection_entries,
-          @additional_key_names
+          @additional_key_names, @compress_marks
         )
       end
 
@@ -53,12 +55,16 @@ module CrystalClick
         defer_destination_check : Bool = false,
         aggregate_projection : Bool = false,
         additional_key_names : Array(String) = [] of String,
+        compress_marks : Bool = false,
       ) : WidePartPublicationInput
         ensure_supported_platform!
         validate_column_name!(key_name)
         raise ArgumentError.new("metadata version must be nonnegative") if metadata_version < 0
         unless rows_per_mark > 0 && rows_per_mark <= WidePartWriter::MAX_ROWS_PER_MARK
           raise ArgumentError.new("rows_per_mark is outside the admitted range")
+        end
+        if compress_marks && (!defer_destination_check || !aggregate_projection)
+          raise UnsupportedFormatError.new("compressed Wide marks are limited to aggregate projection children")
         end
         unless keys.size > 0 && keys.size.to_u64 <= WidePart::MAX_ROWS
           raise ArgumentError.new("a Wide part requires a bounded nonempty key stream")
@@ -126,6 +132,7 @@ module CrystalClick
         logical_seen = Set(String).new
         logical_seen.add(key_name)
         names = Array(String).new(expected_file_count)
+        marks_suffix = compress_marks ? ".cmrk2" : ".mrk2"
         columns.each do |column|
           column.stream_names.each do |logical_name|
             unless logical_name.bytesize > 0 && logical_name.bytesize <= WidePart::MAX_METADATA_LINE_BYTES
@@ -135,7 +142,7 @@ module CrystalClick
               raise UnsupportedFormatError.new("physical stream names collide across the part")
             end
             data_filename = PhysicalStreamName.append_literal(StreamName.hash(logical_name), ".bin")
-            marks_filename = PhysicalStreamName.append_literal(StreamName.hash(logical_name), ".mrk2")
+            marks_filename = PhysicalStreamName.append_literal(StreamName.hash(logical_name), marks_suffix)
             validate_filename!(data_filename)
             validate_filename!(marks_filename)
             names << data_filename
@@ -150,7 +157,7 @@ module CrystalClick
 
         key_base = StreamName.hash(key_name)
         names << PhysicalStreamName.append_literal(key_base, ".bin")
-        names << PhysicalStreamName.append_literal(key_base, ".mrk2")
+        names << PhysicalStreamName.append_literal(key_base, marks_suffix)
         names.concat([
           "primary.idx", "count.txt", "serialization.json", "columns.txt",
           "columns_substreams.txt", "default_compression_codec.txt",
@@ -170,7 +177,7 @@ module CrystalClick
         new(
           target, parent, key_name, first.parent_rows.size.to_i32,
           names, expected_rows, logical_names, lane_bindings, projection_entries,
-          retained_additional_key_names,
+          retained_additional_key_names, compress_marks,
         )
       end
 

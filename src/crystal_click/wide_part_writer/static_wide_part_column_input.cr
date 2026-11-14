@@ -28,7 +28,7 @@ module CrystalClick
         granules = aggregate.state_granules(context.rows_per_mark, WidePartWriter::MAX_MARKS)
         prepare_with_profile(
           descriptor.column_name, type, granules, context,
-          BinaryBulkProfile.with_size_stream, descriptor.count?
+          BinaryBulkProfile.with_size_stream, descriptor.count?, strict_projection_child: true
         )
       end
 
@@ -45,7 +45,9 @@ module CrystalClick
           type, "UInt64 projection key"
         )
         prepare_with_profile(
-          name, type, granules, context, BinaryBulkProfile.with_size_stream, false
+          name, type, granules, context, BinaryBulkProfile.with_size_stream, false,
+          strict_projection_child: true,
+          strict_projection_key_lane: true,
         )
       end
 
@@ -56,6 +58,8 @@ module CrystalClick
         context : WidePartOperationContext,
         effective_profile : BinaryBulkProfile,
         count_projection : Bool,
+        strict_projection_child : Bool = false,
+        strict_projection_key_lane : Bool = false,
       ) : WidePartPreparedColumn
         # Bound and materialize the descriptor before consulting any derived
         # type summaries or nominal admission owner. Descriptor construction
@@ -104,7 +108,8 @@ module CrystalClick
         validate = ->(path : String, codec_budget : BinaryCodecBudget, transport_budget : CompressedStreamBudget) {
           validate_staged!(
             path, name, type, declaration, streams, parent_rows, values,
-            effective_profile, context, codec_budget, transport_budget
+            effective_profile, context, codec_budget, transport_budget,
+            strict_projection_child, strict_projection_key_lane
           )
         }
         WidePartPreparedColumn.new(
@@ -200,10 +205,14 @@ module CrystalClick
         context : WidePartOperationContext,
         codec_budget : BinaryCodecBudget,
         transport_budget : CompressedStreamBudget,
+        strict_projection_child : Bool,
+        strict_projection_key_lane : Bool,
       ) : Nil
         reader = BinaryBulkColumnReader.open(
           path, name, type, context.limits, context.read_transport_limits,
-          codec_budget, transport_budget
+          codec_budget, transport_budget,
+          strict_projection_child: strict_projection_child,
+          strict_projection_key_lane: strict_projection_key_lane,
         )
         expected_rows = parent_rows.map(&.to_u64)
         unless reader.row_count == expected_rows.sum(0_u64) &&

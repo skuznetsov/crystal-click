@@ -2,6 +2,14 @@
 
 ## Current qualification
 
+### W299 Compressed Wide aggregate projection marks
+
+Wide aggregate children use adaptive `.cmrk2` marks when the callback
+sets `compress_marks: true`. Both parent layouts use the same child
+writer and typed reader for plain UInt64 keys and Count, Sum, Min and
+Max states. See the
+[compressed mark profile](PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-marks-w299).
+
 ### W298 Ordered UInt64 group keys in aggregate projections
 
 Both child writers accept an ordered list of plain UInt64 `GROUP BY`
@@ -4828,7 +4836,8 @@ source/runtime identities and executed evidence.
    supported UInt64 arguments. W295 through W297 add the same aggregate functions
    for a Compact MRK4 child with one or two plain UInt64 group keys under either
    parent layout. W298 accepts an ordered array of plain UInt64 group keys
-   for either child layout.
+   for either child layout. W299 qualifies `.cmrk2` marks for Wide
+   aggregate children under both parent layouts.
    General keys and partitions, additional projection declarations, remaining
    layouts/types and automatic materialization remain open.
 4. **General table writing.** The detached-part writers and small
@@ -4992,7 +5001,8 @@ retains the implementation checkpoints and responsibility boundaries.
    UInt64 `sum(value)`, `min(value)`, and `max(value)` states in Wide children.
    W295 through W297 qualify the same states in Compact MRK4 children with
    one or two UInt64 group keys. W298 generalizes the number of UInt64 keys
-   in the aggregate children. More group key and state types, general key and
+   in the aggregate children. W299 qualifies compressed adaptive marks for
+   Wide aggregate children. More group key and state types, general key and
    partition derivation, additional projection declarations, and bounded
    output appenders remain open.
 4. Only then reopen memory/performance work. No current claim of stock-reader
@@ -5000,7 +5010,7 @@ retains the implementation checkpoints and responsibility boundaries.
 
 ## Source reference
 
-W286 through W298 compare the relevant MergeTree paths against the pinned shallow
+W286 through W299 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

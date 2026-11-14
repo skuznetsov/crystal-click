@@ -10,6 +10,10 @@ order. The grouped rows must be strictly increasing lexicographically.
 Every key lane has the same row count and remains paired with its state
 through staging and readback.
 
+The Wide child constructors accept `compress_marks: true` for the
+[compressed mark profile](PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-marks-w299).
+The callback uses the same key and state inputs for either mark format.
+
 Both parent layouts can publish either a Wide child or a Compact MRK4
 child. The uncompressed `primary.idx` contains a little-endian UInt64
 for each key in each mark-start tuple, followed by the final row's tuple.

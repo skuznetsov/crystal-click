@@ -28,8 +28,16 @@ module CrystalClick
       validate_source_declaration : Proc(String, Nil)? = nil,
       subcolumns_validator : Proc(Array(JSON::Any), UInt64, Nil)? = nil,
       require_selected_subcolumns : Bool = false,
+      allow_selected_compressed_marks : Bool = false,
     ) : ObjectColumnPartMetadata
-      new(part_path, column_name, validate_source_declaration, subcolumns_validator, require_selected_subcolumns)
+      new(
+        part_path,
+        column_name,
+        validate_source_declaration,
+        subcolumns_validator,
+        require_selected_subcolumns,
+        allow_selected_compressed_marks,
+      )
     end
 
     def initialize(
@@ -38,6 +46,7 @@ module CrystalClick
       validate_source_declaration : Proc(String, Nil)? = nil,
       @subcolumns_validator : Proc(Array(JSON::Any), UInt64, Nil)? = nil,
       @require_selected_subcolumns : Bool = false,
+      allow_selected_compressed_marks : Bool = false,
     )
       validate_part_directory!(part_path)
       raise ArgumentError.new("Object column name must not be empty") if column_name.empty?
@@ -60,7 +69,7 @@ module CrystalClick
         read_metadata_file("columns_substreams.txt", MAX_METADATA_FILE_BYTES),
         columns,
       )
-      reject_selected_compressed_marks!(@selected_stream_names)
+      reject_selected_compressed_marks!(@selected_stream_names) unless allow_selected_compressed_marks
       validate_codec!(read_metadata_file("default_compression_codec.txt", MAX_CODEC_FILE_BYTES))
       @ordinary_profile = parse_serialization_profile(
         read_metadata_file("serialization.json", MAX_METADATA_FILE_BYTES),

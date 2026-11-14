@@ -225,6 +225,12 @@ module CrystalClick
       if checksums.entries.has_key?("columns.txt")
         checksums.validate_selected_entries(path, "columns.txt")
       end
+      compressed_projection_child = WideMarkFileAdapter.projection_child_compressed_marks?(path, checksums)
+      projection_basename = File.basename(path)
+      unless projection_basename.ends_with?(".proj") && projection_basename.bytesize > ".proj".bytesize
+        raise CorruptPartError.new("Wide projection child path is missing its projection suffix")
+      end
+      projection_name = projection_basename.byte_slice(0, projection_basename.bytesize - ".proj".bytesize)
       columns = WidePart.parse_columns_metadata(columns_text)
       key_count = 0
       while key_count < columns.size && columns[key_count][1] == "UInt64"
@@ -238,7 +244,11 @@ module CrystalClick
         raise CorruptPartError.new("Wide projection aggregate group key roster contains duplicate names")
       end
       key_names.each do |key_name|
-        key_reader = WidePart.open_typed(path, key_name)
+        key_reader = if compressed_projection_child
+                       WidePart.open_projection_child_typed(path, key_name, projection_name, true)
+                     else
+                       WidePart.open_typed(path, key_name)
+                     end
         unless key_reader.column_type == "UInt64" && key_reader.row_count == expected_rows &&
                key_reader.mark_row_counts == expected_mark_rows
           raise CorruptPartError.new("Wide projection aggregate group key row-mark axes differ from its selected state")

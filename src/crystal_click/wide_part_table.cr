@@ -4724,6 +4724,12 @@ module CrystalClick
         current_column_types = Array(String).new(@columns.size)
         current_column_sources = Array({String, String, String}).new(@columns.size)
         checksums = PartChecksums.open(path)
+        compressed_projection_child = if projection_name
+                                        WideMarkFileAdapter.projection_child_compressed_marks?(path, checksums)
+                                      else
+                                        false
+                                      end
+        compressed_projection_aggregate_selected = false
         if selected_projection_name = projection_name
           ProjectionChildSelection.validate_binding!(parent_path, selected_projection_name, checksums)
         end
@@ -4799,7 +4805,13 @@ module CrystalClick
             selected_checksum_names = dynamic_reader.selected_checksum_names
             dynamic_bulk_readers << DynamicBulkColumnReaderEntry.new(column, dynamic_reader, dynamic_value_type, column_type)
           elsif source_declaration = (simple_aggregate_bulk_declaration || aggregate_function_bulk_declaration || qbit_bulk_declaration || custom_geo_bulk_declaration || generic_static_bulk_declaration)
-            binary_reader, binary_value_type = BinaryBulkColumnAdapter.open(path, column, source_declaration)
+            binary_reader, binary_value_type = BinaryBulkColumnAdapter.open(
+              path,
+              column,
+              source_declaration,
+              !projection_name.nil?,
+              compressed_projection_child,
+            )
             mark_rows = binary_reader.mark_row_counts
             raise BoundsError.new("mark count exceeds per-reader limit") if mark_rows.size > MAX_MARKS_PER_READER
             mark_rows.each do |rows|
@@ -4818,7 +4830,12 @@ module CrystalClick
                        WidePart.open_numeric(path, column)
                      elsif @typed_mode
                        if selected_projection_name = projection_name
-                         WidePart.open_projection_child_typed(path, column, selected_projection_name)
+                         WidePart.open_projection_child_typed(
+                           path,
+                           column,
+                           selected_projection_name,
+                           compressed_projection_child,
+                         )
                        else
                          WidePart.open_typed(path, column)
                        end
@@ -4883,7 +4900,37 @@ module CrystalClick
           end
           current_column_types << column_type
           current_column_sources << column_source
+          if compressed_projection_child && projection_name &&
+             WidePartProjectionAggregateDescriptor.for_column(column, column_type)
+            compressed_projection_aggregate_selected = true
+          end
           total_marks = checked_total_marks(total_marks, mark_rows.size.to_u64)
+        end
+
+        if compressed_projection_aggregate_selected && aggregate_count_key_names.nil?
+          selected_projection_name = projection_name ||
+                                     raise(CorruptPartError.new("compressed projection aggregate name is missing"))
+          key_names = WidePart.projection_group_key_column_names(path)
+          key_names.each do |key_name|
+            next if @columns.includes?(key_name)
+            key_reader = WidePart.open_projection_child_typed(
+              path,
+              key_name,
+              selected_projection_name,
+              true,
+            )
+            expected_rows = expected_row_count ||
+                            raise(CorruptPartError.new("selected part has no aggregate row count"))
+            expected_marks = expected_mark_rows ||
+                             raise(CorruptPartError.new("selected part has no aggregate mark grid"))
+            unless key_reader.column_type == "UInt64" && key_reader.row_count == expected_rows &&
+                   key_reader.mark_row_counts == expected_marks
+              raise CorruptPartError.new("compressed projection hidden key grid differs from its selected aggregate state")
+            end
+            key_reader.selected_checksum_names.each do |checksum_name|
+              checksums.validate_selected_entries(path, checksum_name)
+            end
+          end
         end
 
         if current_types = expected_column_types

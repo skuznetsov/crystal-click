@@ -1759,6 +1759,13 @@ module CrystalClick
       end
     end
 
+    # True only for the exact aggregate projection child path when the
+    # caller's child manifest selected compressed marks (or a selected
+    # physical `.cmrk2` sidecar independently selected that path).
+    def compressed_projection_child? : Bool
+      @compressed_projection_child
+    end
+
     def self.open(path : String) : WidePart
       new(path, nil, :uint64)
     rescue ex : IO::Error
@@ -1791,14 +1798,43 @@ module CrystalClick
     # :nodoc:
     # The WidePartTable projection route validates the parent-manifest binding
     # before calling this opener; direct callers must establish that binding.
-    def self.open_projection_child_typed(path : String, column : String, projection_name : String) : WidePart
+    def self.open_projection_child_typed(
+      path : String,
+      column : String,
+      projection_name : String,
+      compressed_projection_child : Bool = false,
+    ) : WidePart
       ProjectionChildSelection.validate_name!(projection_name)
       unless File.basename(path) == "#{projection_name}.proj"
         raise InvalidPartError.new("selected projection child name does not match its declaration")
       end
-      new(path, column, :typed, nil, true)
+      new(path, column, :typed, nil, true, compressed_projection_child)
     rescue ex : IO::Error
       raise InvalidPartError.new(ex.message || "cannot read part")
+    end
+
+    # Returns the ordered leading UInt64 key roster from a projection child.
+    # Callers use it only after an exact aggregate projection descriptor has
+    # been admitted; values and marks are validated by the typed child reader.
+    def self.projection_group_key_column_names(path : String) : Array(String)
+      checksums = PartChecksums.open(path)
+      if checksums.entry("columns.txt")
+        checksums.validate_selected_entries(path, "columns.txt")
+      end
+      metadata = PartMetadataFileReader.new(path, CompressedStreamBudget.read_default)
+      columns = PartMetadataTextParser.parse_columns(metadata.read("columns.txt"))
+      key_count = 0
+      while key_count < columns.size && columns[key_count][1] == "UInt64"
+        key_count += 1
+      end
+      if key_count == 0
+        raise CorruptPartError.new("aggregate projection has no leading UInt64 group key roster")
+      end
+      names = columns.first(key_count).map { |name, _type| String.new(name.to_slice) }
+      unless names.to_set.size == names.size
+        raise CorruptPartError.new("aggregate projection group key roster contains duplicate names")
+      end
+      names
     end
 
     # Open one explicit in-memory Nested view over ClickHouse's flattened
@@ -11615,15 +11651,28 @@ module CrystalClick
       mode : Symbol,
       flattened_nested_context : FlattenedNestedStoragePlan? = nil,
       allow_projection_aggregate_roster : Bool = false,
+      compressed_projection_child : Bool = false,
     )
       @path = path
       @flattened_nested_context = flattened_nested_context
+      @compressed_projection_child = false
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
       @single_stream_string = false
       @low_cardinality_string_state = nil
-      @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, @aggregate_count_key_column_names, physical_streams = parse_metadata(requested_column, mode, allow_projection_aggregate_roster)
+      @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, @aggregate_count_key_column_names, aggregate_projection_child, physical_streams = parse_metadata(requested_column, mode, allow_projection_aggregate_roster)
       @streams = Hash(String, PhysicalStream).new
+      strict_projection_mark_profile = allow_projection_aggregate_roster &&
+                                       aggregate_projection_child &&
+                                       (@column_type == "UInt64" ||
+                                        (@column == "count()" && !WideAggregateCountStoragePlan.for_type_name(@column_type).nil?))
+      projection_mark_source = nil.as(PartStreamSource?)
+      projection_mark_budget = nil.as(CompressedStreamBudget?)
+      if strict_projection_mark_profile && compressed_projection_child
+        projection_mark_source = PartStreamSource.new(@path)
+        projection_mark_budget = CompressedStreamBudget.read_default
+        @compressed_projection_child = true
+      end
       geometry_plan = GeometryColumnType.for_type(@column_type)
       point_plan = PointColumnType.for_type(@column_type)
       geo_array_plan = GeoArrayColumnType.for_type(@column_type)
@@ -11638,6 +11687,35 @@ module CrystalClick
       physical_streams.each do |stream_name|
         PartMetadataTextParser.validate_selected_stream_name(stream_name)
         data_path, mark_path, compressed_marks = resolve_stream(stream_name)
+        authenticated_canonical_marks = nil.as(Bytes?)
+        if strict_projection_mark_profile && (compressed_projection_child || compressed_marks)
+          unless projection_mark_source
+            projection_mark_source = PartStreamSource.new(@path)
+            projection_mark_budget = CompressedStreamBudget.read_default
+          end
+          @compressed_projection_child = true
+          source = projection_mark_source || raise(CorruptPartError.new("projection mark checksum source is missing"))
+          input, mark_file = WideMarkFileAdapter.open(@path, source, File.basename(data_path))
+          unless mark_file.compressed
+            raise CorruptPartError.new("compressed projection child mixes .mrk2 and .cmrk2 lanes")
+          end
+          authenticated_canonical_marks = mark_file.read_canonical_marks(
+            input,
+            projection_mark_budget || raise(CorruptPartError.new("projection mark budget is missing")),
+          ) || raise(CorruptPartError.new("compressed projection marks did not produce canonical bytes"))
+          inspected = CompressedMarkReader.inspect_canonical(
+            input.data_path,
+            input.data_size,
+            authenticated_canonical_marks,
+            0,
+            projection_mark_budget || raise(CorruptPartError.new("projection mark budget is missing")),
+          )
+          if @column_type == "UInt64"
+            CompressedMarkReader.validate_fixed_width_spans!(inspected, sizeof(UInt64).to_i32)
+          elsif @column == "count()" && WideAggregateCountStoragePlan.for_type_name(@column_type)
+            WideAggregateCountStoragePlan.validate_mark_spans!(inspected)
+          end
+        end
         if (variant_plan || dynamic_string) && compressed_marks
           raise UnsupportedFormatError.new("Variant and Dynamic require plain .mrk2 marks")
         end
@@ -11819,7 +11897,8 @@ module CrystalClick
                                 nil
                               else
                                 0_u64
-                              end
+                              end,
+                              canonical_bytes: authenticated_canonical_marks
                             )
                           end
         validate_rows(marks)
@@ -11843,12 +11922,15 @@ module CrystalClick
       @element_width = stream_element_width(primary_stream)
     end
 
-    private def parse_metadata(requested_column : String?, mode : Symbol, allow_projection_aggregate_roster : Bool = false) : {String, String, String, String, Bool, UInt64, Array(String)?, Array(String)}
+    private def parse_metadata(requested_column : String?, mode : Symbol, allow_projection_aggregate_roster : Bool = false) : {String, String, String, String, Bool, UInt64, Array(String)?, Bool, Array(String)}
       columns_text = read_metadata_file("columns.txt")
       physical_columns = PartMetadataTextParser.parse_columns(columns_text)
       columns = physical_columns
       if columns.empty?
         raise UnsupportedFormatError.new("columns.txt contains no columns")
+      end
+      aggregate_projection_child = allow_projection_aggregate_roster && columns.any? do |name, type_name|
+        !WidePartProjectionAggregateDescriptor.for_column(name, type_name).nil?
       end
       flattened_binding = nil.as(FlattenedNestedStoragePlan::Binding?)
       if flattened_context = @flattened_nested_context
@@ -12002,7 +12084,7 @@ module CrystalClick
                          else
                            parse_substreams(columns, selected, column_type, source_column_name, json_paths)
                          end
-      {selected, column_type, source_column_name, source_column_type, json_typed_path, row_count, aggregate_count_key_column_names, physical_streams}
+      {selected, column_type, source_column_name, source_column_type, json_typed_path, row_count, aggregate_count_key_column_names, aggregate_projection_child, physical_streams}
     rescue ex : ArgumentError
       raise CorruptPartError.new("invalid metadata")
     end
@@ -13846,6 +13928,7 @@ module CrystalClick
       max_records : Int? = nil,
       required_first_mark_decompressed_offset : UInt64? = 0_u64,
       alignment_width : Int32? = nil,
+      canonical_bytes : Bytes? = nil,
     ) : {Array(Mark), Mark}
       size = File.size(file)
       raise CorruptPartError.new("mark file exceeds limit") if size > MAX_MARK_FILE_BYTES
@@ -13853,7 +13936,12 @@ module CrystalClick
       if limit = maximum_record_bytes
         raise UnsupportedFormatError.new("mark file exceeds per-reader mark limit") if !compressed && size > limit
       end
-      bytes = if compressed
+      bytes = if canonical = canonical_bytes
+                unless compressed
+                  raise CorruptPartError.new("canonical compressed marks were supplied for a plain mark file")
+                end
+                canonical
+              elsif compressed
                 compressed_bytes = File.read(file).to_slice
                 CompressedBlock.decode_all(
                   compressed_bytes,

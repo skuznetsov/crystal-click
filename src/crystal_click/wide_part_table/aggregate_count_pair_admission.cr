@@ -33,7 +33,16 @@ module CrystalClick
       count_mark_rows = count_reader.mark_row_counts
       key_reader = nil.as(WidePart?)
       key_names.each do |key_name|
-        reader = WidePart.open_typed(path, key_name)
+        reader = if count_reader.compressed_projection_child?
+                   basename = File.basename(path)
+                   unless basename.ends_with?(".proj") && basename.bytesize > ".proj".bytesize
+                     raise CorruptPartError.new("compressed AggregateFunction(count) reader is outside a projection child")
+                   end
+                   projection_name = basename.byte_slice(0, basename.bytesize - ".proj".bytesize)
+                   WidePart.open_projection_child_typed(path, key_name, projection_name, true)
+                 else
+                   WidePart.open_typed(path, key_name)
+                 end
         unless reader.column_type == "UInt64"
           raise CorruptPartError.new("AggregateFunction(count) sibling is not an exact UInt64 column")
         end

@@ -57,6 +57,24 @@ module CrystalClick
       for_type(type) || raise(UnsupportedFormatError.new("AggregateFunction(count) requires one exact admitted descriptor"))
     end
 
+    # Validate only the complete structural Count byte spans. Each UInt64
+    # varUInt occupies one through ten bytes; this does not decode state data
+    # outside a selected read window.
+    def self.validate_mark_spans!(grid : CompressedMarkGrid) : Nil
+      grid.mark_count.times do |index|
+        rows = grid.row_count_at(index)
+        if rows > MAX_MARK_RANGE_ROWS
+          raise CorruptPartError.new("AggregateFunction(count) mark range exceeds row limit")
+        end
+        span = (grid.position_at(index + 1) - grid.position_at(index)).to_u64
+        maximum = rows * MAX_STATE_BYTES_PER_ROW
+        unless span >= rows && span <= maximum
+          raise CorruptPartError.new("AggregateFunction(count) compressed mark span is outside its varUInt bound")
+        end
+      end
+      nil
+    end
+
     private def self.bounded_type_name(type : BinaryDataType) : String?
       budget = BinaryCodecBudget.new(BinaryCodecLimits.default, true)
       bounds = BinaryTypeNameBudget.measure(type, budget)

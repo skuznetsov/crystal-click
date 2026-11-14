@@ -16,6 +16,7 @@ module CrystalClick
       @keys : Array(UInt64)
       @additional_key_columns : Array(Array(UInt64))
       @rows_per_mark : Int32
+      @compress_marks : Bool
       @context : WidePartOperationContext
       @columns : Array(WidePartPreparedColumn)
       @input : WidePartPublicationInput
@@ -27,6 +28,7 @@ module CrystalClick
         @keys : Array(UInt64),
         @additional_key_columns : Array(Array(UInt64)),
         @rows_per_mark : Int32,
+        @compress_marks : Bool,
         @context : WidePartOperationContext,
         @columns : Array(WidePartPreparedColumn),
         @input : WidePartPublicationInput,
@@ -121,6 +123,7 @@ module CrystalClick
           defer_destination_check: true,
           aggregate_projection: projection.aggregate_projection?,
           additional_key_names: key_names[1..],
+          compress_marks: projection.compress_marks,
         )
         metadata_columns = Array(Tuple(String, String, Array(String))).new(prepared_columns.size)
         prepared_columns.each do |column|
@@ -137,7 +140,7 @@ module CrystalClick
 
         new(
           entry_name, keys, additional_key_columns,
-          rows_per_mark, context, prepared_columns,
+          rows_per_mark, projection.compress_marks, context, prepared_columns,
           input, WidePartMetadataEnvelope.new(metadata)
         )
       end
@@ -157,6 +160,7 @@ module CrystalClick
             encoded[name] = pair
           end
         end
+        preflight_compressed_marks!
         @encoded_files = encoded
         nil
       end
@@ -172,12 +176,46 @@ module CrystalClick
           input, @keys.to_unsafe.to_slice(@keys.size), @metadata, encoded, @rows_per_mark,
           @context.limits, @context.read_transport_limits, @context.read_transport_budget,
           additional_index_keys: additional_index_keys,
+          frame_bytes: @context.frame_bytes,
+          write_transport_budget: @context.transport_budget,
         ) do |stage|
           @columns.each do |column|
             column.validate(stage, @context.read_codec_budget, @context.read_transport_budget)
           end
         end
         ProjectionPartSummary.record(@entry_name, child_path, summary_sidecars)
+      end
+
+      private def preflight_compressed_marks! : Nil
+        return nil unless @compress_marks
+
+        raw_size = (@input.mark_count.to_i64 + 1_i64) * CompressedMarkWriter::MARK_RECORD_SIZE
+        budget = @context.transport_budget
+        physical_size = CompressedMarkWriter.preflight_all(
+          raw_size, @context.frame_bytes, budget
+        ).to_i64
+        if physical_size > WidePart::MAX_MARK_FILE_BYTES.to_i64 ||
+           physical_size > budget.limits.max_mark_bytes
+          raise UnsupportedFormatError.new("compressed Wide marks exceed their configured mark-size limit")
+        end
+
+        lane_count = @input.lane_bindings.size.to_i64 + 1_i64
+        frame_count = 1_i64 + (raw_size - 1_i64) // @context.frame_bytes.to_i64
+        if lane_count > 0 && frame_count > Int64::MAX // lane_count
+          raise UnsupportedFormatError.new("compressed Wide mark record count overflows")
+        end
+        if lane_count > 0 && raw_size > Int64::MAX // lane_count
+          raise UnsupportedFormatError.new("compressed Wide mark decoded size overflows")
+        end
+        if lane_count > 0 && physical_size > Int64::MAX // lane_count
+          raise UnsupportedFormatError.new("compressed Wide mark output size overflows")
+        end
+
+        budget.preflight_records(frame_count * lane_count)
+        budget.preflight_decoded_bytes(raw_size * lane_count)
+        budget.preflight_file_bytes(physical_size * lane_count)
+        budget.preflight_result_bytes(physical_size * lane_count)
+        nil
       end
     end
   end

@@ -337,6 +337,12 @@ accepts `sum(value)`, `min(value)`, and `max(value)` states. Use
 a Compact MRK4 child. Both child layouts work under either parent layout.
 See the [ordered UInt64 key profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#ordered-uint64-group-keys-in-aggregate-projections-w298).
 
+Pass `compress_marks: true` to `WidePartProjection.precomputed_aggregate`
+or `WidePartProjection.precomputed_count` to write `.cmrk2` marks for all
+keys and states in the Wide child. The default is `.mrk2`. Either parent
+layout can use either Wide child mark format. See the
+[compressed Wide mark profile](docs/PROJECTION_PUBLICATION_FRONTIER.md#compressed-wide-aggregate-projection-marks-w299).
+
 `OfflineTable#projections` exposes declared projection metadata. For a table
 with a physical Wide or Compact projection `p` containing a `UInt64` column
 `pk`, call `scan_projection_typed_window` with the projection name and row

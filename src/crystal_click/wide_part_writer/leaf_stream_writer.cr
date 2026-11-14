@@ -8,6 +8,9 @@ module CrystalClick
         rows_per_mark : Int32,
         schedule : TupleLeafMarkSchedule? = nil,
         axis : TupleLeafMarkSchedule::Axis = TupleLeafMarkSchedule::Axis::Leaf,
+        compress_marks : Bool = false,
+        frame_bytes : Int = 4096,
+        transport_budget : CompressedStreamBudget? = nil,
       ) : Array(ChecksumRecord)
         if current = schedule
           expected_count = if axis == TupleLeafMarkSchedule::Axis::Outer
@@ -21,7 +24,7 @@ module CrystalClick
         end
         base_name = StreamName.hash(column)
         data_name = "#{base_name}.bin"
-        marks_name = "#{base_name}.mrk2"
+        marks_name = "#{base_name}#{compress_marks ? ".cmrk2" : ".mrk2"}"
         data_path = File.join(stage, data_name)
         mark_path = File.join(stage, marks_name)
         data_hash = CityHashV1::FileHasher.new
@@ -63,12 +66,37 @@ module CrystalClick
         StreamEncoding.write_uint64_le(mark_bytes, 0_u64)
         marks = mark_bytes.to_slice
         raise ArgumentError.new("mark stream exceeds reader limit") if marks.size.to_i64 > MAX_MARK_FILE_BYTES
-        File.write(mark_path, marks)
         mark_hash = CityHashV1.file_hash(marks)
+        physical_marks = if compress_marks
+                           budget = transport_budget || raise ArgumentError.new("compressed marks require a shared write budget")
+                           budget.ensure_direction(true)
+                           encoded = CompressedMarkWriter.encode_all(marks, frame_bytes, budget)
+                           if encoded.size.to_i64 > MAX_MARK_FILE_BYTES ||
+                              encoded.size.to_i64 > budget.limits.max_mark_bytes
+                             raise UnsupportedFormatError.new("compressed UInt64 key marks exceed their configured mark-size limit")
+                           end
+                           encoded
+                         else
+                           marks
+                         end
+        File.write(mark_path, physical_marks)
+
+        mark_record = if compress_marks
+                        ChecksumRecord.new(
+                          marks_name,
+                          physical_marks.size.to_u64,
+                          CityHashV1.file_hash(physical_marks),
+                          true,
+                          marks.size.to_u64,
+                          mark_hash,
+                        )
+                      else
+                        ChecksumRecord.new(marks_name, marks.size.to_u64, mark_hash, false)
+                      end
 
         [
           ChecksumRecord.new(data_name, data_size, data_hash.finish, true, values.size.to_u64 * 8_u64, raw_hash.finish),
-          ChecksumRecord.new(marks_name, marks.size.to_u64, mark_hash, false),
+          mark_record,
         ]
       end
 

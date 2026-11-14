@@ -20,6 +20,8 @@ module CrystalClick
     @source : PartStreamSource
     @physical : BinaryBulkPhysicalPlan
     @grids : Hash(String, CompressedMarkGrid)
+    @compressed_marks_name : String?
+    @canonical_marks : Bytes?
     @mark_row_counts : Array(UInt64)
     @schema_declaration : String
     @source_declaration : String
@@ -38,8 +40,22 @@ module CrystalClick
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       codec_budget : BinaryCodecBudget? = nil,
       transport_budget : CompressedStreamBudget? = nil,
+      strict_projection_child : Bool = false,
+      strict_projection_key_lane : Bool = false,
+      compressed_projection_child : Bool = false,
     ) : BinaryBulkColumnReader
-      new(part_path, column_name, expected_type, limits, transport_limits, codec_budget, transport_budget)
+      new(
+        part_path,
+        column_name,
+        expected_type,
+        limits,
+        transport_limits,
+        codec_budget,
+        transport_budget,
+        strict_projection_child,
+        strict_projection_key_lane,
+        compressed_projection_child,
+      )
     end
 
     private def initialize(
@@ -50,6 +66,9 @@ module CrystalClick
       @transport_limits : CompressedStreamLimits,
       codec_budget : BinaryCodecBudget?,
       transport_budget : CompressedStreamBudget?,
+      strict_projection_child : Bool,
+      strict_projection_key_lane : Bool,
+      compressed_projection_child : Bool,
     )
       validate_read_budgets!(codec_budget, transport_budget)
       @codec_budget = codec_budget
@@ -108,6 +127,18 @@ module CrystalClick
       raise ArgumentError.new("Binary bulk column name must be nonempty") if column_name.empty?
       @part_path = File.expand_path(part_path)
       @column_name = String.new(column_name.to_slice)
+      projection_descriptor = if strict_projection_child
+                                WidePartProjectionAggregateDescriptor.for_column(@column_name, canonical)
+                              else
+                                nil
+                              end
+      # Only the staged projection writer opts root UInt64 key carriers into
+      # this BinaryBulk path. Public projection UInt64 reads use WidePart's
+      # full child-roster gate instead.
+      strict_projection_key = strict_projection_child && strict_projection_key_lane &&
+                              @type.tag == BinaryDataType::TAG_UINT64
+      strict_projection_profile = strict_projection_child &&
+                                  (!projection_descriptor.nil? || strict_projection_key)
 
       metadata = ObjectColumnPartMetadata.open(
         @part_path,
@@ -118,6 +149,7 @@ module CrystalClick
           end
           nil
         },
+        allow_selected_compressed_marks: strict_projection_profile,
       )
       @source_declaration = metadata.source_declaration
       @ordinary_profile = metadata.ordinary_profile
@@ -137,20 +169,51 @@ module CrystalClick
       end
 
       @source = PartStreamSource.new(@part_path)
+      compressed_projection_marks = strict_projection_profile && compressed_projection_child
       operation_codec_budget = codec_budget || BinaryCodecBudget.new(@limits)
       operation_transport_budget = transport_budget || CompressedStreamBudget.new(@transport_limits)
       grids = Hash(String, CompressedMarkGrid).new(initial_capacity: role_names.size)
+      compressed_marks_name = nil.as(String?)
+      canonical_marks = nil.as(Bytes?)
       parent_rows = nil.as(Array(UInt64)?)
       logical_bytes = 0_u64
 
       role_names.keys.sort!.each do |role|
         prefix = @physical.prefix_size_for(role)
-        grid = @source.inspect_grid(
-          @physical.data_file_for(role, true),
-          @physical.marks_file_for(role, true),
-          prefix,
-          operation_transport_budget,
-        )
+        data_name = @physical.data_file_for(role, true)
+        grid = if strict_projection_profile &&
+                  (compressed_projection_marks || WideMarkFileAdapter.compressed_candidate?(@part_path, @source, data_name))
+                 if role_names.size != 1 || !compressed_marks_name.nil?
+                   raise UnsupportedFormatError.new("compressed marks require one exact projection state lane")
+                 end
+                 input, mark_file = WideMarkFileAdapter.open(@part_path, @source, data_name)
+                 unless mark_file.compressed
+                   raise CorruptPartError.new("compressed projection child mixes .mrk2 and .cmrk2 lanes")
+                 end
+                 compressed_marks_name = mark_file.marks_name
+                 canonical_marks = mark_file.read_canonical_marks(input, operation_transport_budget) ||
+                                   raise(CorruptPartError.new("compressed Wide marks did not produce canonical bytes"))
+                 inspected = CompressedMarkReader.inspect_canonical(
+                   input.data_path,
+                   input.data_size,
+                   canonical_marks,
+                   prefix,
+                   operation_transport_budget,
+                 )
+                 if width = strict_projection_fixed_width(@type, projection_descriptor)
+                   CompressedMarkReader.validate_fixed_width_spans!(inspected, width)
+                 elsif projection_descriptor.try(&.count?)
+                   WideAggregateCountStoragePlan.validate_mark_spans!(inspected)
+                 end
+                 inspected
+               else
+                 @source.inspect_grid(
+                   @physical.data_file_for(role, true),
+                   @physical.marks_file_for(role, true),
+                   prefix,
+                   operation_transport_budget,
+                 )
+               end
         if current_rows = parent_rows
           unless grid.rows_per_mark == current_rows
             raise CorruptPartError.new("Binary bulk physical lanes disagree on the parent mark grid")
@@ -235,11 +298,13 @@ module CrystalClick
       end
 
       @grids = grids
+      @compressed_marks_name = compressed_marks_name
+      @canonical_marks = canonical_marks
       @mark_row_counts = rows
       @row_count = metadata.row_count
       @mark_count = rows.size.to_i32
       @physical_stream_names = expected_stream_names
-      @selected_checksum_names = checksum_names(role_names)
+      @selected_checksum_names = checksum_names(role_names, compressed_marks_name)
       @logical_read_bytes = logical_bytes
     end
 
@@ -267,7 +332,16 @@ module CrystalClick
     # The map count and every grid's mark-specific arrays come from the
     # retained structures, not an inferred profile roster.
     def retained_grid_workspace_bytes : UInt64
-      grid_map_workspace_bytes(@grids)
+      bytes = grid_map_workspace_bytes(@grids)
+      if marks = @canonical_marks
+        bytes = checked_grid_workspace_add(bytes, sizeof(Bytes).to_u64)
+        bytes = checked_grid_workspace_add(bytes, marks.size.to_u64)
+        if name = @compressed_marks_name
+          bytes = checked_grid_workspace_add(bytes, instance_sizeof(String).to_u64)
+          bytes = checked_grid_workspace_add(bytes, name.bytesize.to_u64 + 1_u64)
+        end
+      end
+      bytes
     end
 
     # Returns selected physical marks → parent rows → exact-type BinaryValues.
@@ -298,14 +372,33 @@ module CrystalClick
       role_names.keys.sort!.each do |role|
         grid = @grids[role]? || raise(CorruptPartError.new("Binary bulk role has no inspected parent grid"))
         prefix = @physical.prefix_size_for(role)
-        window = @source.read_window(
-          @physical.data_file_for(role, true),
-          @physical.marks_file_for(role, true),
-          read_first,
-          read_count,
-          prefix,
-          transport_budget,
-        )
+        window = if canonical_marks = @canonical_marks
+                   unless @physical.stream_names.size == 1
+                     raise CorruptPartError.new("compressed projection marks are not bound to one state lane")
+                   end
+                   input = @source.physical_input(
+                     @physical.data_file_for(role, true),
+                     @compressed_marks_name || raise(CorruptPartError.new("Binary bulk compressed mark sidecar binding is missing")),
+                   )
+                   CompressedMarkReader.read_canonical(
+                     input.data_path,
+                     input.data_size,
+                     canonical_marks,
+                     read_first,
+                     read_count,
+                     prefix,
+                     transport_budget,
+                   )
+                 else
+                   @source.read_window(
+                     @physical.data_file_for(role, true),
+                     @physical.marks_file_for(role, true),
+                     read_first,
+                     read_count,
+                     prefix,
+                     transport_budget,
+                   )
+                 end
         expected_rows = selected_rows(read_first, read_count)
         unless window.rows_per_mark == expected_rows && grid.mark_count == @mark_count
           raise CorruptPartError.new("Binary bulk selected lane window differs from its inspected parent grid")
@@ -337,13 +430,24 @@ module CrystalClick
       decoded
     end
 
-    private def checksum_names(role_names : Hash(String, String)) : Array(String)
+    private def checksum_names(role_names : Hash(String, String), compressed_marks_name : String?) : Array(String)
       names = Array(String).new(role_names.size * 2)
       role_names.each_key do |role|
         names << @physical.data_file_for(role, true)
-        names << @physical.marks_file_for(role, true)
+        names << (compressed_marks_name || @physical.marks_file_for(role, true))
       end
       names.sort!
+    end
+
+    private def strict_projection_fixed_width(
+      type : BinaryDataType,
+      descriptor : WidePartProjectionAggregateDescriptor?,
+    ) : Int32?
+      return 8 if type.tag == BinaryDataType::TAG_UINT64
+      return nil unless descriptor
+      return 8 if descriptor.sum?
+      return 9 if descriptor.minmax?
+      nil
     end
 
     private def grid_map_workspace_bytes(grids : Hash(String, CompressedMarkGrid)) : UInt64

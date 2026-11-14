@@ -15,6 +15,8 @@ module CrystalClick
         validation_transport_budget : CompressedStreamBudget? = nil,
         projections : Array(ProjectionPreparedPart) = [] of ProjectionPreparedPart,
         additional_index_keys : Array(Slice(UInt64)) = [] of Slice(UInt64),
+        frame_bytes : Int = 4096,
+        write_transport_budget : CompressedStreamBudget? = nil,
         &validate_value : String -> Nil
       ) : String
         unless keys.size.to_u64 == input.expected_rows.sum(0_u64)
@@ -48,15 +50,24 @@ module CrystalClick
         unless projections.map(&.entry_name) == input.projection_entries
           raise UnsupportedFormatError.new("prepared projections differ from the admitted parent roster")
         end
+        if input.compress_marks
+          budget = write_transport_budget || raise ArgumentError.new("compressed Wide marks require a shared write budget")
+          budget.ensure_direction(true)
+        end
 
         records = Array(ChecksumRecord).new(input.checksum_entry_count)
-        lanes = checksum_column_files(encoded_files, input, transport_limits, records, validation_transport_budget)
+        lanes = checksum_column_files(
+          encoded_files, input, transport_limits, records, validation_transport_budget,
+          frame_bytes, write_transport_budget
+        )
         stage = PartDirectoryPublisher.create_stage(input.parent)
         begin
           key_records = LeafStreamWriter.write_uint64_stream(
-            stage, input.key_name, keys, rows_per_mark
+            stage, input.key_name, keys, rows_per_mark, nil,
+            TupleLeafMarkSchedule::Axis::Leaf,
+            input.compress_marks, frame_bytes, write_transport_budget
           )
-          validate_key_record_roster!(key_records, input.key_name)
+          validate_key_record_roster!(key_records, input.key_name, input.compress_marks)
           records.concat(key_records)
 
           lanes.each do |lane|
@@ -96,6 +107,8 @@ module CrystalClick
         limits : CompressedStreamLimits,
         records : Array(ChecksumRecord),
         validation_transport_budget : CompressedStreamBudget?,
+        frame_bytes : Int,
+        write_transport_budget : CompressedStreamBudget?,
       ) : Array(WidePartLane)
         budget = validation_transport_budget || CompressedStreamBudget.new(limits, true)
         if validation_transport_budget
@@ -108,13 +121,25 @@ module CrystalClick
         input.lane_bindings.each do |binding|
           pair = files[binding.logical_name]
           data = pair.data
-          marks = pair.marks
+          canonical_marks = pair.marks
           if data.size.to_i64 > MAX_DATA_FILE_BYTES || data.size > Int32::MAX
             raise UnsupportedFormatError.new("value data file exceeds reader limit")
           end
-          unless marks.size.to_i64 == expected_mark_size && marks.size.to_i64 <= WidePart::MAX_MARK_FILE_BYTES
+          unless canonical_marks.size.to_i64 == expected_mark_size && canonical_marks.size.to_i64 <= WidePart::MAX_MARK_FILE_BYTES
             raise UnsupportedFormatError.new("value mark file differs from the complete parent grid")
           end
+          canonical_mark_hash = CityHashV1.file_hash(canonical_marks)
+          marks = if input.compress_marks
+                    write_budget = write_transport_budget || raise ArgumentError.new("compressed Wide marks require a shared write budget")
+                    encoded = CompressedMarkWriter.encode_all(canonical_marks, frame_bytes, write_budget)
+                    if encoded.size.to_i64 > WidePart::MAX_MARK_FILE_BYTES.to_i64 ||
+                       encoded.size.to_i64 > write_budget.limits.max_mark_bytes
+                      raise UnsupportedFormatError.new("compressed Wide marks exceed their configured mark-size limit")
+                    end
+                    encoded
+                  else
+                    canonical_marks
+                  end
           if data.size.to_i64 > Int64::MAX - marks.size.to_i64
             raise UnsupportedFormatError.new("value lane file byte count overflows")
           end
@@ -140,7 +165,10 @@ module CrystalClick
             frames = index.frames
           end
 
-          lanes << WidePartLane.new(binding, data, marks, frames, logical_size)
+          lanes << WidePartLane.new(
+            binding, data, marks, frames, logical_size,
+            canonical_marks.size.to_u64, canonical_mark_hash
+          )
         end
 
         budget.reserve_decoded_bytes(total_raw_size)
@@ -169,12 +197,29 @@ module CrystalClick
             lane.logical_size.to_u64,
             raw_hash.finish
           )
-          records << ChecksumRecord.new(
-            lane.binding.marks_filename,
-            lane.marks.size.to_u64,
-            CityHashV1.file_hash(lane.marks),
-            false
-          )
+          marks_hash = if input.compress_marks
+                         CityHashV1.file_hash(lane.marks)
+                       else
+                         lane.canonical_marks_hash
+                       end
+          marks_record = if input.compress_marks
+                           ChecksumRecord.new(
+                             lane.binding.marks_filename,
+                             lane.marks.size.to_u64,
+                             marks_hash,
+                             true,
+                             lane.canonical_marks_size,
+                             lane.canonical_marks_hash,
+                           )
+                         else
+                           ChecksumRecord.new(
+                             lane.binding.marks_filename,
+                             lane.marks.size.to_u64,
+                             marks_hash,
+                             false,
+                           )
+                         end
+          records << marks_record
         end
         lanes
       end
@@ -197,10 +242,14 @@ module CrystalClick
         value
       end
 
-      private def self.validate_key_record_roster!(records : Array(ChecksumRecord), key_name : String) : Nil
+      private def self.validate_key_record_roster!(
+        records : Array(ChecksumRecord),
+        key_name : String,
+        compress_marks : Bool,
+      ) : Nil
         base = StreamName.hash(key_name)
         expected_data = PhysicalStreamName.append_literal(base, ".bin")
-        expected_marks = PhysicalStreamName.append_literal(base, ".mrk2")
+        expected_marks = PhysicalStreamName.append_literal(base, compress_marks ? ".cmrk2" : ".mrk2")
         unless records.size == 2 && records.any? { |record| record.name == expected_data } &&
                records.any? { |record| record.name == expected_marks }
           raise UnsupportedFormatError.new("UInt64 key writer returned an unexpected physical roster")
@@ -323,27 +372,74 @@ module CrystalClick
         validation_transport_budget : CompressedStreamBudget?,
       ) : Nil
         budget = validation_transport_budget || CompressedStreamBudget.new(transport_limits)
+        if input.compress_marks
+          source = PartStreamSource.new(stage, checksums)
+          key_data_name = PhysicalStreamName.append_literal(StreamName.hash(input.key_name), ".bin")
+          key_marks_name = PhysicalStreamName.append_literal(StreamName.hash(input.key_name), ".cmrk2")
+          validate_compressed_mark_grid!(
+            source, key_data_name, key_marks_name, input.expected_rows, budget
+          )
+        end
         input.lane_bindings.each do |binding|
           data_entry = checksums.entry(binding.data_filename) ||
                        raise CorruptPartError.new("value data stream is absent from checksums.txt")
-          marks_entry = checksums.entry(binding.marks_filename) ||
-                        raise CorruptPartError.new("value marks stream is absent from checksums.txt")
           unless data_entry.compressed && !data_entry.uncompressed_size.nil?
             raise CorruptPartError.new("value data stream lacks compressed checksum metadata")
           end
-          grid = CompressedMarkReader.inspect(
-            File.join(stage, binding.data_filename),
-            File.join(stage, binding.marks_filename),
-            data_entry.physical_size.to_i64,
-            marks_entry.physical_size.to_i64,
-            budget: budget
-          )
+          grid = if input.compress_marks
+                   validate_compressed_mark_grid!(
+                     source.not_nil!, binding.data_filename, binding.marks_filename,
+                     input.expected_rows, budget
+                   )
+                 else
+                   marks_entry = checksums.entry(binding.marks_filename) ||
+                                 raise CorruptPartError.new("value marks stream is absent from checksums.txt")
+                   CompressedMarkReader.inspect(
+                     File.join(stage, binding.data_filename),
+                     File.join(stage, binding.marks_filename),
+                     data_entry.physical_size.to_i64,
+                     marks_entry.physical_size.to_i64,
+                     budget: budget
+                   )
+                 end
           unless grid.rows_per_mark == input.expected_rows &&
                  grid.logical_size.to_u64 == data_entry.uncompressed_size.not_nil!
             raise CorruptPartError.new("staged value lane differs from the complete parent mark grid")
           end
         end
         nil
+      end
+
+      private def self.validate_compressed_mark_grid!(
+        source : PartStreamSource,
+        data_name : String,
+        marks_name : String,
+        expected_rows : Array(UInt64),
+        budget : CompressedStreamBudget,
+      ) : CompressedMarkGrid
+        data_entry = source.checksum_entry(data_name) ||
+                     raise CorruptPartError.new("compressed mark data stream is absent from checksums.txt")
+        marks_entry = source.checksum_entry(marks_name) ||
+                      raise CorruptPartError.new("compressed marks stream is absent from checksums.txt")
+        unless data_entry.compressed && !data_entry.uncompressed_size.nil?
+          raise CorruptPartError.new("compressed mark data stream lacks compressed checksum metadata")
+        end
+        physical_input = source.physical_input(data_name, marks_name)
+        adapter = WideMarkFileAdapter.new(marks_name, marks_entry)
+        canonical = adapter.read_canonical_marks(physical_input, budget) ||
+                    raise CorruptPartError.new("compressed Wide marks did not produce canonical bytes")
+        grid = CompressedMarkReader.inspect_canonical(
+          physical_input.data_path,
+          physical_input.data_size,
+          canonical,
+          0,
+          budget,
+        )
+        unless grid.rows_per_mark == expected_rows &&
+               grid.logical_size.to_u64 == data_entry.uncompressed_size.not_nil!
+          raise CorruptPartError.new("staged compressed marks differ from the complete parent grid")
+        end
+        grid
       end
     end
   end

@@ -57,32 +57,7 @@ module CrystalClick
       budget.reserve_records(mark_record_count) if mark_record_count > 0
 
       marks = read_marks(marks_path, expected_mark_size, limits, budget, mark_record_count)
-      lane_count = marks.size - 1
-      raise ArgumentError.new("first mark is outside the grid") if first_mark > lane_count
-      selected_count = mark_count || (lane_count - first_mark)
-      if selected_count > lane_count - first_mark
-        raise ArgumentError.new("mark selection is outside the grid")
-      end
-      if selected_count > Int32::MAX
-        raise ArgumentError.new("mark selection exceeds supported in-memory domain")
-      end
-
-      if expected_data_size == 0
-        validate_empty_grid!(marks, lane_count, prefix_size)
-        verify_empty_regular_file(data_path)
-        return empty_window(marks, first_mark, selected_count, prefix_size)
-      end
-
-      raise CorruptPartError.new("zero-domain mark grid requires empty data") if lane_count == 0
-      ensure_not_symlink(data_path, "data file")
-
-      window = nil.as(CompressedMarkWindow?)
-      MMapDataSource.with_file(data_path, expected_data_size, limits.max_file_bytes) do |data|
-        index = CompressedFrameIndex.new(data, limits, budget)
-        positions = validate_grid!(marks, index, prefix_size)
-        window = selected_window(data, marks, positions, index, first_mark, selected_count, prefix_size, budget)
-      end
-      window.not_nil!
+      read_mark_window(data_path, expected_data_size, marks, first_mark, mark_count, prefix_size, budget)
     end
 
     # Inspects and validates the full physical row grid without authenticating
@@ -127,28 +102,81 @@ module CrystalClick
       budget.reserve_records(mark_record_count) if mark_record_count > 0
 
       marks = read_marks(marks_path, expected_mark_size, budget.limits, budget, mark_record_count)
-      lane_count = marks.size - 1
-      if expected_data_size == 0
-        validate_empty_grid!(marks, lane_count, 0)
-        if prefix_size && prefix_size != 0
-          raise CorruptPartError.new("empty data requires a zero prefix")
+      inspect_mark_grid(data_path, expected_data_size, marks, prefix_size, budget)
+    end
+
+    # Inspects a grid whose mark bytes were already decoded and authenticated
+    # by a format-specific adapter. The caller has charged the physical mark
+    # file and canonical output through that adapter; this method charges the
+    # paired data read and mark-record parsing only.
+    def self.inspect_canonical(
+      data_path : String,
+      expected_data_size : Int64,
+      canonical_marks : Bytes,
+      prefix_size : Int? = nil,
+      budget : CompressedStreamBudget = CompressedStreamBudget.read_default,
+    ) : CompressedMarkGrid
+      budget.ensure_direction(false)
+      validate_expected_size(expected_data_size, "data")
+      if expected_data_size > Int32::MAX
+        raise CorruptPartError.new("paired file exceeds supported in-memory domain")
+      end
+      if canonical_marks.size.to_i64 > budget.limits.max_mark_bytes
+        raise CorruptPartError.new("canonical mark file exceeds configured limit")
+      end
+      if requested_prefix = prefix_size
+        if requested_prefix < 0 || requested_prefix > Int32::MAX
+          raise ArgumentError.new("prefix size exceeds supported in-memory domain")
         end
-        verify_empty_regular_file(data_path)
-        positions = Array(Int64).new(marks.size, 0_i64)
-        rows = Array(UInt64).new(lane_count)
-        lane_count.times { |mark| rows << marks[mark].rows }
-        return CompressedMarkGrid.new(positions, rows, 0, 0_i64)
       end
+      budget.reserve_file_bytes(expected_data_size)
 
-      raise CorruptPartError.new("zero-domain mark grid requires empty data") if lane_count == 0
-      ensure_not_symlink(data_path, "data file")
+      marks = parse_canonical_marks(canonical_marks, budget)
+      inspect_mark_grid(data_path, expected_data_size, marks, prefix_size, budget)
+    end
 
-      grid = nil.as(CompressedMarkGrid?)
-      MMapDataSource.with_file(data_path, expected_data_size, budget.limits.max_file_bytes) do |data|
-        index = CompressedFrameIndex.new(data, budget.limits, budget)
-        grid = inspected_grid(marks, index, prefix_size)
+    # Checks a caller-admitted fixed-width lane against every adjacent mark
+    # position. Strict projection readers use this after the complete frame
+    # grid has been inspected, including marks outside a requested window.
+    def self.validate_fixed_width_spans!(grid : CompressedMarkGrid, width : Int32) : Nil
+      raise ArgumentError.new("fixed-width mark span must be positive") unless width > 0
+      grid.mark_count.times do |index|
+        expected = grid.row_count_at(index) * width.to_u64
+        actual = grid.position_at(index + 1) - grid.position_at(index)
+        unless actual.to_u64 == expected
+          raise CorruptPartError.new("fixed-width projection lane span does not match its mark row count")
+        end
       end
-      grid.not_nil!
+      nil
+    end
+
+    # Reads a selected window against authenticated canonical mark bytes. The
+    # canonical array is retained by the reader, so later windows only charge
+    # the paired data and proportional mark-record parsing work.
+    def self.read_canonical(
+      data_path : String,
+      expected_data_size : Int64,
+      canonical_marks : Bytes,
+      first_mark : Int = 0,
+      mark_count : Int? = nil,
+      prefix_size : Int = 0,
+      budget : CompressedStreamBudget = CompressedStreamBudget.read_default,
+    ) : CompressedMarkWindow
+      budget.ensure_direction(false)
+      validate_expected_size(expected_data_size, "data")
+      raise ArgumentError.new("first mark must be nonnegative") if first_mark < 0
+      raise ArgumentError.new("mark count must be nonnegative") if mark_count && mark_count < 0
+      raise ArgumentError.new("prefix size must be nonnegative") if prefix_size < 0
+      if prefix_size > Int32::MAX || expected_data_size > Int32::MAX
+        raise CorruptPartError.new("paired file exceeds supported in-memory domain")
+      end
+      if canonical_marks.size.to_i64 > budget.limits.max_mark_bytes
+        raise CorruptPartError.new("canonical mark file exceeds configured limit")
+      end
+      budget.reserve_file_bytes(expected_data_size)
+
+      marks = parse_canonical_marks(canonical_marks, budget)
+      read_mark_window(data_path, expected_data_size, marks, first_mark, mark_count, prefix_size, budget)
     end
 
     # Reads an unmarked stream in full. This deliberately rejects empty input:
@@ -366,14 +394,92 @@ module CrystalClick
         unless actual_count.to_i64 == record_count
           raise CorruptPartError.new("mark record count changed")
         end
-        parsed = Array(Mark).new(actual_count)
-        actual_count.times do |index|
-          offset = index * MARK_RECORD_SIZE
-          parsed << Mark.new(read_u64(bytes, offset), read_u64(bytes, offset + 8), read_u64(bytes, offset + 16))
-        end
-        records = parsed
+        records = parse_mark_records(bytes, actual_count)
       end
       records.not_nil!
+    end
+
+    private def self.parse_canonical_marks(bytes : Bytes, budget : CompressedStreamBudget) : Array(Mark)
+      raise CorruptPartError.new("canonical mark file is empty or truncated") if bytes.empty? || bytes.size % MARK_RECORD_SIZE != 0
+      record_count = bytes.size // MARK_RECORD_SIZE
+      budget.reserve_records(record_count.to_i64)
+      parse_mark_records(bytes, record_count)
+    end
+
+    private def self.parse_mark_records(bytes : Bytes, record_count : Int32) : Array(Mark)
+      Array(Mark).new(record_count) do |index|
+        offset = index * MARK_RECORD_SIZE
+        Mark.new(read_u64(bytes, offset), read_u64(bytes, offset + 8), read_u64(bytes, offset + 16))
+      end
+    end
+
+    private def self.read_mark_window(
+      data_path : String,
+      expected_data_size : Int64,
+      marks : Array(Mark),
+      first_mark : Int,
+      mark_count : Int?,
+      prefix_size : Int,
+      budget : CompressedStreamBudget,
+    ) : CompressedMarkWindow
+      limits = budget.limits
+      lane_count = marks.size - 1
+      raise ArgumentError.new("first mark is outside the grid") if first_mark > lane_count
+      selected_count = mark_count || (lane_count - first_mark)
+      if selected_count > lane_count - first_mark
+        raise ArgumentError.new("mark selection is outside the grid")
+      end
+      if selected_count > Int32::MAX
+        raise ArgumentError.new("mark selection exceeds supported in-memory domain")
+      end
+
+      if expected_data_size == 0
+        validate_empty_grid!(marks, lane_count, prefix_size)
+        verify_empty_regular_file(data_path)
+        return empty_window(marks, first_mark, selected_count, prefix_size)
+      end
+
+      raise CorruptPartError.new("zero-domain mark grid requires empty data") if lane_count == 0
+      ensure_not_symlink(data_path, "data file")
+
+      window = nil.as(CompressedMarkWindow?)
+      MMapDataSource.with_file(data_path, expected_data_size, limits.max_file_bytes) do |data|
+        index = CompressedFrameIndex.new(data, limits, budget)
+        positions = validate_grid!(marks, index, prefix_size)
+        window = selected_window(data, marks, positions, index, first_mark, selected_count, prefix_size, budget)
+      end
+      window.not_nil!
+    end
+
+    private def self.inspect_mark_grid(
+      data_path : String,
+      expected_data_size : Int64,
+      marks : Array(Mark),
+      prefix_size : Int?,
+      budget : CompressedStreamBudget,
+    ) : CompressedMarkGrid
+      lane_count = marks.size - 1
+      if expected_data_size == 0
+        validate_empty_grid!(marks, lane_count, 0)
+        if prefix_size && prefix_size != 0
+          raise CorruptPartError.new("empty data requires a zero prefix")
+        end
+        verify_empty_regular_file(data_path)
+        positions = Array(Int64).new(marks.size, 0_i64)
+        rows = Array(UInt64).new(lane_count)
+        lane_count.times { |mark| rows << marks[mark].rows }
+        return CompressedMarkGrid.new(positions, rows, 0, 0_i64)
+      end
+
+      raise CorruptPartError.new("zero-domain mark grid requires empty data") if lane_count == 0
+      ensure_not_symlink(data_path, "data file")
+
+      grid = nil.as(CompressedMarkGrid?)
+      MMapDataSource.with_file(data_path, expected_data_size, budget.limits.max_file_bytes) do |data|
+        index = CompressedFrameIndex.new(data, budget.limits, budget)
+        grid = inspected_grid(marks, index, prefix_size)
+      end
+      grid.not_nil!
     end
 
     private def self.validate_grid!(

@@ -8,6 +8,8 @@ module CrystalClick
         part_path : String,
         column : String,
         source_declaration : String,
+        strict_projection_child : Bool = false,
+        compressed_projection_child : Bool = false,
       ) : {BinaryBulkColumnReader, BinaryDataType}
         expected_type = SimpleAggregateBulkColumnDeclaration.parse(source_declaration)
         expected_type ||= BinaryAggregateFunctionBulkColumnDeclaration.parse(source_declaration)
@@ -18,7 +20,13 @@ module CrystalClick
           raise UnsupportedFormatError.new("selected declaration is outside the admitted static BinaryBulk profile")
         end
 
-        reader = BinaryBulkColumnReader.open(part_path, column, expected_type)
+        reader = BinaryBulkColumnReader.open(
+          part_path,
+          column,
+          expected_type,
+          strict_projection_child: strict_projection_child,
+          compressed_projection_child: compressed_projection_child,
+        )
         unless reader.schema_declaration == source_declaration &&
                reader.source_declaration == source_declaration
           raise CorruptPartError.new("selected static BinaryBulk declaration changed while opening the reader")

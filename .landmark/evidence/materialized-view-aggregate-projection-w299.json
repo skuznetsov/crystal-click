@@ -1,0 +1,476 @@
+{
+  "format": "crystal_click_materialized_view_aggregate_projection_w299_evidence_v1",
+  "date": "2026-11-14",
+  "baseline_revision": "8b26b1a239a395cb2ca3bb154f71f0c991f364ac",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Read and publish Wide aggregate children with adaptive .cmrk2 marks under Wide or Compact parents. The bounded profile covers ordered plain UInt64 group keys, Count, UInt64 Sum, Min and Max states, and a raw primary.idx.",
+    "adversary": "ROBUST for the two native parent layouts, stage rollback, mixed-child preflight, and corruption cases recorded below.",
+    "remaining": "The writer emits LZ4 literal frames. Compressed primary indexes and other group key and state types remain open. Count preflight checks structural bounds on all spans and decodes payloads in the selected window. Catalog reads assume quiescent part directories."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "A late sidecar offset passes size, checksum, row count and frame monotonicity checks while associating a grouped key or state with the wrong bytes.",
+    "guards": [
+      "Authenticate the child manifest and the physical and canonical compressed marks. Require a complete, uniform mark inventory.",
+      "Check exact fixed-width spans for selected states and all keys of selected aggregates. Bound Count spans by their VarUInt row count. Reject the tested rehashed late offsets even at EOF.",
+      "Check staged index tuples and state round trips with the shared writer budgets. Under a readback budget failure, require the staging directory to be removed."
+    ],
+    "rollback": "Revert the feature commit. Previously published parts are not rewritten. Parent and child staging remains one publication."
+  },
+  "verification": {
+    "toolchain": {
+      "crystal": "1.22.3",
+      "llvm": "23.1.5",
+      "target": "aarch64-apple-darwin25.6.0",
+      "ruby": "4.0.9"
+    },
+    "guard": {
+      "sha256": "fbfa0fd9d717eb24c1a3f829d464188110e505c7ae311eee2e95cbe7cefab011",
+      "minimum_system_memory_free_percent_exclusive": 40,
+      "crystal": {
+        "process_tree_memory_mib": 12288,
+        "timeout_seconds": 600
+      },
+      "native_helper_and_clickhouse": {
+        "process_tree_memory_mib": 2048,
+        "timeout_seconds": 90
+      },
+      "clickhouse_max_memory_usage_bytes": 536870912,
+      "single_worker": true
+    },
+    "input_seals": {
+      "production.source.json": {
+        "files": 639,
+        "sha256": "5d07febd8c5f42cc418647b65389ae9c3dacc6422d3a305e12457b95eaadcffb"
+      },
+      "qualification.source.json": {
+        "files": 740,
+        "sha256": "90baaf5e0b67347246ea445594e8dc0db3599fe49e408c02f19cece467df1383"
+      }
+    },
+    "baseline_native_reads": {
+      "observation": "For each parent, select keys, Count, Sum, Min, Max, then all lanes. The compressed baseline fails the last four selections before callbacks at the generic compressed-mark refusal. The plain control reads every selection.",
+      "profiles": {
+        "plain": {
+          "passes": 12,
+          "failures": 0,
+          "log_sha256": "2648dd53f37071b7436ca9df9b44ff57bdf050c736e623d98d27e149ac2e069a",
+          "fixture_sql_sha256": "2672aa3b2208ab712db370c29205e91b13565aa2203f832b55d27e1950745e29"
+        },
+        "compressed": {
+          "passes": 4,
+          "failures": 8,
+          "log_sha256": "889257651542a83b19192f539319a99096c9ea2d50b24d2252255ce01524f2d7",
+          "fixture_sql_sha256": "d5e100e65f9da6b0f96a634d006643f2fe84a9e64067a49f7d9864916c124bd7"
+        }
+      },
+      "probe_sha256": "98d8ba0112e2e132c1fb3915551fc87d76d2e66f8b5b116f75a3ceba6db688e7"
+    },
+    "specs": {
+      "command_per_cohort": "crystal spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color <cohort paths>",
+      "release_flags": "--release --no-debug",
+      "temporary_root": "Use the canonical SSD path for TMPDIR. Two older transform specs compare the canonical published path with a fixture path and fail when TMPDIR uses a symlink.",
+      "paths_per_mode": 54,
+      "examples_per_mode": {
+        "debug": 398,
+        "release": 398
+      },
+      "examples_by_cohort_per_mode": {
+        "focused": 82,
+        "transform": 34,
+        "publication": 39,
+        "catalog": 36,
+        "states": 26,
+        "extrema": 25,
+        "compact": 30,
+        "compact_read": 41,
+        "transport": 85
+      },
+      "cohorts": {
+        "focused": [
+          "spec/offline_materialized_view_aggregate_projection_w298_spec.cr",
+          "spec/offline_materialized_view_compact_two_key_projection_w297_spec.cr",
+          "spec/offline_materialized_view_compressed_aggregate_projection_w299_spec.cr",
+          "spec/wide_part_projection_compressed_marks_w299_writer_spec.cr",
+          "spec/offline_materialized_view_compact_aggregate_projection_w296_spec.cr",
+          "spec/offline_materialized_view_compact_count_projection_w295_spec.cr",
+          "spec/offline_materialized_view_two_key_projection_w294_spec.cr",
+          "spec/offline_materialized_view_minmax_projection_w293_spec.cr",
+          "spec/offline_materialized_view_sum_projection_w292_spec.cr",
+          "spec/offline_materialized_view_aggregate_projection_w291_spec.cr",
+          "spec/offline_materialized_view_projection_transform_w290_spec.cr",
+          "spec/aggregate_count_physical_names_w219_spec.cr",
+          "spec/aggregate_count_w176_writer_spec.cr"
+        ],
+        "transform": [
+          "spec/offline_materialized_view_transform_w257_spec.cr",
+          "spec/offline_materialized_view_compact_transform_w286_spec.cr",
+          "spec/wide_part_schema_binding_w257_spec.cr",
+          "spec/embedded_merge_tree_pk_range_spec.cr"
+        ],
+        "publication": [
+          "spec/compact_projection_writer_spec.cr",
+          "spec/compact_projection_reader_spec.cr",
+          "spec/projection_checksum_binding_w287_spec.cr",
+          "spec/projection_publication_w256_spec.cr",
+          "spec/offline_projection_window_w229_spec.cr",
+          "spec/projection_specialized_consumers_w217_spec.cr"
+        ],
+        "catalog": [
+          "spec/offline_materialized_view_w228_spec.cr",
+          "spec/offline_mv_materialization_w88_spec.cr",
+          "spec/offline_catalog_projection_w87_spec.cr"
+        ],
+        "states": [
+          "spec/aggregate_count_w176_reader_spec.cr",
+          "spec/aggregate_count_consumers_w177_admission_spec.cr",
+          "spec/aggregate_sum_w223_bulk_spec.cr",
+          "spec/aggregate_sum_w223_consumers_spec.cr",
+          "spec/aggregate_count_w175_core_spec.cr",
+          "spec/aggregate_count_w176_admission_spec.cr",
+          "spec/aggregate_count_table_w177_spec.cr",
+          "spec/aggregate_count_offline_w177_spec.cr"
+        ],
+        "extrema": [
+          "spec/aggregate_minmax_w237_core_spec.cr",
+          "spec/aggregate_minmax_w237_physical_spec.cr",
+          "spec/aggregate_minmax_w237_adversary_spec.cr"
+        ],
+        "compact": [
+          "spec/compact_mark_file_adapter_w274_entry_spec.cr",
+          "spec/compact_part_writer_w264_spec.cr",
+          "spec/compact_part_writer_w265_publication_spec.cr",
+          "spec/compact_part_writer_w283_entry_spec.cr",
+          "spec/compact_mark_file_adapter_w274_adversary_spec.cr"
+        ],
+        "compact_read": [
+          "spec/compact_typed_w260_spec.cr",
+          "spec/compact_typed_w260_adversary_spec.cr",
+          "spec/compact_dynamic_w262_spec.cr",
+          "spec/compact_dynamic_w262_adversary_spec.cr"
+        ],
+        "transport": [
+          "spec/compressed_mark_transport_w124_spec.cr",
+          "spec/compressed_mark_transport_w124_root_spec.cr",
+          "spec/compressed_mark_positions_w194_spec.cr",
+          "spec/binary_bulk_w122_spec.cr",
+          "spec/binary_bulk_physical_prefix_w151_spec.cr",
+          "spec/binary_bulk_discriminator_framing_w189_spec.cr",
+          "spec/static_binary_bulk_table_w247_spec.cr",
+          "spec/compact_mark_file_adapter_w274_integration_spec.cr"
+        ]
+      },
+      "log_sha256": {
+        "debug": {
+          "focused": "bd1849760ceb4999e856212f8dccb22f4ee25bacbd7337e35494090defcace29",
+          "transform": "ade651e66be5e76081bac72a58f29fd6a6bded091d260e734d822384025fccdc",
+          "publication": "4d499d16cc5c5556a192187a94e21e833095bb9ffe21b52f6155274773ee0143",
+          "catalog": "4c7ffc89b3cd2d9c6c56bb8d557ddc1c8d6cf01425292652d3177786976407aa",
+          "states": "34d8d557ccb020ba2e0fe55aaf5b5bc24d27a8360ce185f2a8ffcc7c69958b25",
+          "extrema": "d9a554a2edf635bb92940a9c3b64a642faa91d81b74b9e4536d40095418041c7",
+          "compact": "a07958685e94d980a76160cc46ada6da78792072a4dea9b727ea19439a977077",
+          "compact_read": "3f66d6a5e6e0abbb4e37234b7d1130c8575d7976b3509e087e52cf05e9730a60",
+          "transport": "4cbdeaa87b7cc28d08edd62ff716a8fc9594ff656ad8cc59c18d501d5a6d58db"
+        },
+        "release": {
+          "focused": "f0d7ddab365eedfc87766895afaf7f72f988424cf7fd8f1c9accd6a178907130",
+          "transform": "0a49f3d975f941fef49e3ab76dcf4205de491b865f1f19a960e83a5a4b58cc4d",
+          "publication": "5c156d051941ca6180dffa8ccf8d5a174791a1d59d32d8203f0a192b7dc37b7c",
+          "catalog": "45cc31443415aa157bd6998bca13ccc79feaf76b405d7acea414c73e35226ec8",
+          "states": "7afb3d7ae6669c80b81c8d070e74a74d549a576eaab966e3d1e774ffcb3aa04f",
+          "extrema": "98f279fa3c2d04cbd1ea6cea4bd4e94d17fae1ae3b61f15da9104667ba27fb5b",
+          "compact": "4497859f65f627e4a2c66fcdd4da1a4d6775940917086e5ae998f44f4aefca8f",
+          "compact_read": "accdfe45729c4daf2b99bfc1e2f91a169cf02a0df1818c466cfc3136fd975bb9",
+          "transport": "e95b463ac4d8c11ea217134d43406f28158c76df8761039974f595e4d0125def"
+        }
+      }
+    },
+    "stock_mutations": {
+      "method": "Copy native parts for each parent layout, mutate a late mark or rebind marks with inconsistent hashes or suffixes, then regenerate the child checksums and parent projection summary. A plain grid inspection confirms the late offset changes preserve monotonicity and row counts.",
+      "checks_per_mode": 44,
+      "window_start_rows": [
+        0,
+        13
+      ],
+      "observed": "Zero callbacks for all mutations in both modes. Unmodified controls return the first group. Cases include Sum and Count state shifts, hidden fourth-key shifts, mismatched mark hashes, and dual or mixed sidecar suffixes.",
+      "probe_sha256": "803d01350e48aa2653753f530a299fb12601ffce843d8f60ead47116b6f3268f",
+      "log_sha256": {
+        "debug": "21cb0c553c80a9fbe9feba6a2e958e9761b26b08f4e4ad43a02e5fb64ff6afd1",
+        "release": "53a7cbbc3f25595c35739c612fb810923a185b5c247bd2b89bf757b71bed627f"
+      }
+    },
+    "mixed_child_scan": {
+      "method": "Adapt the W298 fixture to publish one Wide .cmrk2 child and one Compact MRK4 child. Read Sum and Count across the two parents. Repeat with reordered hidden keys and assert rejection before callbacks at row zero and EOF.",
+      "examples_per_mode": {
+        "debug": 2,
+        "release": 2
+      },
+      "probe_sha256": "61d5710db17de2fc3d1ffa5da00916dded79825d85c187d4399dcdc3b589ff4b",
+      "log_sha256": {
+        "debug": "1837ea9be09e82ccc7ecde9908fe03143c6cd751f34adb1772e84bbdab939762",
+        "release": "0f7c842287963f2575b38ece7affcc805263935ca7f6686a1d57a5e3d8e7ef85"
+      }
+    },
+    "native": {
+      "runner": "scripts/verify_materialized_view_aggregate_projection_w298.rb",
+      "runner_sha256": "fd05d68a609c21244d36b07c34509f21f27de8ab970db0373b4d7c2a375f86bc",
+      "helper": "scripts/check_materialized_view_aggregate_projection_w298.cr",
+      "helper_source_sha256": "a3e33a28b27d3751bd4ac82c88352b3306b4da8a120c09521f5b26e96ac0664e",
+      "build_command": "crystal build --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color scripts/check_materialized_view_aggregate_projection_w298.cr -o \"$helper\"",
+      "release_flags": "--release --no-debug",
+      "command": "ruby scripts/verify_materialized_view_aggregate_projection_w298.rb --binary \"$clickhouse\" --run-safe \"$run_safe\" --helper \"$helper\" --evidence-root \"$fresh_ssd_directory\" --w299",
+      "success_status": "w299_stock_and_generated_compressed_wide_children_attached_checked_and_offline_scanned",
+      "version": "26.10.1.1201",
+      "revision": "54515",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "binary_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "source_reference": {
+        "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "files": [
+          "src/Storages/MergeTree/IMergeTreeDataPart.cpp",
+          "src/Storages/MergeTree/MergeTreeDataPartWriterWide.cpp",
+          "src/Storages/MergeTree/MergeTreeIndexGranularityInfo.cpp",
+          "src/Storages/MergeTree/MergeTreeWriterStream.cpp"
+        ]
+      },
+      "fixture": {
+        "parent_rows": 16,
+        "output_groups": 13,
+        "child_mark_rows": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          1
+        ],
+        "index_entries_including_terminal": 8,
+        "primary_index_bytes": 256,
+        "stock_and_attached_offline_window": [
+          1,
+          6
+        ],
+        "aggregates": [
+          "count()",
+          "sum(value)",
+          "min(value)",
+          "max(value)"
+        ],
+        "settings_removed_in_offline_catalog_copy": [
+          "compress_marks",
+          "compress_primary_key",
+          "replace_long_file_name_to_hash"
+        ]
+      },
+      "results": "Both generated parts pass ATTACH PART and CHECK TABLE. Native state RowBinary and compound primary indexes match stock. Forced and disabled projection queries agree with expected groups. The offline catalog reopens stock and attached parts and reads a full scan and a window across marks.",
+      "per_mode": {
+        "debug": {
+          "summary_sha256": "616e33a125aa859da07b656a0a8f261ce50eaeecdbfe1b2699795f012c4d7c00",
+          "helper_binary_sha256": "f575536e04cac2a057368a841f5545eaeb5f064738e1196917cd0ec6104ac92b",
+          "guarded_processes": {
+            "ClickHouse local": 50,
+            "prebuilt Crystal helper": 2
+          }
+        },
+        "release": {
+          "summary_sha256": "9c1207ddf552826cd56848274e427577979e071254ca0230551d0c7a63950611",
+          "helper_binary_sha256": "0927682bcfe63680c9ddca9da61a18fa27ae69ce1680b98a513d35c3c3a71ee0",
+          "guarded_processes": {
+            "ClickHouse local": 50,
+            "prebuilt Crystal helper": 2
+          }
+        }
+      },
+      "observed": {
+        "Wide/Wide": {
+          "key_order": [
+            "key_a",
+            "key_b",
+            "key_c",
+            "key_d"
+          ],
+          "stock_child": {
+            "sidecar_count": 8,
+            "physical_bytes_range": [
+              74,
+              78
+            ],
+            "canonical_bytes_per_sidecar": 192,
+            "method": "0x90",
+            "terminal_coordinates": [
+              "end_of_last_frame"
+            ]
+          },
+          "written_child": {
+            "sidecar_count": 8,
+            "physical_bytes_range": [
+              219,
+              219
+            ],
+            "canonical_bytes_per_sidecar": 192,
+            "method": "0x82",
+            "terminal_coordinates": [
+              "physical_eof"
+            ]
+          },
+          "state_rowbinary_sha256": "bda29098ab769ae3e7c20259ae1bb9df75e23f68ee291d3b9881956a05d55527",
+          "index_sha256": "5831179645a31c42397dfe7cfce455be5d866356e04b674ba2641c7aee576621",
+          "generated_parent_marks": ".mrk2",
+          "stock_parent_marks": ".cmrk2",
+          "check_status": 1,
+          "preserved_files": 44,
+          "granules": {
+            "multi_key_prefix": [
+              2,
+              7
+            ],
+            "fourth_key_refinement": [
+              1,
+              7
+            ],
+            "uint64_max_boundary": [
+              2,
+              7
+            ]
+          }
+        },
+        "Compact/Wide": {
+          "key_order": [
+            "key_b",
+            "key_d",
+            "key_a",
+            "key_c"
+          ],
+          "stock_child": {
+            "sidecar_count": 8,
+            "physical_bytes_range": [
+              74,
+              78
+            ],
+            "canonical_bytes_per_sidecar": 192,
+            "method": "0x90",
+            "terminal_coordinates": [
+              "end_of_last_frame"
+            ]
+          },
+          "written_child": {
+            "sidecar_count": 8,
+            "physical_bytes_range": [
+              219,
+              219
+            ],
+            "canonical_bytes_per_sidecar": 192,
+            "method": "0x82",
+            "terminal_coordinates": [
+              "physical_eof"
+            ]
+          },
+          "state_rowbinary_sha256": "64131629dd84f03dcb648785629d5fa2132c7357e48c1cf4a979d42750eba21f",
+          "index_sha256": "91c1c18b4b6d41a9d0d9a844aa13a6dcaaa9542ec06c81d534c5e0d365715ba5",
+          "generated_parent_marks": ".cmrk4",
+          "stock_parent_marks": ".cmrk4",
+          "check_status": 1,
+          "preserved_files": 34,
+          "granules": {
+            "multi_key_prefix": [
+              2,
+              7
+            ],
+            "uint64_max_boundary": [
+              2,
+              7
+            ]
+          }
+        }
+      },
+      "independent_audit": {
+        "method": "Recompute key tuples, state bytes and expected filter rows from source RowBinary. Decode physical mark sidecars using native ZSTD or LZ4 and parse their records. Compare exact compound index bytes, query granule counts and before/after part inventory.",
+        "script_sha256": "73c5d1f3a2912150b4593c1af76da0cd622c03069776f5d76fd34857ee578d6d",
+        "report_sha256": "28a0b1dc5a7ba757cf8a81878e4b2bf3eaf797e51a46dca3ceab0c4c8513a53c"
+      },
+      "w298_control": {
+        "command": "ruby scripts/verify_materialized_view_aggregate_projection_w298.rb --binary \"$clickhouse\" --run-safe \"$run_safe\" --helper \"$helper\" --evidence-root \"$fresh_ssd_directory\"",
+        "mode": "debug",
+        "status": "four_parent_child_layout_pairings_attached_checked_and_offline_scanned",
+        "guarded_processes": {
+          "ClickHouse local": 88,
+          "prebuilt Crystal helper": 2
+        },
+        "summary_sha256": "41424943fd570d29c7303db3e86bab0805d80c87e8ffe98bebdef0306fe3e2de"
+      }
+    },
+    "artifact_availability": "The checked-in witness and spec paths reproduce the two native pairs and repository tests. The stock baseline, independent audit and extra mutations are recorded as observations. Temporary stores, manifests, probes and logs are released after verification."
+  },
+  "boundaries": {
+    "allowed_paths": [
+      ".landmark/evidence/materialized-view-aggregate-projection-w299.json",
+      "LANDMARKS.md",
+      "README.md",
+      "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+      "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "scripts/check_materialized_view_aggregate_projection_w298.cr",
+      "scripts/verify_materialized_view_aggregate_projection_w298.rb",
+      "spec/offline_materialized_view_compressed_aggregate_projection_w299_spec.cr",
+      "spec/wide_part_projection_compressed_marks_w299_writer_spec.cr",
+      "src/crystal_click.cr",
+      "src/crystal_click/binary_bulk_column_reader.cr",
+      "src/crystal_click/compressed_mark_reader.cr",
+      "src/crystal_click/object_column_part_metadata.cr",
+      "src/crystal_click/typed_part_table.cr",
+      "src/crystal_click/wide_aggregate_count_storage_plan.cr",
+      "src/crystal_click/wide_mark_file_adapter.cr",
+      "src/crystal_click/wide_part.cr",
+      "src/crystal_click/wide_part_projection.cr",
+      "src/crystal_click/wide_part_table.cr",
+      "src/crystal_click/wide_part_table/aggregate_count_pair_admission.cr",
+      "src/crystal_click/wide_part_table/binary_bulk_column_adapter.cr",
+      "src/crystal_click/wide_part_writer/leaf_stream_writer.cr",
+      "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr",
+      "src/crystal_click/wide_part_writer/wide_part_lane.cr",
+      "src/crystal_click/wide_part_writer/wide_part_prepared_projection.cr",
+      "src/crystal_click/wide_part_writer/wide_part_publication_input.cr",
+      "src/crystal_click/wide_part_writer/wide_part_publisher.cr"
+    ]
+  },
+  "changed_paths": [
+    ".landmark/evidence/materialized-view-aggregate-projection-w299.json",
+    "LANDMARKS.md",
+    "README.md",
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "scripts/check_materialized_view_aggregate_projection_w298.cr",
+    "scripts/verify_materialized_view_aggregate_projection_w298.rb",
+    "spec/offline_materialized_view_compressed_aggregate_projection_w299_spec.cr",
+    "spec/wide_part_projection_compressed_marks_w299_writer_spec.cr",
+    "src/crystal_click.cr",
+    "src/crystal_click/binary_bulk_column_reader.cr",
+    "src/crystal_click/compressed_mark_reader.cr",
+    "src/crystal_click/object_column_part_metadata.cr",
+    "src/crystal_click/typed_part_table.cr",
+    "src/crystal_click/wide_aggregate_count_storage_plan.cr",
+    "src/crystal_click/wide_mark_file_adapter.cr",
+    "src/crystal_click/wide_part.cr",
+    "src/crystal_click/wide_part_projection.cr",
+    "src/crystal_click/wide_part_table.cr",
+    "src/crystal_click/wide_part_table/aggregate_count_pair_admission.cr",
+    "src/crystal_click/wide_part_table/binary_bulk_column_adapter.cr",
+    "src/crystal_click/wide_part_writer/leaf_stream_writer.cr",
+    "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr",
+    "src/crystal_click/wide_part_writer/wide_part_lane.cr",
+    "src/crystal_click/wide_part_writer/wide_part_prepared_projection.cr",
+    "src/crystal_click/wide_part_writer/wide_part_publication_input.cr",
+    "src/crystal_click/wide_part_writer/wide_part_publisher.cr"
+  ],
+  "links": [
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "LANDMARKS.md",
+    ".landmark/evidence/materialized-view-aggregate-projection-w298.json"
+  ],
+  "refresh_when": "Repeat Debug and Release and both native pairs after changes to adaptive mark framing, checksum binding, state or key grids, publication, typed admission, or the ClickHouse pin."
+}
