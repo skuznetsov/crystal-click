@@ -37,9 +37,9 @@ module CrystalClick
         unless count_total == parent_row_count.to_u128
           raise ArgumentError.new("count projection total does not match the parent row count")
         end
-        unless projection.row_count <= parent_row_count
-          raise ArgumentError.new("count projection row count exceeds the parent row count")
-        end
+      end
+      if projection.aggregate_projection? && projection.row_count > parent_row_count
+        raise ArgumentError.new("aggregate projection row count exceeds the parent row count")
       end
       new(entry_name, projection, budgets, parent_row_count)
     end
@@ -60,8 +60,8 @@ module CrystalClick
 
     def publish(parent_stage : String) : PartWriterInfrastructure::ChecksumRecord
       child_path = File.join(parent_stage, @entry_name)
-      if @projection.count_total
-        CompactPartOperation.write_projection_count(
+      if @projection.aggregate_projection?
+        CompactPartOperation.write_projection_aggregate(
           child_path, @projection, @budgets, @parent_row_count
         )
       else

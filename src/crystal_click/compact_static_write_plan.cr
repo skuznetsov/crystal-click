@@ -18,6 +18,7 @@ module CrystalClick
       @variant_discriminator_mode : CompactVariantDiscriminatorMode = CompactVariantDiscriminatorMode::Compact,
       *,
       allow_projection_count_state : Bool = false,
+      allow_projection_aggregate_state : Bool = false,
     )
       @limits = limits
       @variant_discriminator_mode.wire_value
@@ -40,9 +41,12 @@ module CrystalClick
           raise UnsupportedFormatError.new("Compact static column names are invalid or duplicated")
         end
 
+        projection_aggregate_state = allow_projection_aggregate_state &&
+                                     !WidePartProjectionAggregateDescriptor.for_column(name, column.type.name).nil?
+        projection_count_state = allow_projection_count_state && name == "count()"
         plan = CompactStaticCallbackPlan.new(
           column, limits, @variant_discriminator_mode,
-          allow_projection_count_state && name == "count()",
+          projection_aggregate_state || projection_count_state,
         )
         names = plan.callback_names
         if names.empty?

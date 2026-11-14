@@ -300,32 +300,48 @@ module CrystalClick
     # eight bytes per parent row on every mark, including marks outside a
     # selected value window.
     def validate_uint64_single_callback_spans!(column_name : String, expected_stream_name : String) : Nil
+      validate_fixed_width_single_callback_spans!(column_name, expected_stream_name, 8_u64, "UInt64 key")
+      nil
+    end
+
+    # Projection aggregate admission uses this for fixed-width state lanes as
+    # well as the hidden UInt64 key. Validation covers the complete physical
+    # mark grid so windows and EOF reads cannot hide a malformed later span.
+    def validate_fixed_width_single_callback_spans!(
+      column_name : String,
+      expected_stream_name : String,
+      width : UInt64,
+      lane_label : String,
+    ) : Nil
       unless @mode.mrk4?
-        raise UnsupportedFormatError.new("Compact UInt64 key span validation requires MRK4")
+        raise UnsupportedFormatError.new("Compact fixed-width projection lane validation requires MRK4")
+      end
+      if width == 0_u64
+        raise ArgumentError.new("Compact fixed-width projection lane width must be positive")
       end
 
       slot_count = @columns_substreams.slot_count_for(column_name)
       unless slot_count == 1
-        raise CorruptPartError.new("Compact UInt64 key span requires exactly one physical callback")
+        raise CorruptPartError.new("Compact #{lane_label} span requires exactly one physical callback")
       end
       @budget.preflight_records(slot_count.to_i64)
       @budget.reserve_records(slot_count.to_i64)
 
       slots = @columns_substreams.slots_for(column_name)
       unless slots.size == 1
-        raise CorruptPartError.new("Compact UInt64 key span descriptor differs from its bounded slot count")
+        raise CorruptPartError.new("Compact #{lane_label} span descriptor differs from its bounded slot count")
       end
       slot = slots[0]
       unless slot.stream_name == expected_stream_name
-        raise CorruptPartError.new("Compact UInt64 key callback identity differs from its expected span")
+        raise CorruptPartError.new("Compact #{lane_label} callback identity differs from its expected span")
       end
 
       @mark_index.mark_count.times do |mark|
         rows = @mark_index.row_count_at(mark)
-        if rows > UInt64::MAX // 8_u64
-          raise CorruptPartError.new("Compact UInt64 key span row width overflows")
+        if rows > UInt64::MAX // width
+          raise CorruptPartError.new("Compact #{lane_label} span row width overflows")
         end
-        expected_bytes = rows * 8_u64
+        expected_bytes = rows * width
         start = @mark_index.position_at(mark, slot.index)
         finish = if slot.index + 1 < @mark_index.slot_count
                    @mark_index.position_at(mark, slot.index + 1)
@@ -333,10 +349,10 @@ module CrystalClick
                    @mark_index.position_at(mark + 1, 0)
                  end
         if finish < start
-          raise CorruptPartError.new("Compact UInt64 key span has descending coordinates")
+          raise CorruptPartError.new("Compact #{lane_label} span has descending coordinates")
         end
         unless (finish - start).to_u64 == expected_bytes
-          raise CorruptPartError.new("Compact UInt64 key span differs from its exact row width")
+          raise CorruptPartError.new("Compact #{lane_label} span differs from its exact row width")
         end
       end
       nil

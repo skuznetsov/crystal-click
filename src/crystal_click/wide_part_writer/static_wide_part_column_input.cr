@@ -23,38 +23,9 @@ module CrystalClick
           if context.rows_per_mark.to_u64 > WideAggregateCountStoragePlan::MAX_MARK_RANGE_ROWS
             raise ArgumentError.new("count projection rows_per_mark is outside the admitted range")
           end
-        else
-          plan = BinaryAggregateFunctionStatePlan.for_type(type)
-          if descriptor.sum?
-            unless plan.state_width == sizeof(UInt64)
-              raise UnsupportedFormatError.new("sum projection requires the fixed UInt64 AggregateFunction state")
-            end
-          elsif descriptor.minmax?
-            layout = plan.minmax_layout ||
-                     raise UnsupportedFormatError.new("min/max projection requires the existing fixed-value state plan")
-            unless layout.input_type.tag == BinaryDataType::TAG_UINT64 && layout.state_kind.fixed? && !plan.nullable_argument?
-              raise UnsupportedFormatError.new("min/max projection requires the present UInt64 SingleValueData state")
-            end
-          else
-            raise UnsupportedFormatError.new("aggregate projection function is outside the admitted profile")
-          end
         end
 
-        granules = aggregate_projection_granules(
-          aggregate.values, context.rows_per_mark, descriptor.function_name
-        ) do |value|
-          if descriptor.count?
-            BinaryValue.aggregate_count_state(type, value)
-          else
-            presence_bytes = descriptor.minmax? ? 1 : 0
-            state_bytes = Bytes.new(presence_bytes + sizeof(UInt64))
-            if presence_bytes == 1
-              state_bytes[0] = 1_u8
-            end
-            IO::ByteFormat::LittleEndian.encode(value, state_bytes[presence_bytes, sizeof(UInt64)])
-            BinaryValue.aggregate_function_state(type, state_bytes)
-          end
-        end
+        granules = aggregate.state_granules(context.rows_per_mark, WidePartWriter::MAX_MARKS)
         prepare_with_profile(
           descriptor.column_name, type, granules, context,
           BinaryBulkProfile.with_size_stream, descriptor.count?

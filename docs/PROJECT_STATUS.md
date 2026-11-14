@@ -2,6 +2,19 @@
 
 ## Current qualification
 
+### W296 Compact UInt64 aggregate projection publication from a materialized-view transform
+
+Both parent layouts publish Compact MRK4 children with one plain UInt64
+group key and caller-computed `sum(value)`, `min(value)`, `max(value)`,
+and `count()` states. Each function can appear alone or with the other
+supported functions in SELECT order. A state-only scan preflights the
+hidden key and fixed-width state spans across child marks.
+Debug and Release each passed 288 affected examples and a stock-child scan.
+ClickHouse 26.10.1.1201 attached and checked both pairs. The tested key
+filter read one of three child granules in each pair. See the
+[Compact aggregate profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-uint64-aggregate-projection-publication-from-a-transform-w296)
+and [W296 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w296.json).
+
 ### W295 Compact Count projection publication from a materialized-view transform
 
 The callback can supply one plain UInt64 group key and `count()` through
@@ -159,8 +172,8 @@ S0/S1 and V3 statistics matrix. See the
 
 ## Remaining work
 
-1. **Projections.** Extend the Compact Count profile with more aggregate
-   states, compound group keys, and further layout and type combinations
+1. **Projections.** Extend the Compact aggregate profile with compound
+   group keys, additional state types, and further layout combinations
    for projection reads and writes. See the
    [projection publication frontier](PROJECTION_PUBLICATION_FRONTIER.md).
 2. **Type and layout compatibility.** Pair reader and writer admission for
@@ -4789,8 +4802,9 @@ source/runtime identities and executed evidence.
    W291 through W294 add Wide aggregate projection children under either
    parent layout with one or two plain UInt64 group keys and any combination of
    `count()`, `sum(value)`, `min(value)`, and `max(value)` over the
-   supported UInt64 arguments. W295 adds a Compact MRK4 child under either
-   parent layout for one plain UInt64 group key with `count()`.
+   supported UInt64 arguments. W295 and W296 add the same aggregate functions
+   for a Compact MRK4 child with one plain UInt64 group key under either
+   parent layout.
    General keys and partitions, additional projection declarations, remaining
    layouts/types and automatic materialization remain open.
 4. **General table writing.** The detached-part writers and small
@@ -4952,8 +4966,8 @@ retains the implementation checkpoints and responsibility boundaries.
    paths for plain projection declarations. W291 through W294 qualify
    aggregate projections with one or two plain UInt64 group keys, `count()`, and
    UInt64 `sum(value)`, `min(value)`, and `max(value)` states in Wide children.
-   W295 qualifies one UInt64 group key with `count()` in a Compact MRK4 child.
-   Compact children with more group keys or aggregate states, general key and
+   W295 and W296 qualify the same states in Compact MRK4 children with
+   one UInt64 group key. More Compact group keys or state types, general key and
    partition derivation, additional projection declarations, and bounded
    output appenders remain open.
 4. Only then reopen memory/performance work. No current claim of stock-reader
@@ -4961,7 +4975,7 @@ retains the implementation checkpoints and responsibility boundaries.
 
 ## Source reference
 
-W286 through W295 compare the relevant MergeTree paths against the pinned shallow
+W286 through W296 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

@@ -68,6 +68,10 @@ module CrystalClick
       expected_types = nil.as(Array({String, String})?)
       expected_sources = nil.as(Array({String, String, String})?)
       expected_aggregate_count_key_names = nil.as(Array(String)?)
+      expected_compact_projection_key_names = nil.as(Array(String)?)
+      compact_projection_aggregate_seen = false
+      wide_projection_children = [] of {String, UInt64, Array(UInt64)}
+      projection_without_count = !@columns.includes?("count()")
       total_rows = 0_u64
       total_marks = 0_u64
       checksum_state = ChecksumVerification::SizeChecked
@@ -132,6 +136,21 @@ module CrystalClick
           raise CorruptPartError.new("selected parts have different hidden AggregateFunction(count) sibling group key rosters")
         end
 
+        if projection_selection && projection_without_count
+          if compact_reader = reader.as?(CompactPartTable)
+            if current_key_names = compact_reader.projection_aggregate_key_names
+              compact_projection_aggregate_seen = true
+              if prior_key_names = expected_compact_projection_key_names
+                unless current_key_names == prior_key_names
+                  raise CorruptPartError.new("selected Compact projection aggregate siblings disagree on their group key roster")
+                end
+              else
+                expected_compact_projection_key_names = current_key_names
+              end
+            end
+          end
+        end
+
         marks_by_part = reader.part_mark_row_counts
         unless marks_by_part.size == 1 && !marks_by_part[0].empty? &&
                marks_by_part[0].size <= WidePartTable::MAX_MARKS_PER_READER
@@ -148,6 +167,13 @@ module CrystalClick
         end
         unless part_rows == reader.total_row_count && part_rows > 0_u64
           raise CorruptPartError.new("selected part mark grid differs from its row count")
+        end
+        if projection_selection && projection_without_count && reader.is_a?(WidePartTable)
+          wide_projection_children << {
+            String.new(read_path.to_slice),
+            part_rows,
+            mark_rows.dup,
+          }
         end
         if part_rows > WidePartTable::MAX_TOTAL_ROWS.to_u64 - total_rows
           raise BoundsError.new("total row count exceeds limit")
@@ -167,9 +193,62 @@ module CrystalClick
 
       @column_types = expected_types || raise(CorruptPartError.new("selected parts have no typed column metadata"))
       @column_sources = expected_sources || raise(CorruptPartError.new("selected parts have no source metadata"))
+      if projection_selection && projection_without_count && compact_projection_aggregate_seen
+        expected_key_names = expected_compact_projection_key_names ||
+                             raise(CorruptPartError.new("Compact projection aggregate omitted its group key roster"))
+        wide_projection_children.each do |wide_path, wide_rows, wide_marks|
+          wide_key_names = wide_projection_group_key_names!(wide_path, wide_rows, wide_marks)
+          unless wide_key_names == expected_key_names
+            raise CorruptPartError.new("selected mixed Wide/Compact projection aggregate group key roster differs")
+          end
+        end
+      end
       @total_row_count = total_rows
       @part_count = @entries.size.to_i32
       @checksum_verification = checksum_state
+    end
+
+    # Mixed no-Count projection parity is checked only after an admitted
+    # Compact aggregate child has supplied its hidden key roster. The Wide
+    # child metadata may describe one or two leading UInt64 group keys; this
+    # guard compares that existing roster without narrowing Wide admission.
+    private def wide_projection_group_key_names!(
+      path : String,
+      expected_rows : UInt64,
+      expected_mark_rows : Array(UInt64),
+    ) : Array(String)
+      budget = CompressedStreamBudget.read_default
+      metadata = PartMetadataFileReader.new(path, budget)
+      checksums = PartChecksums.parse(
+        metadata.read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice,
+      )
+      columns_text = metadata.read("columns.txt")
+      if checksums.entries.has_key?("columns.txt")
+        checksums.validate_selected_entries(path, "columns.txt")
+      end
+      columns = WidePart.parse_columns_metadata(columns_text)
+      key_count = 0
+      while key_count < columns.size && columns[key_count][1] == "UInt64"
+        key_count += 1
+      end
+      unless key_count == 1 || key_count == 2
+        raise CorruptPartError.new("Wide projection aggregate has no one- or two-column UInt64 group key roster")
+      end
+      key_names = columns.first(key_count).map { |name, _type| String.new(name.to_slice) }
+      unless key_names.to_set.size == key_names.size
+        raise CorruptPartError.new("Wide projection aggregate group key roster contains duplicate names")
+      end
+      key_names.each do |key_name|
+        key_reader = WidePart.open_typed(path, key_name)
+        unless key_reader.column_type == "UInt64" && key_reader.row_count == expected_rows &&
+               key_reader.mark_row_counts == expected_mark_rows
+          raise CorruptPartError.new("Wide projection aggregate group key row-mark axes differ from its selected state")
+        end
+        key_reader.selected_checksum_names.each do |checksum_name|
+          checksums.validate_selected_entries(path, checksum_name)
+        end
+      end
+      key_names
     end
 
     def columns : Array(String)

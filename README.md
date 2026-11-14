@@ -304,9 +304,13 @@ child = CrystalClick::WidePartProjection.precomputed_aggregate(
 )
 ```
 
-Pass the Wide child through `projections:` for either parent layout.
-Each extremum can appear alone or with the other supported aggregates.
-See the [Min and Max projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-min-and-max-projection-publication-from-a-transform-w293).
+Pass the child through `projections:` for either parent layout. Use
+`CompactPartProjection.precomputed_aggregate` with the same arguments to
+write a Compact MRK4 child with one UInt64 group key. The Compact API
+accepts `sum`, `min`, `max`, and `count` states individually or together in
+SELECT order. Read Sum and extrema through `batch.binary_bulk_values_for`.
+See the [Wide Min and Max profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#uint64-min-and-max-projection-publication-from-a-transform-w293)
+and [Compact aggregate profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-uint64-aggregate-projection-publication-from-a-transform-w296).
 
 For `PROJECTION by_group (SELECT count() GROUP BY region, day)`, pass
 the two UInt64 key columns in GROUP BY order. Here `regions` and `days`

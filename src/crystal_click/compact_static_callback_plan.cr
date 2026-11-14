@@ -19,7 +19,8 @@ module CrystalClick
     def self.validate_declaration!(
       type : BinaryDataType,
       limits : BinaryCodecLimits,
-      allow_projection_count_state : Bool = false,
+      allow_projection_aggregate_state : Bool = false,
+      column_name : String? = nil,
     ) : Nil
       if type.contains_dynamic?
         raise UnsupportedFormatError.new("Compact static writer does not admit Dynamic state")
@@ -27,8 +28,11 @@ module CrystalClick
       if type.contains_json?
         raise UnsupportedFormatError.new("Compact static writer does not admit JSON state")
       end
-      if allow_projection_count_state && type == BinaryDataType.aggregate_count
-        return nil
+      if allow_projection_aggregate_state
+        aggregate_name = column_name || ""
+        if WidePartProjectionAggregateDescriptor.for_column(aggregate_name, type.name)
+          return nil
+        end
       end
       unless BinaryValueTypedBatchAdapter.admitted?(type)
         raise UnsupportedFormatError.new("Compact selected type has no established typed batch carrier")
@@ -44,7 +48,7 @@ module CrystalClick
       input : CompactStaticColumnInput,
       limits : BinaryCodecLimits,
       @variant_discriminator_mode : CompactVariantDiscriminatorMode = CompactVariantDiscriminatorMode::Compact,
-      allow_projection_count_state : Bool = false,
+      allow_projection_aggregate_state : Bool = false,
     )
       @type = input.type
       @profile = input.profile
@@ -58,11 +62,11 @@ module CrystalClick
       unless input.map_basic?
         raise UnsupportedFormatError.new("Compact static writer requires BASIC Map serialization")
       end
-      if allow_projection_count_state &&
-         (@column_name != "count()" || @type != BinaryDataType.aggregate_count)
-        raise UnsupportedFormatError.new("Compact projection Count requires its exact nominal count() column")
+      if allow_projection_aggregate_state &&
+         !WidePartProjectionAggregateDescriptor.for_column(@column_name, @type.name)
+        raise UnsupportedFormatError.new("Compact projection aggregate requires its exact canonical state column")
       end
-      self.class.validate_declaration!(@type, limits, allow_projection_count_state)
+      self.class.validate_declaration!(@type, limits, allow_projection_aggregate_state, @column_name)
 
       physical = BinaryBulkPhysicalPlan.new(@type, @column_name, @profile, limits)
       normalizer = CompactBinaryBulkNormalizer.new(@type, @column_name, @profile, limits)

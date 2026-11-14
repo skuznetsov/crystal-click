@@ -768,30 +768,63 @@ module CrystalClick
         end
       when BinaryDataType::TAG_AGGREGATE_FUNCTION
         count_plan = WideAggregateCountStoragePlan.for_type(type)
-        unless role == "root" && type == @type && count_plan &&
-               count_plan.type_name == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME &&
-               cursor.mrk4?
-          raise UnsupportedFormatError.new("Compact BinaryBulk admits only root no-argument Count states under MRK4")
-        end
-
-        maximum_state_bytes = multiply_checked(
-          count,
-          WideAggregateCountStoragePlan::MAX_STATE_BYTES_PER_ROW,
-        )
-        if maximum_state_bytes > @limits.max_bytes.to_u64
-          raise CorruptPartError.new("Compact AggregateFunction(count) state range exceeds its byte bound")
-        end
-
         data_role = "#{role}.data"
-        cursor.begin_event(body_name(data_role, physical))
-        value_start = cursor.position
-        count.to_i.times { cursor.read_var_uint }
-        bytes = cursor.consumed_slice(value_start)
-        cursor.finish_event
-        if bytes.size.to_u64 > maximum_state_bytes
-          raise CorruptPartError.new("Compact AggregateFunction(count) state range exceeds its byte bound")
+        if role == "root" && type == @type && count_plan &&
+           count_plan.type_name == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME && cursor.mrk4?
+          maximum_state_bytes = multiply_checked(
+            count,
+            WideAggregateCountStoragePlan::MAX_STATE_BYTES_PER_ROW,
+          )
+          if maximum_state_bytes > @limits.max_bytes.to_u64
+            raise CorruptPartError.new("Compact AggregateFunction(count) state range exceeds its byte bound")
+          end
+
+          cursor.begin_event(body_name(data_role, physical))
+          value_start = cursor.position
+          count.to_i.times { cursor.read_var_uint }
+          bytes = cursor.consumed_slice(value_start)
+          cursor.finish_event
+          if bytes.size.to_u64 > maximum_state_bytes
+            raise CorruptPartError.new("Compact AggregateFunction(count) state range exceeds its byte bound")
+          end
+          append_lane(lanes, data_role, bytes, budget, workspace_observer, physical_workspace_bytes, mark_count)
+        else
+          descriptor = WidePartProjectionAggregateDescriptor.for_column(@column, type.name) ||
+                       raise(UnsupportedFormatError.new("Compact BinaryBulk aggregate state has no canonical projection descriptor"))
+          unless role == "root" && type == @type && cursor.mrk4? &&
+                 !descriptor.count? && (descriptor.sum? || descriptor.minmax?)
+            raise UnsupportedFormatError.new("Compact BinaryBulk admits only root UInt64 sum/min/max states under MRK4")
+          end
+
+          state_plan = BinaryAggregateFunctionStatePlan.for_type(type)
+          if descriptor.sum?
+            width = state_plan.state_width.to_u64
+            unless width == 8_u64
+              raise CorruptPartError.new("Compact UInt64 sum state has an unexpected fixed width")
+            end
+            bytes = exact_event(data_role, count, width, cursor, physical)
+            append_lane(lanes, data_role, bytes, budget, workspace_observer, physical_workspace_bytes, mark_count)
+          else
+            # UInt64 min/max use ClickHouse's one-byte presence marker followed
+            # by an eight-byte value. Empty states are not part of this
+            # projection profile; reject them in every selected callback.
+            width = 9_u64
+            bytes = exact_event(data_role, count, width, cursor, physical)
+            count.to_i.times do |row|
+              offset = row * width.to_i32
+              state_bytes = bytes[offset, width.to_i32]
+              unless state_bytes[0] == 1_u8
+                raise CorruptPartError.new("Compact UInt64 min/max state is absent")
+              end
+              begin
+                state_plan.validate_state_bytes(state_bytes)
+              rescue ex : ArgumentError
+                raise CorruptPartError.new("Compact UInt64 min/max state has an invalid presence or width")
+              end
+            end
+            append_lane(lanes, data_role, bytes, budget, workspace_observer, physical_workspace_bytes, mark_count)
+          end
         end
-        append_lane(lanes, data_role, bytes, budget, workspace_observer, physical_workspace_bytes, mark_count)
       else
         data_role = "#{role}.data"
         width = if type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_BOOL

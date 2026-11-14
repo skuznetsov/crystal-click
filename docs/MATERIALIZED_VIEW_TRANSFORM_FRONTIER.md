@@ -1,5 +1,60 @@
 # Caller-run materialized-view transform frontier
 
+## Compact UInt64 aggregate projection publication from a transform (W296)
+
+The Compact MRK4 child accepts one plain UInt64 `GROUP BY` key and
+one state per group for each selected aggregate. The query can use any
+combination of `sum(value)`, `min(value)`, `max(value)`, and `count()`.
+Each non-Count argument is a plain UInt64 target column. The physical
+schema starts with the key and keeps the canonical aggregate columns
+in SELECT order, with at most one of each function. Both parent layouts
+use the same Compact child writer with plain or compressed MRK4 marks
+and an uncompressed primary index.
+
+The callback supplies sorted, distinct keys and the matching states through
+`CompactPartProjection.precomputed_aggregate`. It may supply a single
+aggregate or combine them. The writer checks group cardinality against the
+parent rows and Count conservation when Count is present. Sum uses eight
+little-endian bytes, including zero and wraparound. Min and Max use a
+presence byte of `01` and eight little-endian bytes. A grouped UInt64
+extremum is present for each written group. Count uses the existing
+VarUInt state codec.
+
+The reader admits the canonical projection roster and checks single
+callbacks and exact fixed-width spans over every data mark before yielding
+rows, including aggregate-only windows. It uses the existing BinaryBulk
+accessor for Sum, Min and Max and the Count accessor for Count. Ordinary
+Compact aggregate columns, compound group keys, additional functions,
+MRK3 and compressed primary indexes remain outside the profile.
+
+The principal failure is a child that attaches but assigns a state to the
+wrong group or yields a wrong aggregate in a forced projection query. A
+stock Compact child with a wrapped Sum and UInt64 extrema exercises the
+prior read refusal. Focused specs must cover DDL and state-roster binding,
+invalid extents or extrema, and short and cross-mark scans. Both build
+modes must read stock children and publish children that ClickHouse attaches
+and checks under Wide and Compact parents. Compare native forced and
+projection-disabled results and exact state and index bytes, and reopen
+the attachments in Crystal. Revert the feature commit to roll back.
+
+### Qualification
+
+Debug and Release each passed 288 examples across 42 affected spec files
+and a separate typed scan of stock Compact aggregate children.
+
+In both Crystal build modes, ClickHouse 26.10.1.1201 attached and checked
+a Wide parent with a `data.mrk4` child and a Compact parent with a
+`data.cmrk4` child. Both children contained `sum(value)`, `min(value)`, and
+`max(value)`. The Wide parent case also included `count()` between the
+extrema in SELECT order.
+The state bytes and four primary-index entries matched stock ClickHouse
+for both children, and Crystal reopened the attachments for full and
+cross-mark reads. Forced `by_group` queries matched projection-disabled
+results. With `group_key = 42`, ClickHouse selected one of three child
+granules in both cases. See the
+[native witness runner](../scripts/verify_materialized_view_aggregate_projection_w296.rb)
+and [W296 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w296.json).
+
 ## Compact Count projection publication from a transform (W295)
 
 This profile admits a Compact MRK4 child with an uncompressed `primary.idx`

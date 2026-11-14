@@ -59,6 +59,10 @@ the same Wide child publication.
 The [Compact Count profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-count-projection-publication-from-a-transform-w295)
 uses `CompactPartProjection.precomputed_count` for a Compact MRK4 child with
 one UInt64 group key and `count()` under either parent layout.
+The [Compact UInt64 aggregate profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-uint64-aggregate-projection-publication-from-a-transform-w296)
+uses `CompactPartProjection.precomputed_aggregate` for `sum(value)`,
+`min(value)`, `max(value)`, and `count()` states in the same Compact child
+layout. The child retains the SELECT aggregate order.
 
 ## Compact and mixed projection reads (W288)
 
@@ -72,9 +76,10 @@ and path, and source offsets count rows from the selected children in order.
 
 The reader checks every child's presence, manifest binding and selected
 schema before callbacks, including short and EOF windows. It inherits the
-selected reader's format, type and payload-validation policy. W295 adds a
-Compact MRK4 Count profile, with the same hidden group-key roster
-required across all selected children. The catalog recognizes the persisted
+selected reader's format, type and payload-validation policy. Typed Compact
+aggregate selections preflight fixed-width state and UInt64 key spans in
+each child data mark. Mixed selections require matching hidden group-key
+rosters. The catalog recognizes the persisted
 `WITH SETTINGS (...)` suffix with simple literals and retains the SELECT
 body as the projection definition.
 

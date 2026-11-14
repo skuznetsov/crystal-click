@@ -1,0 +1,147 @@
+{
+  "format": "crystal_click_materialized_view_aggregate_projection_w296_evidence_v1",
+  "date": "2026-11-14",
+  "baseline_revision": "562cbb638a07c8ffb8c6a7cbf77fe1381c4a0d0b",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the one-key Compact MRK4 profile and the exercised native pairs.",
+    "scope": "Caller-computed UInt64 Sum, Min and Max states and optional Count in SELECT order. One UInt64 group key, an uncompressed primary index, and either Wide or Compact parent. Typed full, state-only and window scans.",
+    "remaining": "The callback computes the grouped states. New admissions are limited to projection children with one key and exact nominal state declarations. Admission checks the hidden lanes and index shape. The native audit additionally compares the index values and every physical callback payload."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "A projection passes ATTACH and CHECK but binds a state to the wrong group or prunes a valid group.",
+    "guards": [
+      "Bind the canonical argument, type and SELECT order before publication, constrain group cardinality, and conserve the parent row count when Count is present.",
+      "Reject a shortened hidden state in a later mark and a mixed Wide and Compact key mismatch before the first one-row callback. Reject an absent selected extremum.",
+      "Independently reconstruct states from native parent rows, audit each stock and generated callback lane, and compare literal index values and native forced results.",
+      "The raw audit rejects a same-size mutation to the middle primary-index entry and passes after it is restored."
+    ],
+    "rollback": "Revert the feature commit. The existing writer stages parent and projection together and publishes them with one rename."
+  },
+  "verification": {
+    "toolchain": "Crystal 1.22.3, LLVM 23.1.5, aarch64-apple-darwin25.6.0",
+    "baseline_debug": "A typed scan of Sum, Min and Max from a stock Compact MRK4 child fails at the prior static or Dynamic BinaryBulk admission fence.",
+    "spec_paths_per_mode": 42,
+    "examples_per_mode": {
+      "debug": 288,
+      "release": 288
+    },
+    "stock_read_examples_per_mode": {
+      "debug": 1,
+      "release": 1
+    },
+    "guard": {
+      "sha256": "fbfa0fd9d717eb24c1a3f829d464188110e505c7ae311eee2e95cbe7cefab011",
+      "minimum_system_memory_free_percent_exclusive": 50,
+      "crystal_process_tree_memory_mib": 12288,
+      "native_process_tree_memory_mib": 2048,
+      "clickhouse_max_memory_usage_bytes": 536870912
+    },
+    "input_seals": {
+      "production": {
+        "path": "/opt/mldata_ssd/cache/crystal-click-w296.MZ6ojv3e/manifests/production.source.json",
+        "bytes": 80711,
+        "sha256": "db53332c712f2fbf79e47788346cec4480290a44e28d688489bf1fe3b3cf2a5c",
+        "files": 638
+      },
+      "qualified": {
+        "path": "/opt/mldata_ssd/cache/crystal-click-w296.MZ6ojv3e/manifests/qualified.source.json",
+        "bytes": 441490,
+        "sha256": "d5d3d762f46cb9cce5270d676d61a78488d3ffae9ca33595be782234e9a0100e",
+        "files": 3377
+      }
+    },
+    "native": {
+      "runner": "scripts/verify_materialized_view_aggregate_projection_w296.rb",
+      "helper": "scripts/check_materialized_view_aggregate_projection_w296.cr",
+      "version": "26.10.1.1201",
+      "revision": "54515",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "binary_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "source_reference": {
+        "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "files": [
+          "src/AggregateFunctions/AggregateFunctionSum.h",
+          "src/AggregateFunctions/SingleValueData.h",
+          "src/Storages/MergeTree/MergeTreeDataWriter.cpp"
+        ]
+      },
+      "per_mode": "Both native pairs pass ATTACH, CHECK, stock index and state comparisons, full and filtered forced queries, and offline reopen. The independent audit verifies physical mark grids, state bytes, and preservation of every generated file through ATTACH.",
+      "guarded_processes_per_mode": {
+        "debug": 56,
+        "release": 56
+      },
+      "observed": {
+        "input_rows": 143,
+        "output_groups": 5,
+        "child_data_mark_rows": [
+          2,
+          2,
+          1
+        ],
+        "child_index_entries_including_terminal": 4,
+        "pairs": [
+          {
+            "parent_layout": "Compact",
+            "child_marks": "data.cmrk4",
+            "child_state_columns": [
+              "max(value)",
+              "sum(value)",
+              "min(value)"
+            ],
+            "original_files_preserved": 20,
+            "key_filtered_granules_read": 1,
+            "child_data_granules": 3
+          },
+          {
+            "parent_layout": "Wide",
+            "child_marks": "data.mrk4",
+            "child_state_columns": [
+              "min(value)",
+              "count()",
+              "sum(value)",
+              "max(value)"
+            ],
+            "original_files_preserved": 24,
+            "key_filtered_granules_read": 1,
+            "child_data_granules": 3
+          }
+        ]
+      }
+    },
+    "evidence_index": {
+      "path": "/opt/mldata_ssd/cache/crystal-click-w296.MZ6ojv3e/verification-summary.json",
+      "bytes": 17531,
+      "sha256": "f0e3612b0a19df169a8cdfaef949c8c1aa51ede6b2da5779500e18d2573012e9"
+    }
+  },
+  "changed_paths": [
+    ".landmark/evidence/materialized-view-aggregate-projection-w296.json",
+    "LANDMARKS.md",
+    "README.md",
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "scripts/check_materialized_view_aggregate_projection_w296.cr",
+    "scripts/verify_materialized_view_aggregate_projection_w296.rb",
+    "spec/offline_materialized_view_compact_aggregate_projection_w296_spec.cr",
+    "src/crystal_click.cr",
+    "src/crystal_click/compact_aggregate_count_reader_admission.cr",
+    "src/crystal_click/compact_binary_bulk_column_reader.cr",
+    "src/crystal_click/compact_binary_bulk_normalizer.cr",
+    "src/crystal_click/compact_part_physical_context.cr",
+    "src/crystal_click/compact_part_projection.cr",
+    "src/crystal_click/compact_part_table.cr",
+    "src/crystal_click/compact_part_writer/compact_part_operation.cr",
+    "src/crystal_click/compact_part_writer/compact_part_prepared_projection.cr",
+    "src/crystal_click/compact_projection_aggregate_reader_admission.cr",
+    "src/crystal_click/compact_static_callback_plan.cr",
+    "src/crystal_click/compact_static_write_plan.cr",
+    "src/crystal_click/offline_transform_projection_bindings.cr",
+    "src/crystal_click/typed_part_table.cr",
+    "src/crystal_click/wide_part_projection_aggregate.cr",
+    "src/crystal_click/wide_part_writer/static_wide_part_column_input.cr"
+  ],
+  "refresh_when": "Re-run both Crystal build modes and both native pairs after changes to DDL binding, state encoding, Compact marks, publication, typed admission, or the pinned ClickHouse executable."
+}

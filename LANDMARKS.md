@@ -1,5 +1,22 @@
 # Crystal Click landmarks
 
+## Compact UInt64 aggregate projection publication from a transform — W296
+
+- Both parent writers publish a Compact MRK4 child with one plain UInt64
+  group key and caller-computed Sum, Min, Max, and Count states. The child
+  stores states in SELECT order using the existing Wide aggregate codec.
+- Typed aggregate reads preflight the hidden key and fixed-width state
+  spans in every data mark. Mixed Wide and Compact selections compare the
+  hidden group key names. Selected extrema also validate the presence byte.
+- ClickHouse attached and checked both parent layouts, matched the stock
+  state bytes and primary indexes, and selected one of three child
+  granules for the tested key filter. Crystal reopened both attachments
+  for full and cross-mark scans. Refresh after changes to DDL binding,
+  state serialization, Compact marks, publication, typed admission,
+  or the ClickHouse pin. See the
+  [Compact aggregate profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#compact-uint64-aggregate-projection-publication-from-a-transform-w296)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w296.json).
+
 ## Compact Count projection publication from a transform — W295
 
 - The callback supplies one strictly ascending UInt64 group key and positive

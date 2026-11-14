@@ -31,26 +31,33 @@ module CrystalClick
     end
 
     # :nodoc:
-    # The only writer entry for a Compact Count projection takes the immutable
-    # projection owner and verifies its parent conservation before writing.
-    def self.write_projection_count(
+    # The only writer entry for a Compact aggregate projection takes its
+    # immutable owner and verifies cardinality and Count conservation.
+    def self.write_projection_aggregate(
       destination : String,
       projection : CompactPartProjection,
       budgets : ProjectionWriterBudgets,
       parent_row_count : UInt64,
     ) : String
-      count_total = projection.count_total ||
-                    raise(ArgumentError.new("Compact projection Count owner is missing its declared total"))
-      unless count_total == parent_row_count.to_u128
-        raise ArgumentError.new("count projection total does not match the parent row count")
+      unless projection.aggregate_projection?
+        raise ArgumentError.new("Compact projection aggregate owner has no aggregate columns")
+      end
+      if count_total = projection.count_total
+        unless count_total == parent_row_count.to_u128
+          raise ArgumentError.new("count projection total does not match the parent row count")
+        end
+      end
+      unless projection.row_count <= parent_row_count
+        raise ArgumentError.new("aggregate projection row count exceeds the parent row count")
       end
 
       keys = projection.keys
+      columns = projection.columns
       write_uint64_columns_impl(
         destination,
         projection.key_name,
         keys.to_unsafe.to_slice(keys.size),
-        projection.columns,
+        columns,
         projection.rows_per_mark,
         projection.frame_bytes,
         budgets.write_codec.limits,
@@ -65,6 +72,23 @@ module CrystalClick
         budgets,
         projection,
       )
+    end
+
+    # Compatibility bridge for the earlier Count-only writer path.
+    def self.write_projection_count(
+      destination : String,
+      projection : CompactPartProjection,
+      budgets : ProjectionWriterBudgets,
+      parent_row_count : UInt64,
+    ) : String
+      aggregates = projection.aggregate_columns
+      unless aggregates.size == 1 && aggregates[0].count?
+        raise ArgumentError.new("Compact projection Count writer requires one exact count() state")
+      end
+      unless projection.count_total
+        raise ArgumentError.new("Compact projection Count owner is missing its declared total")
+      end
+      write_projection_aggregate(destination, projection, budgets, parent_row_count)
     end
 
     private def self.write_uint64_columns_impl(
@@ -84,18 +108,15 @@ module CrystalClick
       schema_binding : PartSchemaBinding? = nil,
       projections : Indexable(WidePartProjection | CompactPartProjection) = [] of WidePartProjection,
       projection_budgets : ProjectionWriterBudgets? = nil,
-      projection_count : CompactPartProjection? = nil,
+      projection_aggregate : CompactPartProjection? = nil,
     ) : String
       validate_mark_format!(mark_format)
       variant_discriminator_mode.wire_value
       validate_dimensions!(keys, columns, rows_per_mark)
       validate_column_name!(key_name)
       validate_key_order!(keys)
-      if projection = projection_count
-        validate_projection_count_shape!(columns, mark_format, variant_discriminator_mode, profile)
-        unless projection.count_total
-          raise ArgumentError.new("Compact projection Count owner is missing its declared total")
-        end
+      if projection = projection_aggregate
+        validate_projection_aggregate_shape!(columns, projection, mark_format, variant_discriminator_mode, profile)
       else
         validate_column_set!(key_name, columns)
       end
@@ -210,7 +231,7 @@ module CrystalClick
           limits,
           mark_format,
           variant_discriminator_mode,
-          allow_projection_count_state: !projection_count.nil?,
+          allow_projection_aggregate_state: !projection_aggregate.nil?,
         )
       end
 
@@ -337,7 +358,7 @@ module CrystalClick
           reader_limits,
           read_codec_budget,
           read_transport_budget,
-          projection_count.try(&.count_total),
+          projection_aggregate,
         )
         PartWriterInfrastructure::PartDirectoryPublisher.publish_exclusively(stage, target)
         target
@@ -429,19 +450,28 @@ module CrystalClick
       nil
     end
 
-    private def self.validate_projection_count_shape!(
+    private def self.validate_projection_aggregate_shape!(
       columns : Array(CompactPartColumn),
+      projection : CompactPartProjection,
       mark_format : CompactMarkFormat,
       variant_discriminator_mode : CompactVariantDiscriminatorMode,
       profile : BinaryBulkProfile,
     ) : Nil
       unless mark_format.mrk4? && variant_discriminator_mode.compact? && profile.with_size_stream?
-        raise UnsupportedFormatError.new("Compact projection Count requires its fixed MRK4 serialization profile")
+        raise UnsupportedFormatError.new("Compact aggregate projection requires its fixed MRK4 serialization profile")
       end
-      unless columns.size == 1 && columns[0].name == "count()" &&
-             columns[0].type == BinaryDataType.aggregate_count &&
-             !columns[0].dynamic_context? && !columns[0].json_context?
-        raise UnsupportedFormatError.new("Compact projection Count requires one exact count() state column")
+      aggregates = projection.aggregate_columns
+      unless projection.aggregate_projection? && columns.size == aggregates.size &&
+             columns.size > 0 && columns.size <= 4
+        raise UnsupportedFormatError.new("Compact aggregate projection column count differs from its owner")
+      end
+
+      columns.each_with_index do |column, index|
+        descriptor = aggregates[index].descriptor
+        unless column.name == descriptor.column_name && column.type == descriptor.type &&
+               !column.dynamic_context? && !column.json_context?
+          raise UnsupportedFormatError.new("Compact aggregate projection columns differ from their ordered state owners")
+        end
       end
 
       nil
@@ -654,7 +684,7 @@ module CrystalClick
       reader_limits : CompressedStreamLimits,
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
-      projection_count_total : UInt128?,
+      projection_aggregate : CompactPartProjection?,
     ) : Nil
       expected_files = metadata.expected_files + projections.map(&.entry_name)
       unless Dir.children(stage).sort == expected_files.sort
@@ -776,6 +806,14 @@ module CrystalClick
           )
           next
         end
+        projection_state = if projection_aggregate
+                             unless WidePartProjectionAggregateDescriptor.for_column(input.name, input.type.name)
+                               raise UnsupportedFormatError.new("staged Compact aggregate readback lost its exact state binding")
+                             end
+                             true
+                           else
+                             false
+                           end
         validate_column_values!(
           stage,
           input.name,
@@ -789,7 +827,7 @@ module CrystalClick
           reader_limits,
           codec_budget,
           transport_budget,
-          projection_count: !projection_count_total.nil? && input.name == "count()",
+          projection_aggregate: projection_state,
         )
       end
     end
@@ -807,21 +845,33 @@ module CrystalClick
       reader_limits : CompressedStreamLimits,
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
-      projection_count : Bool = false,
+      projection_aggregate : Bool = false,
     ) : Nil
       CompactReadbackGrid.preflight!(transport_budget, rows.size, slot_count, planned_data_size)
-      reader = if projection_count
-                 unless name == "count()" && type == BinaryDataType.aggregate_count &&
-                        input.is_a?(CompactStaticColumnInput)
-                   raise UnsupportedFormatError.new("staged Compact projection Count readback lost its exact state binding")
+      reader = if projection_aggregate
+                 unless input.is_a?(CompactStaticColumnInput)
+                   raise UnsupportedFormatError.new("staged Compact aggregate readback requires its static state input")
                  end
-                 CompactBinaryBulkColumnReader.open_projection_count(
-                   stage,
-                   limits,
-                   reader_limits,
-                   codec_budget: codec_budget,
-                   transport_budget: transport_budget,
-                 )
+                 descriptor = WidePartProjectionAggregateDescriptor.for_column(name, type.name) ||
+                              raise UnsupportedFormatError.new("staged Compact aggregate readback has a noncanonical state binding")
+                 if descriptor.count?
+                   CompactBinaryBulkColumnReader.open_projection_count(
+                     stage,
+                     limits,
+                     reader_limits,
+                     codec_budget: codec_budget,
+                     transport_budget: transport_budget,
+                   )
+                 else
+                   CompactBinaryBulkColumnReader.open_projection_aggregate(
+                     stage,
+                     name,
+                     limits,
+                     reader_limits,
+                     codec_budget: codec_budget,
+                     transport_budget: transport_budget,
+                   )
+                 end
                elsif dynamic_input = input.as?(CompactDynamicColumnInput)
                  CompactDynamicBulkColumnReader.open(
                    stage,

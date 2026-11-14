@@ -14,6 +14,7 @@ module CrystalClick
     @key_name : String
     @keys : Array(UInt64)
     @columns : Array(CompactPartColumn)
+    @aggregate_columns : Array(WidePartProjectionAggregate)
     @schema_binding : PartSchemaBinding?
     @count_total : UInt128?
 
@@ -30,6 +31,7 @@ module CrystalClick
       @profile : BinaryBulkProfile,
       @schema_binding : PartSchemaBinding? = nil,
       @count_total : UInt128? = nil,
+      @aggregate_columns : Array(WidePartProjectionAggregate) = [] of WidePartProjectionAggregate,
     )
     end
 
@@ -89,6 +91,33 @@ module CrystalClick
       frame_bytes : Int = 4096,
       compress_marks : Bool = false,
     ) : CompactPartProjection
+      unless counts.size == keys.size
+        raise ArgumentError.new("count projection keys and counts must have equal lengths")
+      end
+
+      precomputed_aggregate(
+        name, key_name, keys,
+        [WidePartProjectionAggregate.count(counts)] of WidePartProjectionAggregate,
+        rows_per_mark: rows_per_mark,
+        frame_bytes: frame_bytes,
+        compress_marks: compress_marks,
+      )
+    end
+
+    # Retains sorted distinct group keys and one to four caller-computed
+    # AggregateFunction states in SELECT order. Compact aggregate children use
+    # the pinned MRK4, compact Variant, and String serialization version 1
+    # profile; ordinary Compact AggregateFunction columns remain unadmitted.
+    def self.precomputed_aggregate(
+      name : String,
+      key_name : String,
+      keys : Slice(UInt64),
+      aggregates : Array(WidePartProjectionAggregate),
+      *,
+      rows_per_mark : Int32 = 8192,
+      frame_bytes : Int = 4096,
+      compress_marks : Bool = false,
+    ) : CompactPartProjection
       validate_projection_name!(name)
       validate_column_name!(key_name)
       unless rows_per_mark > 0 && rows_per_mark <= WidePartWriter::MAX_ROWS_PER_MARK &&
@@ -99,53 +128,42 @@ module CrystalClick
         raise ArgumentError.new("projection frame_bytes is outside the Compact writer limit")
       end
       if keys.empty? || keys.size.to_u64 > WidePart::MAX_ROWS
-        raise ArgumentError.new("a count projection requires a bounded nonempty UInt64 key stream")
+        raise ArgumentError.new("an aggregate projection requires a bounded nonempty UInt64 key stream")
       end
-      unless counts.size == keys.size
-        raise ArgumentError.new("count projection keys and counts must have equal lengths")
+      unless aggregates.size > 0 && aggregates.size <= 4
+        raise ArgumentError.new("an aggregate projection requires one to four aggregate columns")
+      end
+
+      retained_aggregates = aggregates.dup
+      count_total : UInt128? = nil
+      seen_functions = Set(WidePartProjectionAggregateDescriptor::Function).new
+      retained_aggregates.each do |aggregate|
+        unless aggregate.value_count == keys.size
+          raise ArgumentError.new("aggregate projection keys and values must have equal lengths")
+        end
+        unless seen_functions.add?(aggregate.descriptor.function)
+          raise ArgumentError.new("aggregate projection may contain each admitted function only once")
+        end
+        count_total = aggregate.count_total if aggregate.count?
       end
 
       retained_keys = Array(UInt64).new(keys.size)
-      retained_counts = Array(UInt64).new(counts.size)
-      total = 0_u128
+      previous_key = 0_u64
       keys.each_with_index do |key, index|
-        if index > 0 && key <= retained_keys[index - 1]
-          raise ArgumentError.new("count projection keys must be strictly increasing")
+        if index > 0 && key <= previous_key
+          raise ArgumentError.new("aggregate projection keys must be strictly increasing")
         end
         retained_keys << key
-
-        count = counts[index]
-        if count == 0_u64
-          raise ArgumentError.new("count projection values must be positive")
-        end
-        count128 = count.to_u128
-        if count128 > UInt128::MAX - total
-          raise ArgumentError.new("count projection total overflows UInt128")
-        end
-        retained_counts << count
-        total += count128
+        previous_key = key
       end
-
-      count_type = BinaryDataType.aggregate_count
-      mark_count = (retained_counts.size - 1) // rows_per_mark + 1
-      count_granules = Array(Array(BinaryValue)).new(mark_count)
-      offset = 0
-      while offset < retained_counts.size
-        rows = {rows_per_mark, retained_counts.size - offset}.min
-        granule = Array(BinaryValue).new(rows)
-        rows.times do |row|
-          granule << BinaryValue.aggregate_count_state(count_type, retained_counts[offset + row])
-        end
-        count_granules << granule
-        offset += rows
-      end
-      count_column = CompactPartColumn.binary_bulk("count()", count_type, count_granules)
+      retained_columns = build_aggregate_columns(retained_aggregates, rows_per_mark)
 
       new(
-        String.new(name.to_slice), String.new(key_name.to_slice), retained_keys,
-        [count_column] of CompactPartColumn, rows_per_mark, frame_bytes.to_i32,
+        String.new(name.to_slice), String.new(key_name.to_slice),
+        retained_keys, retained_columns, rows_per_mark, frame_bytes.to_i32,
         CompactMarkFormat::Mrk4, CompactVariantDiscriminatorMode::Compact,
-        compress_marks, BinaryBulkProfile.with_size_stream, nil, total,
+        compress_marks, BinaryBulkProfile.with_size_stream, nil, count_total,
+        retained_aggregates,
       )
     end
 
@@ -163,6 +181,16 @@ module CrystalClick
 
     def columns : Array(CompactPartColumn)
       @columns.dup
+    end
+
+    # Retains caller aggregate order while detaching the roster. The state
+    # owners already hold detached UInt64 vectors.
+    def aggregate_columns : Array(WidePartProjectionAggregate)
+      @aggregate_columns.dup
+    end
+
+    def aggregate_projection? : Bool
+      !@aggregate_columns.empty?
     end
 
     # :nodoc:
@@ -186,7 +214,7 @@ module CrystalClick
         source.@name, source.@key_name, source.@keys, source.@columns,
         source.@rows_per_mark, source.@frame_bytes, source.@mark_format,
         source.@variant_discriminator_mode, source.@compress_marks, source.@profile,
-        binding, source.@count_total,
+        binding, source.@count_total, source.@aggregate_columns,
       )
     end
 
@@ -215,6 +243,19 @@ module CrystalClick
         raise ArgumentError.new("column name must be a bounded ASCII identifier")
       end
       nil
+    end
+
+    private def self.build_aggregate_columns(
+      aggregates : Array(WidePartProjectionAggregate),
+      rows_per_mark : Int32,
+    ) : Array(CompactPartColumn)
+      columns = Array(CompactPartColumn).new(aggregates.size)
+      aggregates.each do |aggregate|
+        descriptor = aggregate.descriptor
+        granules = aggregate.state_granules(rows_per_mark, WidePartTable::MAX_MARKS_PER_READER)
+        columns << CompactPartColumn.binary_bulk(descriptor.column_name, descriptor.type, granules)
+      end
+      columns
     end
   end
 end

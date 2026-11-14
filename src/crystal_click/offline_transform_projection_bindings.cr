@@ -7,7 +7,6 @@ module CrystalClick
       binding: PartSchemaBinding,
       aggregate: Bool,
       aggregate_count: Bool,
-      aggregate_count_only: Bool,
     )
 
     @schema_by_name : Hash(String, ProjectionSchema)
@@ -75,21 +74,39 @@ module CrystalClick
         unless key_names_match
           raise UnsupportedFormatError.new("transform projection output key does not match target schema")
         end
-        aggregate_child = projection.is_a?(WidePartProjection) && projection.aggregate_projection?
+        aggregate_child = if wide = projection.as?(WidePartProjection)
+                            wide.aggregate_projection?
+                          elsif compact = projection.as?(CompactPartProjection)
+                            compact.aggregate_projection?
+                          else
+                            false
+                          end
         count_child = !projection.count_total.nil?
+        if compact = projection.as?(CompactPartProjection)
+          if aggregate_child
+            bound_columns = [{compact.key_name, "UInt64"}] of Tuple(String, String)
+            compact.aggregate_columns.each do |aggregate|
+              descriptor = aggregate.descriptor
+              bound_columns << {descriptor.column_name, descriptor.type_name}
+            end
+            binding.validate_compact!(bound_columns)
+
+            bound_keys = binding.key_names
+            unless bound_keys.size == 1 && bound_keys[0] == compact.key_name
+              raise UnsupportedFormatError.new("transform Compact aggregate child requires one UInt64 GROUP BY key")
+            end
+            if !count_child && compact.row_count > parent_rows
+              raise UnsupportedFormatError.new("transform Compact aggregate group count exceeds the parent row count")
+            end
+          end
+        end
         if schema[:aggregate_count]
           unless count_child
             raise UnsupportedFormatError.new("transform count projection requires a Wide count child or an exact Compact Count child")
           end
-          if compact = projection.as?(CompactPartProjection)
-            bound_keys = binding.key_names
-            unless schema[:aggregate_count_only] && bound_keys.size == 1 && bound_keys[0] == compact.key_name
-              raise UnsupportedFormatError.new("transform Compact Count child requires one UInt64 GROUP BY key and canonical count() only")
-            end
-          end
         elsif schema[:aggregate]
           unless aggregate_child
-            raise UnsupportedFormatError.new("transform aggregate projection requires a Wide aggregate child")
+            raise UnsupportedFormatError.new("transform aggregate projection requires a caller-computed aggregate child")
           end
           if count_child
             raise UnsupportedFormatError.new("transform aggregate projection roster does not match target DDL")
@@ -110,12 +127,11 @@ module CrystalClick
 
     private def parse_schema(definition : String, target_columns : Array(OfflineColumn)) : ProjectionSchema
       if grouped = /\ASELECT\s+([\s\S]+?)\s+GROUP\s+BY\s+([\s\S]+)\z/i.match(definition)
-        binding, aggregate_count, aggregate_count_only = parse_aggregate_schema(grouped[1], grouped[2], target_columns)
+        binding, aggregate_count = parse_aggregate_schema(grouped[1], grouped[2], target_columns)
         return {
-          binding:              binding,
-          aggregate:            true,
-          aggregate_count:      aggregate_count,
-          aggregate_count_only: aggregate_count_only,
+          binding:         binding,
+          aggregate:       true,
+          aggregate_count: aggregate_count,
         }
       end
 
@@ -139,10 +155,9 @@ module CrystalClick
       end
       columns = selected_columns.map { |column| {column.name, column.type} }
       {
-        binding:              PartSchemaBinding.new(key.name, columns, "projection"),
-        aggregate:            false,
-        aggregate_count:      false,
-        aggregate_count_only: false,
+        binding:         PartSchemaBinding.new(key.name, columns, "projection"),
+        aggregate:       false,
+        aggregate_count: false,
       }
     end
 
@@ -150,7 +165,7 @@ module CrystalClick
       select_list : String,
       group_keys_sql : String,
       target_columns : Array(OfflineColumn),
-    ) : Tuple(PartSchemaBinding, Bool, Bool)
+    ) : Tuple(PartSchemaBinding, Bool)
       group_keys = group_keys_sql.split(',').map { |token| plain_target_column(token, target_columns) }
       unless group_keys.size == 1 || group_keys.size == 2
         raise UnsupportedFormatError.new("transform aggregate projection GROUP BY requires one or two plain UInt64 keys")
@@ -235,8 +250,7 @@ module CrystalClick
                 else
                   PartSchemaBinding.new({group_keys[0].name, group_keys[1].name}, columns, "projection")
                 end
-      count_only = group_keys.size == 1 && count_seen && aggregate_functions.size == 1
-      {binding, count_seen, count_only}
+      {binding, count_seen}
     end
 
     private def aggregate_alias!(token : String, function_name : String) : String

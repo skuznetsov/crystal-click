@@ -134,21 +134,28 @@ module CrystalClick
           next
         end
 
+        projection_aggregate_descriptor = WidePartProjectionAggregateDescriptor.for_column(column, source_type)
         projection_count_plan = WideAggregateCountStoragePlan.for_type_name(source_type)
         if count_plan = projection_count_plan
           unless projection_name && column == "count()" &&
                  count_plan.type_name == WideAggregateCountStoragePlan::NO_ARGUMENT_TYPE_NAME
             raise UnsupportedFormatError.new("Compact AggregateFunction(count) is admitted only for the literal projection count() child")
           end
+        elsif projection_aggregate_descriptor
+          unless projection_name && (projection_aggregate_descriptor.sum? || projection_aggregate_descriptor.minmax?)
+            raise UnsupportedFormatError.new("Compact UInt64 sum/min/max states are admitted only for projection children")
+          end
         end
 
         type = if count_plan = projection_count_plan
                  count_plan.data_type
+               elsif descriptor = projection_aggregate_descriptor
+                 descriptor.type
                else
                  dynamic_type || StaticBinaryBulkColumnDeclaration.parse(source_type) ||
                    raise(UnsupportedFormatError.new("selected Compact declaration is outside static or Dynamic BinaryBulk admission"))
                end
-        if dynamic_type.nil? && projection_count_plan.nil? && !BinaryValueTypedBatchAdapter.admitted?(type)
+        if dynamic_type.nil? && projection_aggregate_descriptor.nil? && !BinaryValueTypedBatchAdapter.admitted?(type)
           raise UnsupportedFormatError.new("selected Compact declaration has no established typed batch carrier")
         end
 
@@ -160,6 +167,12 @@ module CrystalClick
           count_reader.aggregate_count_key_names ||
             raise(CorruptPartError.new("Compact projection Count reader omitted its hidden key roster"))
           count_reader
+        elsif projection_aggregate_descriptor && projection_name
+          CompactBinaryBulkColumnReader.open_projection_aggregate_with_descriptor(
+            @part_path,
+            projection_aggregate_descriptor,
+            transport_budget: budget,
+          )
         elsif dynamic_type
           CompactDynamicBulkColumnReader.open(
             @part_path,
@@ -240,6 +253,18 @@ module CrystalClick
       @readers.each do |entry|
         if reader = entry[3].as?(CompactBinaryBulkColumnReader)
           names = reader.aggregate_count_key_names
+          return names if names
+        end
+      end
+      nil
+    end
+
+    # Detached hidden UInt64 key roster for any admitted aggregate projection.
+    # Count keeps its historical accessor above for W295 callers.
+    def projection_aggregate_key_names : Array(String)?
+      @readers.each do |entry|
+        if reader = entry[3].as?(CompactBinaryBulkColumnReader)
+          names = reader.projection_aggregate_key_names
           return names if names
         end
       end
@@ -535,6 +560,8 @@ module CrystalClick
                           slice_rows,
                           remaining_bytes - carrier_bytes,
                         )
+                      elsif projection_aggregate_state?(entry[0], entry[1])
+                        0_u64
                       else
                         BinaryValueTypedBatchAdapter.estimated_materialization_bytes(entry[2], slice) ||
                           raise(UnsupportedFormatError.new("Compact selected mark has no bounded typed carrier estimate"))
@@ -649,6 +676,8 @@ module CrystalClick
             batch.install_aggregate_count_states(entry[0], slice, rows.to_i32)
           elsif entry[2].contains_dynamic?
             batch.install_dynamic_bulk_values(entry[0], slice, rows.to_i32)
+          elsif projection_aggregate_state?(entry[0], entry[1])
+            batch.install_binary_bulk_values(entry[0], slice, rows.to_i32)
           else
             BinaryValueTypedBatchAdapter.install(
               batch,
@@ -678,6 +707,11 @@ module CrystalClick
       end
       yield batch
       nil
+    end
+
+    private def projection_aggregate_state?(column_name : String, type_name : String) : Bool
+      descriptor = WidePartProjectionAggregateDescriptor.for_column(column_name, type_name)
+      descriptor ? !descriptor.count? : false
     end
 
     private def ensure_json_shape_limits!(
