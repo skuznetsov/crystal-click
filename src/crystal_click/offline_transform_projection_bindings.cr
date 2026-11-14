@@ -66,12 +66,7 @@ module CrystalClick
           raise UnsupportedFormatError.new("transform projection output roster does not match target DDL")
         end
         binding = schema[:binding]
-        key_names_match = if wide = projection.as?(WidePartProjection)
-                            wide.key_names == binding.key_names
-                          else
-                            projection.key_name == binding.key_name
-                          end
-        unless key_names_match
+        unless projection.key_names == binding.key_names
           raise UnsupportedFormatError.new("transform projection output key does not match target schema")
         end
         aggregate_child = if wide = projection.as?(WidePartProjection)
@@ -84,17 +79,12 @@ module CrystalClick
         count_child = !projection.count_total.nil?
         if compact = projection.as?(CompactPartProjection)
           if aggregate_child
-            bound_columns = [{compact.key_name, "UInt64"}] of Tuple(String, String)
+            bound_columns = compact.key_names.map { |key_name| {key_name, "UInt64"} }
             compact.aggregate_columns.each do |aggregate|
               descriptor = aggregate.descriptor
               bound_columns << {descriptor.column_name, descriptor.type_name}
             end
             binding.validate_compact!(bound_columns)
-
-            bound_keys = binding.key_names
-            unless bound_keys.size == 1 && bound_keys[0] == compact.key_name
-              raise UnsupportedFormatError.new("transform Compact aggregate child requires one UInt64 GROUP BY key")
-            end
             if !count_child && compact.row_count > parent_rows
               raise UnsupportedFormatError.new("transform Compact aggregate group count exceeds the parent row count")
             end

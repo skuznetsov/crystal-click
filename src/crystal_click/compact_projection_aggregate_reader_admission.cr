@@ -48,9 +48,9 @@ module CrystalClick
       validate_projection_manifest!(path, reader, PartChecksums.parse(
         PartMetadataFileReader.new(path, transport_budget)
           .read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice,
-      ), selected_checksum_names, mark_name)
+      ), selected_checksum_names, mark_name, key_names.size)
 
-      key_names.map { |name| String.new(name.to_slice) }
+      key_names
     end
 
     def self.validate_projection_roster!(
@@ -66,23 +66,18 @@ module CrystalClick
       while key_count < columns.size && columns[key_count][1] == "UInt64"
         key_count += 1
       end
-      unless key_count == 1 && columns.size > key_count && columns.size <= key_count + 4
-        raise UnsupportedFormatError.new("Compact projection aggregate requires one leading UInt64 key and one to four states")
+      unless (key_count == 1 || key_count == 2) && columns.size > key_count && columns.size <= key_count + 4
+        raise UnsupportedFormatError.new("Compact projection aggregate requires one or two leading UInt64 keys and one to four states")
       end
       unless columns.map(&.[0]).to_set.size == columns.size
         raise CorruptPartError.new("Compact projection aggregate column names are not unique")
       end
 
-      key_name = columns[0][0]
-      key_stream_name = PhysicalStreamName.escape(key_name)
-      key_slots = context.physical_roster.select { |slot| slot.column_name == key_name }
-      observed_key_callbacks = key_slots.map do |slot|
-        slot.stream_name || raise(CorruptPartError.new("Compact projection UInt64 key callback has no stream name"))
+      key_names = Array(String).new(key_count) do |index|
+        key_name = columns[index][0]
+        context.validate_uint64_single_callback_spans!(key_name, PhysicalStreamName.escape(key_name))
+        key_name
       end
-      unless observed_key_callbacks == [key_stream_name]
-        raise CorruptPartError.new("Compact projection UInt64 key callback differs from its exact physical plan")
-      end
-      context.validate_uint64_single_callback_spans!(key_name, key_stream_name)
 
       seen_functions = Set(WidePartProjectionAggregateDescriptor::Function).new
       count_seen = false
@@ -131,7 +126,7 @@ module CrystalClick
       unless state_columns.any? { |name, type_name| name == selected_descriptor.column_name && type_name == selected_descriptor.type_name }
         raise CorruptPartError.new("Compact selected aggregate differs from its persisted state roster")
       end
-      [String.new(key_name.to_slice)] of String
+      key_names
     end
 
     private def self.validate_projection_manifest!(
@@ -140,6 +135,7 @@ module CrystalClick
       checksums : PartChecksums,
       selected_checksum_names : Array(String),
       mark_name : String,
+      key_count : Int32,
     ) : Nil
       unless selected_checksum_names == ["data.bin", mark_name]
         raise CorruptPartError.new("Compact projection checksum selection differs from its physical data and mark files")
@@ -153,14 +149,23 @@ module CrystalClick
         checksums.validate_selected_entries(path, name)
       end
 
-      mark_count = reader.mark_count.to_u64
-      if mark_count + 1_u64 > PrimaryKeyIndex::MAX_INDEX_ENTRIES.to_u64
+      primary_entry = checksums.entry("primary.idx") ||
+                      raise(CorruptPartError.new("Compact projection primary index is absent from checksums.txt"))
+      unless !primary_entry.compressed && primary_entry.uncompressed_size.nil? && primary_entry.uncompressed_hash.nil?
+        raise CorruptPartError.new("Compact projection primary.idx must use uncompressed checksum metadata")
+      end
+
+      entry_count = reader.mark_count.to_u64 + 1_u64
+      if entry_count > PrimaryKeyIndex::MAX_INDEX_ENTRIES.to_u64
         raise CorruptPartError.new("Compact projection UInt64 primary index exceeds its entry bound")
       end
-      expected_index_bytes = (mark_count + 1_u64) * 8_u64
+      expected_index_bytes = entry_count * key_count.to_u64 * sizeof(UInt64).to_u64
+      if expected_index_bytes > PrimaryKeyIndex::MAX_INDEX_FILE_BYTES.to_u64
+        raise CorruptPartError.new("Compact projection UInt64 primary index exceeds its byte bound")
+      end
       index_path = File.join(path, "primary.idx")
       unless File.size(index_path).to_u64 == expected_index_bytes
-        raise CorruptPartError.new("Compact projection primary.idx is not an exact uncompressed UInt64 mark grid")
+        raise CorruptPartError.new("Compact projection primary.idx is not an exact uncompressed UInt64 key roster mark grid")
       end
       nil
     rescue ex : IO::Error

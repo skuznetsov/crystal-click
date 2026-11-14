@@ -1,5 +1,20 @@
 # Crystal Click landmarks
 
+## Two UInt64 group keys in a Compact aggregate projection — W297
+
+- Both parent layouts publish Compact MRK4 children with lexicographically
+  ordered pairs of UInt64 keys in GROUP BY order. Each child reuses the
+  existing aggregate state and compound index writers. The index records
+  the first key pair at each mark and the final row's pair at the terminal
+  mark. A typed state scan checks both key callback spans before yielding.
+- ClickHouse matched the stock key and state bytes and selected one of five
+  granules with the tested interior two-key predicates and two with leading
+  keys or boundary pairs. Crystal reopened both attachments. Refresh after
+  changes to DDL binding, index and state serialization, Compact marks,
+  publication, typed admission, or the native pin. See the
+  [Compact two-key profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-a-compact-aggregate-projection-w297)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w297.json).
+
 ## Compact UInt64 aggregate projection publication from a transform — W296
 
 - Both parent writers publish a Compact MRK4 child with one plain UInt64

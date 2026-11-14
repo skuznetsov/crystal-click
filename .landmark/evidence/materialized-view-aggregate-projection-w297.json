@@ -1,0 +1,173 @@
+{
+  "format": "crystal_click_materialized_view_aggregate_projection_w297_evidence_v1",
+  "date": "2026-11-14",
+  "baseline_revision": "3609444a18fe2808e57ce6cd42a013d5ba4e19e8",
+  "claim": {
+    "level": "VERIFIED",
+    "adversary": "ROBUST within the two-key Compact MRK4 profile and the exercised native pairs.",
+    "scope": "Two distinct plain UInt64 GROUP BY keys with caller-computed Count, Sum, Min and Max states, an uncompressed primary index, and either Wide or Compact parent. Covers full, key-only, state-only and cross-mark Crystal reads.",
+    "remaining": "Crystal typed scans use row windows and check the compound index shape. ClickHouse uses the index values for granule selection. The staged writer and the native audit independently verify those values."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "A projection passes ATTACH and CHECK but prunes a valid group or swaps the states of two pairs.",
+    "guards": [
+      "Bind both keys in exact GROUP BY order and the nominal state roster in SELECT order. Reject duplicate or descending pairs, excess groups and Count loss before publication.",
+      "A width error in the hidden second key of a later granule and a mismatched Wide or Compact sibling order each fail before the first selected state can be yielded.",
+      "Read stock parts in Crystal. Compare both staged key lanes, every aggregate payload, all compound index entries and native forced results against separately written native controls.",
+      "The independent physical audit rejects a same-size mutation to the second UInt64 of a middle index entry in a scratch copy."
+    ],
+    "rollback": "Revert the feature commit. The existing writer stages each parent and its child together and publishes them with one rename."
+  },
+  "verification": {
+    "toolchain": [
+      "Crystal 1.22.3 (2026-11-13)",
+      "LLVM: 23.1.5",
+      "Default target: aarch64-apple-darwin25.6.0"
+    ],
+    "ruby_version": "4.0.9",
+    "baseline_debug": "The typed scan of a stock two-key Compact aggregate projection is rejected by the one-key roster guard.",
+    "spec_paths_per_mode": 43,
+    "examples_per_mode": {
+      "debug": 296,
+      "release": 296
+    },
+    "stock_read_examples_per_mode": {
+      "debug": 1,
+      "release": 1
+    },
+    "guard": {
+      "sha256": "fbfa0fd9d717eb24c1a3f829d464188110e505c7ae311eee2e95cbe7cefab011",
+      "minimum_system_memory_free_percent_exclusive": 50,
+      "crystal_process_tree_memory_mib": 12288,
+      "native_process_tree_memory_mib": 2048,
+      "clickhouse_max_memory_usage_bytes": 536870912
+    },
+    "input_seals": {
+      "production": {
+        "path": "/opt/mldata_ssd/cache/crystal-click-w297.G28LhfvT/manifests/production.source.json",
+        "bytes": 80711,
+        "sha256": "35cebc4c201fc423c71665c246497122a7463702dc7e1e7a3ea1e87342020d27",
+        "files": 638
+      },
+      "qualified": {
+        "path": "/opt/mldata_ssd/cache/crystal-click-w297.G28LhfvT/manifests/qualified.source.json",
+        "bytes": 441903,
+        "sha256": "48af18e3c2323a469fd2da36ec6673d3799d8457c7fd4689ca4f5a7571cd9131",
+        "files": 3380
+      }
+    },
+    "native": {
+      "runner": "scripts/verify_materialized_view_aggregate_projection_w297.rb",
+      "helper": "scripts/check_materialized_view_aggregate_projection_w297.cr",
+      "version": "26.10.1.1201",
+      "revision": "54515",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "binary_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "source_reference": {
+        "revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+        "files": [
+          "src/Storages/MergeTree/MergeTreeDataPartWriterOnDisk.cpp"
+        ]
+      },
+      "per_mode": "Both native pairs pass ATTACH, CHECK TABLE, stock state and index comparisons, full and filtered queries with forced and disabled projection use, and Crystal reopen. The independent audit matches the physical mark grids, original file digests and query results.",
+      "guarded_processes_per_mode": {
+        "debug": 63,
+        "release": 63
+      },
+      "observed": {
+        "input_rows": 19,
+        "output_groups": 9,
+        "child_data_mark_rows": [
+          2,
+          2,
+          2,
+          2,
+          1
+        ],
+        "child_index_entries_including_terminal": 6,
+        "pairs": [
+          {
+            "parent_layout": "Compact",
+            "child_marks": "data.cmrk4",
+            "group_key_order": [
+              "key_a",
+              "key_b"
+            ],
+            "child_state_columns": [
+              "count()",
+              "sum(value)",
+              "min(value)",
+              "max(value)"
+            ],
+            "primary_index_sha256": "04eaa5acc96821fb3ef8811d7e6d62db8bd0dd08a8ac9ee2840f440a43370ca9",
+            "state_rowbinary_sha256": "4b413485686697afec21263ba8f0eeba57d6e17dbcb31bd57823f7e6245f38bb",
+            "original_files_preserved": 20,
+            "leading_key_granules": [
+              2,
+              5
+            ],
+            "interior_pair_granules": [
+              1,
+              5
+            ],
+            "boundary_pair_granules": [
+              2,
+              5
+            ]
+          },
+          {
+            "parent_layout": "Wide",
+            "child_marks": "data.mrk4",
+            "group_key_order": [
+              "key_b",
+              "key_a"
+            ],
+            "child_state_columns": [
+              "sum(value)",
+              "min(value)",
+              "max(value)"
+            ],
+            "primary_index_sha256": "84ee50d7f8064be99544a7c76105102a4a1eb060748fd8a6e797f5e46dfb2c40",
+            "state_rowbinary_sha256": "e2035e84aa74fe1d4bbaf6bc7c8b960324fa90f138f147a5263908cf626884e5",
+            "original_files_preserved": 26,
+            "leading_key_granules": [
+              2,
+              5
+            ],
+            "interior_pair_granules": [
+              1,
+              5
+            ],
+            "boundary_pair_granules": [
+              2,
+              5
+            ]
+          }
+        ]
+      }
+    },
+    "evidence_index": {
+      "path": "/opt/mldata_ssd/cache/crystal-click-w297.G28LhfvT/verification-summary.json",
+      "bytes": 21781,
+      "sha256": "c51ba022ad8486833be78d8c59a7d66055e428db6a3b87cfe77ef94db1507d62"
+    }
+  },
+  "changed_paths": [
+    ".landmark/evidence/materialized-view-aggregate-projection-w297.json",
+    "LANDMARKS.md",
+    "README.md",
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "scripts/check_materialized_view_aggregate_projection_w297.cr",
+    "scripts/verify_materialized_view_aggregate_projection_w297.rb",
+    "spec/offline_materialized_view_compact_two_key_projection_w297_spec.cr",
+    "src/crystal_click/compact_part_projection.cr",
+    "src/crystal_click/compact_part_writer/compact_part_operation.cr",
+    "src/crystal_click/compact_projection_aggregate_reader_admission.cr",
+    "src/crystal_click/offline_transform_projection_bindings.cr",
+    "src/crystal_click/part_writer_infrastructure/primary_index_writer.cr"
+  ],
+  "refresh_when": "Rerun both Crystal build modes and both native pairs after changes to DDL binding, key ordering, index and state serialization, Compact marks, publication, typed admission, or the ClickHouse pin."
+}

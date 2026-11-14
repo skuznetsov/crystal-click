@@ -52,6 +52,19 @@ module CrystalClick
       end
 
       keys = projection.keys
+      secondary_index_keys : Array(UInt64)? = nil
+      if secondary_name = projection.secondary_key_name
+        snapshot_bytes = checked_add_u64(
+          instance_sizeof(Array(UInt64)).to_u64,
+          checked_multiply_u64(projection.row_count, sizeof(UInt64).to_u64),
+        )
+        budgets.write_transport.reserve_result_bytes(to_i64(snapshot_bytes))
+        secondary_index_keys = projection.secondary_keys ||
+                               raise(UnsupportedFormatError.new("two-key Compact aggregate projection lost its second key stream"))
+        unless secondary_index_keys.size == keys.size && secondary_name != projection.key_name
+          raise UnsupportedFormatError.new("two-key Compact aggregate projection lost its aligned second key stream")
+        end
+      end
       columns = projection.columns
       write_uint64_columns_impl(
         destination,
@@ -71,6 +84,7 @@ module CrystalClick
         [] of WidePartProjection,
         budgets,
         projection,
+        secondary_index_keys,
       )
     end
 
@@ -109,6 +123,7 @@ module CrystalClick
       projections : Indexable(WidePartProjection | CompactPartProjection) = [] of WidePartProjection,
       projection_budgets : ProjectionWriterBudgets? = nil,
       projection_aggregate : CompactPartProjection? = nil,
+      secondary_index_keys : Array(UInt64)? = nil,
     ) : String
       validate_mark_format!(mark_format)
       variant_discriminator_mode.wire_value
@@ -285,7 +300,7 @@ module CrystalClick
         write_transport_budget,
       )
 
-      index_record = planned_primary_index_record(key_snapshot, rows_per_mark_grid)
+      index_record = planned_primary_index_record(key_snapshot, rows_per_mark_grid, secondary_index_keys)
       reserve_primary_index_output!(write_transport_budget, index_record)
       count_bytes = metadata.count_text.to_slice
       serialization_bytes = metadata.serialization_text.to_slice
@@ -318,11 +333,20 @@ module CrystalClick
       begin
         File.write(File.join(stage, "data.bin"), data)
         mark_output.write_to(stage)
-        written_index = PartWriterInfrastructure::PrimaryIndexWriter.write(
-          stage,
-          key_snapshot.to_unsafe.to_slice(key_snapshot.size),
-          rows_per_mark,
-        )
+        written_index = if secondary_keys = secondary_index_keys
+                          PartWriterInfrastructure::PrimaryIndexWriter.write_compound(
+                            stage,
+                            key_snapshot.to_unsafe.to_slice(key_snapshot.size),
+                            secondary_keys.to_unsafe.to_slice(secondary_keys.size),
+                            rows_per_mark,
+                          )
+                        else
+                          PartWriterInfrastructure::PrimaryIndexWriter.write(
+                            stage,
+                            key_snapshot.to_unsafe.to_slice(key_snapshot.size),
+                            rows_per_mark,
+                          )
+                        end
         unless same_checksum_record?(written_index, index_record)
           raise UnsupportedFormatError.new("Compact primary index changed after preflight")
         end
@@ -359,6 +383,7 @@ module CrystalClick
           read_codec_budget,
           read_transport_budget,
           projection_aggregate,
+          secondary_index_keys,
         )
         PartWriterInfrastructure::PartDirectoryPublisher.publish_exclusively(stage, target)
         target
@@ -461,13 +486,31 @@ module CrystalClick
         raise UnsupportedFormatError.new("Compact aggregate projection requires its fixed MRK4 serialization profile")
       end
       aggregates = projection.aggregate_columns
-      unless projection.aggregate_projection? && columns.size == aggregates.size &&
-             columns.size > 0 && columns.size <= 4
+      secondary_key_name = projection.secondary_key_name
+      aggregate_offset = secondary_key_name ? 1 : 0
+      unless projection.aggregate_projection? && columns.size == aggregates.size + aggregate_offset &&
+             aggregates.size > 0 && aggregates.size <= 4
         raise UnsupportedFormatError.new("Compact aggregate projection column count differs from its owner")
       end
 
+      names = Set(String).new
+      names << projection.key_name
+      if second_name = secondary_key_name
+        validate_column_name!(second_name)
+        unless second_name != projection.key_name &&
+               columns[0].name == second_name && columns[0].type.name == "UInt64" &&
+               !columns[0].dynamic_context? && !columns[0].json_context?
+          raise UnsupportedFormatError.new("Compact aggregate projection second key differs from its ordered key owner")
+        end
+      end
+
       columns.each_with_index do |column, index|
-        descriptor = aggregates[index].descriptor
+        unless names.add?(column.name)
+          raise UnsupportedFormatError.new("Compact aggregate projection columns are not unique")
+        end
+        next if index < aggregate_offset
+
+        descriptor = aggregates[index - aggregate_offset].descriptor
         unless column.name == descriptor.column_name && column.type == descriptor.type &&
                !column.dynamic_context? && !column.json_context?
           raise UnsupportedFormatError.new("Compact aggregate projection columns differ from their ordered state owners")
@@ -608,21 +651,38 @@ module CrystalClick
       nil
     end
 
-    private def self.planned_primary_index_record(keys : Array(UInt64), rows : Array(UInt64)) : ChecksumRecord
+    private def self.planned_primary_index_record(
+      keys : Array(UInt64),
+      rows : Array(UInt64),
+      secondary_keys : Array(UInt64)? = nil,
+    ) : ChecksumRecord
+      if secondary = secondary_keys
+        unless secondary.size == keys.size
+          raise ArgumentError.new("compound primary index keys do not share a bounded row grid")
+        end
+      end
       entry_count = rows.size.to_i64 + 1_i64
-      physical_size = entry_count * 8_i64
-      if physical_size > PrimaryKeyIndex::MAX_INDEX_FILE_BYTES
+      index_width = secondary_keys ? 16_i64 : 8_i64
+      physical_size = entry_count * index_width
+      if entry_count > PrimaryKeyIndex::MAX_INDEX_ENTRIES.to_i64 ||
+         physical_size > PrimaryKeyIndex::MAX_INDEX_FILE_BYTES || physical_size > Int32::MAX
         raise UnsupportedFormatError.new("Compact primary index exceeds the reader limit")
       end
-      scratch = Bytes.new(8)
+      scratch = Bytes.new(index_width.to_i)
       hasher = CityHashV1::FileHasher.new
       offset = 0
       rows.each do |mark_rows|
         PartWriterInfrastructure::StreamEncoding.write_uint64_le(scratch, 0, keys[offset])
+        if secondary = secondary_keys
+          PartWriterInfrastructure::StreamEncoding.write_uint64_le(scratch, 8, secondary[offset])
+        end
         hasher.update(scratch)
         offset += mark_rows.to_i
       end
       PartWriterInfrastructure::StreamEncoding.write_uint64_le(scratch, 0, keys.last)
+      if secondary = secondary_keys
+        PartWriterInfrastructure::StreamEncoding.write_uint64_le(scratch, 8, secondary.last)
+      end
       hasher.update(scratch)
       ChecksumRecord.new("primary.idx", physical_size.to_u64, hasher.finish, false)
     end
@@ -685,6 +745,7 @@ module CrystalClick
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
       projection_aggregate : CompactPartProjection?,
+      secondary_index_keys : Array(UInt64)?,
     ) : Nil
       expected_files = metadata.expected_files + projections.map(&.entry_name)
       unless Dir.children(stage).sort == expected_files.sort
@@ -764,22 +825,33 @@ module CrystalClick
         raise CorruptPartError.new("staged Compact physical grid differs from preflight")
       end
 
-      index_bytes = (rows.size.to_i64 + 1_i64) * 8_i64
+      index_width = secondary_index_keys ? 16_i64 : 8_i64
+      index_bytes = (rows.size.to_i64 + 1_i64) * index_width
       if index_bytes > Int64::MAX // 2_i64
         raise UnsupportedFormatError.new("Compact primary-index validation workspace overflows")
       end
       transport_budget.reserve_file_bytes(index_bytes)
       transport_budget.reserve_result_bytes(index_bytes * 2_i64)
-      primary = PrimaryKeyIndex.open(stage, rows.size, checksums, verify_recorded_hash: true)
-      offset = 0
-      rows.each_with_index do |mark_rows, mark|
-        unless primary.keys[mark] == keys[offset]
-          raise CorruptPartError.new("staged Compact primary index differs from the parent grid")
+      if secondary = secondary_index_keys
+        PartWriterInfrastructure::PrimaryIndexWriter.validate_compound!(
+          stage,
+          rows,
+          keys.to_unsafe.to_slice(keys.size),
+          secondary.to_unsafe.to_slice(secondary.size),
+          checksums,
+        )
+      else
+        primary = PrimaryKeyIndex.open(stage, rows.size, checksums, verify_recorded_hash: true)
+        offset = 0
+        rows.each_with_index do |mark_rows, mark|
+          unless primary.keys[mark] == keys[offset]
+            raise CorruptPartError.new("staged Compact primary index differs from the parent grid")
+          end
+          offset += mark_rows.to_i
         end
-        offset += mark_rows.to_i
-      end
-      unless offset == keys.size && primary.keys.last == keys.last
-        raise CorruptPartError.new("staged Compact primary-index terminal differs from the final key")
+        unless offset == keys.size && primary.keys.last == keys.last
+          raise CorruptPartError.new("staged Compact primary-index terminal differs from the final key")
+        end
       end
 
       key_type = BinaryDataType.primitive("UInt64")
@@ -806,20 +878,35 @@ module CrystalClick
           )
           next
         end
+        second_key_lane = projection_aggregate.try(&.secondary_key_name) == input.name
         projection_state = if projection_aggregate
-                             unless WidePartProjectionAggregateDescriptor.for_column(input.name, input.type.name)
-                               raise UnsupportedFormatError.new("staged Compact aggregate readback lost its exact state binding")
+                             if second_key_lane && input.type.name == "UInt64"
+                               false
+                             elsif WidePartProjectionAggregateDescriptor.for_column(input.name, input.type.name)
+                               true
+                             else
+                               raise UnsupportedFormatError.new("staged Compact aggregate readback lost its exact key or state binding")
                              end
-                             true
                            else
                              false
                            end
+        expected_keys = if second_key_lane
+                          secondary_index_keys ||
+                            raise UnsupportedFormatError.new("staged Compact second-key readback lost its index snapshot")
+                        else
+                          keys
+                        end
+        expected_input = if second_key_lane
+                           nil
+                         else
+                           input.as(CompactStaticColumnInput | CompactDynamicColumnInput)
+                         end
         validate_column_values!(
           stage,
           input.name,
           input.type,
-          keys,
-          input.as(CompactStaticColumnInput | CompactDynamicColumnInput),
+          expected_keys,
+          expected_input,
           rows,
           planned_data_size,
           slot_count,

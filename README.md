@@ -330,9 +330,12 @@ child = CrystalClick::WidePartProjection.precomputed_aggregate(
 )
 ```
 
-The pairs must be distinct and lexicographically sorted. The same Wide child
-API accepts `sum(value)`, `min(value)`, and `max(value)` states. See the
-[two-key projection profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-an-aggregate-projection-w294).
+The pairs must be distinct and lexicographically sorted. The API also accepts
+`sum(value)`, `min(value)`, and `max(value)` states. Use
+`CompactPartProjection.precomputed_aggregate` with the same arguments to write
+a Compact MRK4 child under either parent layout. See the
+[Wide two-key profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-an-aggregate-projection-w294)
+and [Compact two-key profile](docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-a-compact-aggregate-projection-w297).
 
 `OfflineTable#projections` exposes declared projection metadata. For a table
 with a physical Wide or Compact projection `p` containing a `UInt64` column

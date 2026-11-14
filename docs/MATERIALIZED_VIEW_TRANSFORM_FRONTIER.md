@@ -1,5 +1,50 @@
 # Caller-run materialized-view transform frontier
 
+## Two UInt64 group keys in a Compact aggregate projection (W297)
+
+Extend the Compact MRK4 aggregate child to two distinct plain UInt64
+`GROUP BY` columns under either parent layout. The callback supplies two
+detached, aligned key columns through `CompactPartProjection.precomputed_aggregate`.
+Key pairs must ascend lexicographically. Repeated leading keys and a reset
+of the second key when the first increases are valid. The child stores the
+keys in GROUP BY order and the existing Count, Sum, Min and Max states in
+SELECT aggregate order. The uncompressed `primary.idx` stores one 16-byte
+pair per mark start and the terminal pair from the final row.
+
+The writer checks staged keys and index against the callback's key columns.
+Typed aggregate scans preflight both key callbacks and their byte spans over
+the whole part, including state-only windows, and check matching ordered key
+rosters in mixed Wide and Compact children. Reject unsupported key types and
+counts, duplicate or descending pairs, and a key or aggregate roster that
+differs from the target DDL. The ordinary Compact index reader serves scalar
+keys.
+
+The critical failure is a child that attaches but prunes a valid group when
+both keys are constrained. Read a stock Compact child and compare its exact
+state bytes and mark-start and terminal index pairs with Crystal output.
+In Debug and Release, attach and check both parent layouts in ClickHouse,
+compare forced and projection-disabled results, and measure granules with
+one and two key predicates. Reopen both attachments in Crystal. Exercise
+a malformed hidden second-key span beyond a one-row window and regress
+single-key and mixed-layout scans. Revert the feature commit to roll back.
+
+### Qualification
+
+Debug and Release each passed 296 examples across 43 affected spec files and
+a separate typed scan of a stock Compact aggregate child.
+
+In each build mode, ClickHouse 26.10.1.1201 attached and checked both parent
+layouts with Compact children. The child under the Wide parent used plain
+MRK4 marks and the child under the Compact parent used compressed marks. Both
+orders of the group keys matched the compound primary index and state bytes
+of their stock controls. Forced and projection-disabled queries returned the
+same groups. In each child, the leading-key predicate selected two of five
+granules. The two-key predicate selected one for a group inside a granule
+and two for a group at its boundary. Crystal reopened each
+attachment for full and cross-mark scans. See the
+[native witness runner](../scripts/verify_materialized_view_aggregate_projection_w297.rb)
+and [W297 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w297.json).
+
 ## Compact UInt64 aggregate projection publication from a transform (W296)
 
 The Compact MRK4 child accepts one plain UInt64 `GROUP BY` key and

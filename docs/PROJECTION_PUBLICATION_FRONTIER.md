@@ -63,6 +63,9 @@ The [Compact UInt64 aggregate profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#c
 uses `CompactPartProjection.precomputed_aggregate` for `sum(value)`,
 `min(value)`, `max(value)`, and `count()` states in the same Compact child
 layout. The child retains the SELECT aggregate order.
+The [Compact two-key profile](MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md#two-uint64-group-keys-in-a-compact-aggregate-projection-w297)
+adds a second UInt64 key in GROUP BY order and writes both key values at
+every mark start and at the terminal row in `primary.idx`.
 
 ## Compact and mixed projection reads (W288)
 

@@ -19,9 +19,9 @@ module CrystalClick
         ChecksumRecord.new("primary.idx", raw.size.to_u64, CityHashV1.file_hash(raw), false)
       end
 
-      # Writes the bounded raw UInt64 pair form used only by a two-key Wide
-      # aggregate projection child. Ordinary part readers retain the scalar
-      # eight-byte index contract.
+      # Writes the bounded raw UInt64 pair form used by two-key Wide and
+      # Compact aggregate projection children. Ordinary part readers retain
+      # the scalar eight-byte index contract.
       def self.write_compound(
         stage : String,
         first_keys : Slice(UInt64),
