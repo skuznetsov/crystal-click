@@ -36,8 +36,21 @@ module CrystalClick
         match_length += 4
         ensure_output(output_index, match_length, output.size)
         match_start = output_index - distance
-        match_length.times do |offset|
-          output[output_index + offset] = output[match_start + offset]
+        output_pointer = output.to_unsafe
+        match_source = output_pointer + match_start
+        match_destination = output_pointer + output_index
+        if distance >= match_length
+          match_source.copy_to(match_destination, match_length)
+        else
+          # Seed one period, then grow from the initialized prefix. Each copy is disjoint.
+          match_source.copy_to(match_destination, distance)
+          copied_length = distance
+          while copied_length < match_length
+            remaining_length = match_length - copied_length
+            copy_length = copied_length < remaining_length ? copied_length : remaining_length
+            match_destination.copy_to(match_destination + copied_length, copy_length)
+            copied_length += copy_length
+          end
         end
         output_index += match_length
       end

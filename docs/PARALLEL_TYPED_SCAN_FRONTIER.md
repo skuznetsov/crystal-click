@@ -542,6 +542,65 @@ wall times unresolved.
 | Compact `data.bin` | `dca9d56af3a75be50c7c3608e2549dc87a66466db98ebc8ed6bb74c88d33c334` |
 | Expected 48-byte RowBinary reduction | `2f4e9f8b0da83ff03781c162a511f160dd0441c250c2f2c71d38e6950e96bc15` |
 
+### Bounded LZ4 match copies
+
+The decoder copies a disjoint match in one block. For an overlapping
+match, it copies one period from the earlier output and expands the
+initialized prefix in growing blocks. Each copy uses disjoint source and
+destination ranges inside the validated output. Exact-size destination
+slices need no padding.
+
+The reference was `b20028de7662b38ef617e48b760c7ac3fd26497b`. The candidate
+changed only `src/crystal_click/lz4.cr` in the benchmark source tree. Both
+workers used Crystal 1.22.3, LLVM 23.1.5, and Boehm with
+`--release -Dparallel_scan_bench` on the same M2 Max. The Compact MRK3 part
+and official ClickHouse 26.10.1.1201 binary had the same hashes as in the
+shared-scan profile. The part contains 32 LZ4 frames and 2 MiB of decoded
+`UInt64` data. Of its 262,033 LZ4 matches, 241,016 have length five or
+seven bytes. Only 37 overlap, all at distance one.
+
+Each track used four warmups and 24 timed rounds per arm, with each of the
+six arm orders occurring four times. A monotonic timer measured POST to
+receipt of the complete response over preconnected loopback HTTP sockets.
+Both Crystal readers were prepared outside the timed requests. ClickHouse
+used the same reduction with `checksum_on_read=1` and `max_threads` set to
+the track's worker count. Query result, query condition, uncompressed,
+and deserialization-prefix caches were disabled.
+All 216 timed responses matched the independent 48-byte reduction.
+Ordered 2 MiB exports from all three arms matched before and after every
+track. `CHECK TABLE` returned success and all ten part files kept their
+hashes. Both Crystal arms rejected an altered reduction and reported four
+isolated contexts in each four-worker track. Separate native diagnostics
+at each count observed the requested number of reading threads and all
+32 compressed blocks.
+
+| Workers | Series | Scalar Crystal, ms | Block-copy Crystal, ms | ClickHouse, ms | Block copy / ClickHouse |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | Initial | 4.953 ± 0.100 | 4.517 ± 0.066 | 2.121 ± 0.123 | 2.13× |
+| 4 | Initial | 3.103 ± 0.238 | 2.916 ± 0.270 | 1.886 ± 0.170 | 1.55× |
+| 4 | Repeat | 2.374 ± 0.122 | 2.410 ± 0.170 | 1.365 ± 0.038 | 1.76× |
+
+Values are median ± MAD. At one worker the median fell by 8.8%, with a
+median paired reduction of 0.450 ms and 24 wins in 24 pairs. At four
+workers, the effect remained within pair-to-pair variation. The initial
+series gave a median paired reduction of 0.017 ± 0.268 ms and the repeat
+gave 0.096 ± 0.271 ms. Each had 13 wins in 24 pairs. The host snapshots
+before these series showed 51.75% and 92.68% CPU idle, respectively. Both
+Crystal arms had large latency outliers in the initial series.
+
+The nine focused LZ4 examples passed for the scalar reference and the
+candidate. Replacing the match loop with one whole-region copy failed
+five of those examples. The 57 related compressed-block, Compact, and
+typed-scan examples passed. A separate Release check compared 1,309
+liblz4-generated blocks and three large-offset cases against expected
+bytes, then compared both decoders on 20,000 arbitrary inputs, including
+errors and writes to the destination and guard bytes.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Scalar Crystal HTTP worker | `e34bedd282005fe2af7d0d9a9f25f9fc7c011b65218c63e432290fc4ae3d9f90` |
+| Block-copy Crystal HTTP worker | `72fb08bcbea3a31a86d2c6f62cd4b241b6fcb3db9f60091922049b6c4d11c285` |
+
 ## Reproduce the comparison
 
 Run from the repository root with Python 3, Crystal, and the pinned
@@ -630,6 +689,17 @@ the request timer. For the native diagnostic, enable `trace_log` and
 `query_profiler_cpu_time_period_ns=1000000` and
 `query_profiler_real_time_period_ns=0` as HTTP parameters. Join the
 diagnostic logs by query ID after `SYSTEM FLUSH LOGS`.
+
+For the LZ4 comparison, build `b20028d` and the block-copy revision with
+`--release -Dparallel_scan_bench`. Use the Compact fixture and both worker
+counts. Start a prepared HTTP worker for each revision and connect both
+workers and ClickHouse before the warmups. For each count, run four warmups
+per arm and four copies of each three-arm permutation. This run shuffled the
+24 measured orders using Python `random.Random(20261115 + workers)`, starting
+from `itertools.permutations(("stock", "block_copy", "clickhouse"))`. Call
+`/prepare` on the Crystal arm outside each timed request, and use
+`settings_sql(workers, 1)` and `checked_request_ns` from the benchmark
+script. Preserve all samples when recomputing paired differences.
 
 ```sh
 python3 -B scripts/parallel_scan_benchmark.py bench \
