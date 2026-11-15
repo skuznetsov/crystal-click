@@ -25,6 +25,7 @@ module CrystalClick
     @emit_part_path : String
     @mark_row_counts : Array(UInt64)
     @transport_budget : CompressedStreamBudget
+    @direct_uint64_scan_context : CompactPartPhysicalContext?
 
     def self.open_selected_typed(parts : Array(String), columns : Array(String)) : CompactPartTable
       new(parts, columns)
@@ -37,8 +38,9 @@ module CrystalClick
       parts : Array(String),
       columns : Array(String),
       budget : CompressedStreamBudget,
+      scan_context : CompactPartPhysicalContext? = nil,
     ) : CompactPartTable
-      new(parts, columns, nil, budget)
+      new(parts, columns, nil, budget, scan_context)
     end
 
     # :nodoc:
@@ -58,6 +60,7 @@ module CrystalClick
       columns : Array(String),
       projection_name : String? = nil,
       shared_transport_budget : CompressedStreamBudget? = nil,
+      shared_scan_context : CompactPartPhysicalContext? = nil,
     )
       unless parts.size == 1
         raise BoundsError.new("Compact table backend requires exactly one physical part")
@@ -92,6 +95,7 @@ module CrystalClick
       end
       budget = shared_transport_budget || CompressedStreamBudget.read_default
       @transport_budget = budget
+      @direct_uint64_scan_context = nil
       projection_admission_session = if projection_name
                                        CompactProjectionAggregateReaderAdmissionSession.new(@part_path, budget)
                                      end
@@ -101,6 +105,23 @@ module CrystalClick
       physical_columns.each do |name, type|
         raise CorruptPartError.new("duplicate Compact physical column") if physical_types.has_key?(name)
         physical_types[name] = type
+      end
+
+      direct_plain_uint64_selection = {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+                                        projection_name.nil? &&
+                                          @columns.all? { |column| physical_types[column]? == "UInt64" }
+                                      {% else %}
+                                        false
+                                      {% end %}
+      if shared_scan_context
+        unless direct_plain_uint64_selection &&
+               shared_scan_context.data_path == File.join(@part_path, "data.bin") &&
+               shared_scan_context.transport_budget.same?(budget)
+          raise CorruptPartError.new("shared Compact UInt64 scan context does not match its selected part")
+        end
+        @direct_uint64_scan_context = shared_scan_context
+      elsif direct_plain_uint64_selection
+        @direct_uint64_scan_context = CompactPartPhysicalContext.open(@part_path, budget)
       end
 
       @readers = Array(SelectedReader).new(@columns.size)
@@ -208,6 +229,7 @@ module CrystalClick
             column,
             type,
             transport_budget: budget,
+            context: @direct_uint64_scan_context,
           )
         end
         if projection_name && projection_aggregate_descriptor.nil? && type.name == "UInt64"
@@ -322,6 +344,12 @@ module CrystalClick
       reusable_direct_uint64_column_count > 0
     end
 
+    # :nodoc:
+    # Shared only with worker readers of this exact all-UInt64 physical part.
+    def parallel_uint64_scan_context : CompactPartPhysicalContext?
+      reusable_uint64_scan? ? @direct_uint64_scan_context : nil
+    end
+
     def scan_typed(
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
       & : WidePartTableBatch -> Nil
@@ -340,7 +368,7 @@ module CrystalClick
     ) : Nil
       validate_batch_rows(batch_rows)
       scan_workspace = scan_workspace_for_scan(workspace)
-      scan_selected_marks(nil, batch_rows, nil, scan_workspace) { |batch| yield batch }
+      scan_selected_marks(nil, batch_rows, nil, scan_workspace, nil) { |batch| yield batch }
       nil
     end
 
@@ -364,6 +392,7 @@ module CrystalClick
       mark_indices : Array(Int32),
       batch_rows : Int,
       workspace : CompactUInt64ScanWorkspace?,
+      scan_image : CompactUInt64ScanImage? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_batch_rows(batch_rows)
@@ -377,7 +406,7 @@ module CrystalClick
       end
       raise BoundsError.new("parallel Compact mark list is empty") if selected_marks.empty?
       scan_workspace = scan_workspace_for_scan(workspace)
-      scan_selected_marks(selected_marks, batch_rows, nil, scan_workspace) { |batch| yield batch }
+      scan_selected_marks(selected_marks, batch_rows, nil, scan_workspace, scan_image) { |batch| yield batch }
       nil
     end
 
@@ -398,7 +427,7 @@ module CrystalClick
       available = @total_row_count - start_row
       rows = max_rows.to_u64 < available ? max_rows.to_u64 : available
       scan_workspace = scan_workspace_for_scan(nil)
-      scan_selected_marks(nil, max_rows, {start_row, start_row + rows}, scan_workspace) { |batch| yield batch }
+      scan_selected_marks(nil, max_rows, {start_row, start_row + rows}, scan_workspace, nil) { |batch| yield batch }
       nil
     end
 
@@ -423,7 +452,7 @@ module CrystalClick
       # A candidate callback is one complete physical granule, matching the
       # existing typed Wide candidate-mark contract.
       scan_workspace = scan_workspace_for_scan(nil)
-      scan_selected_marks(selected, WidePartTable::MAX_MARK_ROWS.to_i, nil, scan_workspace) { |batch| yield batch }
+      scan_selected_marks(selected, WidePartTable::MAX_MARK_ROWS.to_i, nil, scan_workspace, nil) { |batch| yield batch }
       nil
     end
 
@@ -432,24 +461,50 @@ module CrystalClick
       batch_rows : Int,
       window_rows : {UInt64, UInt64}?,
       scan_workspace : CompactUInt64ScanWorkspace?,
+      scan_image : CompactUInt64ScanImage?,
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_dynamic_schedules!
 
+      if image = scan_image
+        if reusable_uint64_scan?
+          context = @direct_uint64_scan_context || raise(CorruptPartError.new("Compact direct UInt64 scan lost its admitted context"))
+          image.validate_context!(context)
+        end
+        scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, image) { |batch| yield batch }
+      elsif reusable_uint64_scan? && candidate_marks.try(&.empty?) != true
+        context = @direct_uint64_scan_context || raise(CorruptPartError.new("Compact direct UInt64 scan lost its admitted context"))
+        CompactUInt64ScanImage.with_context(context, @transport_budget) do |opened_image|
+          scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, opened_image) { |batch| yield batch }
+        end
+      else
+        scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, nil) { |batch| yield batch }
+      end
+      nil
+    end
+
+    private def scan_selected_marks_loop(
+      candidate_marks : Array(Int32)?,
+      batch_rows : Int,
+      window_rows : {UInt64, UInt64}?,
+      scan_workspace : CompactUInt64ScanWorkspace?,
+      scan_image : CompactUInt64ScanImage?,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
       selected_cursor = 0
       part_row_offset = 0_u64
       @mark_row_counts.each_with_index do |mark_rows, mark_index|
+        if mark_rows > UInt64::MAX - part_row_offset
+          raise CorruptPartError.new("Compact part row offset overflows")
+        end
+        mark_start = part_row_offset
+        mark_end = mark_start + mark_rows
         selected = true
         if marks = candidate_marks
           selected = selected_cursor < marks.size && marks[selected_cursor] == mark_index
           selected_cursor += 1 if selected
         end
-
-        mark_start = part_row_offset
-        if mark_rows > UInt64::MAX - part_row_offset
-          raise CorruptPartError.new("Compact part row offset overflows")
-        end
-        part_row_offset += mark_rows
+        part_row_offset = mark_end
         next unless selected
 
         row_start = 0_u64
@@ -463,7 +518,7 @@ module CrystalClick
         end
         next unless row_start < row_end
 
-        values_by_column, json_carriers, retained_charge = materialize_mark(mark_index, mark_rows, scan_workspace)
+        values_by_column, json_carriers, retained_charge = materialize_mark(mark_index, mark_rows, scan_workspace, scan_image)
         cursor = row_start
         while cursor < row_end
           remaining = row_end - cursor
@@ -575,6 +630,7 @@ module CrystalClick
       mark_index : Int32,
       rows : UInt64,
       scan_workspace : CompactUInt64ScanWorkspace?,
+      scan_image : CompactUInt64ScanImage?,
     ) : MaterializedMark
       remaining_bytes = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
       retained_workspace = 0_u64
@@ -674,7 +730,7 @@ module CrystalClick
           if reusable_direct_workspace
             workspace = scan_workspace || raise(CorruptPartError.new("Compact UInt64 scan lost its local workspace"))
             lane = workspace.values_for(rows, reusable_slot, reusable_direct_count)
-            reader.read_ordinary_uint64_mark_into(mark_index, lane.to_unsafe_bytes, workspace.transport_workspace)
+            reader.read_ordinary_uint64_mark_into(mark_index, lane.to_unsafe_bytes, workspace.transport_workspace, scan_image)
             values_by_column << lane
             reusable_slot += 1
             next
@@ -686,7 +742,7 @@ module CrystalClick
           remaining_bytes -= direct_bytes
           retained_total = checked_add(retained_total, direct_bytes)
 
-          bytes = reader.read_ordinary_uint64_mark(mark_index)
+          bytes = reader.read_ordinary_uint64_mark(mark_index, scan_image)
           unless bytes.size.to_u64 == direct_bytes
             raise CorruptPartError.new("Compact direct UInt64 reader returned an invalid mark width")
           end

@@ -34,7 +34,17 @@ module CrystalClick
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       codec_budget : BinaryCodecBudget? = nil,
       transport_budget : CompressedStreamBudget? = nil,
+      context : CompactPartPhysicalContext? = nil,
     ) : CompactBinaryBulkColumnReader
+      if shared_context = context
+        effective_budget = transport_budget || shared_context.transport_budget
+        expected_data_path = File.join(File.expand_path(part_path), "data.bin")
+        unless File.expand_path(shared_context.data_path) == expected_data_path &&
+               shared_context.transport_budget.same?(effective_budget)
+          raise CorruptPartError.new("shared Compact physical context does not match its part and transport budget")
+        end
+        transport_budget = effective_budget
+      end
       new(
         part_path,
         column_name,
@@ -43,6 +53,8 @@ module CrystalClick
         transport_limits,
         codec_budget,
         transport_budget,
+        nil,
+        context,
       )
     end
 
@@ -448,13 +460,17 @@ module CrystalClick
     # Reads one selected mark of an already-admitted ordinary UInt64 column.
     # The fast path is intentionally limited to the table's default codec
     # bounds; custom limits keep using the BinaryValue decoder and its budget.
-    def read_ordinary_uint64_mark(mark_index : Int) : Bytes
+    def read_ordinary_uint64_mark(
+      mark_index : Int,
+      scan_image : CompactUInt64ScanImage? = nil,
+    ) : Bytes
       slot_index, expected_stream_name = ordinary_uint64_read_target
       @context.read_uint64_mark(
         @column_name,
         slot_index,
         mark_index,
         expected_stream_name,
+        scan_image,
       )
     end
 
@@ -466,6 +482,7 @@ module CrystalClick
       mark_index : Int,
       destination : Bytes,
       workspace : CompressedBlock::DecodeWorkspace,
+      scan_image : CompactUInt64ScanImage? = nil,
     ) : Nil
       slot_index, expected_stream_name = ordinary_uint64_read_target
       @context.read_uint64_mark_into(
@@ -475,6 +492,7 @@ module CrystalClick
         expected_stream_name,
         destination,
         workspace,
+        scan_image,
       )
       nil
     end

@@ -75,6 +75,25 @@ module CrystalClick
       String.new(@data_input.marks_name.to_slice)
     end
 
+    # :nodoc:
+    # Scan-image identity is bound to the physical input admitted by this
+    # context; callers receive detached path text, never its retained owner.
+    def data_path : String
+      String.new(@data_input.data_path.to_slice)
+    end
+
+    def data_size : Int64
+      @data_input.data_size
+    end
+
+    def frame_index : CompressedFrameIndex
+      @mark_index.frame_index
+    end
+
+    def transport_budget : CompressedStreamBudget
+      @budget
+    end
+
     def compressed_primary_index_signal? : Bool
       @compressed_primary_index_signal
     end
@@ -601,6 +620,7 @@ module CrystalClick
       slot_index : Int32,
       mark_index : Int,
       expected_stream_name : String?,
+      scan_image : CompactUInt64ScanImage? = nil,
     ) : Bytes
       start, finish, expected_bytes = validated_uint64_mark_range(
         column_name,
@@ -612,6 +632,20 @@ module CrystalClick
       # One retained input range plus the output descriptor that read_ranges
       # reserves before allocating its result array.
       reserve_uint64_mark_range_records!
+      if image = scan_image
+        image.validate_context!(self)
+        bytes = CompressedMarkReader.read_range_indexed(
+          image.data,
+          image.frame_index,
+          start,
+          finish,
+          @budget,
+        )
+        unless bytes.size.to_u64 == expected_bytes
+          raise CorruptPartError.new("Compact UInt64 reader returned an invalid selected mark width")
+        end
+        return bytes
+      end
       ranges = [{start, finish}]
       authenticated = CompressedMarkReader.read_ranges(
         @data_input.data_path,
@@ -635,6 +669,7 @@ module CrystalClick
       expected_stream_name : String?,
       destination : Bytes,
       workspace : CompressedBlock::DecodeWorkspace,
+      scan_image : CompactUInt64ScanImage? = nil,
     ) : Nil
       start, finish, expected_bytes = validated_uint64_mark_range(
         column_name,
@@ -649,6 +684,19 @@ module CrystalClick
       # Match read_ranges' operation-level accounting: one caller range and
       # one transport range descriptor, plus the same touched frame headers.
       reserve_uint64_mark_range_records!
+      if image = scan_image
+        image.validate_context!(self)
+        CompressedMarkReader.read_range_into_indexed(
+          image.data,
+          image.frame_index,
+          start,
+          finish,
+          destination,
+          workspace,
+          @budget,
+        )
+        return nil
+      end
       CompressedMarkReader.read_range_into(
         @data_input.data_path,
         @data_input.data_size,

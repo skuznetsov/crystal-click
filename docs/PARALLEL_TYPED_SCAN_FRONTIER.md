@@ -23,8 +23,7 @@ their next assigned mark during each callback. A worker has at most one
 outstanding batch and may reuse its buffers when the callback returns.
 Workers on one Compact part share its cumulative transport budget across
 reader admission and decoding. Its file, record, decoded-byte, and result-byte
-allowances apply across the complete worker group. Reopening the part per
-worker consumes some of that budget before decoding starts.
+allowances apply across the complete worker group.
 Operation exit waits for the workers after normal completion, early exit,
 and decoder or callback failures. Keep selected part files stable for the
 lifetime of the reader and use a separate reader for each concurrent scan.
@@ -51,6 +50,17 @@ and aggregate mark limits still apply. If the current mark's materialization
 allowance accommodates only the detached result, the scan uses that path.
 Mixed selections dispatch to the per-column readers. Callers must copy values
 they retain beyond the callback.
+
+When all selected columns are ordinary `UInt64` on a little-endian host,
+table admission builds one mark grid and one `data.bin` frame index per
+part. Full, window, and candidate-mark scans open one read-only `data.bin`
+mapping per part read.
+The scan checks the mapped headers against the admitted index and verifies
+each accessed frame's checksum before decompression. The transport budget
+charges the mapping and header pass once per scan and accumulates decode
+work and result bytes across selected ranges and workers. The mapping stays
+valid through the last scheduled worker's read. Cancellation and failure
+join the workers before closing any remaining mappings.
 
 Guard checks cover both mark layouts, exact batch offsets and values,
 checksum corruption, inconsistent interval width, and budget exhaustion
@@ -111,11 +121,11 @@ and three candidate one-worker exports each returned the exact first
 3,145,728 bytes of the input sequence before the cutoff. The baseline's
 reduction endpoint reported the underlying exception before sending a response.
 
-The Compact `data.bin` was 5,303,170 bytes. On this path, each selected
-column's mark read charges that entire file size against the cumulative
+The Compact `data.bin` was 5,303,170 bytes. In that campaign, each selected
+column's mark read charged that entire file size against the cumulative
 256 MiB transport budget. A 16-mark fixture of the same size reached
 `Compact typed carriers exceed aggregate materialization limit` at 32,768
-rows per mark. The four-worker reader with a shared budget also rejects the
+rows per mark. The four-worker reader with a shared budget also rejected the
 64-mark pilot with `compressed stream file-byte limit exceeded`. The paired
 campaign uses 131,072 rows in 16 marks of 8,192 rows with a fresh Crystal
 reader for each request.
@@ -378,6 +388,51 @@ copy. This part exercises the complete LZ4 frame path.
 | Slab Boehm probe | `0f88fb070f0ebef69c55bdd9ca41ae764a531d4cbe4d2f05f7b9891e265bbff1` |
 | Slab `src/` diff against `d46b678` | `1a9fc20532df5f2c815d673b793b6b481ab6da961aa590630ffb147ef999b1bf` |
 
+### Sharing the Compact mapping and frame index
+
+The reference is the slab build at `2467485e11374cff8f504300297a7add9056b974`.
+Both builds use the same HTTP worker source, Crystal 1.22.3, and
+`--release -Dparallel_scan_bench` with Boehm enabled. The run used the same
+131,072-row Compact MRK3 LZ4 part and ClickHouse 26.10.1.1201 binary as the
+slab comparison, on an Apple M2 Max with macOS 26.6.2.
+
+The three arms rotate through four warmups and 21 timed rounds at each
+worker count. Each timed request runs the scan and reduction on warm page
+cache through a preconnected loopback HTTP socket. Crystal prepares a
+fresh selected-part reader outside the timer. The scan mapping and worker
+startup are included in the timer. Numbers are median ± MAD on a shared
+host.
+
+| Workers | Slab reference, ms | Shared mapping and index, ms | ClickHouse, ms |
+| ---: | ---: | ---: | ---: |
+| 1 | 6.463 ± 0.141 | 5.079 ± 0.093 | 2.639 ± 0.199 |
+| 4 | 4.025 ± 0.257 | 2.629 ± 0.231 | 1.644 ± 0.109 |
+
+The shared path was faster in all 21 paired rounds at each worker count.
+Median latency fell by 21.4% and 34.7%, respectively. Both Crystal builds
+used four execution contexts in their four-worker probes. The native arm
+sets `max_threads` to the configured count. The final diagnostics observed
+one and four positive-read threads in their respective tracks. An earlier
+`max_threads=4` diagnostic observed two positive-read threads in one trial.
+
+Every timed response matched the exact 48-byte reduction. All full ordered
+exports matched the independent RowBinary fixture, block for block.
+ClickHouse used `checksum_on_read=1`, and `CHECK TABLE` returned success
+before and after timing. The ten-file part manifest stayed unchanged.
+
+A separate acquisition test used two MRK3 parts with eight data marks and
+two selected columns per part. The reference mapped and indexed each part
+16 times during a one-worker scan and 24 times during a four-worker scan.
+The shared path builds one index per part at admission and opens and
+closes one scan mapping per accessed part at either worker count.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Slab reference HTTP worker | `e84409748367bb1d62cc4b3bbc814b6b5f51d3c68b44975026f013f5110d33da` |
+| Shared mapping HTTP worker | `7a3232850b01cbdd1bf6140fa9ae7d8f57fa5025810b639ccfa0e03d79c762fe` |
+| Shared mapping `src/` file manifest | `35734103f7dbfebca1f643c4ea2b51327207e840b94989e82b37da0d3b1cf40c` |
+| Full ordered RowBinary export | `5103eb0b689c92f3ebe4c23ae58816b4d120b12d5a543c2e274a58a547a075b5` |
+
 ## Reproduce the comparison
 
 Run from the repository root with Python 3, Crystal, and the pinned
@@ -454,6 +509,8 @@ worker source. Run both Compact tracks at each revision with
 For the slab comparison, use `d46b678` as the reference and build both
 revisions with the same flags. Keep one prepared HTTP worker per revision
 and rotate the two Crystal requests and the ClickHouse request in each round.
+For the shared-mapping comparison, use `2467485` as the reference with the
+same flags, HTTP worker source, fixture, and three-way rotation.
 
 ```sh
 python3 -B scripts/parallel_scan_benchmark.py bench \
@@ -500,16 +557,30 @@ suites passed 30 examples with `-Dwithout_mt`. The added guards cover slab
 lifetime, capacity accounting, exact-fit fallback, partial frames, and
 checksum rejection before a write to the failing frame's destination.
 
+For the shared mapping, `spec/compact_parallel_scan_mapping_spec.cr` passed
+three examples. It counts mapping opens, closes, and frame-index builds and
+checks cleanup when a worker never reaches a mapped part. The related
+parallel, Compact typed, writer, mark adapter, mmap, Dynamic, and offline
+transform suites covered 86 passing examples. The offline transform suite
+uses a physically resolved `TMPDIR` for its path equality check. The mapping,
+parallel, mmap, and W124 transport specs passed 31 examples with
+`-Dwithout_mt`.
+
 ## Falsifiers
 
 - An ordered scan must match serial rows, batch coordinates, and batch size
   limits on mixed parts and when one part is split across workers.
 - A callback failure or a worker failure must release outstanding buffers and
   join the workers. A subsequent scan of valid parts must still succeed.
+- An ordinary `UInt64` Compact scan must build no additional frame index and
+  map each accessed `data.bin` exactly once. Aborting at an earlier part must
+  close a later part's mapping even if an assigned worker never acquired it.
 - Splitting Compact marks between workers must keep a cumulative per-part
-  transport limit. A higher worker count must still reject the 64-mark pilot.
+  transport limit. For the shared `UInt64` path, file and header work is
+  charged per mapping and selected range work accumulates across workers.
 - The benchmark must reject an incorrect aggregate and changed part bytes.
-  A four-worker result requires observed concurrent work on both engines.
+  Worker probes confirm the Crystal execution contexts and record the number
+  of ClickHouse threads that read rows at each `max_threads` setting.
 
 Revert the parallel scan change to remove the opt-in path. Keep the sequential
 reference timings as evidence for their pinned revision and runtime.

@@ -75,17 +75,30 @@ module CrystalClick
         # Preserve the serial facade's full pre-callback backend admission.
         preflight_backends!
         schedule, worker_marks = parallel_scan_plan(effective_workers, positive_mark_count)
-        part_sources = Array({String, Bool, CompressedStreamBudget?}).new(@entries.size)
+        part_sources = Array({String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?}).new(@entries.size)
         part_starts = Array(UInt64).new(@entries.size)
         source_row_offset = 0_u64
         @entries.each do |entry|
           compact_reader = entry.reader.as?(CompactPartTable)
           transport_budget = compact_reader.try(&.parallel_scan_transport_budget!)
-          part_sources << {String.new(entry.path.to_slice), !compact_reader.nil?, transport_budget}
+          scan_context = compact_reader.try(&.parallel_uint64_scan_context)
+          part_sources << {String.new(entry.path.to_slice), !compact_reader.nil?, transport_budget, scan_context}
           part_starts << source_row_offset
           source_row_offset = checked_add_rows(source_row_offset, entry.row_count)
         end
         raise CorruptPartError.new("source row count mismatch") unless source_row_offset == @total_row_count
+
+        expected_scan_image_users = Array(Int32).new(@entries.size, 0_i32)
+        worker_marks.each do |parts|
+          parts.each_with_index do |marks, part_index|
+            expected_scan_image_users[part_index] += 1 unless marks.empty?
+          end
+        end
+        scan_image_registry = CompactUInt64ScanImageRegistry.new(
+          part_sources.map { |source| source[3] },
+          part_sources.map { |source| source[2] },
+          expected_scan_image_users,
+        )
 
         outputs = Array(Channel(WidePartTableBatch)).new(effective_workers) do
           Channel(WidePartTableBatch).new(1)
@@ -102,6 +115,7 @@ module CrystalClick
               worker_index,
               worker_marks[worker_index],
               part_sources,
+              scan_image_registry,
               batch_rows,
               outputs[worker_index],
               acknowledgements[worker_index],
@@ -151,6 +165,15 @@ module CrystalClick
               context.wait
             rescue ex : Exception
               primary_error ||= ex
+            end
+          end
+          begin
+            scan_image_registry.close_all
+          rescue ex : Error
+            if error = primary_error
+              primary_error = MMapCleanupError.new(error, ex)
+            else
+              raise ex
             end
           end
         end
@@ -206,20 +229,22 @@ module CrystalClick
       private def start_parallel_worker(
         worker_index : Int,
         part_marks : Array(Array(Int32)),
-        part_sources : Array({String, Bool, CompressedStreamBudget?}),
+        part_sources : Array({String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?}),
+        scan_image_registry : CompactUInt64ScanImageRegistry,
         batch_rows : Int,
         output : Channel(WidePartTableBatch),
         acknowledgement : Channel(Nil),
       ) : Fiber::ExecutionContext::Isolated
         name = "crystal-click typed scan worker #{worker_index}"
         Fiber::ExecutionContext::Isolated.new(name) do
-          run_parallel_worker(part_marks, part_sources, batch_rows, output, acknowledgement)
+          run_parallel_worker(part_marks, part_sources, scan_image_registry, batch_rows, output, acknowledgement)
         end
       end
 
       private def run_parallel_worker(
         part_marks : Array(Array(Int32)),
-        part_sources : Array({String, Bool, CompressedStreamBudget?}),
+        part_sources : Array({String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?}),
+        scan_image_registry : CompactUInt64ScanImageRegistry,
         batch_rows : Int,
         output : Channel(WidePartTableBatch),
         acknowledgement : Channel(Nil),
@@ -227,14 +252,25 @@ module CrystalClick
         scan_workspace = nil.as(CompactUInt64ScanWorkspace?)
         part_marks.each_with_index do |marks, part_index|
           next if marks.empty?
-          path, compact, transport_budget = part_sources[part_index]
+          path, compact, transport_budget, scan_context = part_sources[part_index]
           if compact
             budget = transport_budget || raise(CorruptPartError.new("parallel Compact part lost its transport budget"))
-            reader = CompactPartTable.open_selected_typed_with_transport_budget([path], @columns, budget)
+            reader = CompactPartTable.open_selected_typed_with_transport_budget([path], @columns, budget, scan_context)
             if reader.reusable_uint64_scan?
               scan_workspace ||= CompactUInt64ScanWorkspace.new
-              reader.scan_typed_mark_indices_with_workspace(marks, batch_rows, scan_workspace) do |batch|
-                send_parallel_batch!(batch, output, acknowledgement)
+              if scan_context
+                image = scan_image_registry.acquire(part_index)
+                begin
+                  reader.scan_typed_mark_indices_with_workspace(marks, batch_rows, scan_workspace, image) do |batch|
+                    send_parallel_batch!(batch, output, acknowledgement)
+                  end
+                ensure
+                  scan_image_registry.release(part_index)
+                end
+              else
+                reader.scan_typed_mark_indices_with_workspace(marks, batch_rows, scan_workspace) do |batch|
+                  send_parallel_batch!(batch, output, acknowledgement)
+                end
               end
             else
               reader.scan_typed_mark_indices(marks, batch_rows) do |batch|

@@ -103,6 +103,13 @@ module CrystalClick
       @rows[mark_index]
     end
 
+    # :nodoc:
+    # The frame descriptors are immutable and are shared with a scan-local
+    # mapping only after that image passes geometry validation.
+    def frame_index : CompressedFrameIndex
+      @frame_index
+    end
+
     def logical_position(pair : Tuple(UInt64, UInt64)) : Int64
       terminal = pair[0] == @frame_index.data_size.to_u64 && pair[1] == 0_u64
       @frame_index.logical_position(pair[0], pair[1], terminal)

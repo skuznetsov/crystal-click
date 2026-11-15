@@ -54,6 +54,82 @@ module CrystalClick
       raise CorruptPartError.new("mark compressed offset does not name a frame boundary")
     end
 
+    # Revalidates the retained header index against one current mapped image.
+    # Compact direct-UInt64 scans reuse this index only after proving that the
+    # mapped file still has the exact geometry admitted with its mark grid.
+    # Payload checksums remain lazy and are verified immediately before decode.
+    def validate_data_geometry!(data : Bytes, limits : CompressedStreamLimits, budget : CompressedStreamBudget) : Nil
+      budget.ensure_direction(false)
+      unless data.size.to_i64 == @data_size && @data_size > 0 &&
+             @data_size <= Int32::MAX && @data_size <= limits.max_file_bytes
+        raise CorruptPartError.new("compressed data file size changed since frame-index admission")
+      end
+
+      offset = 0_i64
+      @frames.each do |frame|
+        budget.reserve_records(1_i64)
+        if offset > @data_size - CompressedBlock::FRAME_HEADER_SIZE
+          raise CorruptPartError.new("compressed frame header is truncated")
+        end
+
+        header_offset = offset.to_i + CompressedBlock::CHECKSUM_SIZE
+        method = data[header_offset]
+        compressed_size = read_u32(data, header_offset + 1).to_i64
+        decompressed_size = read_u32(data, header_offset + 5).to_i64
+        unless method == CompressedBlock::METHOD_LZ4 || method == CompressedBlock::METHOD_ZSTD ||
+               method == CompressedBlock::METHOD_MULTIPLE
+          raise UnsupportedFormatError.new("unsupported ClickHouse compression method")
+        end
+
+        unless frame.compressed_offset == offset && frame.method == method &&
+               frame.compressed_size == compressed_size && frame.decompressed_size == decompressed_size
+          raise CorruptPartError.new("compressed data frame geometry changed since Compact mark-grid admission")
+        end
+        if frame.end_offset > @data_size || frame.end_offset <= offset
+          raise CorruptPartError.new("compressed frame index exceeds the mapped data file")
+        end
+        offset = frame.end_offset
+      end
+
+      unless offset == @data_size
+        raise CorruptPartError.new("compressed data frame geometry changed since Compact mark-grid admission")
+      end
+      nil
+    end
+
+    # Returns a half-open descriptor-index range for frames intersecting one
+    # logical interval. This keeps per-mark transport work proportional to the
+    # touched frames rather than the complete file index.
+    def touched_frame_bounds(start : Int64, finish : Int64) : {Int32, Int32}
+      if start < 0 || finish < start || finish > @logical_size
+        raise ArgumentError.new("logical range is outside the decompressed stream")
+      end
+      return {0_i32, 0_i32} if start == finish
+
+      low = 0
+      high = @frames.size
+      while low < high
+        middle = low + (high - low) // 2
+        if @frames[middle].logical_end <= start
+          low = middle + 1
+        else
+          high = middle
+        end
+      end
+      first = low
+
+      high = @frames.size
+      while low < high
+        middle = low + (high - low) // 2
+        if @frames[middle].logical_start < finish
+          low = middle + 1
+        else
+          high = middle
+        end
+      end
+      {first.to_i32, low.to_i32}
+    end
+
     private def scan_headers(data : Bytes, limits : CompressedStreamLimits, budget : CompressedStreamBudget) : Tuple(Int64, Int64)
       raise CorruptPartError.new("compressed stream is empty") if data.empty?
 

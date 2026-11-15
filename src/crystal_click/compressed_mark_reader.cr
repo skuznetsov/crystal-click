@@ -357,51 +357,159 @@ module CrystalClick
       preflight_regular_file(data_path, expected_data_size, "data file")
       budget.reserve_file_bytes(expected_data_size)
       MMapDataSource.with_file(data_path, expected_data_size, budget.limits.max_file_bytes) do |data|
-        limits = budget.limits
-        index = CompressedFrameIndex.new(data, limits, budget)
+        index = CompressedFrameIndex.new(data, budget.limits, budget)
         if finish > index.logical_size
           raise ArgumentError.new("logical range is outside the decompressed stream")
         end
+        bounds = index.touched_frame_bounds(start, finish)
+        reserve_indexed_decode_work!(data, index, bounds, result_size, budget)
+        decode_indexed_range_into(data, index, bounds, start, finish, destination, workspace, budget)
+      end
+      nil
+    end
 
-        decoded_work = 0_i64
-        index.frames.each do |frame|
-          next if result_size == 0 || frame.logical_start >= finish || frame.logical_end <= start
-          decoded_work = checked_add(decoded_work, frame.decompressed_size, "decoded work")
-          if frame.method == CompressedBlock::METHOD_MULTIPLE
-            decoded_work = checked_add(decoded_work, multiple_nested_size(data, frame, limits), "nested decoded work")
-          end
+    # Reads one interval from a scan-owned mapping and its already validated
+    # frame index. The caller owns the mapping lifetime; this method still
+    # charges the per-range descriptor, exact touched-frame decode work, and
+    # result bytes before checksum validation or destination writes.
+    def self.read_range_into_indexed(
+      data : Bytes,
+      index : CompressedFrameIndex,
+      start : Int64,
+      finish : Int64,
+      destination : Bytes,
+      workspace : CompressedBlock::DecodeWorkspace,
+      budget : CompressedStreamBudget,
+    ) : Nil
+      bounds = preflight_indexed_range!(data, index, start, finish, destination, budget)[0]
+      decode_indexed_range_into(data, index, bounds, start, finish, destination, workspace, budget)
+      nil
+    end
+
+    # Detached exact result variant for the existing UInt64 materialization
+    # fallback. It uses the same scan image and reserves result bytes before
+    # allocating the output owner.
+    def self.read_range_indexed(
+      data : Bytes,
+      index : CompressedFrameIndex,
+      start : Int64,
+      finish : Int64,
+      budget : CompressedStreamBudget,
+    ) : Bytes
+      bounds, result_size = preflight_indexed_range!(data, index, start, finish, nil, budget)
+      output = Bytes.new(result_size.to_i)
+      decode_indexed_range_into(
+        data,
+        index,
+        bounds,
+        start,
+        finish,
+        output,
+        CompressedBlock::DecodeWorkspace.new,
+        budget,
+      )
+      output
+    end
+
+    private def self.preflight_indexed_range!(
+      data : Bytes,
+      index : CompressedFrameIndex,
+      start : Int64,
+      finish : Int64,
+      destination : Bytes?,
+      budget : CompressedStreamBudget,
+    ) : {Tuple(Int32, Int32), Int64}
+      budget.ensure_direction(false)
+      if start < 0 || finish < start
+        raise ArgumentError.new("logical range must be nonnegative and ordered")
+      end
+      result_size = finish - start
+      if result_size > Int32::MAX
+        raise CorruptPartError.new("logical range result exceeds supported in-memory domain")
+      end
+      if data.empty? || data.size.to_i64 > budget.limits.max_file_bytes || data.size > Int32::MAX
+        raise CorruptPartError.new("data file exceeds supported in-memory limit")
+      end
+      unless data.size.to_i64 == index.data_size
+        raise CorruptPartError.new("compressed data image differs from its frame index")
+      end
+      if finish > index.logical_size
+        raise ArgumentError.new("logical range is outside the decompressed stream")
+      end
+      if bytes = destination
+        unless bytes.size.to_i64 == result_size
+          raise ArgumentError.new("logical range destination must match the requested byte count")
         end
+        raise BoundsError.new("logical range destination must be writable") if bytes.read_only?
+      end
 
-        # Preserve read_ranges accounting even when complete frames decode
-        # directly into caller-owned storage. Both aggregate limits are
-        # consumed before checksum work or the first destination write.
-        budget.reserve_decoded_bytes(decoded_work)
-        budget.reserve_result_bytes(result_size)
+      # Matches read_range_into's one transport range-record charge. Compact's
+      # physical context separately charges its caller-owned range descriptor.
+      budget.reserve_records(1_i64)
+      bounds = index.touched_frame_bounds(start, finish)
+      reserve_indexed_decode_work!(data, index, bounds, result_size, budget)
+      {bounds, result_size}
+    end
 
-        index.frames.each do |frame|
-          next if result_size == 0 || frame.logical_start >= finish || frame.logical_end <= start
-          # A failed call's caller-owned destination must be discarded. Each
-          # individual frame is authenticated before its output slice is used.
-          verify_frame_checksum!(data, frame)
-          whole_frame = frame.logical_start >= start && frame.logical_end <= finish
-          if whole_frame && (frame.method == CompressedBlock::METHOD_LZ4 || frame.method == CompressedBlock::METHOD_ZSTD)
-            destination_offset = (frame.logical_start - start).to_i
-            frame_size = frame.decompressed_size.to_i
-            decoded = CompressedBlock.decode_frame_into_destination(
-              data,
-              frame.compressed_offset,
-              destination[destination_offset, frame_size],
-              limits.max_frame_compressed_bytes,
-              limits.max_frame_decompressed_bytes
-            )
-            unless decoded.end_offset == frame.end_offset && decoded.output.size.to_i64 == frame.decompressed_size
-              raise CorruptPartError.new("decoded compressed frame disagrees with its indexed header")
-            end
-          else
-            decoded = decode_indexed_frame(data, frame, workspace, limits)
-            copy_interval(decoded, frame, start, finish, destination, -start)
-          end
+    private def self.reserve_indexed_decode_work!(
+      data : Bytes,
+      index : CompressedFrameIndex,
+      bounds : Tuple(Int32, Int32),
+      result_size : Int64,
+      budget : CompressedStreamBudget,
+    ) : Nil
+      decoded_work = 0_i64
+      frame_index = bounds[0]
+      while frame_index < bounds[1]
+        frame = index.frames[frame_index]
+        decoded_work = checked_add(decoded_work, frame.decompressed_size, "decoded work")
+        if frame.method == CompressedBlock::METHOD_MULTIPLE
+          decoded_work = checked_add(decoded_work, multiple_nested_size(data, frame, budget.limits), "nested decoded work")
         end
+        frame_index += 1
+      end
+      budget.reserve_decoded_bytes(decoded_work)
+      budget.reserve_result_bytes(result_size)
+      nil
+    end
+
+    private def self.decode_indexed_range_into(
+      data : Bytes,
+      index : CompressedFrameIndex,
+      bounds : Tuple(Int32, Int32),
+      start : Int64,
+      finish : Int64,
+      destination : Bytes,
+      workspace : CompressedBlock::DecodeWorkspace,
+      budget : CompressedStreamBudget,
+    ) : Nil
+      # Both variants are charged in the shared preflight above; the detached
+      # variant allocates its result only after that reservation returns.
+      frame_index = bounds[0]
+      while frame_index < bounds[1]
+        frame = index.frames[frame_index]
+        # A failed call's caller-owned destination must be discarded. Each
+        # individual frame is authenticated before its output slice is used.
+        verify_frame_checksum!(data, frame)
+        whole_frame = frame.logical_start >= start && frame.logical_end <= finish
+        if whole_frame && (frame.method == CompressedBlock::METHOD_LZ4 || frame.method == CompressedBlock::METHOD_ZSTD)
+          destination_offset = (frame.logical_start - start).to_i
+          frame_size = frame.decompressed_size.to_i
+          decoded = CompressedBlock.decode_frame_into_destination(
+            data,
+            frame.compressed_offset,
+            destination[destination_offset, frame_size],
+            budget.limits.max_frame_compressed_bytes,
+            budget.limits.max_frame_decompressed_bytes
+          )
+          unless decoded.end_offset == frame.end_offset && decoded.output.size.to_i64 == frame.decompressed_size
+            raise CorruptPartError.new("decoded compressed frame disagrees with its indexed header")
+          end
+        else
+          decoded = decode_indexed_frame(data, frame, workspace, budget.limits)
+          copy_interval(decoded, frame, start, finish, destination, -start)
+        end
+        frame_index += 1
       end
       nil
     end
