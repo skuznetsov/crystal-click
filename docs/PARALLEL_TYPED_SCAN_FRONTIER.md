@@ -148,6 +148,112 @@ oracle. The measured aggregate values were
 | Crystal reference worker binary | `fe2d083bce098fe5753178970cb21aac8dcd17c28f61fbda3aa6977cf3a03309` |
 | Crystal candidate worker binary | `de5bc91780259384bc26c871b29937fee360cc3c4ac143232263ddc9f25f1d8c` |
 
+### Compact scan profile
+
+The November 15, 2026 run profiled `4fcf1e1` on an Apple M2 Max with Crystal
+1.22.3 `--release` (LLVM 23.1.5, Boehm 8.2.12) and the same official ClickHouse
+26.10.1.1201 binary (Clang 22.1.8, jemalloc). The regenerated part matched
+the complete Compact file manifest above. Its `data.bin` contains 32 LZ4
+frames of 64 KiB decoded each, one frame per selected column and data mark.
+
+The uninstrumented comparison used four warmup pairs and 21 timed pairs per
+worker count with the same preconnected HTTP boundary and checksums enabled
+in both engines. Both complete RowBinary exports and all aggregate responses
+matched the oracle. `CHECK TABLE` passed and the part manifest stayed fixed.
+
+| Workers | Crystal median ± MAD, ms | ClickHouse median ± MAD, ms | Ratio |
+| ---: | ---: | ---: | ---: |
+| 1 | 56.355 ± 1.084 | 2.748 ± 0.234 | 20.51× |
+| 4 | 61.601 ± 2.946 | 2.087 ± 0.221 | 29.52× |
+
+The four-worker Crystal median was 9.3% higher, with overlapping observed
+sample ranges. Separate logged queries read 1,325,955 compressed bytes in 32
+blocks at both ClickHouse thread counts. At four threads, each reader logged
+32,768 rows, totaling 131,072 rows. The Crystal witness observed four isolated
+execution contexts with ordered delivery of all 16 data marks.
+
+Separate eight-second macOS `sample` captures used the uninstrumented worker
+at 1 ms intervals with repeated checked aggregate requests. Four-worker
+stacks repeatedly parked at `__psynch_mutexwait` under `BinaryValue.new`,
+`GC_malloc_kind`, and `GC_generic_malloc_many`. That Boehm refill path takes
+the allocator lock and can trigger a collection. A parked stack can be
+waiting for another thread's collection, and thread snapshots do not give
+a wall-time percentage. [Boehm allocator source][boehm-refill].
+
+The allocation controls used one scan per fresh Release process over the
+same warm file pages. They ran 12 timed rounds with one request per setting
+in rotating order, reversed every other round. The connection and part
+preparation preceded timing, and every aggregate still matched the oracle.
+The probe read `GC_get_heap_usage_safe` and collection event counters
+around the request. The allocation totals include a small telemetry cost.
+These are distinct from the steady worker medians above.
+
+| Crystal runtime mode | 1 worker, ms | 4 workers, ms | Allocated per scan, 1 / 4 workers |
+| --- | ---: | ---: | ---: |
+| Boehm, collection enabled | 65.152 ± 2.136 | 75.129 ± 4.451 | 112.018 / 113.881 MiB |
+| Same binary after `GC.disable` | 56.472 ± 0.751 | 60.539 ± 2.562 | 112.021 / 113.894 MiB |
+| `-Dgc_none` (libc malloc) | 53.975 ± 0.947 | 27.282 ± 1.128 | — |
+
+The times are median ± MAD. At one and four workers, Boehm recorded median
+collection counts of 20 and 15 per scan. The median sums of the durations
+from collection start to end were 15.038 and 12.017 ms. The disabled mode
+recorded zero collections in every scan with a similar allocation volume.
+Disabling collections improved the four-worker time in all 12 rounds.
+Its four-worker median was still 7.2% above the one-worker median, slower
+in 10 of 12 rounds. With libc, four workers reduced the median by 1.98× and
+had lower latency in all 12 rounds. The build switches the allocator and
+runtime thread registration as well as disabling reclamation. Each process
+exited after one scan to bound unreclaimed memory. A separate two-second
+capture across three checked four-worker scans with `GC.disable`
+found the same `BinaryValue.new` allocator mutex stacks with zero collection
+events. The controls expose both collection and contention in the Boehm
+allocation path. GC mode also changes heap growth and reuse, so the wall-time
+differences combine these effects.
+
+For these two columns Crystal decodes 262,144 owned `BinaryValue` leaves,
+visits them for materialization accounting and typed-carrier checks, and
+copies their values into packed `Array(UInt64)` buffers. The ClickHouse
+build's `SerializationNumber` deserializes the fixed-width data through
+`readBig` into a contiguous `ColumnVector` backing array. Those routes
+present different amounts of work to LLVM before machine-code generation.
+[Crystal decode and accounting](../src/crystal_click/compact_part_table.cr#L579),
+[Crystal typed conversion](../src/crystal_click/binary_value_typed_batch_adapter.cr#L101),
+[ClickHouse bulk numeric deserialization][ch-serialization-number].
+
+The instrumented Release probe timed these regions over 20 checked
+requests per worker count after a separate smoke request. The outer scan
+and the reduction run on the caller. Timers inside parallel readers sum
+elapsed time across workers, including contention. Their values can
+overlap and exceed end-to-end latency. The instrumented HTTP medians were
+54.368 and 73.400 ms. Nearby unpaired checks with the stock worker gave
+56.056 and 70.746 ms (10 and 8 requests, respectively). Run-to-run variation
+limits attribution of these differences to instrumentation.
+
+| Timed region | 1 worker, median ms | 4 workers, median ms |
+| --- | ---: | ---: |
+| Outer scan including reduction | 54.150 | 73.098 |
+| Compact read windows | 7.195 | 16.447 |
+| Normalize Compact streams | 6.559 | 18.038 |
+| Decode streams into `BinaryValue` | 24.988 | 200.430 |
+| Estimate typed carrier materialization | 4.201 | 8.926 |
+| Install typed batch carriers | 3.685 | 7.968 |
+| Caller reduction | 0.075 | 0.123 |
+
+Each request decoded exactly 32 frames and 2 MiB of values. The frame
+decode timer within read windows was 4.123 and 4.621 ms summed,
+respectively. The scan rebuilt the full 32-header frame index for each
+column and mark. That produced 32 index builds at one worker and 40 at
+four, including the additional reader admission work. At four workers,
+reopening readers summed to 4.613 ms and acknowledgement waits summed to
+4.226 ms. The ordered caller spent 72.840 ms receiving batches. The
+decoder accumulated the largest increase in worker elapsed time, and
+the caller's reduction was small on this fixture.
+[Compact range transport](../src/crystal_click/compressed_mark_reader.cr#L281),
+[Parallel scan handoff](../src/crystal_click/typed_part_table_parallel_scan.cr#L108).
+
+[boehm-refill]: https://github.com/ivmai/bdwgc/blob/v8.2.12/mallocx.c#L284-L320
+[ch-serialization-number]: https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationNumber.cpp#L320-L335
+
 ## Reproduce the comparison
 
 Run from the repository root with Python 3, Crystal, and the pinned
@@ -215,6 +321,8 @@ bench_worker=$!
 
 After the worker prints `READY`, run the timing track and stop the worker.
 The JSON contains the raw paired samples, checks, and summary statistics.
+The Compact profile comparison used only the two parallel-mode Compact
+tracks, with `--warmups 4 --repeats 21` at revision `4fcf1e1`.
 
 ```sh
 python3 -B scripts/parallel_scan_benchmark.py bench \
