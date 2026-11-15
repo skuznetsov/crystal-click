@@ -315,6 +315,34 @@ module CrystalClick
       scan_typed_rows(batch_rows) { |batch| yield batch }
     end
 
+    # :nodoc:
+    # Materialize a selected ordered mark list for an independent parallel
+    # reader while preserving the existing typed scan path and budgets.
+    def scan_typed_mark_indices(
+      mark_indices : Array(Int32),
+      batch_rows : Int,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
+        raise BoundsError.new("batch row count is out of range")
+      end
+      unless @entries.size == 1
+        raise BoundsError.new("parallel mark range requires one physical Wide part")
+      end
+      mark_count = @entries[0].mark_row_counts.size
+      selected_marks = mark_indices.dup
+      previous = -1
+      selected_marks.each do |mark_index|
+        unless mark_index >= 0 && mark_index < mark_count && mark_index > previous
+          raise BoundsError.new("parallel Wide mark indices are outside the physical grid or unordered")
+        end
+        previous = mark_index
+      end
+      raise BoundsError.new("parallel Wide mark list is empty") if selected_marks.empty?
+      scan_typed_rows(batch_rows, [selected_marks], whole_marks: false) { |batch| yield batch }
+      nil
+    end
+
     # Scan a bounded physical-row interval in caller-selected part order.
     # Only marks intersecting the interval have selected column payloads
     # materialized; each selected mark is still decoded under the existing

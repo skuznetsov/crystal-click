@@ -15,6 +15,7 @@ module CrystalClick
     @column_types : Array({String, String})
     @column_sources : Array({String, String, String})
     @part_mark_row_counts : Array(Array(UInt64))
+    @projection_selected : Bool
 
     def self.open_selected_typed(parts : Array(String), columns : Array(String)) : TypedPartTable
       new(parts, columns)
@@ -36,6 +37,7 @@ module CrystalClick
       columns : Array(String),
       projection_selection : ProjectionChildSelection? = nil,
     )
+      @projection_selected = !projection_selection.nil?
       raise BoundsError.new("no parts selected") if parts.empty?
       raise BoundsError.new("part count exceeds limit") if parts.size > WidePartTable::MAX_PARTS
       raise BoundsError.new("no columns selected") if columns.empty?

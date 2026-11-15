@@ -208,6 +208,24 @@ a caller-selected ordered list of compatible Wide and Compact part paths. Its
 explicit list. The preflight checks selected schemas and rejects overlapping
 part identities within a partition.
 
+To decode ordinary Wide and Compact parts concurrently, opt in from the
+catalog or the direct part reader. The catalog checks the DDL and resolves
+the parts as it does for `scan_typed`.
+
+```crystal
+total = 0_u64
+table.scan_typed_parallel(["metric"], workers: 4) do |batch|
+  batch.values_for("metric", UInt64).each { |value| total &+= value }
+end
+```
+
+The callback runs on the calling fiber in part and row order. The reader
+assigns distinct physical marks to workers, including within a single part.
+The threaded path supports primitive 8–64-bit integer and 32/64-bit float columns
+with Crystal execution contexts. `workers: 1` uses `scan_typed`. Keep part
+files immutable while reading. See the
+[parallel scan profile and comparison](docs/PARALLEL_TYPED_SCAN_FRONTIER.md).
+
 ## Materialized views and projections
 
 The offline catalog exposes persisted materialized-view targets and SELECT

@@ -3,18 +3,40 @@ module CrystalClick
   # Counts remain charged after a failed operation so retries cannot reset work.
   class CompressedStreamBudget
     getter limits : CompressedStreamLimits
-    getter file_byte_count : Int64
-    getter record_count : Int64
-    getter decoded_byte_count : Int64
-    getter result_byte_count : Int64
 
     @writing : Bool
+    @mutex : Thread::Mutex?
 
     def initialize(@limits : CompressedStreamLimits = CompressedStreamLimits.new, @writing : Bool = false)
       @file_byte_count = 0_i64
       @record_count = 0_i64
       @decoded_byte_count = 0_i64
       @result_byte_count = 0_i64
+      @mutex = nil
+    end
+
+    def file_byte_count : Int64
+      with_budget_lock { @file_byte_count }
+    end
+
+    def record_count : Int64
+      with_budget_lock { @record_count }
+    end
+
+    def decoded_byte_count : Int64
+      with_budget_lock { @decoded_byte_count }
+    end
+
+    def result_byte_count : Int64
+      with_budget_lock { @result_byte_count }
+    end
+
+    # :nodoc:
+    # Enable before sharing this budget across parallel reads. Ordinary readers
+    # keep the original lock-free serial path.
+    def enable_synchronization! : Nil
+      @mutex ||= Thread::Mutex.new
+      nil
     end
 
     def writing? : Bool
@@ -35,26 +57,38 @@ module CrystalClick
 
     def reserve_file_bytes(count : Int64) : Nil
       ensure_nonnegative(count)
-      preflight_file_bytes(count)
-      @file_byte_count += count
+      with_budget_lock do
+        ensure_capacity(count, @limits.max_file_bytes - @file_byte_count, "file-byte")
+        @file_byte_count += count
+      end
+      nil
     end
 
     def reserve_records(count : Int64) : Nil
       ensure_nonnegative(count)
-      preflight_records(count)
-      @record_count += count
+      with_budget_lock do
+        ensure_capacity(count, @limits.max_records - @record_count, "header-record")
+        @record_count += count
+      end
+      nil
     end
 
     def reserve_decoded_bytes(count : Int64) : Nil
       ensure_nonnegative(count)
-      preflight_decoded_bytes(count)
-      @decoded_byte_count += count
+      with_budget_lock do
+        ensure_capacity(count, @limits.max_decoded_bytes - @decoded_byte_count, "decoded-byte")
+        @decoded_byte_count += count
+      end
+      nil
     end
 
     def reserve_result_bytes(count : Int64) : Nil
       ensure_nonnegative(count)
-      preflight_result_bytes(count)
-      @result_byte_count += count
+      with_budget_lock do
+        ensure_capacity(count, @limits.max_result_bytes - @result_byte_count, "result-byte")
+        @result_byte_count += count
+      end
+      nil
     end
 
     # Non-mutating whole-operation checks let a column writer prove every
@@ -62,22 +96,42 @@ module CrystalClick
     # Individual encoders still consume these counters as they produce files.
     def preflight_file_bytes(count : Int64) : Nil
       ensure_nonnegative(count)
-      ensure_capacity(count, @limits.max_file_bytes - @file_byte_count, "file-byte")
+      with_budget_lock do
+        ensure_capacity(count, @limits.max_file_bytes - @file_byte_count, "file-byte")
+      end
+      nil
     end
 
     def preflight_records(count : Int64) : Nil
       ensure_nonnegative(count)
-      ensure_capacity(count, @limits.max_records - @record_count, "header-record")
+      with_budget_lock do
+        ensure_capacity(count, @limits.max_records - @record_count, "header-record")
+      end
+      nil
     end
 
     def preflight_decoded_bytes(count : Int64) : Nil
       ensure_nonnegative(count)
-      ensure_capacity(count, @limits.max_decoded_bytes - @decoded_byte_count, "decoded-byte")
+      with_budget_lock do
+        ensure_capacity(count, @limits.max_decoded_bytes - @decoded_byte_count, "decoded-byte")
+      end
+      nil
     end
 
     def preflight_result_bytes(count : Int64) : Nil
       ensure_nonnegative(count)
-      ensure_capacity(count, @limits.max_result_bytes - @result_byte_count, "result-byte")
+      with_budget_lock do
+        ensure_capacity(count, @limits.max_result_bytes - @result_byte_count, "result-byte")
+      end
+      nil
+    end
+
+    private def with_budget_lock(& : -> T) : T forall T
+      if mutex = @mutex
+        mutex.synchronize { yield }
+      else
+        yield
+      end
     end
 
     private def ensure_nonnegative(count : Int64) : Nil

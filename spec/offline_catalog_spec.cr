@@ -168,6 +168,10 @@ describe CrystalClick::OfflineCatalog do
       expect_raises(CrystalClick::BoundsError) do
         table.scan_typed_window(["left"], 1_u64, 1) { |_batch| callbacks += 1 }
       end
+      table.scan_typed_parallel(["left"], workers: 2) { |_batch| callbacks += 1 }
+      expect_raises(CrystalClick::BoundsError) do
+        table.scan_typed_parallel(["left"], workers: 0) { |_batch| callbacks += 1 }
+      end
       callbacks.should eq(0)
     end
   end
@@ -532,7 +536,7 @@ describe CrystalClick::OfflineCatalog do
       table.part_candidates.map(&.name).should eq(["all_1_1_0", "all_1_1_1"])
       table.resolved_scan_parts.map(&.name).should eq(["all_1_1_1"])
 
-      {"UInt64", "numeric", "typed"}.each do |scan_kind|
+      {"UInt64", "numeric", "typed", "parallel"}.each do |scan_kind|
         seen_rows = 0_u64
         scan = ->(batch : CrystalClick::WidePartTableBatch) do
           batch.part_name.should eq("all_1_1_1")
@@ -543,8 +547,11 @@ describe CrystalClick::OfflineCatalog do
           table.scan_uint64(["left"], batch_rows: 127, &scan)
         when "numeric"
           table.scan_numeric(["left"], batch_rows: 127, &scan)
-        else
+        when "typed"
           table.scan_typed(["left"], batch_rows: 127, &scan)
+        else
+          workers = {% if !flag?(:without_mt) && (!flag?(:preview_mt) || flag?(:execution_context)) %} 2 {% else %} 1 {% end %}
+          table.scan_typed_parallel(["left"], workers: workers, batch_rows: 127, &scan)
         end
         seen_rows.should eq(OFFLINE_TABLE_ROWS.to_u64)
       end

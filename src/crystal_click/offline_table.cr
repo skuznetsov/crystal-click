@@ -1693,6 +1693,25 @@ module CrystalClick
       end
     end
 
+    # Scan the resolved, immutable MergeTree parts with up to `workers`
+    # decoders. The calling fiber receives ordered, borrowed batches.
+    def scan_typed_parallel(
+      columns : Array(String),
+      workers : Int,
+      batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
+      &block : WidePartTableBatch -> Nil
+    ) : Nil
+      TypedPartTable.validate_parallel_workers!(workers)
+      return scan_typed(columns, batch_rows, &block) if workers == 1
+
+      case reader = open_typed_reader(columns, batch_rows, "batch")
+      when TypedPartTable
+        reader.scan_typed_parallel(workers, batch_rows, &block)
+      when WidePartTable
+        raise UnsupportedFormatError.new("parallel typed scan does not support flattened Nested table bindings")
+      end
+    end
+
     # Open exactly one named candidate from the globally resolved covering
     # set. Resolution and the ordinary typed DDL/physical checks remain in
     # force; this seam does not let callers bypass candidate selection with a

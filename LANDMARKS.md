@@ -1,5 +1,19 @@
 # Crystal Click landmarks
 
+## Ordered parallel typed part scans
+
+- The typed part reader and offline catalog assign ordinary Wide and Compact
+  marks to isolated workers. The caller sees the serial order and coordinates.
+  Each worker waits for the callback to release its borrowed batch before
+  reusing buffers. Compact workers share the original part's transport budget.
+- The native-backed comparison pins `main` at `09d3d95` and ClickHouse at
+  `26.10.1.1201`. The Compact pilot exposed cumulative file-byte and single-mark
+  materialization limits before timing. The admitted workload has 16 marks of
+  8,192 rows and verifies the full RowBinary sequence plus every timed reduction.
+  Refresh after reader admission, transport budgets, mark decoding, worker
+  scheduling, timing boundaries, or native pin changes. See the
+  [parallel scan contract and measurements](docs/PARALLEL_TYPED_SCAN_FRONTIER.md).
+
 ## Compressed Compact aggregate projection indexes — W301
 
 - Compact MRK4 aggregate callbacks opt into `primary.cidx` through

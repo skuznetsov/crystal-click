@@ -22,9 +22,21 @@ module CrystalClick
     @emit_part_name : String
     @emit_part_path : String
     @mark_row_counts : Array(UInt64)
+    @transport_budget : CompressedStreamBudget
 
     def self.open_selected_typed(parts : Array(String), columns : Array(String)) : CompactPartTable
       new(parts, columns)
+    end
+
+    # :nodoc:
+    # Reopen this physical part on a worker while preserving the owning table's
+    # cumulative transport budget across worker admission and selected marks.
+    def self.open_selected_typed_with_transport_budget(
+      parts : Array(String),
+      columns : Array(String),
+      budget : CompressedStreamBudget,
+    ) : CompactPartTable
+      new(parts, columns, nil, budget)
     end
 
     # :nodoc:
@@ -43,6 +55,7 @@ module CrystalClick
       parts : Array(String),
       columns : Array(String),
       projection_name : String? = nil,
+      shared_transport_budget : CompressedStreamBudget? = nil,
     )
       unless parts.size == 1
         raise BoundsError.new("Compact table backend requires exactly one physical part")
@@ -75,7 +88,8 @@ module CrystalClick
         @part_path, @emit_part_name = validate_selected_part(parts[0])
         @emit_part_path = @part_path
       end
-      budget = CompressedStreamBudget.read_default
+      budget = shared_transport_budget || CompressedStreamBudget.read_default
+      @transport_budget = budget
       projection_admission_session = if projection_name
                                        CompactProjectionAggregateReaderAdmissionSession.new(@part_path, budget)
                                      end
@@ -245,6 +259,13 @@ module CrystalClick
       @checksum_verification = ChecksumVerification::SizeChecked
     end
 
+    # :nodoc:
+    # The caller enables synchronization before any worker shares this budget.
+    def parallel_scan_transport_budget! : CompressedStreamBudget
+      @transport_budget.enable_synchronization!
+      @transport_budget
+    end
+
     def columns : Array(String)
       @columns.map { |column| String.new(column.to_slice) }
     end
@@ -293,6 +314,28 @@ module CrystalClick
     ) : Nil
       validate_batch_rows(batch_rows)
       scan_selected_marks(nil, batch_rows, nil) { |batch| yield batch }
+      nil
+    end
+
+    # :nodoc:
+    # Materialize an ordered mark list through the established Compact typed
+    # path, retaining its normal frame checksum verification policy.
+    def scan_typed_mark_indices(
+      mark_indices : Array(Int32),
+      batch_rows : Int,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      validate_batch_rows(batch_rows)
+      selected_marks = mark_indices.dup
+      previous = -1
+      selected_marks.each do |mark_index|
+        unless mark_index >= 0 && mark_index < @mark_row_counts.size && mark_index > previous
+          raise BoundsError.new("parallel Compact mark indices are outside the physical grid or unordered")
+        end
+        previous = mark_index
+      end
+      raise BoundsError.new("parallel Compact mark list is empty") if selected_marks.empty?
+      scan_selected_marks(selected_marks, batch_rows, nil) { |batch| yield batch }
       nil
     end
 

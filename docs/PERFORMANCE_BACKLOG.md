@@ -1,6 +1,8 @@
 # Performance Backlog
 
-Status: **deferred; no performance code changes in this task**.
+The Delta+ZSTD campaign and optimization experiments below remain deferred.
+The [parallel scan comparison](PARALLEL_TYPED_SCAN_FRONTIER.md) covers a
+separate LZ4 workload on current Wide and Compact readers.
 
 Scope: one generated 10,000,000-row Wide `UInt64` Delta+ZSTD part, measured at
 baseline revision `8e59ec6` before the table-reader change. These observations

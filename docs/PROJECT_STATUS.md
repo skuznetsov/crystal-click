@@ -2,6 +2,14 @@
 
 ## Current qualification
 
+### Ordered parallel typed part scans
+
+The catalog and direct typed reader can decode ordinary Wide and Compact
+parts on isolated worker threads. Workers take distinct physical marks,
+including marks within a single part. Callbacks keep the serial scan's part
+order, row order, and offsets. This path covers direct primitive numeric
+columns. See the [parallel scan profile and comparison](PARALLEL_TYPED_SCAN_FRONTIER.md).
+
 ### W301 Compressed Compact aggregate projection indexes
 
 Compact MRK4 aggregate children use `primary.cidx` when the callback
@@ -242,11 +250,11 @@ S0/S1 and V3 statistics matrix. See the
 4. **Module boundaries.** Continue moving staged validation, physical stream
    binding, and granule orchestration into focused owners with stable public
    APIs. See the [modularization frontier](MODULARIZATION_FRONTIER.md).
-5. **Memory and throughput.** After type, MV, and projection compatibility,
-   establish comparable Crystal and ClickHouse measurements for the same data,
-   operation, and validation policy. Then measure allocation, peak memory, and
-   throughput changes against the baseline. The target of at most 10% slowdown
-   remains unmeasured. See the [performance backlog](PERFORMANCE_BACKLOG.md).
+5. **Memory and throughput.** Extend the [parallel scan comparison](PARALLEL_TYPED_SCAN_FRONTIER.md)
+   across larger parts, codecs, types, and cache regimes. After type, MV, and
+   projection compatibility, measure allocation and peak memory alongside
+   throughput on representative workloads. Use that matrix to evaluate the
+   10% slowdown target. See the [performance backlog](PERFORMANCE_BACKLOG.md).
 
 ## Previous qualification
 
