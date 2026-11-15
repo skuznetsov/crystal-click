@@ -51,6 +51,117 @@ private def w260_u64_bytes(value : UInt64) : Bytes
   Bytes.new(8) { |index| ((value >> (index * 8)) & 0xff_u64).to_u8 }
 end
 
+private def w260_read_u64_le(bytes : Bytes, offset : Int) : UInt64
+  value = 0_u64
+  8.times { |index| value |= bytes[offset + index].to_u64 << (index * 8) }
+  value
+end
+
+private def w260_write_u64_part(
+  part_path : String,
+  mark_format : CrystalClick::CompactMarkFormat,
+  values : Array(UInt64),
+  rows_per_mark : Int32 = 2,
+  frame_bytes : Int32 = 11,
+) : String
+  raise ArgumentError.new("W260 UInt64 fixture needs at least one row") if values.empty?
+  raise ArgumentError.new("W260 UInt64 fixture rows_per_mark must be positive") unless rows_per_mark > 0
+
+  type = w260_parse_type("UInt64")
+  granules = [] of Array(CrystalClick::BinaryValue)
+  offset = 0
+  while offset < values.size
+    end_offset = Math.min(offset + rows_per_mark, values.size)
+    granules << values[offset...end_offset].map { |value| CrystalClick::BinaryValue.uint64(value) }
+    offset = end_offset
+  end
+  column = CrystalClick::CompactPartColumn.binary_bulk("payload", type, granules)
+  keys = Array(UInt64).new(values.size) { |index| index.to_u64 + 1_u64 }
+  CrystalClick::CompactPartWriter.write_uint64_columns(
+    part_path,
+    "pk",
+    keys.to_unsafe.to_slice(keys.size),
+    [column],
+    rows_per_mark: rows_per_mark,
+    frame_bytes: frame_bytes,
+    mark_format: mark_format,
+  )
+end
+
+private def w260_mark_file_name(mark_format : CrystalClick::CompactMarkFormat) : String
+  mark_format.mrk3? ? "data.mrk3" : "data.mrk4"
+end
+
+private def w260_physical_slot_index(
+  part_path : String,
+  mark_format : CrystalClick::CompactMarkFormat,
+  column_name : String,
+) : Tuple(Int32, Int32)
+  columns = CrystalClick::WidePart.parse_columns_metadata(File.read(File.join(part_path, "columns.txt")))
+  substreams = if mark_format.mrk4?
+                 CrystalClick::WidePart.parse_columns_substreams_metadata(
+                   File.read(File.join(part_path, "columns_substreams.txt")),
+                   columns,
+                 )
+               end
+  roster = CrystalClick::CompactColumnsSubstreams.new(mark_format, columns, substreams)
+  slot_index = -1_i32
+  roster.roster.each_with_index do |slot, index|
+    if slot.column_name == column_name
+      slot_index = index.to_i32
+      break
+    end
+  end
+  raise "W260 selected physical slot is missing" if slot_index < 0
+  {slot_index, roster.slot_count}
+end
+
+private def w260_flip_marked_frame_checksum!(
+  part_path : String,
+  mark_format : CrystalClick::CompactMarkFormat,
+  column_name : String,
+  mark_index : Int32,
+) : Nil
+  mark_name = w260_mark_file_name(mark_format)
+  marks = File.read(File.join(part_path, mark_name)).to_slice
+  slot_index, slot_count = w260_physical_slot_index(part_path, mark_format, column_name)
+  record_width = slot_count * 16 + 8
+  compressed_offset = w260_read_u64_le(marks, mark_index * record_width + slot_index * 16).to_i
+
+  data_path = File.join(part_path, "data.bin")
+  data = File.read(data_path).to_slice.dup
+  unless compressed_offset >= 0 && compressed_offset <= data.size - CrystalClick::CompressedBlock::CHECKSUM_SIZE
+    raise "W260 selected mark does not start at a compressed frame"
+  end
+  data[compressed_offset] ^= 1_u8
+  File.write(data_path, data)
+  CompactPhysicalContextW259Fixture.refresh_checksums(part_path)
+end
+
+private def w260_shorten_marked_uint64_span!(
+  part_path : String,
+  mark_format : CrystalClick::CompactMarkFormat,
+  column_name : String,
+) : Nil
+  mark_name = w260_mark_file_name(mark_format)
+  marks = File.read(File.join(part_path, mark_name)).to_slice.dup
+  slot_index, slot_count = w260_physical_slot_index(part_path, mark_format, column_name)
+  raise "W260 UInt64 fixture has an invalid physical roster" unless slot_count > slot_index
+  decompressed_offset_field = slot_index * 16 + 8
+  decompressed_offset = w260_read_u64_le(marks, decompressed_offset_field)
+  # The helper writer uses 11-byte frames. Moving the first payload callback
+  # one byte into its frame keeps the mark grid monotone while making its
+  # fixed-width span 15 bytes instead of 16.
+  raise "W260 span mutation would cross a frame" unless decompressed_offset < 10_u64
+  CompactPhysicalContextW259Fixture.write_u64(
+    marks,
+    decompressed_offset_field,
+    decompressed_offset + 1_u64,
+  )
+  File.write(File.join(part_path, mark_name), marks)
+  CompactPhysicalContextW259Fixture.refresh_checksums(part_path)
+end
+
 private def w260_join_bytes(parts : Array(Bytes)) : Bytes
   memory = IO::Memory.new
   parts.each { |part| memory.write(part) }
@@ -793,8 +904,6 @@ describe CrystalClick::CompactColumnsSubstreams do
 end
 
 class CrystalClick::CompactBinaryBulkColumnReader
-  class_property w260_test_read_marks_calls = 0
-
   def retained_workspace_bytes : UInt64
     bytes = previous_def
     extra = @w260_test_workspace_extra_bytes || 0_u64
@@ -802,15 +911,6 @@ class CrystalClick::CompactBinaryBulkColumnReader
       raise CrystalClick::CorruptPartError.new("W260 injected workspace overflows")
     end
     bytes + extra
-  end
-
-  def read_marks(
-    first_mark : Int,
-    mark_count : Int,
-    workspace_observer : Proc(UInt64, Nil),
-  ) : Array(Array(BinaryValue))
-    CrystalClick::CompactBinaryBulkColumnReader.w260_test_read_marks_calls += 1
-    previous_def
   end
 
   def w260_test_inject_logical_read_bytes!(bytes : UInt64) : Nil
@@ -906,30 +1006,36 @@ describe CrystalClick::CompactPartTable do
     root = File.tempname("crystal-click-w260-aggregate-workspace-")
     part_path = File.join(root, "all_1_1_0")
     begin
-      # Both selected readers are real independent Compact contexts opened from
-      # this tiny two-column part. Each receives a synthetic conservative
-      # workspace estimate; no large payload is allocated. Each estimate
-      # remains admissible in isolation, while their live sum does not.
-      w260_write_workspace_part(part_path, 0, include_baseline_column: true)
-      table = CrystalClick::CompactPartTable.open_selected_typed([part_path], ["payload", "baseline"])
+      Dir.mkdir(root)
+      # Both selected UInt64 readers are independent Compact contexts. The
+      # first selected frame has a valid manifest but a bad compressed-frame
+      # checksum, so an eager read would fail with a checksum error before the
+      # aggregate workspace refusal. No large payload is allocated.
+      w260_write_u64_part(
+        part_path,
+        CrystalClick::CompactMarkFormat::Mrk4,
+        [7_u64, 8_u64, 9_u64, 10_u64] of UInt64,
+        rows_per_mark: 2,
+        frame_bytes: 16,
+      )
+      w260_flip_marked_frame_checksum!(part_path, CrystalClick::CompactMarkFormat::Mrk4, "payload", 0)
+      table = CrystalClick::CompactPartTable.open_selected_typed([part_path], ["payload", "pk"])
       half_limit = CrystalClick::WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64 // 2_u64
       payload_workspace = table.w260_test_inject_reader_workspace_extra!("payload", half_limit)
-      baseline_workspace = table.w260_test_inject_reader_workspace_extra!("baseline", half_limit)
+      pk_workspace = table.w260_test_inject_reader_workspace_extra!("pk", half_limit)
       payload_workspace.should be < CrystalClick::WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
-      baseline_workspace.should be < CrystalClick::WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
-      (payload_workspace + baseline_workspace).should be > CrystalClick::WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
+      pk_workspace.should be < CrystalClick::WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
+      (payload_workspace + pk_workspace).should be > CrystalClick::WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
 
-      CrystalClick::CompactBinaryBulkColumnReader.w260_test_read_marks_calls = 0
       callbacks = 0
-      expect_raises(CrystalClick::CorruptPartError) do
+      expect_raises(CrystalClick::CorruptPartError, /selected mark exceeds aggregate materialization limit/) do
         table.scan_typed(batch_rows: 1) do |_batch|
           callbacks += 1
         end
       end
       callbacks.should eq(0)
-      # Refusal before callback alone is insufficient: the old implementation
-      # decoded `payload` before noticing the baseline owner of `baseline`.
-      CrystalClick::CompactBinaryBulkColumnReader.w260_test_read_marks_calls.should eq(0)
+      # The checksum is corrupt in the first selected mark, but aggregate
+      # workspace preflight rejects before attempting to authenticate it.
     ensure
       FileUtils.rm_rf(root)
     end
@@ -948,20 +1054,212 @@ describe CrystalClick::CompactPartTable do
       baseline_workspace.should be < CrystalClick::WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
       (payload_workspace + baseline_workspace).should be < CrystalClick::WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
 
-      CrystalClick::CompactBinaryBulkColumnReader.w260_test_read_marks_calls = 0
       callbacks = 0
       table.scan_typed(batch_rows: 1) do |batch|
         callbacks += 1
         batch.row_count.not_nil!.should eq(1_u64)
         batch.values_for("baseline").to_a.should eq([7_u64])
+        batch.values_for("baseline", UInt64).to_a.should eq([7_u64])
         payload = batch.binary_bulk_values_for("payload")
         payload.size.should eq(1)
         payload[0].elements.should be_empty
       end
       callbacks.should eq(1)
-      CrystalClick::CompactBinaryBulkColumnReader.w260_test_read_marks_calls.should eq(2)
     ensure
       FileUtils.rm_rf(root)
+    end
+  end
+end
+
+describe "Compact borrowed UInt64 typed scans" do
+  values = [
+    0_u64,
+    (1_u64 << 63) - 1_u64,
+    1_u64 << 63,
+    9_007_199_254_740_993_u64,
+    1_u64,
+    UInt64::MAX - 1_u64,
+    UInt64::MAX,
+    42_u64,
+  ] of UInt64
+  keys = (1_u64..8_u64).to_a
+  modes = [CrystalClick::CompactMarkFormat::Mrk3, CrystalClick::CompactMarkFormat::Mrk4]
+
+  modes.each do |mark_format|
+    it "preserves exact UInt64 values through #{mark_format} full, window, selected-mark, and parallel scans" do
+      root = File.tempname("crystal-click-w260-borrowed-uint64-")
+      part_path = File.join(root, "all_1_1_0")
+      Dir.mkdir(root)
+      begin
+        w260_write_u64_part(part_path, mark_format, values, rows_per_mark: 2, frame_bytes: 11)
+        compact = CrystalClick::CompactPartTable.open_selected_typed([part_path], ["payload", "pk"])
+        compact.columns.should eq(["payload", "pk"])
+        compact.column_types.should eq([{"payload", "UInt64"}, {"pk", "UInt64"}])
+        compact.part_mark_row_counts.should eq([[2_u64, 2_u64, 2_u64, 2_u64]])
+
+        full_values = [] of UInt64
+        full_keys = [] of UInt64
+        full_offsets = [] of UInt64
+        full_marks = [] of Int32
+        last_payload_addresses = Hash(Int32, UInt64).new
+        last_key_addresses = Hash(Int32, UInt64).new
+        compact.scan_typed(batch_rows: 1) do |batch|
+          batch.column_names.should eq(["payload", "pk"])
+          batch.row_count.not_nil!.should eq(1_u64)
+          payload = batch.values_for("payload")
+          payload.should eq(batch.values_for("payload", UInt64))
+          payload_address = payload.to_unsafe.address.to_u64
+          key_values = batch.values_for("pk", UInt64)
+          key_address = key_values.to_unsafe.address.to_u64
+          if previous_address = last_payload_addresses[batch.mark_index]?
+            payload_address.should eq(previous_address + sizeof(UInt64).to_u64)
+          end
+          if previous_address = last_key_addresses[batch.mark_index]?
+            key_address.should eq(previous_address + sizeof(UInt64).to_u64)
+          end
+          last_payload_addresses[batch.mark_index] = payload_address
+          last_key_addresses[batch.mark_index] = key_address
+          key_values.each_with_index do |value, index|
+            full_keys << value
+            full_offsets << batch.source_row_offset + index.to_u64
+          end
+          full_values.concat(payload.to_a)
+          full_marks << batch.mark_index if full_marks.last? != batch.mark_index
+        end
+        full_values.should eq(values)
+        full_keys.should eq(keys)
+        full_offsets.should eq((0_u64...8_u64).to_a)
+        full_marks.should eq([0_i32, 1_i32, 2_i32, 3_i32])
+        # The two one-row sub-batches within each mark are adjacent views of
+        # the same borrowed UInt64 slices, not separately materialized arrays.
+
+        window_values = [] of UInt64
+        window_keys = [] of UInt64
+        window_offsets = [] of UInt64
+        compact.scan_typed_window(1_u64, 5) do |batch|
+          window_values.concat(batch.values_for("payload", UInt64).to_a)
+          window_keys.concat(batch.values_for("pk").to_a)
+          window_offsets.concat(batch.values_for("payload").size.times.map { |index| batch.source_row_offset + index.to_u64 })
+        end
+        window_values.should eq(values[1, 5])
+        window_keys.should eq(keys[1, 5])
+        window_offsets.should eq([1_u64, 2_u64, 3_u64, 4_u64, 5_u64])
+
+        selected_values = [] of UInt64
+        selected_keys = [] of UInt64
+        selected_marks = [] of Int32
+        compact.scan_typed_mark_indices([1_i32, 3_i32], 1) do |batch|
+          selected_values.concat(batch.values_for("payload", UInt64).to_a)
+          selected_keys.concat(batch.values_for("pk", UInt64).to_a)
+          selected_marks << batch.mark_index if selected_marks.last? != batch.mark_index
+        end
+        selected_values.should eq([values[2], values[3], values[6], values[7]])
+        selected_keys.should eq([keys[2], keys[3], keys[6], keys[7]])
+        selected_marks.should eq([1_i32, 3_i32])
+
+        typed = CrystalClick::TypedPartTable.open_selected_typed([part_path], ["payload", "pk"])
+        parallel_values = [] of UInt64
+        parallel_keys = [] of UInt64
+        parallel_offsets = [] of UInt64
+        parallel_marks = [] of Int32
+        {% if flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+          expect_raises(CrystalClick::UnsupportedFormatError, /execution context/) do
+            typed.scan_typed_parallel(workers: 4, batch_rows: 1) { |_batch| }
+          end
+        {% else %}
+          caller_thread_id = Thread.current.object_id
+          callback_count = 0
+          typed.scan_typed_parallel(workers: 4, batch_rows: 1) do |batch|
+            Thread.current.object_id.should eq(caller_thread_id)
+            if callback_count == 0
+              GC.collect
+              worker_names = [] of String
+              Fiber::ExecutionContext.each do |context|
+                if isolated = context.as?(Fiber::ExecutionContext::Isolated)
+                  if isolated.running? && isolated.name.starts_with?("crystal-click typed scan worker ")
+                    worker_names << isolated.name
+                  end
+                end
+              end
+              worker_names.size.should eq(4)
+            end
+            batch.column_names.should eq(["payload", "pk"])
+            parallel_values.concat(batch.values_for("payload", UInt64).to_a)
+            parallel_keys.concat(batch.values_for("pk").to_a)
+            parallel_offsets.concat(batch.values_for("payload").size.times.map { |index| batch.source_row_offset + index.to_u64 })
+            parallel_marks << batch.mark_index if parallel_marks.last? != batch.mark_index
+            callback_count += 1
+          end
+          parallel_values.should eq(values)
+          parallel_keys.should eq(keys)
+          parallel_offsets.should eq((0_u64...8_u64).to_a)
+          parallel_marks.should eq([0_i32, 1_i32, 2_i32, 3_i32])
+        {% end %}
+      ensure
+        FileUtils.rm_rf(root)
+      end
+    end
+  end
+
+  modes.each do |mark_format|
+    it "rejects a wrong-width span and checksum corruption before publishing the affected #{mark_format} mark" do
+      root = File.tempname("crystal-click-w260-uint64-integrity-")
+      Dir.mkdir(root)
+      begin
+        width_part = File.join(root, "width", "all_1_1_0")
+        FileUtils.mkdir_p(File.dirname(width_part))
+        w260_write_u64_part(width_part, mark_format, values, rows_per_mark: 2, frame_bytes: 11)
+        w260_shorten_marked_uint64_span!(width_part, mark_format, "payload")
+        width_table = CrystalClick::CompactPartTable.open_selected_typed([width_part], ["payload"])
+        width_callbacks = 0
+        expect_raises(CrystalClick::CorruptPartError, /Compact UInt64 mark span differs from its exact row width/) do
+          width_table.scan_typed(batch_rows: 1) { |_batch| width_callbacks += 1 }
+        end
+        width_callbacks.should eq(0)
+
+        later_part = File.join(root, "later", "all_1_1_0")
+        FileUtils.mkdir_p(File.dirname(later_part))
+        w260_write_u64_part(later_part, mark_format, values, rows_per_mark: 2, frame_bytes: 16)
+        w260_flip_marked_frame_checksum!(later_part, mark_format, "payload", 1)
+        later_table = CrystalClick::CompactPartTable.open_selected_typed([later_part], ["payload"])
+        published_before_error = [] of UInt64
+        later_callbacks = 0
+        expect_raises(CrystalClick::CorruptPartError, /checksum/) do
+          later_table.scan_typed(batch_rows: 1) do |batch|
+            published_before_error.concat(batch.values_for("payload", UInt64).to_a)
+            later_callbacks += 1
+          end
+        end
+        published_before_error.should eq(values[0, 2])
+        later_callbacks.should eq(2)
+
+        unselected_part = File.join(root, "unselected", "all_1_1_0")
+        FileUtils.mkdir_p(File.dirname(unselected_part))
+        w260_write_u64_part(unselected_part, mark_format, values, rows_per_mark: 2, frame_bytes: 16)
+        w260_flip_marked_frame_checksum!(unselected_part, mark_format, "pk", 0)
+        unselected_table = CrystalClick::CompactPartTable.open_selected_typed([unselected_part], ["payload"])
+        unselected_values = [] of UInt64
+        unselected_table.scan_typed(batch_rows: 1) do |batch|
+          unselected_values.concat(batch.values_for("payload").to_a)
+        end
+        unselected_values.should eq(values)
+
+        # The selected payload is valid and read first, but the selected key
+        # hits the corrupted frame. No mixed-column mark may be published.
+        mixed_table = CrystalClick::CompactPartTable.open_selected_typed(
+          [unselected_part],
+          ["payload", "pk"],
+        )
+        mixed_callbacks = 0
+        expect_raises(CrystalClick::CorruptPartError, /checksum/) do
+          mixed_table.scan_typed(batch_rows: 1) do |_batch|
+            mixed_callbacks += 1
+          end
+        end
+        mixed_callbacks.should eq(0)
+      ensure
+        FileUtils.rm_rf(root)
+      end
     end
   end
 end

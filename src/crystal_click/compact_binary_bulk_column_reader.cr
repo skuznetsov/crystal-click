@@ -24,6 +24,7 @@ module CrystalClick
     @source_declaration : String
     @physical_stream_names : Array(String)
     @selected_checksum_names : Array(String)
+    @ordinary_uint64_slot_index : Int32?
 
     def self.open(
       part_path : String,
@@ -198,6 +199,7 @@ module CrystalClick
         "Compact BinaryBulk reader transport budget differs from its read limits",
       )
       @projection_aggregate_key_names = nil
+      @ordinary_uint64_slot_index = nil
       @codec_budget = codec_budget
       @transport_budget = transport_budget
 
@@ -298,6 +300,12 @@ module CrystalClick
         @physical_stream_names = copy_strings(observed_callbacks)
       else
         raise UnsupportedFormatError.new("unsupported Compact mark format for typed BinaryBulk reading")
+      end
+      if @schema_declaration == "UInt64" && @projection_aggregate_descriptor.nil?
+        unless selected_slots.size == 1
+          raise CorruptPartError.new("Compact ordinary UInt64 does not have one physical callback")
+        end
+        @ordinary_uint64_slot_index = selected_slots[0].index
       end
 
       @mark_row_counts = @context.mark_row_counts
@@ -434,6 +442,35 @@ module CrystalClick
       end
       bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
       checked_add(bytes, checked_multiply(@mark_row_counts.size.to_u64, sizeof(UInt64).to_u64))
+    end
+
+    # :nodoc:
+    # Reads one selected mark of an already-admitted ordinary UInt64 column.
+    # The fast path is intentionally limited to the table's default codec
+    # bounds; custom limits keep using the BinaryValue decoder and its budget.
+    def read_ordinary_uint64_mark(mark_index : Int) : Bytes
+      unless @schema_declaration == "UInt64" && @projection_aggregate_descriptor.nil?
+        raise UnsupportedFormatError.new("Compact direct UInt64 reading requires an ordinary exact UInt64 column")
+      end
+      unless @codec_budget.nil? && @limits.same?(BinaryBulkCodec::DEFAULT_LIMITS)
+        raise UnsupportedFormatError.new("Compact direct UInt64 reading requires default codec limits")
+      end
+      slot_index = @ordinary_uint64_slot_index ||
+                   raise CorruptPartError.new("Compact ordinary UInt64 reader lost its admitted physical slot")
+      expected_stream_name = if @context.mode.mrk4?
+                               unless @physical_stream_names.size == 1
+                                 raise CorruptPartError.new("Compact UInt64 reader has an invalid callback roster")
+                               end
+                               @physical_stream_names[0]
+                             else
+                               nil
+                             end
+      @context.read_uint64_mark(
+        @column_name,
+        slot_index,
+        mark_index,
+        expected_stream_name,
+      )
     end
 
     # Returns selected marks → parent rows → exact-type BinaryValues. LC forces

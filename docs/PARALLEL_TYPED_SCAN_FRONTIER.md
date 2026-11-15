@@ -29,6 +29,29 @@ Operation exit waits for the workers after normal completion, early exit,
 and decoder or callback failures. Keep selected part files stable for the
 lifetime of the reader and use a separate reader for each concurrent scan.
 
+### Direct Compact UInt64 batches
+
+An ordinary exact `UInt64` column in an admitted Compact MRK3 or MRK4
+part uses the existing serialization profile, substream roster, and row
+grid checks. For each selected mark, its physical interval must contain
+exactly `rows * sizeof(UInt64)` logical bytes. The checked compressed-range
+reader verifies the touched frames and charges the same shared transport
+budget. All selected columns are validated for the mark before its first
+callback. Wrapped types and projection children use their established
+decoders.
+
+The batch borrows a typed view of the detached range buffer on aligned
+little-endian hosts. Other hosts use a bounded little-endian decode into
+typed storage. The range owner and any conversion workspace count toward
+the aggregate mark limit. A parallel worker holds the owner through the
+last callback's acknowledgement, so a sub-batch can use a slice of the
+same mark. Callers must copy values they retain beyond the callback.
+
+Guard checks cover both mark layouts, exact batch offsets and values,
+checksum corruption, inconsistent interval width, and budget exhaustion
+before a callback sees the affected mark. Reverting the direct-read change
+restores the `BinaryValue` route without a disk format change.
+
 ## Comparison contract
 
 - Scan the same ClickHouse-generated local Wide and Compact part files, with
@@ -102,9 +125,10 @@ and background processes.
 Each engine scanned the same physical part for a layout. The native server
 wrote both parts from the same 131,072-row sequence of two `UInt64` columns
 (2 MiB decoded). Each layout has 16 equal 8,192-row marks and a zero-row
-terminal mark. The benchmark used LZ4 with a 4 KiB maximum compressed block
-size. Wide used MRK2 and 1,386,725 bytes of compressed column files. Compact
-used MRK3 and a 1,325,955-byte `data.bin`.
+terminal mark. The fixture set `max_compress_block_size=4096` and used LZ4.
+Wide used MRK2 and 1,386,725 bytes of compressed column files. Compact used
+MRK3 and a 1,325,955-byte `data.bin` with one 64 KiB decoded frame per column
+and data mark.
 
 Times are median and median absolute deviation in milliseconds. Each row
 contains two warmup pairs and 15 timed pairs. The ratio divides the Crystal
@@ -210,13 +234,13 @@ events. The controls expose both collection and contention in the Boehm
 allocation path. GC mode also changes heap growth and reuse, so the wall-time
 differences combine these effects.
 
-For these two columns Crystal decodes 262,144 owned `BinaryValue` leaves,
-visits them for materialization accounting and typed-carrier checks, and
-copies their values into packed `Array(UInt64)` buffers. The ClickHouse
+On `4fcf1e1`, Crystal decoded 262,144 owned `BinaryValue` leaves for these two
+columns, visited them for materialization accounting and typed-carrier checks,
+and copied their values into packed `Array(UInt64)` buffers. The ClickHouse
 build's `SerializationNumber` deserializes the fixed-width data through
 `readBig` into a contiguous `ColumnVector` backing array. Those routes
 present different amounts of work to LLVM before machine-code generation.
-[Crystal decode and accounting](../src/crystal_click/compact_part_table.cr#L579),
+[Crystal fallback decode and accounting](../src/crystal_click/compact_part_table.cr),
 [Crystal typed conversion](../src/crystal_click/binary_value_typed_batch_adapter.cr#L101),
 [ClickHouse bulk numeric deserialization][ch-serialization-number].
 
@@ -253,6 +277,66 @@ the caller's reduction was small on this fixture.
 
 [boehm-refill]: https://github.com/ivmai/bdwgc/blob/v8.2.12/mallocx.c#L284-L320
 [ch-serialization-number]: https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationNumber.cpp#L320-L335
+
+### Direct UInt64 comparison
+
+The direct reader and its `bd0ee29` baseline used Crystal 1.22.3
+`--release -Dparallel_scan_bench` with Boehm enabled. Both read the same
+Compact MRK3 file manifest as the earlier profile, on the same Apple M2 Max
+and official ClickHouse 26.10.1.1201 binary. Each series used four warmup
+pairs and 21 timed pairs under the comparison contract above. The ClickHouse
+medians come from their corresponding Crystal series.
+
+| Workers | Baseline Crystal, ms | Paired ClickHouse, ms | Direct Crystal, ms | Paired ClickHouse, ms |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 58.666 ± 3.571 | 2.603 ± 0.254 | 7.105 ± 0.119 | 1.886 ± 0.038 |
+| 4 | 55.007 ± 1.183 | 1.848 ± 0.172 | 4.742 ± 0.138 | 1.398 ± 0.041 |
+
+The direct reader reduced Crystal's median by 8.26× at one worker and 11.60×
+at four. Within the direct build, four workers reduced the median by 1.50×.
+The direct medians were 3.77× and 3.39× the paired ClickHouse medians.
+These are warm aggregate request times for this one part on a shared
+host. The full ordered exports, all timed aggregates, and the before/after
+part manifests matched. The native thread-log probes saw one and four read
+threads; the four-worker Crystal witness saw four isolated contexts.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Baseline worker binary | `e3b3d57cab411da9266d6c5ddc592f66c3d01fa0b6e9ce790276d59a40c52773` |
+| Direct worker binary | `a943e7cdc7603a2f31be96806184cba8c3f7da706604753512e29995d82ee710` |
+| Direct source diff against `bd0ee29` | `ff5eb6bf5d12212ae88bf9cc3b719e0e1f41491e3c2370f51ec42587f9150257` |
+
+In separate Release processes with Boehm enabled, the same probe read
+`GC.stats.total_bytes` and `GC.prof_stats.gc_no` around one checked scan and
+reduction. It excluded initial table open and response packing. Each cell
+contains six fresh processes and reports the median. The allocation volume
+includes the probe's own small runtime cost.
+
+| Workers | Baseline allocated, MiB | Direct allocated, MiB | Baseline collections | Direct collections |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 111.96 | 4.20 | 22.5 (21–24) | 7 (6–7) |
+| 4 | 113.85 | 6.05 | 16 (14–16) | 5.5 (5–7) |
+
+The direct path removes both per-row allocation and the intermediate
+materialization passes. The latency comparison combines their effects.
+
+### Reusing Compact decode storage
+
+The direct carrier borrows the checked range output. The range reader still
+allocates that output, decodes into workspace storage, and copies frame
+intersections. An aligned slab owned by each worker could hold the result
+slices for one mark. For the measured two-column fixture, that is 128 KiB
+of result storage per worker. Reuse it across marks after the final batch
+acknowledgement. A frame that exactly fills a destination slice can decode
+there after header, checksum, and budget checks. Shared or partial frames
+still need a bounded decode workspace.
+
+`UInt64SlabVector` owns appended values and copies them into its slabs. A
+caller-owned decode destination would let the reader retain the slice without
+that copy. A follow-up experiment should measure bytes allocated after worker
+setup and collections per scan with Boehm enabled. Include split-frame,
+corrupt-frame, and delayed-callback cases before permitting reuse across
+marks.
 
 ## Reproduce the comparison
 
@@ -323,6 +407,10 @@ After the worker prints `READY`, run the timing track and stop the worker.
 The JSON contains the raw paired samples, checks, and summary statistics.
 The Compact profile comparison used only the two parallel-mode Compact
 tracks, with `--warmups 4 --repeats 21` at revision `4fcf1e1`.
+For the direct UInt64 comparison, build `bd0ee29` and the direct-reader
+revision with `--release -Dparallel_scan_bench` using their own benchmark
+worker source. Run both Compact tracks at each revision with
+`--mode parallel --warmups 4 --repeats 21` against the same manifest.
 
 ```sh
 python3 -B scripts/parallel_scan_benchmark.py bench \
@@ -357,6 +445,11 @@ crystal spec -Dwithout_mt spec/typed_part_table_parallel_scan_spec.cr
 
 The focused suite passed 89 examples. The `-Dwithout_mt` run passed six
 examples and exercised the one-worker scan and execution-context guard.
+
+For the direct reader, run `crystal spec spec/compact_typed_w260_spec.cr`
+and repeat with `-Dwithout_mt`. The combined reader, writer, projection,
+recursive carrier, and transport regression run passed 120 examples. The
+direct Compact suite passed 22 examples with `-Dwithout_mt`.
 
 ## Falsifiers
 

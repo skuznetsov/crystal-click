@@ -72,6 +72,17 @@ module CrystalClick
       end
     end
 
+    # Internal binding check for a previously admitted selected slot. It does
+    # not return or clone the retained slot/name owners.
+    def slot_matches?(index : Int, column_name : String, stream_name : String?) : Bool
+      return false if index < 0
+      if slot = @slots[index]?
+        slot.column_name == column_name && slot.stream_name == stream_name
+      else
+        false
+      end
+    end
+
     # Non-copying root-column identity check used when binding one MRK3
     # whole-column shard to a prepared static-site owner. MRK4 substream slots
     # are intentionally not interpreted as root columns here.

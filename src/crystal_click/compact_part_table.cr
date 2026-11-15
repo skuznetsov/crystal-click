@@ -10,12 +10,14 @@ module CrystalClick
     private alias CompactColumnReader = CompactBinaryBulkColumnReader | CompactDynamicBulkColumnReader
     private alias SelectedReader = {String, String, BinaryDataType, CompactColumnReader}
     private alias SelectedCarrier = CompactJsonColumnMark
-    private alias MaterializedMark = {Array(Array(BinaryValue)), Array(SelectedCarrier), UInt64}
+    private alias CompactBinaryMarkCarrier = Array(BinaryValue) | Slice(UInt64)
+    private alias MaterializedMark = {Array(CompactBinaryMarkCarrier), Array(SelectedCarrier), UInt64}
 
     @columns : Array(String)
     @column_types : Array({String, String})
     @column_sources : Array({String, String, String})
     @readers : Array(SelectedReader)
+    @direct_uint64_readers : Array(Bool)
     @json_readers : Array(CompactJsonColumnAdapter)
     @column_reader_slots : Array(Tuple(Symbol, Int32))
     @part_path : String
@@ -102,6 +104,7 @@ module CrystalClick
       end
 
       @readers = Array(SelectedReader).new(@columns.size)
+      @direct_uint64_readers = Array(Bool).new(@columns.size)
       @json_readers = Array(CompactJsonColumnAdapter).new(@columns.size)
       @column_reader_slots = Array(Tuple(Symbol, Int32)).new(@columns.size)
       @column_types = Array({String, String}).new(@columns.size)
@@ -231,6 +234,10 @@ module CrystalClick
 
         @column_reader_slots << {:binary, @readers.size}
         @readers << {String.new(column.to_slice), String.new(source_type.to_slice), type, reader}
+        @direct_uint64_readers << (
+          projection_name.nil? && dynamic_type.nil? && projection_aggregate_descriptor.nil? &&
+          source_type == "UInt64" && type.name == "UInt64"
+        )
         @column_types << {String.new(column.to_slice), String.new(source_type.to_slice)}
         @column_sources << {
           String.new(column.to_slice),
@@ -423,7 +430,14 @@ module CrystalClick
         while cursor < row_end
           remaining = row_end - cursor
           slice_rows = remaining < batch_rows.to_u64 ? remaining : batch_rows.to_u64
-          emit_batch(mark_index, mark_start, cursor, slice_rows, values_by_column, json_carriers) { |batch| yield batch }
+          emit_batch(
+            mark_index,
+            mark_start,
+            cursor,
+            slice_rows,
+            values_by_column,
+            json_carriers,
+          ) { |batch| yield batch }
           cursor += slice_rows
         end
         # The logical charge bounds one selected mark at a time. Values and
@@ -512,6 +526,7 @@ module CrystalClick
       @json_readers.each do |reader|
         retained_workspace = checked_add(retained_workspace, reader.retained_workspace_bytes)
       end
+      retained_workspace = checked_add(retained_workspace, direct_mark_workspace_bytes)
       if retained_workspace > remaining_bytes
         raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
       end
@@ -554,10 +569,44 @@ module CrystalClick
 
       # All selected reader contexts stay live for this mark. Charge their
       # aggregate retained owner before allocating results or decoding values.
-      values_by_column = Array(Array(BinaryValue)).new(@readers.size)
+      values_by_column = Array(CompactBinaryMarkCarrier).new(@readers.size)
       retained_total = retained_workspace
 
-      @readers.each do |entry|
+      @readers.each_with_index do |entry, reader_index|
+        if @direct_uint64_readers[reader_index]
+          if rows > UInt64::MAX // sizeof(UInt64).to_u64
+            raise CorruptPartError.new("Compact UInt64 mark materialization charge overflows")
+          end
+          direct_bytes = rows * sizeof(UInt64).to_u64
+          if direct_bytes > remaining_bytes
+            raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+          end
+          remaining_bytes -= direct_bytes
+          retained_total = checked_add(retained_total, direct_bytes)
+
+          reader = entry[3].as?(CompactBinaryBulkColumnReader) ||
+                   raise(CorruptPartError.new("Compact direct UInt64 selection has a non-BinaryBulk reader"))
+          bytes = reader.read_ordinary_uint64_mark(mark_index)
+          unless bytes.size.to_u64 == direct_bytes
+            raise CorruptPartError.new("Compact direct UInt64 reader returned an invalid mark width")
+          end
+
+          if borrowable_uint64_bytes?(bytes)
+            values_by_column << borrowed_uint64_slice(bytes, rows)
+          else
+            # The raw authenticated mark and its portable typed copy coexist
+            # during conversion, so charge that transient copy before growing
+            # the fallback array.
+            if direct_bytes > remaining_bytes
+              raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+            end
+            remaining_bytes -= direct_bytes
+            retained_total = checked_add(retained_total, direct_bytes)
+            values_by_column << decode_uint64_bytes(bytes, rows)
+          end
+          next
+        end
+
         reader = entry[3]
         charge = ObjectValuesMaterializationBudget.new(logical_limit: remaining_bytes)
         begin
@@ -605,10 +654,11 @@ module CrystalClick
       while cursor < rows
         slice_rows = (rows - cursor) < WidePartTable::MAX_BATCH_ROWS.to_u64 ? (rows - cursor) : WidePartTable::MAX_BATCH_ROWS.to_u64
         @readers.each_with_index do |entry, column_index|
+          next if values_by_column[column_index].is_a?(Slice(UInt64))
           # Dynamic already has its exact BinaryValue carrier; installing the
           # borrowed slice does not allocate a second typed owner.
           next if entry[2].contains_dynamic?
-          values = values_by_column[column_index]
+          values = values_by_column[column_index].as(Array(BinaryValue))
           slice = Slice.new(values.to_unsafe + cursor.to_i, slice_rows.to_i)
           estimated = if WideAggregateCountStoragePlan.for_type(entry[2])
                         WideAggregateCountTableMaterializer.preflight(
@@ -703,7 +753,7 @@ module CrystalClick
       mark_start : UInt64,
       row_offset : UInt64,
       rows : UInt64,
-      values_by_column : Array(Array(BinaryValue)),
+      values_by_column : Array(CompactBinaryMarkCarrier),
       json_carriers : Array(SelectedCarrier),
       & : WidePartTableBatch -> Nil
     ) : Nil
@@ -725,22 +775,28 @@ module CrystalClick
       @column_reader_slots.each do |kind, reader_index|
         if kind == :binary
           entry = @readers[reader_index]
-          values = values_by_column[reader_index]
-          slice = Slice.new(values.to_unsafe + row_offset.to_i, rows.to_i)
-          if WideAggregateCountStoragePlan.for_type(entry[2])
-            batch.install_aggregate_count_states(entry[0], slice, rows.to_i32)
-          elsif entry[2].contains_dynamic?
-            batch.install_dynamic_bulk_values(entry[0], slice, rows.to_i32)
-          elsif projection_aggregate_state?(entry[0], entry[1])
-            batch.install_binary_bulk_values(entry[0], slice, rows.to_i32)
+          carrier = values_by_column[reader_index]
+          if values = carrier.as?(Slice(UInt64))
+            slice = Slice.new(values.to_unsafe + row_offset.to_i, rows.to_i)
+            batch.install_compact_uint64_values(entry[0], slice, rows.to_i32)
           else
-            BinaryValueTypedBatchAdapter.install(
-              batch,
-              entry[0],
-              entry[2],
-              slice,
-              rows.to_i32,
-            )
+            values = carrier.as(Array(BinaryValue))
+            slice = Slice.new(values.to_unsafe + row_offset.to_i, rows.to_i)
+            if WideAggregateCountStoragePlan.for_type(entry[2])
+              batch.install_aggregate_count_states(entry[0], slice, rows.to_i32)
+            elsif entry[2].contains_dynamic?
+              batch.install_dynamic_bulk_values(entry[0], slice, rows.to_i32)
+            elsif projection_aggregate_state?(entry[0], entry[1])
+              batch.install_binary_bulk_values(entry[0], slice, rows.to_i32)
+            else
+              BinaryValueTypedBatchAdapter.install(
+                batch,
+                entry[0],
+                entry[2],
+                slice,
+                rows.to_i32,
+              )
+            end
           end
         else
           reader = @json_readers[reader_index]
@@ -767,6 +823,46 @@ module CrystalClick
     private def projection_aggregate_state?(column_name : String, type_name : String) : Bool
       descriptor = WidePartProjectionAggregateDescriptor.for_column(column_name, type_name)
       descriptor ? !descriptor.count? : false
+    end
+
+    private def direct_mark_workspace_bytes : UInt64
+      return 0_u64 unless @direct_uint64_readers.any? { |direct| direct }
+      bytes = checked_add(
+        instance_sizeof(Array(Bool)).to_u64,
+        @direct_uint64_readers.size.to_u64 * sizeof(Bool).to_u64,
+      )
+      bytes = checked_add(bytes, instance_sizeof(Array(CompactBinaryMarkCarrier)).to_u64)
+      checked_add(
+        bytes,
+        @readers.size.to_u64 * sizeof(CompactBinaryMarkCarrier).to_u64,
+      )
+    end
+
+    private def borrowable_uint64_bytes?(bytes : Bytes) : Bool
+      return false if bytes.empty?
+      {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+        (bytes.to_unsafe.address & 7_u64) == 0_u64
+      {% else %}
+        false
+      {% end %}
+    end
+
+    private def borrowed_uint64_slice(bytes : Bytes, rows : UInt64) : Slice(UInt64)
+      expected_bytes = rows * sizeof(UInt64).to_u64
+      unless bytes.size.to_u64 == expected_bytes
+        raise CorruptPartError.new("Compact direct UInt64 byte width differs from its row count")
+      end
+      Slice.new(bytes.to_unsafe.unsafe_as(Pointer(UInt64)), rows.to_i)
+    end
+
+    private def decode_uint64_bytes(bytes : Bytes, rows : UInt64) : Slice(UInt64)
+      expected_bytes = rows * sizeof(UInt64).to_u64
+      unless bytes.size.to_u64 == expected_bytes
+        raise CorruptPartError.new("Compact direct UInt64 byte width differs from its row count")
+      end
+      Slice(UInt64).new(rows.to_i) do |index|
+        IO::ByteFormat::LittleEndian.decode(UInt64, bytes[index * sizeof(UInt64), sizeof(UInt64)])
+      end
     end
 
     private def ensure_json_shape_limits!(

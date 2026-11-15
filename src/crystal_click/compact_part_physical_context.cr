@@ -591,6 +591,72 @@ module CrystalClick
       )
     end
 
+    # Reads one admitted ordinary UInt64 mark without constructing detached
+    # shard/granule/window copies. The caller supplies the slot index retained
+    # during reader admission; this method rebinds it to the retained physical
+    # roster, checks the exact selected-mark width, and authenticates only that
+    # range through the normal compressed-frame reader.
+    def read_uint64_mark(
+      column_name : String,
+      slot_index : Int32,
+      mark_index : Int,
+      expected_stream_name : String?,
+    ) : Bytes
+      unless mark_index >= 0 && mark_index < @mark_index.mark_count
+        raise ArgumentError.new("Compact UInt64 mark selection is outside the grid")
+      end
+      case @mode
+      when CompactMarkFormat::Mrk3
+        unless expected_stream_name.nil?
+          raise CorruptPartError.new("Compact MRK3 UInt64 callback cannot have a name")
+        end
+      when CompactMarkFormat::Mrk4
+        unless expected_stream_name
+          raise CorruptPartError.new("Compact MRK4 UInt64 callback has no expected name")
+        end
+      end
+      unless @columns_substreams.slot_matches?(slot_index, column_name, expected_stream_name)
+        raise CorruptPartError.new("Compact UInt64 slot identity differs from its admitted roster")
+      end
+
+      rows = @mark_index.row_count_at(mark_index)
+      if rows > UInt64::MAX // sizeof(UInt64).to_u64
+        raise CorruptPartError.new("Compact UInt64 mark width overflows")
+      end
+      expected_bytes = rows * sizeof(UInt64).to_u64
+      if expected_bytes > Int32::MAX.to_u64
+        raise CorruptPartError.new("Compact UInt64 mark exceeds its in-memory bound")
+      end
+      start = @mark_index.position_at(mark_index, slot_index)
+      finish = if slot_index + 1 < @mark_index.slot_count
+                 @mark_index.position_at(mark_index, slot_index + 1)
+               else
+                 @mark_index.position_at(mark_index + 1, 0)
+               end
+      if finish < start
+        raise CorruptPartError.new("Compact UInt64 mark has descending coordinates")
+      end
+      unless (finish - start).to_u64 == expected_bytes
+        raise CorruptPartError.new("Compact UInt64 mark span differs from its exact row width")
+      end
+
+      # One retained input range plus the output descriptor that read_ranges
+      # reserves before allocating its result array.
+      @budget.preflight_records(2_i64)
+      @budget.reserve_records(1_i64)
+      ranges = [{start, finish}]
+      authenticated = CompressedMarkReader.read_ranges(
+        @data_input.data_path,
+        @data_input.data_size,
+        ranges,
+        @budget,
+      )
+      unless authenticated.size == 1 && authenticated[0].size.to_u64 == expected_bytes
+        raise CorruptPartError.new("Compact UInt64 reader returned an invalid selected mark")
+      end
+      authenticated[0]
+    end
+
     private def row_offset_at(mark : Int) : UInt64
       offset = 0_u64
       mark.times do |index|
