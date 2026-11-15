@@ -76,6 +76,9 @@ module CrystalClick
         @emit_part_path = @part_path
       end
       budget = CompressedStreamBudget.read_default
+      projection_admission_session = if projection_name
+                                       CompactProjectionAggregateReaderAdmissionSession.new(@part_path, budget)
+                                     end
       metadata = PartMetadataFileReader.new(@part_path, budget)
       physical_columns = WidePart.parse_columns_metadata(metadata.read("columns.txt"))
       physical_types = Hash(String, String).new(initial_capacity: physical_columns.size)
@@ -163,6 +166,7 @@ module CrystalClick
           count_reader = CompactBinaryBulkColumnReader.open_projection_count(
             @part_path,
             transport_budget: budget,
+            admission_session: projection_admission_session,
           )
           count_reader.aggregate_count_key_names ||
             raise(CorruptPartError.new("Compact projection Count reader omitted its hidden key roster"))
@@ -172,6 +176,7 @@ module CrystalClick
             @part_path,
             projection_aggregate_descriptor,
             transport_budget: budget,
+            admission_session: projection_admission_session,
           )
         elsif dynamic_type
           CompactDynamicBulkColumnReader.open(
@@ -187,6 +192,13 @@ module CrystalClick
             type,
             transport_budget: budget,
           )
+        end
+        if projection_name && projection_aggregate_descriptor.nil? && type.name == "UInt64"
+          if session = projection_admission_session
+            if compact_reader = reader.as?(CompactBinaryBulkColumnReader)
+              compact_reader.validate_projection_aggregate_candidate!(session)
+            end
+          end
         end
         unless reader.schema_declaration == source_type && reader.source_declaration == source_type
           raise CorruptPartError.new("selected Compact declaration differs from its physical schema")

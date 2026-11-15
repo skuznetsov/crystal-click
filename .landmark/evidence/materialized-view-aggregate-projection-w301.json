@@ -1,0 +1,413 @@
+{
+  "format": "crystal_click_materialized_view_aggregate_projection_w301_evidence_v1",
+  "date": "2026-11-14",
+  "baseline_revision": "fade8a1195670f986efb9abe5bb95cca7f477b3c",
+  "claim": {
+    "level": "VERIFIED",
+    "scope": "Read and publish primary.cidx for Compact MRK4 aggregate projections under Wide and Compact parents.",
+    "profile": {
+      "type": "Compact MRK4 child with ordered plain UInt64 group-key lanes",
+      "parent_layouts": [
+        "Wide",
+        "Compact"
+      ],
+      "child_marks": [
+        "data.mrk4",
+        "data.cmrk4"
+      ],
+      "state_columns": [
+        "count()",
+        "sum(value)",
+        "min(value)",
+        "max(value)"
+      ]
+    },
+    "adversary": "ROBUST for the four native cells, rehashed corrupt tuples, representation checks and rollback under a shared read budget.",
+    "remaining": "The profile covers plain UInt64 group keys and the listed states. MRK3 aggregate children and other key/state types require their own qualification. Catalog reads assume quiescent part directories."
+  },
+  "risk": {
+    "tier": "CAUTION",
+    "strongest_failure": "An index with internally consistent frame and manifest checksums disagrees with the Compact key slots, with the mismatch hidden by a narrow or empty scan.",
+    "guard": "Bound the index before decoding, verify both hashes, and compare all mark-start and terminal tuples against authenticated Compact key data before callbacks. Bind staged keys to the caller input while sharing the parent budgets.",
+    "rollback": "Revert the feature commit to restore the raw-index publisher. Published part files remain on disk."
+  },
+  "verification": {
+    "toolchain": {
+      "crystal": "1.22.3",
+      "llvm": "23.1.5",
+      "target": "aarch64-apple-darwin25.6.0",
+      "ruby": "4.0.9"
+    },
+    "guard": {
+      "sha256": "fbfa0fd9d717eb24c1a3f829d464188110e505c7ae311eee2e95cbe7cefab011",
+      "minimum_system_memory_free_percent_exclusive": 40,
+      "crystal": {
+        "process_tree_memory_mib": 12288,
+        "timeout_seconds": 600
+      },
+      "native_helper_and_clickhouse": {
+        "process_tree_memory_mib": 2048,
+        "timeout_seconds": 90
+      },
+      "clickhouse_max_memory_usage_bytes": 536870912,
+      "single_worker": true
+    },
+    "input_seals": {
+      "production": {
+        "files": 641,
+        "sha256": "488847c5e5739112b95b81ac1dccced5f287a3469e6474ea50542ab0c9349f16"
+      },
+      "qualification": {
+        "files": 732,
+        "sha256": "cfbd3eb1acc62e4de0120c91cff07d2a0db2dd5361ffc6b7690654fad0517a38"
+      }
+    },
+    "baseline_falsifiers": {
+      "reader": {
+        "observed": "The raw control passes. The preceding Compact reader rejects a valid multi-frame LZ4 index with identical decoded tuples and rebound manifest and parent summary.",
+        "admission_source_sha256": "fb7a4fd390333121550544b61714005e44cde51a2d489ad944e8c36414d2b0c3",
+        "probe_sha256": "b270e409383d1daebd2638d851ab7ff2e824cad76f9d73932a85b527026b6cb8",
+        "log_sha256": "a024ff48e1d7d3f815a72a1f221dce4bafef2cf484e26f95e52efb364313a8d9"
+      },
+      "writer": {
+        "observed": "The pre-change Compact Count constructor rejects the compress_primary_key keyword.",
+        "log_sha256": "dec8bf931ec5f013a715f007b44e7149b84cad72bc49027768ac8350ea83d7ba"
+      }
+    },
+    "specs": {
+      "command_per_cohort": "crystal spec --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color <cohort paths>",
+      "release_flags": "--release --no-debug",
+      "cohorts": {
+        "aggregate": [
+          "spec/compact_aggregate_projection_compressed_index_reader_spec.cr",
+          "spec/compact_aggregate_projection_compressed_index_writer_spec.cr",
+          "spec/wide_aggregate_projection_compressed_index_reader_spec.cr",
+          "spec/wide_aggregate_projection_compressed_index_writer_spec.cr",
+          "spec/offline_materialized_view_aggregate_projection_w298_spec.cr",
+          "spec/offline_materialized_view_compact_two_key_projection_w297_spec.cr",
+          "spec/offline_materialized_view_compressed_aggregate_projection_w299_spec.cr",
+          "spec/wide_part_projection_compressed_marks_w299_writer_spec.cr",
+          "spec/offline_materialized_view_compact_aggregate_projection_w296_spec.cr",
+          "spec/offline_materialized_view_compact_count_projection_w295_spec.cr",
+          "spec/offline_materialized_view_two_key_projection_w294_spec.cr",
+          "spec/offline_materialized_view_minmax_projection_w293_spec.cr",
+          "spec/offline_materialized_view_sum_projection_w292_spec.cr",
+          "spec/offline_materialized_view_aggregate_projection_w291_spec.cr",
+          "spec/offline_materialized_view_projection_transform_w290_spec.cr",
+          "spec/aggregate_count_physical_names_w219_spec.cr",
+          "spec/aggregate_count_w176_writer_spec.cr"
+        ],
+        "compact": [
+          "spec/compact_mark_file_adapter_w274_entry_spec.cr",
+          "spec/compact_mark_file_adapter_w274_adversary_spec.cr",
+          "spec/compact_part_writer_w264_spec.cr",
+          "spec/compact_part_writer_w265_publication_spec.cr",
+          "spec/compact_physical_context_w259_spec.cr",
+          "spec/compact_physical_context_w259_adversary_spec.cr",
+          "spec/compact_typed_w260_spec.cr",
+          "spec/compact_typed_w260_adversary_spec.cr",
+          "spec/compact_part_writer_w283_entry_spec.cr"
+        ],
+        "index_transport": [
+          "spec/pk_candidates_spec.cr",
+          "spec/wide_part_reader_w36_spec.cr",
+          "spec/wide_part_reader_w38_spec.cr",
+          "spec/compressed_mark_transport_w124_spec.cr",
+          "spec/compressed_mark_transport_w124_root_spec.cr",
+          "spec/compressed_mark_positions_w194_spec.cr"
+        ],
+        "projection": [
+          "spec/compact_projection_writer_spec.cr",
+          "spec/compact_projection_reader_spec.cr",
+          "spec/projection_checksum_binding_w287_spec.cr",
+          "spec/projection_publication_w256_spec.cr",
+          "spec/offline_projection_window_w229_spec.cr",
+          "spec/projection_specialized_consumers_w217_spec.cr",
+          "spec/offline_materialized_view_transform_w257_spec.cr",
+          "spec/offline_materialized_view_compact_transform_w286_spec.cr",
+          "spec/wide_part_schema_binding_w257_spec.cr",
+          "spec/embedded_merge_tree_pk_range_spec.cr",
+          "spec/offline_materialized_view_w228_spec.cr",
+          "spec/offline_mv_materialization_w88_spec.cr",
+          "spec/offline_catalog_projection_w87_spec.cr"
+        ]
+      },
+      "examples_per_mode": {
+        "debug": 357,
+        "release": 357
+      },
+      "results": {
+        "debug": {
+          "aggregate": {
+            "examples": 97,
+            "log_sha256": "778d139518d3eae4e61a7c9b6ee93d9cb574a2285fed9abf3e7e8a0678c355f3"
+          },
+          "compact": {
+            "examples": 74,
+            "log_sha256": "a41be2a222bd0a11999eae55db4a5ae103b0be2dd650cb99a65a76a6abe038b0"
+          },
+          "index_transport": {
+            "examples": 77,
+            "log_sha256": "55568bec3f982c6317cd185b56ec60b4f7be4b3aee5f16c1c87d8aaf20fb9698"
+          },
+          "projection": {
+            "examples": 109,
+            "log_sha256": "fa84afabcd6eec6712eb08823543bbf4b6d40dca01a0f9670cb70baebf71beaf"
+          }
+        },
+        "release": {
+          "aggregate": {
+            "examples": 97,
+            "log_sha256": "77d14875c04ab3cd7e0233b34e6630e7fda2b90d5a7b4b4dedf07a3e124af1a6"
+          },
+          "compact": {
+            "examples": 74,
+            "log_sha256": "85ac2ea317d397c10acf4512c28f16dff5647297c8cfcaf652b39f129b433c6d"
+          },
+          "index_transport": {
+            "examples": 77,
+            "log_sha256": "36405f38dc5f215fc62edd7a21144b22c9abb7aeea31c025ed5d76b1d18ec61a"
+          },
+          "projection": {
+            "examples": 109,
+            "log_sha256": "bc908b1d85d9375f7e40e137506298b5101dd976af56377492b669e12f2a61c5"
+          }
+        }
+      },
+      "w301_regressions": {
+        "spec/compact_aggregate_projection_compressed_index_reader_spec.cr": [
+          "keeps a same-index raw control readable",
+          "admits a valid cidx for direct state reads and state-only or key-only EOF windows under both parent layouts",
+          "accepts an explicit terminal tuple equal to the final mark-start tuple",
+          "rejects rehashed wrong interior and distinct terminal tuples before state-only or key-only EOF callbacks",
+          "rejects malformed cidx metadata and an extra raw representation before EOF callbacks"
+        ],
+        "spec/compact_aggregate_projection_compressed_index_writer_spec.cr": [
+          "preserves the opt-in through schema binding and writes a multi-frame cidx while defaults remain raw",
+          "removes the parent stage when sibling cidx children exhaust the shared read budget",
+          "exposes the opt-in on every Compact aggregate projection constructor"
+        ]
+      }
+    },
+    "native": {
+      "runner": "scripts/verify_materialized_view_aggregate_projection_w298.rb",
+      "runner_sha256": "04c48aa879521fbd54755055a9f7aebfe139a5cf9e5bf01bc038c36c62923421",
+      "helper": "scripts/check_materialized_view_aggregate_projection_w298.cr",
+      "helper_source_sha256": "320b1ad2e704925aae68fba97f00ae7eddcb46e17784c897f431e8e086e04f52",
+      "build_command": "crystal build --single-module --threads 1 --link-flags=-fuse-ld=ld --error-trace --no-color scripts/check_materialized_view_aggregate_projection_w298.cr -o \"$helper\"",
+      "release_flags": "--release --no-debug",
+      "command": "ruby scripts/verify_materialized_view_aggregate_projection_w298.rb --binary \"$clickhouse\" --run-safe \"$run_safe\" --helper \"$helper\" --evidence-root \"$fresh_ssd_directory\" --w301",
+      "success_status": "w301_stock_and_generated_compressed_compact_child_primary_indexes_attached_checked_and_offline_scanned",
+      "version": "26.10.1.1201",
+      "revision": "54515",
+      "build": "d9bcb5ab007f0f6299f7f973f2642245bab3d028",
+      "binary_sha256": "5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae",
+      "source_revision": "0ca8150d9b1d0886edb2e3b4ab65eebb768d0357",
+      "source_paths": [
+        "src/Storages/MergeTree/IMergeTreeDataPart.cpp",
+        "src/Storages/MergeTree/MergeTreeDataPartWriterOnDisk.cpp",
+        "src/Storages/ProjectionsDescription.cpp",
+        "src/Storages/MergeTree/MergeTreeDataPartWriterCompact.cpp"
+      ],
+      "fixture": {
+        "parent_rows": 16,
+        "groups": 13,
+        "ordered_key_lanes": 4,
+        "child_mark_rows": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          1
+        ],
+        "tuples_including_terminal": 8,
+        "decoded_index_bytes": 256,
+        "offline_window": [
+          1,
+          6
+        ],
+        "settings_removed_in_offline_target_copy": [
+          "compress_marks",
+          "compress_primary_key",
+          "replace_long_file_name_to_hash"
+        ],
+        "mark_rows_including_terminal": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          1,
+          0
+        ]
+      },
+      "observed": "Both Crystal build modes yield successful native ATTACH PART, CHECK TABLE and matching forced and disabled queries, with agreeing stock and attached state bytes. Crystal scans both kinds of children in full and through the cross-mark window.",
+      "per_mode": {
+        "debug": {
+          "summary_sha256": "c70aad69720258e706482f126995298ab02a0804fcb6edb83a93a99bf4143262",
+          "helper_binary_sha256": "7d7a83c815825509e82956c6e84a096fe85e28fd7cee28e7a1b0cd44a7bd2ce7",
+          "guarded_processes": {
+            "ClickHouse local": 85,
+            "prebuilt Crystal helper": 2
+          },
+          "independent_decode_sha256": "19843f60d9f8727dac97077d7c33e2de8043329b844a94b9562e7a745ff653c0"
+        },
+        "release": {
+          "summary_sha256": "f7a346e723599f148d294caa6820c5cd7c6b9d900ed29a9b3a2519fc38476f05",
+          "helper_binary_sha256": "5a87ac7d016e531874d3f35cb3c0809374fb0dc33bbdfd9fec20a8c4a6096376",
+          "guarded_processes": {
+            "ClickHouse local": 85,
+            "prebuilt Crystal helper": 2
+          },
+          "independent_decode_sha256": "19843f60d9f8727dac97077d7c33e2de8043329b844a94b9562e7a745ff653c0"
+        }
+      },
+      "per_cell": {
+        "target_cc": {
+          "parent": "Compact",
+          "child_mark_file": "data.mrk4",
+          "stock_index_bytes": 100,
+          "attached_index_bytes": 283,
+          "index_decoded_sha256": "40b7ce224fdec92a4b0b9708e6e8edd95a02873aef4847d2f3b91441b65fc0ac",
+          "state_rowbinary_sha256": "d253adb1ab6b05119e01eb1e25f2cce4dab3c143ab18cef17a6438ed9671d659",
+          "prefix_granules": [
+            1,
+            7
+          ],
+          "boundary_granules": [
+            2,
+            7
+          ],
+          "attach_exit": 0,
+          "check_row": 1
+        },
+        "target_cc_cm": {
+          "parent": "Compact",
+          "child_mark_file": "data.cmrk4",
+          "stock_index_bytes": 100,
+          "attached_index_bytes": 283,
+          "index_decoded_sha256": "40b7ce224fdec92a4b0b9708e6e8edd95a02873aef4847d2f3b91441b65fc0ac",
+          "state_rowbinary_sha256": "d253adb1ab6b05119e01eb1e25f2cce4dab3c143ab18cef17a6438ed9671d659",
+          "prefix_granules": [
+            1,
+            7
+          ],
+          "boundary_granules": [
+            2,
+            7
+          ],
+          "attach_exit": 0,
+          "check_row": 1
+        },
+        "target_wc": {
+          "parent": "Wide",
+          "child_mark_file": "data.mrk4",
+          "stock_index_bytes": 113,
+          "attached_index_bytes": 283,
+          "index_decoded_sha256": "4716783d25f238e8a1a564ce4e511cdffed559c4c00b496f65f20fd5d8358ef6",
+          "state_rowbinary_sha256": "bec009b6b39bdfbb3df3c73c058b20121971253359a0ca263481746296277438",
+          "prefix_granules": [
+            1,
+            7
+          ],
+          "boundary_granules": [
+            2,
+            7
+          ],
+          "attach_exit": 0,
+          "check_row": 1
+        },
+        "target_wc_cm": {
+          "parent": "Wide",
+          "child_mark_file": "data.cmrk4",
+          "stock_index_bytes": 113,
+          "attached_index_bytes": 283,
+          "index_decoded_sha256": "4716783d25f238e8a1a564ce4e511cdffed559c4c00b496f65f20fd5d8358ef6",
+          "state_rowbinary_sha256": "bec009b6b39bdfbb3df3c73c058b20121971253359a0ca263481746296277438",
+          "prefix_granules": [
+            1,
+            7
+          ],
+          "boundary_granules": [
+            2,
+            7
+          ],
+          "attach_exit": 0,
+          "check_row": 1
+        }
+      },
+      "independent_decode": {
+        "method": "Run the pinned ClickHouse compressor independently on every stock and attached cidx, data.bin and compressed MRK4 sidecar. Compare index bytes to an independently packed group-key schedule and to tuples recovered from the physical key lanes. Check exact mark rows and terminal coordinates, each native attachment, its check result and exact state output.",
+        "script_sha256": "9846bc154c1954d99f15e360dd3aeb64fba165bd5a3e7719b96515af45c2d3a5"
+      },
+      "prior_controls": {
+        "w300_debug": {
+          "status": "w300_stock_and_generated_compressed_wide_child_primary_indexes_attached_checked_and_offline_scanned",
+          "summary_sha256": "29f738beaa637c1a79d9e2e6ed06f2560e57869dbfabf0e18d221f85639ae9c7"
+        }
+      }
+    }
+  },
+  "boundaries": {
+    "allowed_paths": [
+      ".landmark/evidence/materialized-view-aggregate-projection-w301.json",
+      "LANDMARKS.md",
+      "README.md",
+      "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+      "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+      "docs/PROJECT_STATUS.md",
+      "scripts/check_materialized_view_aggregate_projection_w298.cr",
+      "scripts/verify_materialized_view_aggregate_projection_w298.rb",
+      "spec/compact_aggregate_projection_compressed_index_reader_spec.cr",
+      "spec/compact_aggregate_projection_compressed_index_writer_spec.cr",
+      "src/crystal_click.cr",
+      "src/crystal_click/compact_binary_bulk_column_reader.cr",
+      "src/crystal_click/compact_part_physical_context.cr",
+      "src/crystal_click/compact_part_projection.cr",
+      "src/crystal_click/compact_part_table.cr",
+      "src/crystal_click/compact_part_writer/compact_part_metadata.cr",
+      "src/crystal_click/compact_part_writer/compact_part_operation.cr",
+      "src/crystal_click/compact_projection_aggregate_reader_admission.cr",
+      "src/crystal_click/compact_projection_aggregate_reader_admission_session.cr",
+      "src/crystal_click/part_writer_infrastructure/primary_index_writer.cr"
+    ]
+  },
+  "changed_paths": [
+    ".landmark/evidence/materialized-view-aggregate-projection-w301.json",
+    "LANDMARKS.md",
+    "README.md",
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "scripts/check_materialized_view_aggregate_projection_w298.cr",
+    "scripts/verify_materialized_view_aggregate_projection_w298.rb",
+    "spec/compact_aggregate_projection_compressed_index_reader_spec.cr",
+    "spec/compact_aggregate_projection_compressed_index_writer_spec.cr",
+    "src/crystal_click.cr",
+    "src/crystal_click/compact_binary_bulk_column_reader.cr",
+    "src/crystal_click/compact_part_physical_context.cr",
+    "src/crystal_click/compact_part_projection.cr",
+    "src/crystal_click/compact_part_table.cr",
+    "src/crystal_click/compact_part_writer/compact_part_metadata.cr",
+    "src/crystal_click/compact_part_writer/compact_part_operation.cr",
+    "src/crystal_click/compact_projection_aggregate_reader_admission.cr",
+    "src/crystal_click/compact_projection_aggregate_reader_admission_session.cr",
+    "src/crystal_click/part_writer_infrastructure/primary_index_writer.cr"
+  ],
+  "links": [
+    "docs/PROJECTION_PUBLICATION_FRONTIER.md",
+    "docs/MATERIALIZED_VIEW_TRANSFORM_FRONTIER.md",
+    "docs/PROJECT_STATUS.md",
+    "LANDMARKS.md",
+    ".landmark/evidence/materialized-view-aggregate-projection-w300.json"
+  ],
+  "refresh_when": [
+    "Compact projection admission, physical slots or mark-grid semantics change.",
+    "Primary index transport framing, checksums or tuple encoding change.",
+    "Projection bound schemas, operation budgets or staged readback and publication change.",
+    "Pinned ClickHouse source or executable changes."
+  ]
+}

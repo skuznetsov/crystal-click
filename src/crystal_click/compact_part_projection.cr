@@ -8,6 +8,7 @@ module CrystalClick
     getter mark_format : CompactMarkFormat
     getter variant_discriminator_mode : CompactVariantDiscriminatorMode
     getter compress_marks : Bool
+    getter compress_primary_key : Bool
     getter profile : BinaryBulkProfile
 
     @name : String
@@ -36,6 +37,7 @@ module CrystalClick
       @aggregate_columns : Array(WidePartProjectionAggregate) = [] of WidePartProjectionAggregate,
       @additional_key_names : Array(String) = [] of String,
       @additional_key_columns : Array(Array(UInt64)) = [] of Array(UInt64),
+      @compress_primary_key : Bool = false,
     )
     end
 
@@ -94,6 +96,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
       frame_bytes : Int = 4096,
       compress_marks : Bool = false,
+      compress_primary_key : Bool = false,
     ) : CompactPartProjection
       unless counts.size == keys.size
         raise ArgumentError.new("count projection keys and counts must have equal lengths")
@@ -105,6 +108,7 @@ module CrystalClick
         rows_per_mark: rows_per_mark,
         frame_bytes: frame_bytes,
         compress_marks: compress_marks,
+        compress_primary_key: compress_primary_key,
       )
     end
 
@@ -119,6 +123,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
       frame_bytes : Int = 4096,
       compress_marks : Bool = false,
+      compress_primary_key : Bool = false,
     ) : CompactPartProjection
       unless counts.size == keys[0].size
         raise ArgumentError.new("count projection keys and counts must have equal lengths")
@@ -130,6 +135,7 @@ module CrystalClick
         rows_per_mark: rows_per_mark,
         frame_bytes: frame_bytes,
         compress_marks: compress_marks,
+        compress_primary_key: compress_primary_key,
       )
     end
 
@@ -146,6 +152,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
       frame_bytes : Int = 4096,
       compress_marks : Bool = false,
+      compress_primary_key : Bool = false,
     ) : CompactPartProjection
       validate_aggregate_projection_options!(name, rows_per_mark, frame_bytes)
       validate_column_name!(key_name)
@@ -170,8 +177,7 @@ module CrystalClick
         retained_keys, retained_columns, rows_per_mark, frame_bytes.to_i32,
         CompactMarkFormat::Mrk4, CompactVariantDiscriminatorMode::Compact,
         compress_marks, BinaryBulkProfile.with_size_stream, nil, count_total,
-        retained_aggregates,
-      )
+        retained_aggregates, compress_primary_key: compress_primary_key)
     end
 
     # Retains two detached key columns in GROUP BY order and caller-computed
@@ -186,6 +192,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
       frame_bytes : Int = 4096,
       compress_marks : Bool = false,
+      compress_primary_key : Bool = false,
     ) : CompactPartProjection
       validate_aggregate_projection_options!(name, rows_per_mark, frame_bytes)
       validate_column_name!(key_names[0])
@@ -229,7 +236,7 @@ module CrystalClick
         CompactMarkFormat::Mrk4, CompactVariantDiscriminatorMode::Compact,
         compress_marks, BinaryBulkProfile.with_size_stream, nil, count_total,
         retained_aggregates, [String.new(key_names[1].to_slice)] of String,
-        [retained_second_keys] of Array(UInt64),
+        [retained_second_keys] of Array(UInt64), compress_primary_key,
       )
     end
 
@@ -244,6 +251,7 @@ module CrystalClick
       rows_per_mark : Int32 = 8192,
       frame_bytes : Int = 4096,
       compress_marks : Bool = false,
+      compress_primary_key : Bool = false,
     ) : CompactPartProjection
       validate_aggregate_projection_options!(name, rows_per_mark, frame_bytes)
       key_names.each { |key_name| validate_column_name!(key_name) }
@@ -290,7 +298,7 @@ module CrystalClick
         retained_columns, rows_per_mark, frame_bytes.to_i32,
         CompactMarkFormat::Mrk4, CompactVariantDiscriminatorMode::Compact,
         compress_marks, BinaryBulkProfile.with_size_stream, nil, count_total,
-        retained_aggregates, additional_names, additional_keys,
+        retained_aggregates, additional_names, additional_keys, compress_primary_key,
       )
     end
 
@@ -365,6 +373,7 @@ module CrystalClick
         source.@variant_discriminator_mode, source.@compress_marks, source.@profile,
         binding, source.@count_total, source.@aggregate_columns,
         source.@additional_key_names, source.@additional_key_columns,
+        source.@compress_primary_key,
       )
     end
 

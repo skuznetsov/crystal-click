@@ -138,6 +138,7 @@ module CrystalClick
       else
         validate_column_set!(key_name, columns)
       end
+      compress_primary_key = projection_aggregate.try(&.compress_primary_key) || false
       target, parent = validate_destination(destination)
 
       if projections.size > WidePartWriter::MAX_PROJECTIONS
@@ -263,6 +264,7 @@ module CrystalClick
         write_plan,
         compress_marks,
         profile,
+        compress_primary_key: compress_primary_key,
       )
       schema_binding.try { |binding| binding.validate_compact!(metadata.schema_columns) }
       files = case write_plan
@@ -307,8 +309,21 @@ module CrystalClick
       compound_index_keys = additional_index_keys.try do |lanes|
         [key_slice] + lanes.map { |lane| lane.to_unsafe.to_slice(lane.size) }
       end
-      index_record = planned_primary_index_record(key_slice, rows_per_mark_grid, rows_per_mark, compound_index_keys)
-      reserve_primary_index_output!(write_transport_budget, index_record)
+      compressed_primary_index = if compress_primary_key
+                                   index_keys = compound_index_keys || [key_slice] of Slice(UInt64)
+                                   PartWriterInfrastructure::PrimaryIndexWriter.prepare_compound_compressed(
+                                     index_keys,
+                                     rows_per_mark,
+                                     frame_bytes,
+                                     write_transport_budget,
+                                   )
+                                 end
+      index_record = if prepared_index = compressed_primary_index
+                       prepared_index[1]
+                     else
+                       planned_primary_index_record(key_slice, rows_per_mark_grid, rows_per_mark, compound_index_keys)
+                     end
+      reserve_primary_index_output!(write_transport_budget, index_record) unless compressed_primary_index
       count_bytes = metadata.count_text.to_slice
       serialization_bytes = metadata.serialization_text.to_slice
       records = Array(ChecksumRecord).new(5 + prepared_projections.size)
@@ -340,7 +355,10 @@ module CrystalClick
       begin
         File.write(File.join(stage, "data.bin"), data)
         mark_output.write_to(stage)
-        written_index = if index_keys = compound_index_keys
+        written_index = if prepared_index = compressed_primary_index
+                          File.write(File.join(stage, "primary.cidx"), prepared_index[0])
+                          prepared_index[1]
+                        elsif index_keys = compound_index_keys
                           PartWriterInfrastructure::PrimaryIndexWriter.write_compound(
                             stage, index_keys, rows_per_mark
                           )
@@ -827,33 +845,39 @@ module CrystalClick
         raise CorruptPartError.new("staged Compact physical grid differs from preflight")
       end
 
-      index_bytes = if index_keys = compound_index_keys
-                      PartWriterInfrastructure::PrimaryIndexWriter.compound_size(rows.size, index_keys.size).to_i64
-                    else
-                      (rows.size.to_i64 + 1_i64) * sizeof(UInt64)
-                    end
-      if index_bytes > Int64::MAX // 2_i64
-        raise UnsupportedFormatError.new("Compact primary-index validation workspace overflows")
-      end
-      transport_budget.reserve_file_bytes(index_bytes)
-      transport_budget.reserve_result_bytes(index_bytes * 2_i64)
-      if index_keys = compound_index_keys
-        PartWriterInfrastructure::PrimaryIndexWriter.validate_compound!(
-          stage, rows, index_keys, checksums
-        )
-      else
-        primary = PrimaryKeyIndex.open(stage, rows.size, checksums, verify_recorded_hash: true)
-        offset = 0
-        rows.each_with_index do |mark_rows, mark|
-          unless primary.keys[mark] == keys[offset]
-            raise CorruptPartError.new("staged Compact primary index differs from the parent grid")
+      compress_primary_key = projection_aggregate.try(&.compress_primary_key) || false
+      unless compress_primary_key
+        index_bytes = if index_keys = compound_index_keys
+                        PartWriterInfrastructure::PrimaryIndexWriter.compound_size(rows.size, index_keys.size).to_i64
+                      else
+                        (rows.size.to_i64 + 1_i64) * sizeof(UInt64)
+                      end
+        if index_bytes > Int64::MAX // 2_i64
+          raise UnsupportedFormatError.new("Compact primary-index validation workspace overflows")
+        end
+        transport_budget.reserve_file_bytes(index_bytes)
+        transport_budget.reserve_result_bytes(index_bytes * 2_i64)
+        if index_keys = compound_index_keys
+          PartWriterInfrastructure::PrimaryIndexWriter.validate_compound!(
+            stage, rows, index_keys, checksums
+          )
+        else
+          primary = PrimaryKeyIndex.open(stage, rows.size, checksums, verify_recorded_hash: true)
+          offset = 0
+          rows.each_with_index do |mark_rows, mark|
+            unless primary.keys[mark] == keys[offset]
+              raise CorruptPartError.new("staged Compact primary index differs from the parent grid")
+            end
+            offset += mark_rows.to_i
           end
-          offset += mark_rows.to_i
-        end
-        unless offset == keys.size && primary.keys.last == keys.last
-          raise CorruptPartError.new("staged Compact primary-index terminal differs from the final key")
+          unless offset == keys.size && primary.keys.last == keys.last
+            raise CorruptPartError.new("staged Compact primary-index terminal differs from the final key")
+          end
         end
       end
+      projection_admission_session = if compress_primary_key
+                                       CompactProjectionAggregateReaderAdmissionSession.new(stage, transport_budget)
+                                     end
 
       key_type = BinaryDataType.primitive("UInt64")
       key_name = metadata.schema_columns[0][0]
@@ -899,6 +923,7 @@ module CrystalClick
           codec_budget,
           transport_budget,
           projection_aggregate: projection_state,
+          projection_admission_session: projection_state ? projection_admission_session : nil,
         )
       end
     end
@@ -917,6 +942,7 @@ module CrystalClick
       codec_budget : BinaryCodecBudget,
       transport_budget : CompressedStreamBudget,
       projection_aggregate : Bool = false,
+      projection_admission_session : CompactProjectionAggregateReaderAdmissionSession? = nil,
     ) : Nil
       CompactReadbackGrid.preflight!(transport_budget, rows.size, slot_count, planned_data_size)
       reader = if projection_aggregate
@@ -932,15 +958,17 @@ module CrystalClick
                      reader_limits,
                      codec_budget: codec_budget,
                      transport_budget: transport_budget,
+                     admission_session: projection_admission_session,
                    )
                  else
-                   CompactBinaryBulkColumnReader.open_projection_aggregate(
+                   CompactBinaryBulkColumnReader.open_projection_aggregate_with_descriptor(
                      stage,
-                     name,
+                     descriptor,
                      limits,
                      reader_limits,
                      codec_budget: codec_budget,
                      transport_budget: transport_budget,
+                     admission_session: projection_admission_session,
                    )
                  end
                elsif dynamic_input = input.as?(CompactDynamicColumnInput)

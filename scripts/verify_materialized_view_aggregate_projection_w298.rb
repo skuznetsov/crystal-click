@@ -20,6 +20,8 @@ module VerifyMaterializedViewAggregateProjectionW298
   W299_HELPER_FORMAT = 'materialized_view_aggregate_projection_w299_helper_v1'.freeze
   W300_FORMAT = 'materialized_view_aggregate_projection_w300_native_v1'.freeze
   W300_HELPER_FORMAT = 'materialized_view_aggregate_projection_w300_helper_v1'.freeze
+  W301_FORMAT = 'materialized_view_aggregate_projection_w301_native_v1'.freeze
+  W301_HELPER_FORMAT = 'materialized_view_aggregate_projection_w301_helper_v1'.freeze
   BINARY = '/opt/mldata_ssd/cache/crystal-click-w283.PDWAiK/recovery/runtime/clickhouse'.freeze
   BINARY_SHA256 = '5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae'.freeze
   VERSION = '26.10.1.1201'.freeze
@@ -72,6 +74,12 @@ module VerifyMaterializedViewAggregateProjectionW298
     {table: 'target_cw', control: 'control_cw', uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788042', control_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788052', view: 'view_cw', view_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788062', part: SOURCE_PART, parent_format: 'Compact', child_format: 'Wide', compress_marks: false, order: %w[key_b key_d key_a key_c]},
     {table: 'target_cw_cm', control: 'control_cw_cm', uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788043', control_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788053', view: 'view_cw_cm', view_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788063', part: SOURCE_PART, parent_format: 'Compact', child_format: 'Wide', compress_marks: true, order: %w[key_b key_d key_a key_c]},
   ].map(&:freeze).freeze
+  W301_TARGETS = [
+    {table: 'target_wc', control: 'control_wc', uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788070', control_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788080', view: 'view_wc', view_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788090', part: SOURCE_PART, parent_format: 'Wide', child_format: 'Compact', compress_marks: false, order: %w[key_d key_c key_b key_a]},
+    {table: 'target_wc_cm', control: 'control_wc_cm', uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788071', control_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788081', view: 'view_wc_cm', view_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788091', part: SOURCE_PART, parent_format: 'Wide', child_format: 'Compact', compress_marks: true, order: %w[key_d key_c key_b key_a]},
+    {table: 'target_cc', control: 'control_cc', uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788072', control_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788082', view: 'view_cc', view_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788092', part: SOURCE_PART, parent_format: 'Compact', child_format: 'Compact', compress_marks: false, order: %w[key_c key_a key_d key_b]},
+    {table: 'target_cc_cm', control: 'control_cc_cm', uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788073', control_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788083', view: 'view_cc_cm', view_uuid: 'f2980000-7b7f-4e2f-9e44-dc13a8788093', part: SOURCE_PART, parent_format: 'Compact', child_format: 'Compact', compress_marks: true, order: %w[key_c key_a key_d key_b]},
+  ].map(&:freeze).freeze
   MEMORY_BYTES = 536_870_912
   PROCESS_MEMORY_MIB = 2048
   PROCESS_TIMEOUT_SECONDS = 90
@@ -95,11 +103,13 @@ module VerifyMaterializedViewAggregateProjectionW298
       @run_safe_arg = options.fetch(:run_safe)
       @w299 = options.fetch(:w299, false)
       @w300 = options.fetch(:w300, false)
-      fail!('W299 and W300 profiles are mutually exclusive') if @w299 && @w300
-      @targets = if @w300 then W300_TARGETS elsif @w299 then W299_TARGETS else TARGETS end
-      @format = if @w300 then W300_FORMAT elsif @w299 then W299_FORMAT else FORMAT end
-      @helper_format = if @w300 then W300_HELPER_FORMAT elsif @w299 then W299_HELPER_FORMAT else HELPER_FORMAT end
-      @profile = if @w300 then 'w300' elsif @w299 then 'w299' else 'w298' end
+      @w301 = options.fetch(:w301, false)
+      fail!('W299, W300 and W301 profiles are mutually exclusive') if [@w299, @w300, @w301].count(true) > 1
+      @compressed_primary = @w300 || @w301
+      @targets = if @w301 then W301_TARGETS elsif @w300 then W300_TARGETS elsif @w299 then W299_TARGETS else TARGETS end
+      @format = if @w301 then W301_FORMAT elsif @w300 then W300_FORMAT elsif @w299 then W299_FORMAT else FORMAT end
+      @helper_format = if @w301 then W301_HELPER_FORMAT elsif @w300 then W300_HELPER_FORMAT elsif @w299 then W299_HELPER_FORMAT else HELPER_FORMAT end
+      @profile = if @w301 then 'w301' elsif @w300 then 'w300' elsif @w299 then 'w299' else 'w298' end
       @processes = []
       @metadata = {}
       @native_paths = {}
@@ -129,7 +139,8 @@ module VerifyMaterializedViewAggregateProjectionW298
       validate_reopen!(reopened)
       validate_inputs_unchanged!
       write_summary(
-        status: @w300 ? 'w300_stock_and_generated_compressed_wide_child_primary_indexes_attached_checked_and_offline_scanned' :
+        status: @w301 ? 'w301_stock_and_generated_compressed_compact_child_primary_indexes_attached_checked_and_offline_scanned' :
+                @w300 ? 'w300_stock_and_generated_compressed_wide_child_primary_indexes_attached_checked_and_offline_scanned' :
                         @w299 ? 'w299_stock_and_generated_compressed_wide_children_attached_checked_and_offline_scanned' :
                         'four_parent_child_layout_pairings_attached_checked_and_offline_scanned',
         binary: {path: @binary, sha256: @binary_sha, version: VERSION, revision: REVISION},
@@ -138,7 +149,8 @@ module VerifyMaterializedViewAggregateProjectionW298
         attached: @attached, native_checks: native_checks, offline_reopen: reopened,
         invocations: @processes, evidence_root: @root,
       )
-      puts(@w300 ? "W300 compressed Wide child primary index witness passed; evidence=#{@root}" :
+      puts(@w301 ? "W301 compressed Compact child primary index witness passed; evidence=#{@root}" :
+                    @w300 ? "W300 compressed Wide child primary index witness passed; evidence=#{@root}" :
                     @w299 ? "W299 compressed Wide child witness passed; evidence=#{@root}" :
                     "W298 four-layout N-key projection witness passed; evidence=#{@root}")
       true
@@ -239,7 +251,7 @@ module VerifyMaterializedViewAggregateProjectionW298
       keys = target.fetch(:order)
       child_threshold = target.fetch(:child_format) == 'Wide' ? 0 : 1000
       parent_threshold = target.fetch(:parent_format) == 'Wide' ? 0 : 1000
-      compressed = if @w300
+      compressed = if @w300 || @w301
                      target.fetch(:compress_marks) ? 1 : 0
                    else
                      (@w299 || target.fetch(:parent_format) == 'Compact') ? 1 : 0
@@ -251,7 +263,7 @@ module VerifyMaterializedViewAggregateProjectionW298
       end
       projection = "PROJECTION #{PROJECTION} (SELECT #{(keys + AGGREGATES).join(', ')} GROUP BY #{keys.join(', ')}) WITH SETTINGS (min_rows_for_wide_part = #{child_threshold}, index_granularity = 2)"
       schema = 'parent_id UInt64, key_a UInt64, key_b UInt64, key_c UInt64, key_d UInt64, value UInt64'
-      compress_primary_key = @w300 ? 1 : 0
+      compress_primary_key = @compressed_primary ? 1 : 0
       statement = <<~SQL
         CREATE TABLE #{DATABASE}.#{table} UUID '#{uuid}'
         (#{schema}, #{projection}) ENGINE = MergeTree ORDER BY parent_id
@@ -360,23 +372,23 @@ module VerifyMaterializedViewAggregateProjectionW298
         fail!("#{table} stock projection path differs") unless child.fetch(:path) == child_path
         stock_compressed = stock_control_marks_compressed?(target)
         assert_format!(parent_path, target.fetch(:parent_format), "#{table} stock parent", compressed: stock_compressed,
-                       compression_method: @w299 && stock_compressed ? 0x90 : nil,
-                       compressed_primary: @w300)
+                       compression_method: (@w299 || @w301) && stock_compressed ? 0x90 : nil,
+                       compressed_primary: @compressed_primary)
         assert_format!(child_path, target.fetch(:child_format), "#{table} stock projection", compressed: stock_compressed,
-                       compression_method: @w299 && stock_compressed ? 0x90 : nil,
-                       expected_mark_files: (@w299 || @w300) ? 8 : nil, compressed_primary: @w300)
+                       compression_method: (@w299 || @w301) && stock_compressed ? 0x90 : nil,
+                       expected_mark_files: @w301 ? 1 : (@w299 || @w300) ? 8 : nil, compressed_primary: @compressed_primary)
         schema = child_schema(table)
         expected_schema = target.fetch(:order).map { |name| [name, 'UInt64'] } + [
           ['count()', 'AggregateFunction(count)'], ['sum(value)', 'AggregateFunction(sum, UInt64)'],
           ['min(value)', 'AggregateFunction(min, UInt64)'], ['max(value)', 'AggregateFunction(max, UInt64)'],
         ]
         fail!("#{table} stock child schema differs") unless schema == expected_schema
-        index_name = @w300 ? 'primary.cidx' : 'primary.idx'
+        index_name = @compressed_primary ? 'primary.cidx' : 'primary.idx'
         index = File.binread(File.join(child_path, index_name))
-        assert_bytes!(index, expected_primary_index(target), "#{table} stock primary.idx vs literal N-key schedule") unless @w300
-        parent_index_name = @w300 ? 'primary.cidx' : 'primary.idx'
+        assert_bytes!(index, expected_primary_index(target), "#{table} stock primary.idx vs literal N-key schedule") unless @compressed_primary
+        parent_index_name = @compressed_primary ? 'primary.cidx' : 'primary.idx'
         parent_index = File.binread(File.join(parent_path, parent_index_name))
-        assert_bytes!(parent_index, expected_parent_primary_index, "#{table} stock parent primary index vs literal parent schedule") unless @w300
+        assert_bytes!(parent_index, expected_parent_primary_index, "#{table} stock parent primary index vs literal parent schedule") unless @compressed_primary
         raw = query("stock_raw_#{table}", <<~SQL)
           SELECT * FROM mergeTreeProjection('#{DATABASE}','#{table}','#{PROJECTION}')
           ORDER BY #{target.fetch(:order).join(',')} FORMAT RowBinary;
@@ -459,12 +471,12 @@ module VerifyMaterializedViewAggregateProjectionW298
         'index_granularity' => '2',
         'min_rows_for_wide_part' => target.fetch(:parent_format) == 'Wide' ? '0' : '1000',
         'min_bytes_for_wide_part' => '0',
-        'compress_marks' => if @w300
+        'compress_marks' => if @w300 || @w301
                               target.fetch(:compress_marks) ? '1' : '0'
                             else
                               (@w299 || target.fetch(:parent_format) == 'Compact') ? '1' : '0'
                             end,
-        'compress_primary_key' => @w300 ? '1' : '0',
+        'compress_primary_key' => @compressed_primary ? '1' : '0',
         'replace_long_file_name_to_hash' => '0',
       }
       fail!("#{target.fetch(:table)} metadata SETTINGS differ from the fixture-selected writer options") unless settings == expected
@@ -503,20 +515,20 @@ module VerifyMaterializedViewAggregateProjectionW298
         child_path = File.join(@generated.fetch(table).fetch(:path), "#{PROJECTION}.proj")
         assert_format!(@generated.fetch(table).fetch(:path), target.fetch(:parent_format), "#{table} generated parent",
                        compressed: generated_parent_marks_compressed?(target),
-                       compression_method: @w299 && generated_parent_marks_compressed?(target) ? 0x82 : nil,
+                       compression_method: (@w299 || @w301) && generated_parent_marks_compressed?(target) ? 0x82 : nil,
                        compressed_primary: false)
         # W298 preserves its plain Wide child. W299 opts both Wide child lanes
         # into LZ4-compressed marks while the native stock child uses ZSTD.
         assert_format!(child_path, target.fetch(:child_format), "#{table} generated child",
                        compressed: generated_child_marks_compressed?(target),
-                       compression_method: @w299 && generated_child_marks_compressed?(target) ? 0x82 : nil,
-                       expected_mark_files: (@w299 || @w300) ? 8 : nil, compressed_primary: @w300)
-        index_name = @w300 ? 'primary.cidx' : 'primary.idx'
+                       compression_method: (@w299 || @w301) && generated_child_marks_compressed?(target) ? 0x82 : nil,
+                       expected_mark_files: @w301 ? 1 : (@w299 || @w300) ? 8 : nil, compressed_primary: @compressed_primary)
+        index_name = @compressed_primary ? 'primary.cidx' : 'primary.idx'
         index = File.binread(File.join(child_path, index_name))
-        assert_bytes!(index, expected_primary_index(target), "#{table} generated primary.idx vs literal schedule") unless @w300
-        assert_bytes!(index, @stock.fetch(target.fetch(:control)).fetch(:primary_index), "#{table} generated primary.idx vs stock") unless @w300
+        assert_bytes!(index, expected_primary_index(target), "#{table} generated primary.idx vs literal schedule") unless @compressed_primary
+        assert_bytes!(index, @stock.fetch(target.fetch(:control)).fetch(:primary_index), "#{table} generated primary.idx vs stock") unless @compressed_primary
         @generated.fetch(table)[:primary_index_name] = index_name
-        @generated.fetch(table)[:primary_index_hex] = index.unpack1('H*') unless @w300
+        @generated.fetch(table)[:primary_index_hex] = index.unpack1('H*') unless @compressed_primary
         @generated.fetch(table)[:primary_index_sha256] = Digest::SHA256.hexdigest(index)
       end
     end
@@ -563,16 +575,16 @@ module VerifyMaterializedViewAggregateProjectionW298
         assert_attached_files_preserved!(expected_inventory, attached_inventory, table, parent_path)
         assert_format!(parent_path, target.fetch(:parent_format), "#{table} attached parent",
                        compressed: generated_parent_marks_compressed?(target),
-                       compression_method: @w299 && generated_parent_marks_compressed?(target) ? 0x82 : nil,
+                       compression_method: (@w299 || @w301) && generated_parent_marks_compressed?(target) ? 0x82 : nil,
                        compressed_primary: false)
         assert_format!(child_path, target.fetch(:child_format), "#{table} attached child",
                        compressed: generated_child_marks_compressed?(target),
-                       compression_method: @w299 && generated_child_marks_compressed?(target) ? 0x82 : nil,
-                       expected_mark_files: (@w299 || @w300) ? 8 : nil, compressed_primary: @w300)
+                       compression_method: (@w299 || @w301) && generated_child_marks_compressed?(target) ? 0x82 : nil,
+                       expected_mark_files: @w301 ? 1 : (@w299 || @w300) ? 8 : nil, compressed_primary: @compressed_primary)
         @attached[table] = {part: parent[0], parent_path: parent_path, child_path: child_path,
                             inventory: attached_inventory,
-                            primary_index_name: @w300 ? 'primary.cidx' : 'primary.idx',
-                            primary_index_hex: File.binread(File.join(child_path, @w300 ? 'primary.cidx' : 'primary.idx')).unpack1('H*')}
+                            primary_index_name: @compressed_primary ? 'primary.cidx' : 'primary.idx',
+                            primary_index_hex: File.binread(File.join(child_path, @compressed_primary ? 'primary.cidx' : 'primary.idx')).unpack1('H*')}
       end
     end
 
@@ -610,10 +622,10 @@ module VerifyMaterializedViewAggregateProjectionW298
         SQL
         assert_bytes!(raw, expected_child_rowbinary(target), "#{table} attached state RowBinary vs literal")
         assert_bytes!(raw, @stock.fetch(control).fetch(:child_rowbinary), "#{table} attached state RowBinary vs stock")
-        index_name = @w300 ? 'primary.cidx' : 'primary.idx'
+        index_name = @compressed_primary ? 'primary.cidx' : 'primary.idx'
         index = File.binread(File.join(@attached.fetch(table).fetch(:child_path), index_name))
-        assert_bytes!(index, expected_primary_index(target), "#{table} attached primary index vs literal") unless @w300
-        assert_bytes!(index, @stock.fetch(control).fetch(:primary_index), "#{table} attached primary index vs stock") unless @w300
+        assert_bytes!(index, expected_primary_index(target), "#{table} attached primary index vs literal") unless @compressed_primary
+        assert_bytes!(index, @stock.fetch(control).fetch(:primary_index), "#{table} attached primary index vs stock") unless @compressed_primary
         parent_index_name = 'primary.idx'
         parent_index = File.binread(File.join(@attached.fetch(table).fetch(:parent_path), parent_index_name))
         assert_bytes!(parent_index, expected_parent_primary_index, "#{table} generated parent primary index vs literal")
@@ -625,7 +637,7 @@ module VerifyMaterializedViewAggregateProjectionW298
         [table, {full: all, multi_key_prefix: prefix, fourth_key_refinement: refinement,
                  uint64_max_boundary: boundary,
                  state_rowbinary_sha256: Digest::SHA256.hexdigest(raw), primary_index_name: index_name,
-                 primary_index_sha256: Digest::SHA256.hexdigest(index), primary_index_hex: @w300 ? nil : index.unpack1('H*'),
+                 primary_index_sha256: Digest::SHA256.hexdigest(index), primary_index_hex: @compressed_primary ? nil : index.unpack1('H*'),
                  parent_primary_index_name: parent_index_name, parent_primary_index_sha256: Digest::SHA256.hexdigest(parent_index),
                  parent_rowbinary_sha256: Digest::SHA256.hexdigest(parent_raw), schema: child_schema(table)}]
       end
@@ -682,7 +694,7 @@ module VerifyMaterializedViewAggregateProjectionW298
       initial = Integer(primary.fetch('Initial Granules'))
       selected = Integer(primary.fetch('Selected Granules'))
       fail!("#{table} filtered projection primary key did not prune granules") unless initial > 0 && selected > 0 && selected < initial
-      if @w300
+      if @compressed_primary
         fail!("#{table} filtered primary index granules do not match the child mark grid") unless initial == child_mark_rows.size
         attached = @attached.fetch(table)
         child_index = File.join(attached.fetch(:child_path), 'primary.cidx')
@@ -830,30 +842,38 @@ module VerifyMaterializedViewAggregateProjectionW298
             pair['parent_mark_rows'] == PARENT_MARK_ROWS && pair['child_mark_rows'] == child_mark_rows &&
             pair['window_parent_mark_rows'] == [1, 2, 2] && pair['window_child_mark_rows'] == [1, 2, 2]
           assert_w299_mark_witness!(pair, table, target) if @w299
-          assert_w300_primary_witnesses!(pair, table, target) if @w300
+          assert_compressed_primary_witnesses!(pair, table, target) if @compressed_primary
           assert_w300_mark_witness!(pair, table, target) if @w300
+          assert_w301_mark_witness!(pair, table, target) if @w301
           expected_path = table == target.fetch(:control) ?
             File.join(uuid_path(target.fetch(:control_uuid)), SOURCE_PART) : @attached.fetch(table).fetch(:catalog_copy)
           fail!("#{table} offline part path differs") unless pair['path'] == expected_path
         end
       end
-      if @w300
+      if @compressed_primary
         @targets.each do |target|
-          native_tuples = pairs.fetch(target.fetch(:control)).fetch('primary_index_witness').fetch('tuples')
-          generated_tuples = pairs.fetch(target.fetch(:table)).fetch('primary_index_witness').fetch('tuples')
-          fail!("#{target.fetch(:table)} native and generated decoded primary tuples differ") unless native_tuples == generated_tuples
+          native_pair = pairs.fetch(target.fetch(:control))
+          generated_pair = pairs.fetch(target.fetch(:table))
+          %w[primary_index_witness parent_primary_index_witness].each do |key|
+            native = native_pair.fetch(key)
+            generated = generated_pair.fetch(key)
+            fail!("#{target.fetch(:table)} native/generated decoded #{key} tuples or sizes differ") unless
+              native.fetch('tuples') == generated.fetch('tuples') && native.fetch('decoded_bytes') == generated.fetch('decoded_bytes')
+            fail!("#{target.fetch(:table)} native/generated decoded #{key} checksums differ") unless
+              native.fetch('decoded_cityhash_v1') == generated.fetch('decoded_cityhash_v1')
+          end
         end
       end
       report
     end
 
-    def assert_w300_primary_witnesses!(pair, table, target)
+    def assert_compressed_primary_witnesses!(pair, table, target)
       control = table == target.fetch(:control)
       expected_child = expected_primary_tuples(target).map { |tuple| tuple.map(&:to_s) }
       expected_parent = expected_parent_primary_tuples.map { |tuple| tuple.map(&:to_s) }
-      assert_w300_primary_index_witness!(pair.fetch('primary_index_witness'), 'primary.cidx', true,
+      assert_primary_index_witness!(pair.fetch('primary_index_witness'), 'primary.cidx', true,
                                          target.fetch(:order).size, expected_child, table, 'child')
-      assert_w300_primary_index_witness!(pair.fetch('parent_primary_index_witness'),
+      assert_primary_index_witness!(pair.fetch('parent_primary_index_witness'),
                                          control ? 'primary.cidx' : 'primary.idx', control, 1,
                                          expected_parent, table, 'parent')
       child = pair.fetch('primary_index_witness')
@@ -872,11 +892,11 @@ module VerifyMaterializedViewAggregateProjectionW298
       fail!("#{table} parent and child index provenance/path differs") unless
         pair.fetch('path').end_with?("/#{SOURCE_PART}") && child.fetch('tuple_width') == 4 && parent.fetch('tuple_width') == 1
     rescue KeyError, NoMethodError => error
-      fail!("#{table} W300 primary index witness is incomplete: #{error.message}")
+      fail!("#{table} #{@profile.upcase} primary index witness is incomplete: #{error.message}")
     end
 
-    def assert_w300_primary_index_witness!(witness, file, compressed, tuple_width, tuples, table, role)
-      fail!("#{table} W300 #{role} primary index tuple report differs") unless
+    def assert_primary_index_witness!(witness, file, compressed, tuple_width, tuples, table, role)
+      fail!("#{table} #{@profile.upcase} #{role} primary index tuple report differs") unless
         witness.fetch('file') == file && witness.fetch('compressed') == compressed &&
         witness.fetch('tuple_width') == tuple_width && witness.fetch('tuples') == tuples &&
         witness.fetch('tuple_count') == tuples.size && witness.fetch('decoded_bytes') == tuples.size * tuple_width * 8
@@ -884,19 +904,46 @@ module VerifyMaterializedViewAggregateProjectionW298
       method = witness.fetch('method')
       codec = witness.fetch('codec')
       if compressed
-        fail!("#{table} W300 #{role} cidx codec or physical size is invalid") unless
+        fail!("#{table} #{@profile.upcase} #{role} cidx codec or physical size is invalid") unless
           physical_bytes > 16 && [[0x82, 'LZ4'], [0x90, 'ZSTD']].include?([method, codec])
       else
-        fail!("#{table} W300 #{role} raw primary index codec/size differs") unless
+        fail!("#{table} #{@profile.upcase} #{role} raw primary index codec/size differs") unless
           physical_bytes == tuples.size * tuple_width * 8 && method.zero? && codec == 'none'
       end
       %w[physical_cityhash_v1 decoded_cityhash_v1].each do |key|
         value = witness.fetch(key)
-        fail!("#{table} W300 #{role} #{key} is malformed") unless value.is_a?(Array) && value.size == 2 && value.all? { |word| /\A[0-9]+\z/.match?(word) }
+        fail!("#{table} #{@profile.upcase} #{role} #{key} is malformed") unless value.is_a?(Array) && value.size == 2 && value.all? { |word| /\A[0-9]+\z/.match?(word) }
       end
       true
     rescue KeyError, NoMethodError => error
-      fail!("#{table} W300 #{role} primary index witness is incomplete: #{error.message}")
+      fail!("#{table} #{@profile.upcase} #{role} primary index witness is incomplete: #{error.message}")
+    end
+
+    def assert_w301_mark_witness!(pair, table, target)
+      witness = pair.fetch('mark_witness')
+      compressed = target.fetch(:compress_marks)
+      file = compressed ? 'data.cmrk4' : 'data.mrk4'
+      expected_method = compressed ? (table == target.fetch(:control) ? 0x90 : 0x82) : 0
+      expected_codec = compressed ? (expected_method == 0x90 ? 'ZSTD' : 'LZ4') : 'none'
+      record_width = KEY_NAMES.size * 16 + AGGREGATES.size * 16 + 8
+      record_count = child_mark_rows.size + 1
+      fail!("#{table} W301 Compact mark suffix or decoded grid differs") unless
+        witness.fetch('file') == file && witness.fetch('compressed') == compressed &&
+        witness.fetch('record_width') == record_width && witness.fetch('record_count') == record_count &&
+        witness.fetch('decoded_bytes') == record_width * record_count
+      fail!("#{table} W301 Compact mark codec or physical size differs") unless
+        witness.fetch('method') == expected_method && witness.fetch('codec') == expected_codec &&
+        witness.fetch('physical_bytes').positive? && (!compressed || witness.fetch('physical_bytes') > 16)
+      %w[physical_cityhash_v1 decoded_cityhash_v1].each do |key|
+        value = witness.fetch(key)
+        fail!("#{table} W301 Compact mark #{key} is malformed") unless
+          value.is_a?(Array) && value.size == 2 && value.all? { |word| /\A[0-9]+\z/.match?(word) }
+      end
+      fail!("#{table} W301 raw Compact mark physical and decoded checksums differ") if
+        !compressed && witness.fetch('physical_cityhash_v1') != witness.fetch('decoded_cityhash_v1')
+      true
+    rescue KeyError, NoMethodError => error
+      fail!("#{table} W301 Compact mark witness is incomplete: #{error.message}")
     end
 
     def assert_w300_mark_witness!(pair, table, target)
@@ -978,7 +1025,7 @@ module VerifyMaterializedViewAggregateProjectionW298
 
     def helper(action)
       args = [@catalog_root, action]
-      args << @profile if @w299 || @w300
+      args << @profile if @w299 || @w300 || @w301
       output = run_process("helper_#{action}", @helper, args, ''.b, 'prebuilt Crystal helper')
       fail!("helper #{action} must emit one JSON line") unless output.lines.size == 1
       JSON.parse(output)
@@ -1085,7 +1132,7 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def generated_child_marks_compressed?(target)
-      if @w300
+      if @w300 || @w301
         target.fetch(:compress_marks)
       else
         @w299 ? target.fetch(:child_format) == 'Wide' :
@@ -1094,12 +1141,12 @@ module VerifyMaterializedViewAggregateProjectionW298
     end
 
     def stock_control_marks_compressed?(target)
-      @w300 ? target.fetch(:compress_marks) :
+      (@w300 || @w301) ? target.fetch(:compress_marks) :
         @w299 || target.fetch(:child_format) == 'Compact' && target.fetch(:parent_format) == 'Compact'
     end
 
     def generated_parent_marks_compressed?(target)
-      if @w300
+      if @w300 || @w301
         target.fetch(:parent_format) == 'Compact' && target.fetch(:compress_marks)
       else
         target.fetch(:parent_format) == 'Compact'
@@ -1182,7 +1229,7 @@ module VerifyMaterializedViewAggregateProjectionW298
     def write_summary(values)
       return unless @root && File.directory?(@root)
       payload = {format: @format, repository_head: @revision, fatal_error: @fatal_error}.merge(values)
-      payload[:profile] = @profile if @w299 || @w300
+      payload[:profile] = @profile if @w299 || @w300 || @w301
       File.write(File.join(@root, 'summary.json'), JSON.pretty_generate(payload) + "\n", mode: 'w', perm: 0o600)
     end
 
@@ -1198,13 +1245,14 @@ module VerifyMaterializedViewAggregateProjectionW298
   def self.run(argv = ARGV)
     options = {binary: BINARY}
     parser = OptionParser.new do |args|
-      args.banner = 'Usage: ruby scripts/verify_materialized_view_aggregate_projection_w298.rb --evidence-root PATH --helper PREBUILT --run-safe PATH [--binary PATH] [--w299|--w300]'
+      args.banner = 'Usage: ruby scripts/verify_materialized_view_aggregate_projection_w298.rb --evidence-root PATH --helper PREBUILT --run-safe PATH [--binary PATH] [--w299|--w300|--w301]'
       args.on('--evidence-root PATH', 'Fresh directory below an existing non-system-volume parent') { |value| options[:evidence_root] = value }
       args.on('--helper PATH', 'Prebuilt executable W298 Crystal helper') { |value| options[:helper] = value }
       args.on('--run-safe PATH', 'Pinned process resource guard') { |value| options[:run_safe] = value }
       args.on('--binary PATH', 'Pinned stock ClickHouse executable') { |value| options[:binary] = value }
       args.on('--w299', 'Run the two-parent compressed Wide child projection witness') { options[:w299] = true }
       args.on('--w300', 'Run the primary.cidx Wide projection witness across parent layouts') { options[:w300] = true }
+      args.on('--w301', 'Run the primary.cidx Compact MRK4 child witness across parent layouts and mark suffixes') { options[:w301] = true }
     end
     parser.parse!(argv)
     Driver.new(options).run ? 0 : 1

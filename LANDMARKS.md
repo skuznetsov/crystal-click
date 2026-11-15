@@ -1,5 +1,22 @@
 # Crystal Click landmarks
 
+## Compressed Compact aggregate projection indexes — W301
+
+- Compact MRK4 aggregate callbacks opt into `primary.cidx` through
+  `compress_primary_key: true`. Both parent layouts can publish a child
+  with `data.mrk4` or `data.cmrk4`. Staging and readback share the
+  parent operation budgets.
+- State and key-only catalog reads check both index hashes and match every
+  mark-start and terminal tuple against authenticated Compact key spans
+  before callbacks, including at EOF.
+- ClickHouse 26.10.1.1201 attached and checked the four cells in Debug
+  and Release. Native decoding matched stock and generated index tuples
+  to the actual Compact key streams. Refresh after changes to index
+  framing, checksum binding, the Compact key or mark grid, schema
+  binding, staged publication, typed admission, or the native pin.
+  See the [compressed Compact index profile](docs/PROJECTION_PUBLICATION_FRONTIER.md#compressed-compact-aggregate-projection-indexes-w301)
+  and [evidence](.landmark/evidence/materialized-view-aggregate-projection-w301.json).
+
 ## Compressed Wide aggregate projection indexes — W300
 
 - Wide aggregate projection callbacks independently opt into `primary.cidx`

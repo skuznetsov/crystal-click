@@ -2,6 +2,17 @@
 
 ## Current qualification
 
+### W301 Compressed Compact aggregate projection indexes
+
+Compact MRK4 aggregate children use `primary.cidx` when the callback
+sets `compress_primary_key: true`. Both parent layouts support
+`data.mrk4` and `data.cmrk4`. State and key-only catalog reads check both
+index hashes and compare every ordered UInt64 mark-start and terminal
+tuple with the key data before yielding. All four combinations pass
+`ATTACH PART` and `CHECK TABLE` on ClickHouse 26.10.1.1201 in both
+Crystal build modes. See the
+[compressed Compact index profile](PROJECTION_PUBLICATION_FRONTIER.md#compressed-compact-aggregate-projection-indexes-w301).
+
 ### W300 Compressed Wide aggregate projection indexes
 
 Wide aggregate children use `primary.cidx` when the callback sets
@@ -4849,7 +4860,8 @@ source/runtime identities and executed evidence.
    parent layout. W298 accepts an ordered array of plain UInt64 group keys
    for either child layout. W299 qualifies `.cmrk2` marks for Wide
    aggregate children under both parent layouts. W300 qualifies
-   `primary.cidx` indexes with either Wide child mark format.
+   `primary.cidx` indexes with either Wide child mark format. W301
+   qualifies them for Compact children with either MRK4 mark format.
    General keys and partitions, additional projection declarations, remaining
    layouts/types and automatic materialization remain open.
 4. **General table writing.** The detached-part writers and small
@@ -5014,7 +5026,8 @@ retains the implementation checkpoints and responsibility boundaries.
    W295 through W297 qualify the same states in Compact MRK4 children with
    one or two UInt64 group keys. W298 generalizes the number of UInt64 keys
    in the aggregate children. W299 qualifies compressed adaptive marks and
-   W300 qualifies compressed primary indexes for Wide aggregate children.
+   W300 and W301 qualify compressed primary indexes for Wide and
+   Compact aggregate children respectively.
    More group key and state types, general key and
    partition derivation, additional projection declarations, and bounded
    output appenders remain open.
@@ -5023,7 +5036,7 @@ retains the implementation checkpoints and responsibility boundaries.
 
 ## Source reference
 
-W286 through W300 compare the relevant MergeTree paths against the pinned shallow
+W286 through W301 compare the relevant MergeTree paths against the pinned shallow
 revision `0ca8150d9b1d0886edb2e3b4ab65eebb768d0357`. Native interoperability
 uses the separately pinned official full executable of ClickHouse
 `26.10.1.1201`. The feature evidence records both identities.

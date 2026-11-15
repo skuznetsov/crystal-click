@@ -1,5 +1,43 @@
 # Physical projection reads and publication
 
+## Compressed Compact aggregate projection indexes (W301)
+
+`CompactPartProjection.precomputed_count` and
+`CompactPartProjection.precomputed_aggregate` accept `compress_primary_key:`.
+The opt-in targets Compact MRK4 aggregate children under either parent
+layout and admits both `data.mrk4` and `data.cmrk4`. The UInt64 group key
+roster and Count, UInt64 Sum, Min and Max state profile follow W298. The
+default is `primary.idx`. MRK3 and other key and state types are outside
+this profile.
+
+The reader and writer share the W300 ordered tuple encoding, frame
+transport, 8 MiB limits and physical and decoded hashes. The reader
+requires one declared index representation and checks every mark-start
+tuple and the terminal tuple against the Compact key spans. It rejects a
+malformed `primary.cidx` candidate before yielding a state-only or
+key-only catalog window, including EOF. Staging and readback use the
+parent operation budgets. Revert the feature commit to roll back the
+publisher.
+
+Qualification requires the affected specs and native profile in Debug
+and Release. For each parent layout and marks suffix, attach the written
+part, check it and match the decoded index, state bytes and query results
+with the stock control. Reopen both physical parts through the catalog.
+Test rehashed wrong later and terminal tuples, malformed compressed
+metadata and shared-budget rollback. Qualify the corruption probe with a
+valid control and a baseline run before changing admission.
+
+Debug and Release each passed 357 affected examples. On
+ClickHouse 26.10.1.1201, all four parent and mark combinations passed
+`ATTACH PART` and `CHECK TABLE`. Forced projection queries matched the
+results with projections disabled, and the tested key prefix selected
+one of seven child granules. The native compressor decoded stock ZSTD
+and generated LZ4 indexes to the same UInt64 tuples. Those tuples also
+matched the keys independently recovered from the Compact data and
+marks. Crystal reopened stock and attached children for full and
+cross-mark reads. See the
+[W301 evidence](../.landmark/evidence/materialized-view-aggregate-projection-w301.json).
+
 ## Compressed Wide aggregate projection indexes (W300)
 
 A Wide aggregate child of a Wide or Compact part can carry `primary.cidx`
@@ -12,8 +50,8 @@ both the physical and decoded sizes and hashes.
 `compress_primary_key: true` opts into `.cidx` on
 `WidePartProjection.precomputed_aggregate` and `.precomputed_count`.
 The default writes `primary.idx`. The mark format and the parent's index
-format are independent. Compressed indexes on Compact children and
-additional key and state types are outside this profile.
+format are independent. See W301 above for compressed indexes on Compact
+children. Additional key and state types are outside both profiles.
 
 For a compressed index, preflight checks the file and manifest agree on
 one representation and that every index tuple agrees with its key streams.

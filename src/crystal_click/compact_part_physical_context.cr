@@ -12,6 +12,7 @@ module CrystalClick
     @mark_index : CompactMarkIndex
     @data_input : PartPhysicalInput
     @budget : CompressedStreamBudget
+    @compressed_primary_index_signal : Bool
 
     private def initialize(
       @mode : CompactMarkFormat,
@@ -20,6 +21,7 @@ module CrystalClick
       @mark_index : CompactMarkIndex,
       @data_input : PartPhysicalInput,
       @budget : CompressedStreamBudget,
+      @compressed_primary_index_signal : Bool,
     )
       @granule_count = @mark_index.mark_count
     end
@@ -39,6 +41,10 @@ module CrystalClick
       metadata = PartMetadataFileReader.new(part_path, budget, source)
       mark_file = CompactMarkFileAdapter.new(part_path, checksums, source)
       mode = mark_file.mode
+      compressed_index_path = File.join(part_path, "primary.cidx")
+      compressed_index_signal = File.exists?(compressed_index_path) ||
+                                File.symlink?(compressed_index_path) ||
+                                !checksums.entry("primary.cidx").nil?
 
       columns = WidePart.parse_columns_metadata(metadata.read("columns.txt"))
       row_count = WidePart.parse_count_metadata(metadata.read("count.txt", 32_i64), WidePart::MAX_ROWS)
@@ -57,7 +63,7 @@ module CrystalClick
       input = source.physical_input("data.bin", mark_file.marks_name)
       canonical_marks = mark_file.read_canonical_marks(input, budget)
       index = CompactMarkIndex.read(input, roster, row_count, budget, canonical_marks)
-      new(mode, row_count, roster, index, input, budget)
+      new(mode, row_count, roster, index, input, budget, compressed_index_signal)
     end
 
     def columns : Array({String, String})
@@ -67,6 +73,20 @@ module CrystalClick
     # The selected checksum identity is detached from the retained input.
     def marks_name : String
       String.new(@data_input.marks_name.to_slice)
+    end
+
+    def compressed_primary_index_signal? : Bool
+      @compressed_primary_index_signal
+    end
+
+    # Internal binding used by one-child projection admission sessions. A
+    # separate reader context for the same path is valid when it borrows the
+    # exact same consumptive budget.
+    def matches_projection_child_scope?(part_path : String, budget : CompressedStreamBudget) : Bool
+      path = File.expand_path(part_path)
+      @budget.same?(budget) && @data_input.data_name == "data.bin" &&
+        File.expand_path(@data_input.data_path) == File.join(path, "data.bin") &&
+        File.expand_path(@data_input.marks_path) == File.join(path, @data_input.marks_name)
     end
 
     def physical_roster : Array(CompactPhysicalSlot)
@@ -300,7 +320,118 @@ module CrystalClick
     # eight bytes per parent row on every mark, including marks outside a
     # selected value window.
     def validate_uint64_single_callback_spans!(column_name : String, expected_stream_name : String) : Nil
-      validate_fixed_width_single_callback_spans!(column_name, expected_stream_name, 8_u64, "UInt64 key")
+      validate_uint64_single_callback_span_and_slot!(column_name, expected_stream_name)
+      nil
+    end
+
+    # The endpoint reader also needs the exact slot just validated. Returning
+    # its index avoids constructing and retaining a second detached slot copy.
+    def validate_uint64_single_callback_span_and_slot!(column_name : String, expected_stream_name : String) : Int32
+      validate_fixed_width_single_callback_span_slot!(column_name, expected_stream_name, 8_u64, "UInt64 key")
+    end
+
+    # Authenticates the tuple entries needed by primary.cidx against every
+    # leading UInt64 lane in one bounded physical read. The index grid is
+    # already size-bounded by admission before this method is called; this
+    # method independently derives the endpoint cardinality before allocating
+    # the range tape.
+    def validate_projection_uint64_index_endpoints!(key_names : Array(String), index_bytes : Bytes) : Nil
+      unless @mode == CompactMarkFormat::Mrk4 && !key_names.empty? && @mark_index.mark_count > 0
+        raise UnsupportedFormatError.new("Compact compressed projection index requires MRK4 UInt64 key lanes")
+      end
+
+      key_count = key_names.size.to_i64
+      mark_count = @mark_index.mark_count.to_i64
+      entry_count = mark_count + 1_i64
+      if key_count <= 0 || entry_count <= 0 || key_count > Int64::MAX // sizeof(UInt64).to_i64
+        raise CorruptPartError.new("Compact compressed primary index tuple cardinality overflows")
+      end
+      bytes_per_entry = key_count * sizeof(UInt64).to_i64
+      if entry_count > PrimaryKeyIndex::MAX_INDEX_ENTRIES.to_i64 ||
+         entry_count > PrimaryKeyIndex::MAX_INDEX_FILE_BYTES // bytes_per_entry
+        raise CorruptPartError.new("Compact compressed primary index exceeds its tuple bound")
+      end
+      expected_bytes = entry_count * bytes_per_entry
+      unless expected_bytes <= Int32::MAX && index_bytes.size.to_i64 == expected_bytes
+        raise CorruptPartError.new("Compact compressed primary index byte size differs from its mark grid")
+      end
+      range_count = entry_count * key_count
+      unless range_count <= Int32::MAX
+        raise CorruptPartError.new("Compact compressed primary index endpoint count exceeds its reader bound")
+      end
+
+      # The range tape below and read_ranges' detached span/output descriptors
+      # are both charged before allocation. read_ranges also charges the
+      # touched frame headers, decode work, and result bytes against this same
+      # context budget.
+      if range_count > Int64::MAX // 2_i64
+        raise CorruptPartError.new("Compact compressed primary index endpoint records overflow")
+      end
+      @budget.preflight_records(range_count * 2_i64)
+      @budget.reserve_records(range_count)
+
+      slot_indices = Array(Int32).new(key_names.size)
+      key_names.each do |key_name|
+        slot_indices << validate_uint64_single_callback_span_and_slot!(
+          key_name,
+          PhysicalStreamName.escape(key_name),
+        )
+      end
+
+      ranges = Array({Int64, Int64}).new(range_count.to_i)
+      mark_count.to_i.times do |mark|
+        slot_indices.each do |slot_index|
+          start = @mark_index.position_at(mark, slot_index)
+          finish = if slot_index + 1 < @mark_index.slot_count
+                     @mark_index.position_at(mark, slot_index + 1)
+                   else
+                     @mark_index.position_at(mark + 1, 0)
+                   end
+          if finish < start || finish - start < sizeof(UInt64).to_i64
+            raise CorruptPartError.new("Compact compressed primary index mark-start endpoint is outside its key span")
+          end
+          ranges << {start, start + sizeof(UInt64).to_i64}
+        end
+      end
+
+      slot_indices.each do |slot_index|
+        start = @mark_index.position_at(mark_count.to_i - 1, slot_index)
+        finish = if slot_index + 1 < @mark_index.slot_count
+                   @mark_index.position_at(mark_count.to_i - 1, slot_index + 1)
+                 else
+                   @mark_index.position_at(mark_count.to_i, 0)
+                 end
+        if finish < start || finish - start < sizeof(UInt64).to_i64
+          raise CorruptPartError.new("Compact compressed primary index terminal endpoint is outside its key span")
+        end
+        ranges << {finish - sizeof(UInt64).to_i64, finish}
+      end
+
+      endpoint_bytes = CompressedMarkReader.read_ranges(
+        @data_input.data_path,
+        @data_input.data_size,
+        ranges,
+        @budget,
+      )
+      unless endpoint_bytes.size.to_i64 == range_count
+        raise CorruptPartError.new("Compact compressed primary index endpoint reader returned an incomplete tuple grid")
+      end
+
+      index_offset = 0
+      endpoint_bytes.each_with_index do |actual_bytes, endpoint_index|
+        unless actual_bytes.size == sizeof(UInt64)
+          raise CorruptPartError.new("Compact compressed primary index endpoint is not one UInt64 value")
+        end
+        expected_value = IO::ByteFormat::LittleEndian.decode(UInt64, index_bytes[index_offset, sizeof(UInt64)])
+        actual_value = IO::ByteFormat::LittleEndian.decode(UInt64, actual_bytes)
+        unless expected_value == actual_value
+          raise CorruptPartError.new("compressed primary index differs from the ordered Compact key marks")
+        end
+        index_offset += sizeof(UInt64)
+      end
+      unless index_offset.to_i64 == expected_bytes
+        raise CorruptPartError.new("Compact compressed primary index did not validate every ordered tuple endpoint")
+      end
       nil
     end
 
@@ -313,6 +444,16 @@ module CrystalClick
       width : UInt64,
       lane_label : String,
     ) : Nil
+      validate_fixed_width_single_callback_span_slot!(column_name, expected_stream_name, width, lane_label)
+      nil
+    end
+
+    private def validate_fixed_width_single_callback_span_slot!(
+      column_name : String,
+      expected_stream_name : String,
+      width : UInt64,
+      lane_label : String,
+    ) : Int32
       unless @mode.mrk4?
         raise UnsupportedFormatError.new("Compact fixed-width projection lane validation requires MRK4")
       end
@@ -355,7 +496,7 @@ module CrystalClick
           raise CorruptPartError.new("Compact #{lane_label} span differs from its exact row width")
         end
       end
-      nil
+      slot.index
     end
 
     def read_window(

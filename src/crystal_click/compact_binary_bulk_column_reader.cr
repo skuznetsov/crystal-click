@@ -54,6 +54,7 @@ module CrystalClick
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       codec_budget : BinaryCodecBudget? = nil,
       transport_budget : CompressedStreamBudget? = nil,
+      admission_session : CompactProjectionAggregateReaderAdmissionSession? = nil,
     ) : CompactBinaryBulkColumnReader
       open_projection_state(
         part_path,
@@ -64,6 +65,7 @@ module CrystalClick
         transport_limits,
         codec_budget,
         transport_budget,
+        admission_session,
       )
     end
 
@@ -101,6 +103,7 @@ module CrystalClick
       transport_limits : CompressedStreamLimits = CompressedStreamLimits.new,
       codec_budget : BinaryCodecBudget? = nil,
       transport_budget : CompressedStreamBudget? = nil,
+      admission_session : CompactProjectionAggregateReaderAdmissionSession? = nil,
     ) : CompactBinaryBulkColumnReader
       unless !descriptor.count? && (descriptor.sum? || descriptor.minmax?)
         raise UnsupportedFormatError.new("Compact projection aggregate reader admits only UInt64 sum/min/max states")
@@ -114,6 +117,7 @@ module CrystalClick
         transport_limits,
         codec_budget,
         transport_budget,
+        admission_session,
       )
     end
 
@@ -126,6 +130,7 @@ module CrystalClick
       transport_limits : CompressedStreamLimits,
       codec_budget : BinaryCodecBudget?,
       transport_budget : CompressedStreamBudget?,
+      admission_session : CompactProjectionAggregateReaderAdmissionSession? = nil,
     ) : CompactBinaryBulkColumnReader
       if column_name.empty? || column_name.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
         raise ArgumentError.new("Compact BinaryBulk column name is empty or exceeds its bound")
@@ -168,6 +173,7 @@ module CrystalClick
         effective_transport_budget,
         descriptor,
         context,
+        admission_session,
       )
     end
 
@@ -181,6 +187,7 @@ module CrystalClick
       transport_budget : CompressedStreamBudget?,
       @projection_aggregate_descriptor : WidePartProjectionAggregateDescriptor? = nil,
       context : CompactPartPhysicalContext? = nil,
+      admission_session : CompactProjectionAggregateReaderAdmissionSession? = nil,
     )
       StorageReadBudgetValidator.validate!(
         codec_budget,
@@ -323,6 +330,7 @@ module CrystalClick
           descriptor,
           self,
           operation_transport_budget,
+          admission_session,
         )
       end
     end
@@ -384,6 +392,22 @@ module CrystalClick
       end
 
       CompactProjectionAggregateReaderAdmission.validate_projection_roster!(@context, descriptor, @limits)
+    end
+
+    # :nodoc:
+    # Used by CompactPartTable only for a selected ordinary UInt64 key in a
+    # projection child. It validates a cidx candidate without publishing a
+    # hidden aggregate roster on the ordinary reader.
+    def validate_projection_aggregate_candidate!(session : CompactProjectionAggregateReaderAdmissionSession) : Nil
+      return nil unless @projection_aggregate_descriptor.nil?
+      CompactProjectionAggregateReaderAdmission.validate_projection_candidate!(
+        @part_path,
+        @column_name,
+        @context,
+        @limits,
+        @transport_budget || raise(ArgumentError.new("Compact reader lost its borrowed transport budget")),
+        session,
+      )
     end
 
     # Retained physical mark-coordinate and parent-row arrays. The mark index

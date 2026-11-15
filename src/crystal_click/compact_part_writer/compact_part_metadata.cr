@@ -33,6 +33,7 @@ module CrystalClick
       write_plan : W,
       compress_marks : Bool,
       @profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      compress_primary_key : Bool = false,
     ) forall T, W
       unless codec_budget.writing? && same_limits?(codec_budget.limits, limits)
         raise ArgumentError.new("Compact metadata codec budget differs from its write limits")
@@ -166,7 +167,7 @@ module CrystalClick
         CompactPhysicalMarkOutput.file_name(@mark_format, compress_marks),
         "default_compression_codec.txt",
         "metadata_version.txt",
-        "primary.idx",
+        compress_primary_key ? "primary.cidx" : "primary.idx",
         "serialization.json",
         "checksums.txt",
       ]

@@ -6,7 +6,6 @@ module CrystalClick
     FIXED_CHECKSUM_MANIFEST = Set{
       "count.txt",
       "data.bin",
-      "primary.idx",
       "serialization.json",
     }
 
@@ -16,6 +15,7 @@ module CrystalClick
       descriptor : WidePartProjectionAggregateDescriptor,
       reader : CompactBinaryBulkColumnReader,
       transport_budget : CompressedStreamBudget,
+      session : CompactProjectionAggregateReaderAdmissionSession? = nil,
     ) : Array(String)
       path = File.expand_path(part_path)
       transport_budget.ensure_direction(false)
@@ -45,17 +45,75 @@ module CrystalClick
       unless mark_name && (mark_name == "data.mrk4" || mark_name == "data.cmrk4")
         raise UnsupportedFormatError.new("Compact projection aggregates require one MRK4 mark sidecar")
       end
-      validate_projection_manifest!(path, reader, PartChecksums.parse(
+      checksums = PartChecksums.parse(
         PartMetadataFileReader.new(path, transport_budget)
           .read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice,
-      ), selected_checksum_names, mark_name, key_names.size)
+      )
+      validate_projection_manifest!(
+        path,
+        reader.row_count,
+        reader.mark_count,
+        reader.projection_aggregate_physical_context,
+        checksums,
+        selected_checksum_names,
+        mark_name,
+        key_names,
+        transport_budget,
+        session,
+      )
 
       key_names
     end
 
+    # The key-only table route calls this only for a selected leading UInt64
+    # key in a projection child. Plain projections without a canonical
+    # aggregate state keep the existing W300 behavior even if they contain a
+    # primary.cidx candidate.
+    def self.validate_projection_candidate!(
+      part_path : String,
+      selected_key_name : String,
+      context : CompactPartPhysicalContext,
+      limits : BinaryCodecLimits,
+      transport_budget : CompressedStreamBudget,
+      session : CompactProjectionAggregateReaderAdmissionSession,
+    ) : Nil
+      path = File.expand_path(part_path)
+      return nil unless context.mode == CompactMarkFormat::Mrk4 && context.compressed_primary_index_signal?
+
+      columns = context.columns
+      has_aggregate_state = columns.any? do |name, type_name|
+        !WidePartProjectionAggregateDescriptor.for_column(name, type_name).nil?
+      end
+      return nil unless has_aggregate_state
+
+      checksums = PartChecksums.parse(
+        PartMetadataFileReader.new(path, transport_budget)
+          .read("checksums.txt", PartChecksums::MAX_CHECKSUM_FILE_BYTES).to_slice,
+      )
+      return nil unless ProjectionPrimaryIndex.file_signal?(path, checksums, "primary.cidx")
+
+      key_names = validate_projection_roster!(context, nil, limits)
+      return nil unless key_names.includes?(selected_key_name)
+
+      selected_checksum_names = ["data.bin", context.marks_name]
+      validate_projection_manifest!(
+        path,
+        context.row_count,
+        context.granule_count,
+        context,
+        checksums,
+        selected_checksum_names,
+        context.marks_name,
+        key_names,
+        transport_budget,
+        session,
+      )
+      nil
+    end
+
     def self.validate_projection_roster!(
       context : CompactPartPhysicalContext,
-      selected_descriptor : WidePartProjectionAggregateDescriptor,
+      selected_descriptor : WidePartProjectionAggregateDescriptor?,
       limits : BinaryCodecLimits,
     ) : Array(String)
       unless context.mode == CompactMarkFormat::Mrk4
@@ -120,56 +178,109 @@ module CrystalClick
         end
       end
 
-      if selected_descriptor.count? && !count_seen
+      if selected_descriptor.try(&.count?) && !count_seen
         raise UnsupportedFormatError.new("Compact projection Count child roster omits count()")
       end
-      unless state_columns.any? { |name, type_name| name == selected_descriptor.column_name && type_name == selected_descriptor.type_name }
-        raise CorruptPartError.new("Compact selected aggregate differs from its persisted state roster")
+      if selected = selected_descriptor
+        unless state_columns.any? { |name, type_name| name == selected.column_name && type_name == selected.type_name }
+          raise CorruptPartError.new("Compact selected aggregate differs from its persisted state roster")
+        end
       end
       key_names
     end
 
     private def self.validate_projection_manifest!(
       path : String,
-      reader : CompactBinaryBulkColumnReader,
+      row_count : UInt64,
+      mark_count : Int32,
+      context : CompactPartPhysicalContext,
       checksums : PartChecksums,
       selected_checksum_names : Array(String),
       mark_name : String,
-      key_count : Int32,
+      key_names : Array(String),
+      transport_budget : CompressedStreamBudget,
+      session : CompactProjectionAggregateReaderAdmissionSession?,
     ) : Nil
       unless selected_checksum_names == ["data.bin", mark_name]
         raise CorruptPartError.new("Compact projection checksum selection differs from its physical data and mark files")
       end
+
+      raw_index_path = File.join(path, "primary.idx")
+      compressed_index_path = File.join(path, "primary.cidx")
+      raw_signal = File.exists?(raw_index_path) || File.symlink?(raw_index_path) || !checksums.entry("primary.idx").nil?
+      compressed_signal = File.exists?(compressed_index_path) || File.symlink?(compressed_index_path) || !checksums.entry("primary.cidx").nil?
+      if raw_signal && compressed_signal
+        raise CorruptPartError.new("Compact projection has ambiguous raw and compressed primary indexes")
+      end
+
+      index_name = compressed_signal ? "primary.cidx" : "primary.idx"
       expected_manifest = FIXED_CHECKSUM_MANIFEST.dup
       expected_manifest << mark_name
+      expected_manifest << index_name
       unless checksums.entries.keys.to_set == expected_manifest
         raise UnsupportedFormatError.new("Compact projection physical manifest is outside the admitted MRK4 child profile")
       end
-      compressed_index = File.join(path, "primary.cidx")
-      if File.exists?(compressed_index) || File.symlink?(compressed_index)
-        raise CorruptPartError.new("Compact projection has ambiguous raw and compressed primary indexes")
-      end
-      checksums.entries.each_key do |name|
-        checksums.validate_selected_entries(path, name)
-      end
 
-      primary_entry = checksums.entry("primary.idx") ||
+      primary_entry = checksums.entry(index_name) ||
                       raise(CorruptPartError.new("Compact projection primary index is absent from checksums.txt"))
-      unless !primary_entry.compressed && primary_entry.uncompressed_size.nil? && primary_entry.uncompressed_hash.nil?
-        raise CorruptPartError.new("Compact projection primary.idx must use uncompressed checksum metadata")
-      end
 
-      entry_count = reader.mark_count.to_u64 + 1_u64
+      entry_count = mark_count.to_u64 + 1_u64
       if entry_count > PrimaryKeyIndex::MAX_INDEX_ENTRIES.to_u64
         raise CorruptPartError.new("Compact projection UInt64 primary index exceeds its entry bound")
       end
-      expected_index_bytes = entry_count * key_count.to_u64 * sizeof(UInt64).to_u64
-      if expected_index_bytes > PrimaryKeyIndex::MAX_INDEX_FILE_BYTES.to_u64
+      key_count = key_names.size.to_u64
+      if key_count == 0_u64 || key_count > UInt64::MAX // sizeof(UInt64).to_u64
+        raise CorruptPartError.new("Compact projection UInt64 primary index tuple width overflows")
+      end
+      bytes_per_entry = key_count * sizeof(UInt64).to_u64
+      if entry_count > PrimaryKeyIndex::MAX_INDEX_FILE_BYTES.to_u64 // bytes_per_entry
         raise CorruptPartError.new("Compact projection UInt64 primary index exceeds its byte bound")
       end
-      index_path = File.join(path, "primary.idx")
-      unless File.size(index_path).to_u64 == expected_index_bytes
-        raise CorruptPartError.new("Compact projection primary.idx is not an exact uncompressed UInt64 key roster mark grid")
+
+      expected_index_bytes = entry_count * bytes_per_entry
+      if compressed_signal
+        unless primary_entry.compressed && primary_entry.uncompressed_size && primary_entry.uncompressed_hash
+          raise CorruptPartError.new("Compact projection primary.cidx requires physical and decoded checksum metadata")
+        end
+        unless primary_entry.uncompressed_size.not_nil! == expected_index_bytes
+          raise CorruptPartError.new("Compact projection primary.cidx raw size differs from its exact key roster mark grid")
+        end
+
+        checksums.entries.each_key do |name|
+          checksums.validate_selected_entries(path, name) unless name == "primary.cidx"
+        end
+        if admission_session = session
+          admission_session.validate_compressed_index!(
+            path,
+            context,
+            key_names,
+            expected_index_bytes.to_i64,
+            checksums,
+            transport_budget,
+          )
+        else
+          index_bytes = ProjectionPrimaryIndex.read_compressed(
+            path,
+            expected_index_bytes.to_i64,
+            checksums,
+            transport_budget,
+          )
+          context.validate_projection_uint64_index_endpoints!(key_names, index_bytes)
+        end
+      else
+        checksums.entries.each_key do |name|
+          checksums.validate_selected_entries(path, name)
+        end
+        unless !primary_entry.compressed && primary_entry.uncompressed_size.nil? && primary_entry.uncompressed_hash.nil?
+          raise CorruptPartError.new("Compact projection primary.idx must use uncompressed checksum metadata")
+        end
+        index_path = File.join(path, "primary.idx")
+        unless File.size(index_path).to_u64 == expected_index_bytes
+          raise CorruptPartError.new("Compact projection primary.idx is not an exact uncompressed UInt64 key roster mark grid")
+        end
+      end
+      unless row_count == context.row_count
+        raise CorruptPartError.new("Compact projection primary index reader row count differs from its physical context")
       end
       nil
     rescue ex : IO::Error

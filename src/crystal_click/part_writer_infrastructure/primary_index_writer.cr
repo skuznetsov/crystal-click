@@ -107,11 +107,25 @@ module CrystalClick
         frame_bytes : Int,
         budget : CompressedStreamBudget,
       ) : ChecksumRecord
+        physical, record = prepare_compound_compressed(key_columns, rows_per_mark, frame_bytes, budget)
+        File.write(File.join(stage, "primary.cidx"), physical)
+        record
+      end
+
+      # Prepares the exact compressed tuple bytes and checksum record without
+      # touching a stage directory. Compact projection writers use this before
+      # stage creation so the child checksum envelope is fully planned.
+      def self.prepare_compound_compressed(
+        key_columns : Indexable(Slice(UInt64)),
+        rows_per_mark : Int32,
+        frame_bytes : Int,
+        budget : CompressedStreamBudget,
+      ) : Tuple(Bytes, ChecksumRecord)
         row_count = validate_compound_columns!(key_columns, rows_per_mark)
         mark_count = mark_count_for(row_count, rows_per_mark)
         raw_size = compound_size(mark_count, key_columns.size)
 
-        write_compressed_bytes(stage, raw_size, frame_bytes, budget) do |raw|
+        prepare_compressed_bytes(raw_size, frame_bytes, budget) do |raw|
           offset = 0
           each_compound_entry(key_columns, rows_per_mark) do |entry|
             entry.copy_to(raw[offset, entry.size])
@@ -222,13 +236,12 @@ module CrystalClick
         row_count
       end
 
-      private def self.write_compressed_bytes(
-        stage : String,
+      private def self.prepare_compressed_bytes(
         raw_size : Int64,
         frame_bytes : Int,
         budget : CompressedStreamBudget,
         &block : Bytes -> Nil
-      ) : ChecksumRecord
+      ) : Tuple(Bytes, ChecksumRecord)
         budget.ensure_direction(true)
         physical_size = PrimaryIndexWriter.preflight_compressed_output(raw_size, frame_bytes, budget)
         budget.reserve_result_bytes(raw_size)
@@ -239,11 +252,11 @@ module CrystalClick
         unless physical.size.to_i64 == physical_size
           raise UnsupportedFormatError.new("compressed primary index differs from its preflighted size")
         end
-        File.write(File.join(stage, "primary.cidx"), physical)
-        ChecksumRecord.new(
+        record = ChecksumRecord.new(
           "primary.cidx", physical.size.to_u64, CityHashV1.file_hash(physical), true,
           raw.size.to_u64, CityHashV1.file_hash(raw)
         )
+        {physical, record}
       end
 
       private def self.validate_index_grid_bytes!(
