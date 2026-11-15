@@ -601,6 +601,58 @@ errors and writes to the destination and guard bytes.
 | Scalar Crystal HTTP worker | `e34bedd282005fe2af7d0d9a9f25f9fc7c011b65218c63e432290fc4ae3d9f90` |
 | Block-copy Crystal HTTP worker | `72fb08bcbea3a31a86d2c6f62cd4b241b6fcb3db9f60091922049b6c4d11c285` |
 
+### Short disjoint LZ4 matches
+
+After checking the output interval and match distance, the decoder handles
+disjoint matches of four through seven bytes with two exact four-byte
+copies. The payload ranges start at offsets zero and `match_length - 4`.
+Their union covers the match, and the validated distance places the whole
+source before the destination. Individual copies stay inside each range
+and accept unaligned addresses. The ARM64 Release build lowers this branch
+to two 32-bit loads and two stores.
+
+The focused specs cover all four widths, adjacent and separated matches,
+one-byte overlap, and exact output slices with canaries. A separate
+Release check put exact slices next to inaccessible memory pages at
+either end. Both decoders passed 160 valid cases and rejected another
+160 cases whose output slices were one byte too short, with no writes
+past the preceding literals.
+
+The comparison used `70cba7b493715d9231c5588f1ce76d72d881941a` as the
+block-copy reference and changed only the decoder in the candidate
+build. The Compact part retained the ten-file manifest hash above. An
+independent liblz4 decode matched all 32 frames against the fixture.
+The short disjoint path covers 261,980 of the part's 262,033 matches (99.98%).
+
+Both Crystal 1.22.3 builds used `--release -Dparallel_scan_bench` with
+Boehm on the M2 Max. The pinned ClickHouse 26.10.1.1201 build ran with
+`checksum_on_read=1`. Each worker count used the same preparation and
+timer boundaries as the bounded-copy comparison, with four warmups per
+arm and 24 rounds balanced across the six arm orders.
+
+| Workers | Block-copy Crystal, ms | Short-copy Crystal, ms | ClickHouse, ms | Short copy / ClickHouse |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 4.622 ± 0.071 | 3.711 ± 0.088 | 2.531 ± 0.153 | 1.47× |
+| 4 | 2.460 ± 0.101 | 2.238 ± 0.064 | 1.831 ± 0.051 | 1.22× |
+
+Values are median ± MAD. At one worker the median paired reduction was
+0.906 ms (19.4% median paired change), with 24 wins in 24 pairs. At four
+workers it was 0.271 ms (10.7%), with 22 wins in 24 pairs. Each of the
+six order groups favored the short-copy build at both worker counts.
+These results are for this part's match distribution and warm requests.
+
+All 144 timed responses matched the independent 48-byte reduction.
+Every ordered 2 MiB export matched before and after timing, `CHECK TABLE`
+passed, and the part file hashes remained identical. Separate ClickHouse
+diagnostics read all 32 frames at both counts and observed one and four
+threads with positive row and compressed-byte counts, respectively.
+The LZ4, checksum, and typed-scan regression run passed 69 examples.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Block-copy Crystal HTTP worker | `552b54d1700a33b7ef45e806799cb647183cdac66b6785fba535c36634723ea0` |
+| Short-copy Crystal HTTP worker | `03ec849329b2d075dc1876a6ff87a5ab1ed9ba03e8c3f5e267a385cf8fc64397` |
+
 ## Reproduce the comparison
 
 Run from the repository root with Python 3, Crystal, and the pinned
@@ -700,6 +752,9 @@ from `itertools.permutations(("stock", "block_copy", "clickhouse"))`. Call
 `/prepare` on the Crystal arm outside each timed request, and use
 `settings_sql(workers, 1)` and `checked_request_ns` from the benchmark
 script. Preserve all samples when recomputing paired differences.
+For the short-match comparison, use `70cba7b` and the short-copy revision
+with the same schedule. Substitute `("baseline", "candidate", "clickhouse")`
+for the three arm names.
 
 ```sh
 python3 -B scripts/parallel_scan_benchmark.py bench \

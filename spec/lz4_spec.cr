@@ -37,6 +37,18 @@ module LZ4SpecFixture
     expected
   end
 
+  def self.expected_match(literals : Bytes, distance : Int, match_length : Int) : Bytes
+    raise "fixture distance must fit the literal seed" unless distance > 0 && distance <= literals.size
+    raise "fixture match must contain at least four bytes" unless match_length >= 4
+
+    expected = Bytes.new(literals.size + match_length)
+    expected[0, literals.size].copy_from(literals)
+    match_length.times do |index|
+      expected[literals.size + index] = expected[literals.size + index - distance]
+    end
+    expected
+  end
+
   private def self.append_extension(encoded : Array(UInt8), length : Int)
     remaining = length
     while remaining >= 255
@@ -65,6 +77,58 @@ describe CrystalClick::LZ4 do
       input = LZ4SpecFixture.match_block(seed, seed.size, match_length)
       CrystalClick::LZ4.decode(input, expected.size).should eq(expected)
     end
+  end
+
+  it "copies each short disjoint match width at unaligned offsets without touching sink guards" do
+    literals = Bytes[0x13, 0x2b, 0x47, 0x5d, 0x62, 0x7e, 0x8b, 0x91, 0xa7, 0xb3, 0xc5, 0xd9, 0xe1]
+    guard_size = 16
+    guard = Bytes.new(guard_size, 0xee_u8)
+
+    {4, 5, 6, 7}.each do |match_length|
+      {match_length, match_length + 3}.each do |distance|
+        expected = LZ4SpecFixture.expected_match(literals, distance, match_length)
+        input = LZ4SpecFixture.match_block(literals, distance, match_length)
+        storage = Bytes.new(expected.size + (guard_size * 2), 0xee_u8)
+        destination = storage[guard_size, expected.size]
+
+        result = CrystalClick::LZ4.decode_into(input, destination, expected.size)
+
+        result.size.should eq(expected.size)
+        result.should eq(expected)
+        storage[0, guard_size].should eq(guard)
+        storage[guard_size + expected.size, guard_size].should eq(guard)
+      end
+    end
+  end
+
+  it "keeps one-byte-overlapping short matches on the overlap-safe path" do
+    literals = Bytes[0x13, 0x2b, 0x47, 0x5d, 0x62, 0x7e, 0x8b, 0x91, 0xa7, 0xb3, 0xc5, 0xd9, 0xe1]
+
+    {4, 5, 6, 7}.each do |match_length|
+      distance = match_length - 1
+      expected = LZ4SpecFixture.expected_match(literals, distance, match_length)
+      input = LZ4SpecFixture.match_block(literals, distance, match_length)
+
+      CrystalClick::LZ4.decode(input, expected.size).should eq(expected)
+    end
+  end
+
+  it "keeps an unaligned eight-byte disjoint match on the general copy path" do
+    literals = Bytes[0x13, 0x2b, 0x47, 0x5d, 0x62, 0x7e, 0x8b, 0x91, 0xa7, 0xb3, 0xc5, 0xd9, 0xe1]
+    match_length = 8
+    distance = 8
+    expected = LZ4SpecFixture.expected_match(literals, distance, match_length)
+    input = LZ4SpecFixture.match_block(literals, distance, match_length)
+    guard_size = 16
+    guard = Bytes.new(guard_size, 0xee_u8)
+    storage = Bytes.new(expected.size + (guard_size * 2), 0xee_u8)
+    destination = storage[guard_size, expected.size]
+
+    result = CrystalClick::LZ4.decode_into(input, destination, expected.size)
+
+    result.should eq(expected)
+    storage[0, guard_size].should eq(guard)
+    storage[guard_size + expected.size, guard_size].should eq(guard)
   end
 
   it "preserves periodic matches below, at, and above word and block width boundaries" do

@@ -40,7 +40,14 @@ module CrystalClick
         match_source = output_pointer + match_start
         match_destination = output_pointer + output_index
         if distance >= match_length
-          match_source.copy_to(match_destination, match_length)
+          if match_length <= 7
+            # Both four-byte copies stay within this non-overlapping match.
+            match_source.copy_to(match_destination, 4)
+            tail_offset = match_length - 4
+            (match_source + tail_offset).copy_to(match_destination + tail_offset, 4)
+          else
+            match_source.copy_to(match_destination, match_length)
+          end
         else
           # Seed one period, then grow from the initialized prefix. Each copy is disjoint.
           match_source.copy_to(match_destination, distance)
