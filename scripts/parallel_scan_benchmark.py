@@ -433,13 +433,14 @@ def part_metadata(port: int, expected_rows: int, expected_layout: str,
                   mark_rows: int = MARK_ROWS) -> dict:
     parts = query(
         port,
-        "SELECT name, path, rows, marks, part_type FROM system.parts "
+        "SELECT name, hex(path), rows, marks, part_type FROM system.parts "
         "WHERE database='bench' AND table='fixture' AND active "
         "ORDER BY name FORMAT TabSeparated",
     ).decode("utf-8").splitlines()
     if len(parts) != 1:
         fail(f"expected one active native part on port {port}; got {parts!r}")
-    name, raw_path, raw_rows, raw_marks, part_type = parts[0].split("\t")
+    name, raw_path_hex, raw_rows, raw_marks, part_type = parts[0].split("\t")
+    raw_path = bytes.fromhex(raw_path_hex).decode("utf-8")
     if part_type.lower() != expected_layout:
         fail(f"expected {expected_layout} part, got {part_type} at {raw_path}")
     if int(raw_rows) != expected_rows:

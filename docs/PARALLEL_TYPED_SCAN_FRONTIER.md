@@ -433,6 +433,115 @@ closes one scan mapping per accessed part at either worker count.
 | Shared mapping `src/` file manifest | `35734103f7dbfebca1f643c4ea2b51327207e840b94989e82b37da0d3b1cf40c` |
 | Full ordered RowBinary export | `5103eb0b689c92f3ebe4c23ae58816b4d120b12d5a543c2e274a58a547a075b5` |
 
+### Profile of the shared Compact scan
+
+This run used `c7d1cbd9f4e8189ebe0d22007481c1ebc536bdaa` and the same
+131,072-row Compact MRK3 part, toolchain, and pinned ClickHouse binary as
+above. The ten-file part manifest SHA-256 was
+`80f5aaa885eae58e7e5d6888b28977888706d7100e91c5adcc7cb9309929c62a`.
+Both Crystal builds used `--release -Dparallel_scan_bench` with Boehm
+enabled. One served the ordinary worker. The other added monotonic clocks
+and counters in a disposable source copy. Profile snapshots were fetched
+after each timed round.
+
+Each worker count had four warmups and 24 timed rounds per arm on
+preconnected loopback sockets with warm file pages. All six possible
+orders of the three arms occurred four times among the timed rounds.
+The timer ran from POST to receipt of the full 48-byte reduction.
+All 144 timed responses matched the expected bytes. Ordered exports
+before and after timing matched the independent 2 MiB fixture at every
+mark. ClickHouse used `checksum_on_read=1`, `CHECK TABLE` succeeded, and
+the part files retained their hashes.
+
+| Workers | Stock Crystal, ms | Profiled Crystal, ms | ClickHouse, ms | Stock / ClickHouse |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 4.915 ± 0.097 | 4.896 ± 0.157 | 2.228 ± 0.130 | 2.21× |
+| 4 | 2.363 ± 0.143 | 2.440 ± 0.106 | 1.367 ± 0.045 | 1.73× |
+
+Values are median ± MAD. The median paired profile-to-stock latency
+ratio was 1.010 at one worker and 1.014 at four. At both counts the
+paired shift was smaller than the MAD of the paired differences.
+
+The profile below reports medians in milliseconds. A worker sum adds
+elapsed intervals of all workers within one request. A maximum takes the
+largest worker total within that request. Worker intervals can overlap
+both other workers and the caller. Each profile verified 32 CityHash
+checksums and decoded 32 complete LZ4 frames into 2,097,152 bytes. The
+caller processed 32 batches of 4,096 rows. Every request mapped `data.bin`
+once and checked its geometry against the admitted frame index.
+
+| Profiled Crystal stage | 1 worker, ms | 4 workers, ms |
+| --- | ---: | ---: |
+| Scan and reduction | 4.766 | 2.303 |
+| CityHash, worker sum | 0.809 | 0.902 |
+| LZ4 decode, worker sum | 3.776 | 3.952 |
+| CityHash and LZ4 together, maximum worker | 4.585 | 1.233 |
+| Shared mmap and geometry check | 0.040 | 0.043 |
+| Six reductions in the caller's batch loop | 0.071 | 0.289 |
+| Worker reader admission, maximum worker | — | 0.692 |
+| Caller launch, acknowledgement sends, and joins | — | 0.072 |
+| Caller waiting for the next ordered batch | — | 1.914 |
+| Worker waiting for batch acknowledgements, maximum worker | — | 0.283 |
+
+The CityHash clock covers hashing the frame header and payload. Reading
+and comparing the stored checksum stays outside that clock. The LZ4
+clock covers `LZ4.decode_into`, including its validation and match copies.
+Together they account for 96% of the one-worker scan and reduction.
+The LZ4 decoder alone takes more elapsed time than the whole native
+one-thread request. Disassembly of the stock ARM64 build shows byte
+loads in `CityHashV1.fetch64` and a byte-copy loop for LZ4 matches.
+The pinned ClickHouse build uses word loads in CityHash and its native
+LZ4 decoder implements block match copies.
+
+Four Crystal contexts each decoded eight frames. Context launch took
+0.021 ms on the caller. The 0.692 ms reader admission includes opening
+each worker's private reader with the shared part context and transport
+budget. The caller received its first batch after 1.085 ms, versus 0.339
+ms with one worker. Its receive waits overlap the worker opens and
+decoding. Those waits and the worker acknowledgement waits measure
+backpressure and data readiness along with channel delivery.
+
+The reduction loop uses eight-row NEON iterations in both Crystal
+binaries. At four workers the same loop took 0.289 ms across the 32
+batches. The cause of the elapsed-time increase from 0.071 ms remains
+unresolved. Thread CPU clocks at the scan boundaries measured a median
+4.766 ms on the serial caller and 6.900 ms across the four workers plus
+0.504 ms on the parallel caller. Boehm was enabled for all arms of the
+Crystal comparison. The profile leaves collector time unattributed.
+
+The native diagnostics ran separately with `log_query_threads=1`,
+`log_processors_profiles=1`, and a 1 ms CPU sampling period set by the
+HTTP request before SQL parsing. There were 16 profiled queries and
+six processor-log on/off control queries at each count. The 44 results
+matched the same 48 bytes. Each query read all 131,072 rows and 32
+compressed blocks with checksum verification enabled. All diagnostic
+queries with `max_threads=4` had four threads with positive row and
+compressed-byte counts in `system.query_thread_log`.
+
+| Native processor elapsed time | 1 thread, ms | 4 threads, ms |
+| --- | ---: | ---: |
+| `MergeTreeSelect`, sum | 1.140 | 1.445 |
+| `MergeTreeSelect`, maximum | 1.140 | 0.389 |
+| `AggregatingTransform`, sum | 0.091 | 0.119 |
+| `AggregatingTransform`, maximum | 0.091 | 0.036 |
+
+These medians use the per-query sum or maximum from
+`system.processors_profile_log`. `MergeTreeSelect` covers the native read
+including checksum and decompression. The four native partial aggregations
+run on their own streams. The Crystal loop performs all reductions in the
+calling fiber. Native processor waits and expression work are separate
+from the table values. LZ4 appeared in 11 of 36 CPU stacks at one thread
+and eight of 37 at four. No sampled stack named CityHash. The short
+trace series locates decoder work but leaves native checksum and decode
+wall times unresolved.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Stock Crystal HTTP worker | `8af824701cb5d739f9e665e779cd7a496c695dda3c50e5b2a722acef4830e24a` |
+| Profiled Crystal HTTP worker | `e17fbadfe1cd0ab1de2205d185cb770cac52e016070f04ebaeed92458a389450` |
+| Compact `data.bin` | `dca9d56af3a75be50c7c3608e2549dc87a66466db98ebc8ed6bb74c88d33c334` |
+| Expected 48-byte RowBinary reduction | `2f4e9f8b0da83ff03781c162a511f160dd0441c250c2f2c71d38e6950e96bc15` |
+
 ## Reproduce the comparison
 
 Run from the repository root with Python 3, Crystal, and the pinned
@@ -511,6 +620,16 @@ revisions with the same flags. Keep one prepared HTTP worker per revision
 and rotate the two Crystal requests and the ClickHouse request in each round.
 For the shared-mapping comparison, use `2467485` as the reference with the
 same flags, HTTP worker source, fixture, and three-way rotation.
+Use `c7d1cbd` with `--warmups 4 --repeats 24` for the stock tracks of the
+shared scan profile. Stage profiling requires a separate instrumented
+worker with elapsed clocks around `verify_frame_checksum!`'s CityHash
+call, `LZ4.decode_into`, the reducer loop, the shared map admission, and
+the parallel worker boundaries listed above. Fetch stage results outside
+the request timer. For the native diagnostic, enable `trace_log` and
+`processors_profile_log` on a disposable server. Set
+`query_profiler_cpu_time_period_ns=1000000` and
+`query_profiler_real_time_period_ns=0` as HTTP parameters. Join the
+diagnostic logs by query ID after `SYSTEM FLUSH LOGS`.
 
 ```sh
 python3 -B scripts/parallel_scan_benchmark.py bench \
