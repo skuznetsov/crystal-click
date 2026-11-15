@@ -78,6 +78,30 @@ module CrystalClick
       max_compressed_size : Int64 = DEFAULT_MAX_FRAME,
       max_decompressed_size : Int64 = DEFAULT_MAX_FRAME,
     ) : Frame
+      decode_frame_into_buffers(data, offset, workspace, nil, max_compressed_size, max_decompressed_size)
+    end
+
+    # Decodes one supported frame directly into an exact caller-owned output
+    # slice. MULTIPLE needs its nested staging buffer and must use the
+    # workspace-backed overload above.
+    def self.decode_frame_into_destination(
+      data : Bytes,
+      offset : Int64,
+      destination : Bytes,
+      max_compressed_size : Int64 = DEFAULT_MAX_FRAME,
+      max_decompressed_size : Int64 = DEFAULT_MAX_FRAME,
+    ) : Frame
+      decode_frame_into_buffers(data, offset, nil, destination, max_compressed_size, max_decompressed_size)
+    end
+
+    private def self.decode_frame_into_buffers(
+      data : Bytes,
+      offset : Int64,
+      workspace : DecodeWorkspace?,
+      destination : Bytes?,
+      max_compressed_size : Int64,
+      max_decompressed_size : Int64,
+    ) : Frame
       raise CorruptPartError.new("invalid compressed frame limit") if max_compressed_size < HEADER_SIZE
       raise CorruptPartError.new("invalid decompressed frame limit") if max_decompressed_size <= 0
       raise CorruptPartError.new("frame offset out of bounds") if offset < 0 || offset > data.size.to_i64 - FRAME_HEADER_SIZE
@@ -89,6 +113,11 @@ module CrystalClick
       raise CorruptPartError.new("compressed frame size is invalid") if compressed_size < HEADER_SIZE || compressed_size > max_compressed_size
       raise CorruptPartError.new("decompressed frame size is invalid") if decompressed_size <= 0 || decompressed_size > max_decompressed_size
 
+      if exact_destination = destination
+        raise CorruptPartError.new("compressed frame destination size mismatch") unless exact_destination.size.to_i64 == decompressed_size
+        raise BoundsError.new("compressed frame destination must be writable") if exact_destination.read_only?
+      end
+
       remaining = data.size.to_i64 - offset - CHECKSUM_SIZE
       raise CorruptPartError.new("compressed frame is truncated") if compressed_size > remaining
       frame_end = offset + CHECKSUM_SIZE + compressed_size
@@ -96,17 +125,26 @@ module CrystalClick
       payload = data[header_offset + FRAME_HEADER_SIZE, payload_size.to_i]
       output = case method
                when METHOD_LZ4
-                 destination = workspace.buffer_for(decompressed_size.to_i)
-                 LZ4.decode_into(payload, destination, decompressed_size.to_i)
+                 if exact_destination = destination
+                   LZ4.decode_into(payload, exact_destination, decompressed_size.to_i)
+                 else
+                   LZ4.decode_into(payload, workspace.not_nil!.buffer_for(decompressed_size.to_i), decompressed_size.to_i)
+                 end
                when METHOD_ZSTD
-                 destination = workspace.buffer_for(decompressed_size.to_i)
-                 ZSTD.decode_into(payload, destination, decompressed_size.to_i, max_decompressed_size)
+                 if exact_destination = destination
+                   ZSTD.decode_into(payload, exact_destination, decompressed_size.to_i, max_decompressed_size)
+                 else
+                   ZSTD.decode_into(payload, workspace.not_nil!.buffer_for(decompressed_size.to_i), decompressed_size.to_i, max_decompressed_size)
+                 end
                when METHOD_MULTIPLE
-                 decode_multiple_into(payload, decompressed_size.to_i, max_decompressed_size, workspace)
+                 if destination
+                   raise UnsupportedFormatError.new("direct compressed frame decoding requires LZ4 or ZSTD")
+                 end
+                 decode_multiple_into(payload, decompressed_size.to_i, max_decompressed_size, workspace.not_nil!)
                else
                  raise UnsupportedFormatError.new("unsupported ClickHouse compression method")
                end
-      raise CorruptPartError.new("compressed frame output size mismatch") unless output.size == decompressed_size
+      raise CorruptPartError.new("compressed frame output size mismatch") unless output.size.to_i64 == decompressed_size
       Frame.new(frame_end, output)
     end
 

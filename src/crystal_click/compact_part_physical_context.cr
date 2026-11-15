@@ -602,6 +602,71 @@ module CrystalClick
       mark_index : Int,
       expected_stream_name : String?,
     ) : Bytes
+      start, finish, expected_bytes = validated_uint64_mark_range(
+        column_name,
+        slot_index,
+        mark_index,
+        expected_stream_name,
+      )
+
+      # One retained input range plus the output descriptor that read_ranges
+      # reserves before allocating its result array.
+      reserve_uint64_mark_range_records!
+      ranges = [{start, finish}]
+      authenticated = CompressedMarkReader.read_ranges(
+        @data_input.data_path,
+        @data_input.data_size,
+        ranges,
+        @budget,
+      )
+      unless authenticated.size == 1 && authenticated[0].size.to_u64 == expected_bytes
+        raise CorruptPartError.new("Compact UInt64 reader returned an invalid selected mark")
+      end
+      authenticated[0]
+    end
+
+    # Authenticates one admitted ordinary UInt64 mark directly into a
+    # caller-owned, aligned destination. The caller keeps this workspace alive
+    # until all callback acknowledgements for the mark have returned.
+    def read_uint64_mark_into(
+      column_name : String,
+      slot_index : Int32,
+      mark_index : Int,
+      expected_stream_name : String?,
+      destination : Bytes,
+      workspace : CompressedBlock::DecodeWorkspace,
+    ) : Nil
+      start, finish, expected_bytes = validated_uint64_mark_range(
+        column_name,
+        slot_index,
+        mark_index,
+        expected_stream_name,
+      )
+      unless destination.size.to_u64 == expected_bytes
+        raise CorruptPartError.new("Compact UInt64 destination width differs from its exact row width")
+      end
+
+      # Match read_ranges' operation-level accounting: one caller range and
+      # one transport range descriptor, plus the same touched frame headers.
+      reserve_uint64_mark_range_records!
+      CompressedMarkReader.read_range_into(
+        @data_input.data_path,
+        @data_input.data_size,
+        start,
+        finish,
+        destination,
+        workspace,
+        @budget,
+      )
+      nil
+    end
+
+    private def validated_uint64_mark_range(
+      column_name : String,
+      slot_index : Int32,
+      mark_index : Int,
+      expected_stream_name : String?,
+    ) : {Int64, Int64, UInt64}
       unless mark_index >= 0 && mark_index < @mark_index.mark_count
         raise ArgumentError.new("Compact UInt64 mark selection is outside the grid")
       end
@@ -639,22 +704,13 @@ module CrystalClick
       unless (finish - start).to_u64 == expected_bytes
         raise CorruptPartError.new("Compact UInt64 mark span differs from its exact row width")
       end
+      {start, finish, expected_bytes}
+    end
 
-      # One retained input range plus the output descriptor that read_ranges
-      # reserves before allocating its result array.
+    private def reserve_uint64_mark_range_records! : Nil
       @budget.preflight_records(2_i64)
       @budget.reserve_records(1_i64)
-      ranges = [{start, finish}]
-      authenticated = CompressedMarkReader.read_ranges(
-        @data_input.data_path,
-        @data_input.data_size,
-        ranges,
-        @budget,
-      )
-      unless authenticated.size == 1 && authenticated[0].size.to_u64 == expected_bytes
-        raise CorruptPartError.new("Compact UInt64 reader returned an invalid selected mark")
-      end
-      authenticated[0]
+      nil
     end
 
     private def row_offset_at(mark : Int) : UInt64

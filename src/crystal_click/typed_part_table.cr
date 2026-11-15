@@ -283,9 +283,23 @@ module CrystalClick
       preflight_backends!
 
       source_row_offset = 0_u64
+      scan_workspace = nil.as(CompactUInt64ScanWorkspace?)
       @entries.each_with_index do |entry, part_index|
-        entry.reader.scan_typed(batch_rows: batch_rows) do |batch|
-          yield rebase_batch!(batch, part_index, source_row_offset)
+        if compact_reader = entry.reader.as?(CompactPartTable)
+          if compact_reader.reusable_uint64_scan?
+            scan_workspace ||= CompactUInt64ScanWorkspace.new
+            compact_reader.scan_typed_with_workspace(batch_rows, scan_workspace) do |batch|
+              yield rebase_batch!(batch, part_index, source_row_offset)
+            end
+          else
+            compact_reader.scan_typed(batch_rows: batch_rows) do |batch|
+              yield rebase_batch!(batch, part_index, source_row_offset)
+            end
+          end
+        else
+          entry.reader.as(WidePartTable).scan_typed(batch_rows: batch_rows) do |batch|
+            yield rebase_batch!(batch, part_index, source_row_offset)
+          end
         end
         source_row_offset = checked_add_rows(source_row_offset, entry.row_count)
       end

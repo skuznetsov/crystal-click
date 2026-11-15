@@ -321,6 +321,16 @@ describe "W124 independent compressed mark transport" do
           expected_data_size: 37_i64, expected_mark_size: 48_i64, budget: budget)
       end
       error.message.not_nil!.should match(/decoded.*limit/)
+
+      destination = Bytes.new(8, 0xff_u8)
+      error = expect_raises(CrystalClick::CorruptPartError) do
+        CrystalClick::CompressedMarkReader.read_range_into(
+          data_path, 37_i64, 0_i64, 8_i64, destination, CrystalClick::CompressedBlock::DecodeWorkspace.new,
+          CrystalClick::CompressedStreamBudget.new(limits),
+        )
+      end
+      error.message.not_nil!.should match(/decoded.*limit/)
+      destination.should eq(Bytes.new(8, 0xff_u8))
     end
   end
 
@@ -394,6 +404,16 @@ describe "W124 independent compressed mark transport" do
       else
         budget.decoded_byte_count.should eq(count * 8)
       end
+
+      range_budget = CrystalClick::CompressedStreamBudget.new
+      destination = Bytes.new(count * 8)
+      CrystalClick::CompressedMarkReader.read_range_into(
+        data_path, File.size(data_path), 0_i64, destination.size.to_i64, destination,
+        CrystalClick::CompressedBlock::DecodeWorkspace.new, range_budget,
+      )
+      destination.should eq(expected.to_slice)
+      range_budget.decoded_byte_count.should eq(budget.decoded_byte_count)
+      range_budget.result_byte_count.should eq(budget.result_byte_count)
     end
   end
 

@@ -234,6 +234,57 @@ describe "TypedPartTable parallel typed scan" do
     end
   end
 
+  {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+  it "reuses each Compact worker's slab across marks and parts after callbacks return" do
+    root = File.tempname("crystal-click-parallel-compact-slabs-")
+    Dir.mkdir(root)
+    begin
+      part_rows = 16
+      rows_per_mark = 2
+      parts = [0, 1].map do |part_index|
+        block = part_index + 1
+        keys = Array(UInt64).new(part_rows) { |row| (part_index * part_rows + row + 1).to_u64 }
+        parallel_scan_write_compact_fixture(File.join(root, "all_#{block}_#{block}_0"), keys,
+          rows_per_mark: rows_per_mark)
+      end
+      {% if flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+        worker_counts = {1}
+      {% else %}
+        worker_counts = {1, 4}
+      {% end %}
+
+      worker_counts.each do |workers|
+        table = CrystalClick::TypedPartTable.open_selected_typed(parts, ["pk", "value"])
+        lane_bases = Hash(Int32, {UInt64, UInt64}).new
+        observed = [] of UInt64
+        table.scan_typed_parallel(workers: workers, batch_rows: 1) do |batch|
+          keys = batch.values_for("pk", UInt64)
+          values = batch.values_for("value", UInt64)
+          expected = batch.source_row_offset + 1_u64
+          row_byte_offset = (batch.source_row_offset % rows_per_mark) * sizeof(UInt64).to_u64
+          worker = batch.mark_index % workers
+          bases = {keys.to_unsafe.address.to_u64 - row_byte_offset,
+                   values.to_unsafe.address.to_u64 - row_byte_offset}
+          lane_bases.fetch(worker) { lane_bases[worker] = bases }.should eq(bases)
+          if batch.source_row_offset == 0_u64
+            # Give the other workers time to fill their slices while the
+            # callback still holds both lanes of this mark.
+            sleep 1.millisecond
+          end
+          keys.to_a.should eq([expected])
+          values.to_a.should eq([expected])
+          observed << keys[0]
+        end
+        observed.should eq((1_u64..(2 * part_rows).to_u64).to_a)
+        lane_bases.size.should eq(workers)
+        lane_bases.values.flat_map { |key, value| [key, value] }.uniq.size.should eq(2 * workers)
+      end
+    ensure
+      FileUtils.rm_rf(root)
+    end
+  end
+  {% end %}
+
   it "falls back to serial order when there is only one nonempty mark" do
     root = File.tempname("crystal-click-parallel-typed-single-mark")
     Dir.mkdir(root)

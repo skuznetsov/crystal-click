@@ -40,17 +40,23 @@ budget. All selected columns are validated for the mark before its first
 callback. Wrapped types and projection children use their established
 decoders.
 
-The batch borrows a typed view of the detached range buffer on aligned
-little-endian hosts. Other hosts use a bounded little-endian decode into
-typed storage. The range owner and any conversion workspace count toward
-the aggregate mark limit. A parallel worker holds the owner through the
-last callback's acknowledgement, so a sub-batch can use a slice of the
-same mark. Callers must copy values they retain beyond the callback.
+On little-endian hosts, scans selecting only admitted ordinary `UInt64`
+columns borrow typed slices from one slab per worker. The slab grows on
+demand and can be reused across marks and parts. A worker keeps the current
+mark in it through the last callback's acknowledgement. Complete LZ4 and
+ZSTD frames decode straight into the selected column's slice after
+checksum verification. Partial frames and Delta/ZSTD use a separate reusable
+decode workspace, followed by a copy of the selected interval. Transport
+and aggregate mark limits still apply. If the current mark's materialization
+allowance accommodates only the detached result, the scan uses that path.
+Mixed selections dispatch to the per-column readers. Callers must copy values
+they retain beyond the callback.
 
 Guard checks cover both mark layouts, exact batch offsets and values,
 checksum corruption, inconsistent interval width, and budget exhaustion
-before a callback sees the affected mark. Reverting the direct-read change
-restores the `BinaryValue` route without a disk format change.
+before a callback sees the affected mark. The slab tests also cover
+reentrant serial calls and distinct worker storage across parts. Reverting
+the slab change restores the detached range buffers from `d46b678`.
 
 ## Comparison contract
 
@@ -322,21 +328,55 @@ materialization passes. The latency comparison combines their effects.
 
 ### Reusing Compact decode storage
 
-The direct carrier borrows the checked range output. The range reader still
-allocates that output, decodes into workspace storage, and copies frame
-intersections. An aligned slab owned by each worker could hold the result
-slices for one mark. For the measured two-column fixture, that is 128 KiB
-of result storage per worker. Reuse it across marks after the final batch
-acknowledgement. A frame that exactly fills a destination slice can decode
-there after header, checksum, and budget checks. Shared or partial frames
-still need a bounded decode workspace.
+The reusable slab was compared with the detached range buffers from
+`d46b6781f11241350cbc635dfe465eeef65169cc`. Both Release builds used Crystal
+1.22.3 and Boehm 8.2.12 on an Apple M2 Max with macOS 26.6.2. The native arm
+used the same ClickHouse 26.10.1.1201 binary with `checksum_on_read=1`.
+All three read the same MRK3 LZ4 part with two `UInt64` columns and 131,072
+rows in sixteen 8,192-row marks. Its ten-file manifest has SHA-256
+`80f5aaa885eae58e7e5d6888b28977888706d7100e91c5adcc7cb9309929c62a`.
+The slab holds 128 KiB per worker for this fixture. Each selected range
+coincides with a complete frame and needs no decode scratch.
 
-`UInt64SlabVector` owns appended values and copies them into its slabs. A
-caller-owned decode destination would let the reader retain the slice without
-that copy. A follow-up experiment should measure bytes allocated after worker
-setup and collections per scan with Boehm enabled. Include split-frame,
-corrupt-frame, and delayed-callback cases before permitting reuse across
-marks.
+The timing uses the request boundary above and rotates the three arms in
+each worker-count track, with four warmup rounds and 21 timed rounds. A
+fresh slab is allocated within each scan. The ordered exports and every
+timed 48-byte response matched, and the part manifest matched before and
+after the run. The four-worker probes observed four Crystal execution
+contexts and four native read threads. Numbers are median ± MAD on a
+shared host.
+
+| Workers | Detached Crystal, ms | Slab Crystal, ms | ClickHouse, ms |
+| ---: | ---: | ---: | ---: |
+| 1 | 7.767 ± 0.208 | 6.460 ± 0.190 | 2.419 ± 0.219 |
+| 4 | 5.301 ± 0.302 | 4.163 ± 0.224 | 1.807 ± 0.109 |
+
+The slab build was faster in all 21 paired rounds at each worker count.
+Median latency fell by 16.8% at one worker and 21.5% at four. At four
+workers, the slab build took 2.30× the native median for this workload.
+
+The allocation probe samples `GC.stats.total_bytes` and
+`GC.prof_stats.gc_no` around one checked scan and reduction. It includes
+slab and worker setup and excludes the initial table open and response
+packing. The table shows medians from six fresh Release processes per
+build and worker count, with the observed ranges for collections.
+
+| Workers | Detached allocated, MiB | Slab allocated, MiB | Detached collections | Slab collections |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 4.21 | 0.31 | 7 (7–7) | 0 (0–0) |
+| 4 | 6.04 | 2.53 | 6 (5–8) | 2 (2–2) |
+
+The allocation volume fell by 92.5% and 58.2%, respectively. The latency
+result combines storage reuse with the removal of the frame-to-result
+copy. This part exercises the complete LZ4 frame path.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Detached HTTP worker | `a5531cbfc6055e5b3ce129831a7c6a05425616e01f5802cfc3d1fcb4f6e9b14f` |
+| Slab HTTP worker | `ebda159a1855692af28184a4d5d948a74137d62d3fb52919b6921d82b4569fb3` |
+| Detached Boehm probe | `e0691b3cdc0edeffac2e6861005f405dbda325e15a1027301932183fe88a2d89` |
+| Slab Boehm probe | `0f88fb070f0ebef69c55bdd9ca41ae764a531d4cbe4d2f05f7b9891e265bbff1` |
+| Slab `src/` diff against `d46b678` | `1a9fc20532df5f2c815d673b793b6b481ab6da961aa590630ffb147ef999b1bf` |
 
 ## Reproduce the comparison
 
@@ -411,6 +451,9 @@ For the direct UInt64 comparison, build `bd0ee29` and the direct-reader
 revision with `--release -Dparallel_scan_bench` using their own benchmark
 worker source. Run both Compact tracks at each revision with
 `--mode parallel --warmups 4 --repeats 21` against the same manifest.
+For the slab comparison, use `d46b678` as the reference and build both
+revisions with the same flags. Keep one prepared HTTP worker per revision
+and rotate the two Crystal requests and the ClickHouse request in each round.
 
 ```sh
 python3 -B scripts/parallel_scan_benchmark.py bench \
@@ -450,6 +493,12 @@ For the direct reader, run `crystal spec spec/compact_typed_w260_spec.cr`
 and repeat with `-Dwithout_mt`. The combined reader, writer, projection,
 recursive carrier, and transport regression run passed 120 examples. The
 direct Compact suite passed 22 examples with `-Dwithout_mt`.
+
+For the slab, the reader, writer, projection, recursive carrier, and
+transport suites passed 165 examples. The Compact typed and parallel scan
+suites passed 30 examples with `-Dwithout_mt`. The added guards cover slab
+lifetime, capacity accounting, exact-fit fallback, partial frames, and
+checksum rejection before a write to the failing frame's destination.
 
 ## Falsifiers
 

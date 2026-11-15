@@ -56,6 +56,70 @@ private def w124_oracle_read_budget(limits : CrystalClick::CompressedStreamLimit
   CrystalClick::CompressedStreamBudget.new(limits)
 end
 
+describe "CompressedMarkReader caller-owned ranges" do
+  it "fills only the destination slice and bypasses scratch for a complete frame" do
+    raw = Bytes[1_u8, 2_u8, 3_u8, 4_u8]
+    frame = w124_oracle_frame(raw)
+    destination = Bytes.new(6, 0xff_u8)
+    workspace = CrystalClick::CompressedBlock::DecodeWorkspace.new
+    scratch = workspace.buffer_for(4)
+    scratch.fill(0xfe_u8)
+    budget = w124_oracle_read_budget
+
+    w124_oracle_files(frame, Bytes.empty) do |data_path, _|
+      CrystalClick::CompressedMarkReader.read_range_into(
+        data_path, frame.size.to_i64, 0_i64, 4_i64, destination[1, 4], workspace, budget,
+      )
+    end
+
+    destination.should eq(Bytes[0xff_u8, 1_u8, 2_u8, 3_u8, 4_u8, 0xff_u8])
+    scratch.should eq(Bytes.new(4, 0xfe_u8))
+    budget.decoded_byte_count.should eq(4_i64)
+    budget.result_byte_count.should eq(4_i64)
+  end
+
+  it "checks the full touched work and frame checksum before writing into the caller's storage" do
+    frame = w124_oracle_frame(Bytes[1_u8, 2_u8, 3_u8, 4_u8])
+    destination = Bytes.new(4, 0xff_u8)
+    workspace = CrystalClick::CompressedBlock::DecodeWorkspace.new
+    limits = CrystalClick::CompressedStreamLimits.new(max_decoded_bytes: 3)
+    w124_oracle_files(frame, Bytes.empty) do |data_path, _|
+      expect_raises(CrystalClick::CorruptPartError, /decoded.*limit/) do
+        CrystalClick::CompressedMarkReader.read_range_into(
+          data_path, frame.size.to_i64, 1_i64, 3_i64, destination[1, 2], workspace, w124_oracle_read_budget(limits),
+        )
+      end
+      destination.should eq(Bytes.new(4, 0xff_u8))
+    end
+
+    frame[0] ^= 1_u8
+    w124_oracle_files(frame, Bytes.empty) do |data_path, _|
+      expect_raises(CrystalClick::CorruptPartError, /checksum/) do
+        CrystalClick::CompressedMarkReader.read_range_into(
+          data_path, frame.size.to_i64, 0_i64, 4_i64, destination, workspace, w124_oracle_read_budget,
+        )
+      end
+      destination.should eq(Bytes.new(4, 0xff_u8))
+    end
+  end
+
+  it "charges no decoded work for an empty interval inside a frame" do
+    frame = w124_oracle_frame(Bytes[1_u8, 2_u8, 3_u8, 4_u8])
+    frame[0] ^= 1_u8
+    budget = w124_oracle_read_budget(CrystalClick::CompressedStreamLimits.new(max_decoded_bytes: 0))
+    w124_oracle_files(frame, Bytes.empty) do |data_path, _|
+      CrystalClick::CompressedMarkReader.read_range_into(
+        data_path, frame.size.to_i64, 2_i64, 2_i64, Bytes.empty,
+        CrystalClick::CompressedBlock::DecodeWorkspace.new, budget,
+      )
+    end
+    budget.record_count.should eq(2_i64)
+    budget.file_byte_count.should eq(frame.size.to_i64)
+    budget.decoded_byte_count.should eq(0_i64)
+    budget.result_byte_count.should eq(0_i64)
+  end
+end
+
 describe "W124 transport preflight and file-boundary controls" do
   it "preflights the aggregate mark/header record limit before validating a late malformed row count" do
     first = w124_oracle_frame(Bytes[0x41_u8])

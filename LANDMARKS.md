@@ -13,11 +13,11 @@
   Refresh after reader admission, transport budgets, mark decoding, worker
   scheduling, timing boundaries, or native pin changes. See the
   [parallel scan contract and measurements](docs/PARALLEL_TYPED_SCAN_FRONTIER.md).
-- The direct Compact `UInt64` scan borrows a checked range buffer for the
-  callback. The same MRK3 fixture now records the
-  [direct-reader timing and Boehm counters](docs/PARALLEL_TYPED_SCAN_FRONTIER.md#direct-uint64-comparison).
-  Measure worker-owned decode storage against this baseline and preserve
-  mark validation and callback acknowledgement before reusing it.
+- For Compact scans of ordinary exact `UInt64` columns on little-endian
+  hosts, each worker reuses one aligned slab after the final callback for a
+  mark. Complete LZ4 and ZSTD frames decode into typed storage after checksum
+  verification. Refresh the [slab comparison and Boehm counters](docs/PARALLEL_TYPED_SCAN_FRONTIER.md#reusing-compact-decode-storage)
+  after changing frame transport, slab lifetime, or the callback handshake.
 
 ## Compressed Compact aggregate projection indexes — W301
 

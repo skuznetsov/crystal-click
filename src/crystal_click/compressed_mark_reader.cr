@@ -318,6 +318,94 @@ module CrystalClick
       results.not_nil!
     end
 
+    # Reads one logical interval directly into its exact writable destination.
+    # The caller owns a destination disjoint from the reusable decode workspace;
+    # complete LZ4/ZSTD frames decode into destination slices, while partial
+    # frames and MULTIPLE use the workspace and copy only the intersection.
+    def self.read_range_into(
+      data_path : String,
+      expected_data_size : Int64,
+      start : Int64,
+      finish : Int64,
+      destination : Bytes,
+      workspace : CompressedBlock::DecodeWorkspace,
+      budget : CompressedStreamBudget,
+    ) : Nil
+      budget.ensure_direction(false)
+      validate_expected_size(expected_data_size, "data")
+      if start < 0 || finish < start
+        raise ArgumentError.new("logical range must be nonnegative and ordered")
+      end
+      result_size = finish - start
+      if result_size > Int32::MAX
+        raise CorruptPartError.new("logical range result exceeds supported in-memory domain")
+      end
+      unless destination.size.to_i64 == result_size
+        raise ArgumentError.new("logical range destination must match the requested byte count")
+      end
+      raise BoundsError.new("logical range destination must be writable") if destination.read_only?
+      if expected_data_size == 0
+        raise CorruptPartError.new("empty compressed stream is unsupported without a mark grid")
+      end
+      if expected_data_size > budget.limits.max_file_bytes || expected_data_size > Int32::MAX
+        raise CorruptPartError.new("data file exceeds supported in-memory limit")
+      end
+
+      # Matches read_ranges' one range-record charge. Callers that own the
+      # endpoint/output descriptor charge it separately before entering here.
+      budget.reserve_records(1_i64)
+      preflight_regular_file(data_path, expected_data_size, "data file")
+      budget.reserve_file_bytes(expected_data_size)
+      MMapDataSource.with_file(data_path, expected_data_size, budget.limits.max_file_bytes) do |data|
+        limits = budget.limits
+        index = CompressedFrameIndex.new(data, limits, budget)
+        if finish > index.logical_size
+          raise ArgumentError.new("logical range is outside the decompressed stream")
+        end
+
+        decoded_work = 0_i64
+        index.frames.each do |frame|
+          next if result_size == 0 || frame.logical_start >= finish || frame.logical_end <= start
+          decoded_work = checked_add(decoded_work, frame.decompressed_size, "decoded work")
+          if frame.method == CompressedBlock::METHOD_MULTIPLE
+            decoded_work = checked_add(decoded_work, multiple_nested_size(data, frame, limits), "nested decoded work")
+          end
+        end
+
+        # Preserve read_ranges accounting even when complete frames decode
+        # directly into caller-owned storage. Both aggregate limits are
+        # consumed before checksum work or the first destination write.
+        budget.reserve_decoded_bytes(decoded_work)
+        budget.reserve_result_bytes(result_size)
+
+        index.frames.each do |frame|
+          next if result_size == 0 || frame.logical_start >= finish || frame.logical_end <= start
+          # A failed call's caller-owned destination must be discarded. Each
+          # individual frame is authenticated before its output slice is used.
+          verify_frame_checksum!(data, frame)
+          whole_frame = frame.logical_start >= start && frame.logical_end <= finish
+          if whole_frame && (frame.method == CompressedBlock::METHOD_LZ4 || frame.method == CompressedBlock::METHOD_ZSTD)
+            destination_offset = (frame.logical_start - start).to_i
+            frame_size = frame.decompressed_size.to_i
+            decoded = CompressedBlock.decode_frame_into_destination(
+              data,
+              frame.compressed_offset,
+              destination[destination_offset, frame_size],
+              limits.max_frame_compressed_bytes,
+              limits.max_frame_decompressed_bytes
+            )
+            unless decoded.end_offset == frame.end_offset && decoded.output.size.to_i64 == frame.decompressed_size
+              raise CorruptPartError.new("decoded compressed frame disagrees with its indexed header")
+            end
+          else
+            decoded = decode_indexed_frame(data, frame, workspace, limits)
+            copy_interval(decoded, frame, start, finish, destination, -start)
+          end
+        end
+      end
+      nil
+    end
+
     # Shared adaptive-mark envelope check for physical formats whose record
     # width is not the legacy two-lane MARK_RECORD_SIZE. The caller charges
     # its known record count before allocating parsed mark descriptors.
@@ -652,6 +740,15 @@ module CrystalClick
       limits : CompressedStreamLimits,
     ) : Bytes
       verify_frame_checksum!(data, frame)
+      decode_indexed_frame(data, frame, workspace, limits)
+    end
+
+    private def self.decode_indexed_frame(
+      data : Bytes,
+      frame : CompressedFrameDescriptor,
+      workspace : CompressedBlock::DecodeWorkspace,
+      limits : CompressedStreamLimits,
+    ) : Bytes
       decoded = CompressedBlock.decode_frame_into(
         data,
         frame.compressed_offset,

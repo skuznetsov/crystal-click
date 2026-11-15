@@ -315,12 +315,32 @@ module CrystalClick
       [@mark_row_counts.dup]
     end
 
+    # :nodoc:
+    # True only where every selected binary reader is an admitted ordinary
+    # UInt64 lane, so the worker can share one typed slab across Compact parts.
+    def reusable_uint64_scan? : Bool
+      reusable_direct_uint64_column_count > 0
+    end
+
     def scan_typed(
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
       & : WidePartTableBatch -> Nil
     ) : Nil
+      scan_typed_with_workspace(batch_rows, nil) { |batch| yield batch }
+      nil
+    end
+
+    # :nodoc:
+    # Internal workspace injection lets one scan operation reuse one slab
+    # across Compact parts without retaining it on a reader instance.
+    def scan_typed_with_workspace(
+      batch_rows : Int,
+      workspace : CompactUInt64ScanWorkspace?,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
       validate_batch_rows(batch_rows)
-      scan_selected_marks(nil, batch_rows, nil) { |batch| yield batch }
+      scan_workspace = scan_workspace_for_scan(workspace)
+      scan_selected_marks(nil, batch_rows, nil, scan_workspace) { |batch| yield batch }
       nil
     end
 
@@ -330,6 +350,20 @@ module CrystalClick
     def scan_typed_mark_indices(
       mark_indices : Array(Int32),
       batch_rows : Int,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      scan_typed_mark_indices_with_workspace(mark_indices, batch_rows, nil) { |batch| yield batch }
+      nil
+    end
+
+    # :nodoc:
+    # Parallel workers pass a stable per-worker workspace through this
+    # internal entrypoint and wait for each callback acknowledgement before
+    # the next mark can reuse its storage.
+    def scan_typed_mark_indices_with_workspace(
+      mark_indices : Array(Int32),
+      batch_rows : Int,
+      workspace : CompactUInt64ScanWorkspace?,
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_batch_rows(batch_rows)
@@ -342,7 +376,8 @@ module CrystalClick
         previous = mark_index
       end
       raise BoundsError.new("parallel Compact mark list is empty") if selected_marks.empty?
-      scan_selected_marks(selected_marks, batch_rows, nil) { |batch| yield batch }
+      scan_workspace = scan_workspace_for_scan(workspace)
+      scan_selected_marks(selected_marks, batch_rows, nil, scan_workspace) { |batch| yield batch }
       nil
     end
 
@@ -362,7 +397,8 @@ module CrystalClick
 
       available = @total_row_count - start_row
       rows = max_rows.to_u64 < available ? max_rows.to_u64 : available
-      scan_selected_marks(nil, max_rows, {start_row, start_row + rows}) { |batch| yield batch }
+      scan_workspace = scan_workspace_for_scan(nil)
+      scan_selected_marks(nil, max_rows, {start_row, start_row + rows}, scan_workspace) { |batch| yield batch }
       nil
     end
 
@@ -386,7 +422,8 @@ module CrystalClick
       end
       # A candidate callback is one complete physical granule, matching the
       # existing typed Wide candidate-mark contract.
-      scan_selected_marks(selected, WidePartTable::MAX_MARK_ROWS.to_i, nil) { |batch| yield batch }
+      scan_workspace = scan_workspace_for_scan(nil)
+      scan_selected_marks(selected, WidePartTable::MAX_MARK_ROWS.to_i, nil, scan_workspace) { |batch| yield batch }
       nil
     end
 
@@ -394,6 +431,7 @@ module CrystalClick
       candidate_marks : Array(Int32)?,
       batch_rows : Int,
       window_rows : {UInt64, UInt64}?,
+      scan_workspace : CompactUInt64ScanWorkspace?,
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_dynamic_schedules!
@@ -425,7 +463,7 @@ module CrystalClick
         end
         next unless row_start < row_end
 
-        values_by_column, json_carriers, retained_charge = materialize_mark(mark_index, mark_rows)
+        values_by_column, json_carriers, retained_charge = materialize_mark(mark_index, mark_rows, scan_workspace)
         cursor = row_start
         while cursor < row_end
           remaining = row_end - cursor
@@ -448,6 +486,25 @@ module CrystalClick
         raise CorruptPartError.new("Compact part row grid differs from its total row count")
       end
       nil
+    end
+
+    private def scan_workspace_for_scan(
+      provided : CompactUInt64ScanWorkspace?,
+    ) : CompactUInt64ScanWorkspace?
+      return provided if provided
+      return nil unless reusable_uint64_scan?
+      CompactUInt64ScanWorkspace.new
+    end
+
+    private def reusable_direct_uint64_column_count : Int32
+      {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+        return 0_i32 if @readers.empty? || !@json_readers.empty? ||
+                        @direct_uint64_readers.size != @readers.size ||
+                        !@direct_uint64_readers.all? { |direct| direct }
+        @readers.size.to_i32
+      {% else %}
+        0_i32
+      {% end %}
     end
 
     # A learned Dynamic plan is part-wide state. Validate every granule
@@ -517,6 +574,7 @@ module CrystalClick
     private def materialize_mark(
       mark_index : Int32,
       rows : UInt64,
+      scan_workspace : CompactUInt64ScanWorkspace?,
     ) : MaterializedMark
       remaining_bytes = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
       retained_workspace = 0_u64
@@ -527,6 +585,37 @@ module CrystalClick
         retained_workspace = checked_add(retained_workspace, reader.retained_workspace_bytes)
       end
       retained_workspace = checked_add(retained_workspace, direct_mark_workspace_bytes)
+
+      reusable_direct_count = reusable_direct_uint64_column_count
+      reusable_direct_workspace = false
+      if reusable_direct_count > 0 && scan_workspace && retained_workspace <= remaining_bytes
+        if rows > UInt64::MAX // reusable_direct_count.to_u64
+          raise CorruptPartError.new("Compact UInt64 scan slab size overflows")
+        end
+        required_values = rows * reusable_direct_count.to_u64
+        available = remaining_bytes - retained_workspace
+        header_bytes = scan_workspace.retained_header_bytes
+        planned_slab_values = if header_bytes <= available
+                                scan_workspace.planned_capacity_values(
+                                  required_values,
+                                  available - header_bytes,
+                                )
+                              else
+                                nil
+                              end
+        if capacity_values = planned_slab_values
+          scan_workspace.prepare_capacity!(capacity_values)
+          slab_bytes = capacity_values * sizeof(UInt64).to_u64
+          retained_workspace = checked_add(retained_workspace, header_bytes)
+          retained_workspace = checked_add(retained_workspace, slab_bytes)
+          reusable_direct_workspace = true
+        else
+          # A retained high-water slab must not make a mark fail when the
+          # former detached result still fits the existing materialization
+          # budget. Drop it before falling back to the established route.
+          scan_workspace.release_slab!
+        end
+      end
       if retained_workspace > remaining_bytes
         raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
       end
@@ -571,6 +660,7 @@ module CrystalClick
       # aggregate retained owner before allocating results or decoding values.
       values_by_column = Array(CompactBinaryMarkCarrier).new(@readers.size)
       retained_total = retained_workspace
+      reusable_slot = 0
 
       @readers.each_with_index do |entry, reader_index|
         if @direct_uint64_readers[reader_index]
@@ -578,14 +668,24 @@ module CrystalClick
             raise CorruptPartError.new("Compact UInt64 mark materialization charge overflows")
           end
           direct_bytes = rows * sizeof(UInt64).to_u64
+          reader = entry[3].as?(CompactBinaryBulkColumnReader) ||
+                   raise(CorruptPartError.new("Compact direct UInt64 selection has a non-BinaryBulk reader"))
+
+          if reusable_direct_workspace
+            workspace = scan_workspace || raise(CorruptPartError.new("Compact UInt64 scan lost its local workspace"))
+            lane = workspace.values_for(rows, reusable_slot, reusable_direct_count)
+            reader.read_ordinary_uint64_mark_into(mark_index, lane.to_unsafe_bytes, workspace.transport_workspace)
+            values_by_column << lane
+            reusable_slot += 1
+            next
+          end
+
           if direct_bytes > remaining_bytes
             raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
           end
           remaining_bytes -= direct_bytes
           retained_total = checked_add(retained_total, direct_bytes)
 
-          reader = entry[3].as?(CompactBinaryBulkColumnReader) ||
-                   raise(CorruptPartError.new("Compact direct UInt64 selection has a non-BinaryBulk reader"))
           bytes = reader.read_ordinary_uint64_mark(mark_index)
           unless bytes.size.to_u64 == direct_bytes
             raise CorruptPartError.new("Compact direct UInt64 reader returned an invalid mark width")

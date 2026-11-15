@@ -945,6 +945,10 @@ class CrystalClick::CompactPartTable
     raise "W260 selected test column was not found" unless found
     estimate
   end
+
+  def w260_test_direct_mark_workspace_bytes : UInt64
+    direct_mark_workspace_bytes
+  end
 end
 
 describe CrystalClick::CompactBinaryBulkColumnReader do
@@ -1069,6 +1073,43 @@ describe CrystalClick::CompactPartTable do
       FileUtils.rm_rf(root)
     end
   end
+
+  {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+    it "counts slab capacity once and can fall back when only detached results fit" do
+      root = File.tempname("crystal-click-w260-slab-budget-")
+      part_path = File.join(root, "all_1_1_0")
+      Dir.mkdir(root)
+      begin
+        values = [7_u64, 8_u64, 9_u64, 10_u64]
+        w260_write_u64_part(part_path, CrystalClick::CompactMarkFormat::Mrk4, values)
+        table = CrystalClick::CompactPartTable.open_selected_typed([part_path], ["payload", "pk"])
+        base = table.w260_test_inject_reader_workspace_extra!("payload", 0_u64) +
+               table.w260_test_inject_reader_workspace_extra!("pk", 0_u64) +
+               table.w260_test_direct_mark_workspace_bytes
+        result_bytes = 2_u64 * 2_u64 * sizeof(UInt64).to_u64
+        headers = CrystalClick::CompactUInt64ScanWorkspace.new.retained_header_bytes
+        available = CrystalClick::WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64 - base - result_bytes
+        table.w260_test_inject_reader_workspace_extra!("payload", available - headers)
+
+        observed = [] of UInt64
+        table.scan_typed(batch_rows: 2) do |batch|
+          payload = batch.values_for("payload", UInt64)
+          keys = batch.values_for("pk", UInt64)
+          if batch.mark_index == 0
+            keys.to_unsafe.address.should eq(payload.to_unsafe.address + 2 * sizeof(UInt64).to_u64)
+            # The next mark fits the previous detached path's payload budget
+            # exactly, with no room left for the reusable workspace headers.
+            table.w260_test_inject_reader_workspace_extra!("payload", available)
+          end
+          keys.to_a.should eq(batch.mark_index == 0 ? [1_u64, 2_u64] : [3_u64, 4_u64])
+          observed.concat(payload)
+        end
+        observed.should eq(values)
+      ensure
+        FileUtils.rm_rf(root)
+      end
+    end
+  {% end %}
 end
 
 describe "Compact borrowed UInt64 typed scans" do
@@ -1116,6 +1157,13 @@ describe "Compact borrowed UInt64 typed scans" do
           end
           if previous_address = last_key_addresses[batch.mark_index]?
             key_address.should eq(previous_address + sizeof(UInt64).to_u64)
+          elsif batch.mark_index == 0
+            # A nested scan must not overwrite the outer callback's storage.
+            compact.scan_typed_mark_indices([3_i32], 2) do |nested|
+              nested.values_for("payload", UInt64).to_a.should eq(values[6, 2])
+            end
+            payload.to_a.should eq(values[0, 1])
+            key_values.to_a.should eq(keys[0, 1])
           end
           last_payload_addresses[batch.mark_index] = payload_address
           last_key_addresses[batch.mark_index] = key_address
@@ -1130,8 +1178,12 @@ describe "Compact borrowed UInt64 typed scans" do
         full_keys.should eq(keys)
         full_offsets.should eq((0_u64...8_u64).to_a)
         full_marks.should eq([0_i32, 1_i32, 2_i32, 3_i32])
-        # The two one-row sub-batches within each mark are adjacent views of
-        # the same borrowed UInt64 slices, not separately materialized arrays.
+        {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+          # Equal-width marks reuse their two slab lanes after the last callback.
+          last_payload_addresses.values.uniq.size.should eq(1)
+          last_key_addresses.values.uniq.size.should eq(1)
+          last_key_addresses[0].should eq(last_payload_addresses[0] + 2 * sizeof(UInt64).to_u64)
+        {% end %}
 
         window_values = [] of UInt64
         window_keys = [] of UInt64

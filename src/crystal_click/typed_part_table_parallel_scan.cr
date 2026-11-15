@@ -224,14 +224,22 @@ module CrystalClick
         output : Channel(WidePartTableBatch),
         acknowledgement : Channel(Nil),
       ) : Nil
+        scan_workspace = nil.as(CompactUInt64ScanWorkspace?)
         part_marks.each_with_index do |marks, part_index|
           next if marks.empty?
           path, compact, transport_budget = part_sources[part_index]
           if compact
             budget = transport_budget || raise(CorruptPartError.new("parallel Compact part lost its transport budget"))
             reader = CompactPartTable.open_selected_typed_with_transport_budget([path], @columns, budget)
-            reader.scan_typed_mark_indices(marks, batch_rows) do |batch|
-              send_parallel_batch!(batch, output, acknowledgement)
+            if reader.reusable_uint64_scan?
+              scan_workspace ||= CompactUInt64ScanWorkspace.new
+              reader.scan_typed_mark_indices_with_workspace(marks, batch_rows, scan_workspace) do |batch|
+                send_parallel_batch!(batch, output, acknowledgement)
+              end
+            else
+              reader.scan_typed_mark_indices(marks, batch_rows) do |batch|
+                send_parallel_batch!(batch, output, acknowledgement)
+              end
             end
           else
             reader = WidePartTable.open_selected_typed([path], @columns)

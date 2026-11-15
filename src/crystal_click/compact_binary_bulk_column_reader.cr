@@ -449,6 +449,37 @@ module CrystalClick
     # The fast path is intentionally limited to the table's default codec
     # bounds; custom limits keep using the BinaryValue decoder and its budget.
     def read_ordinary_uint64_mark(mark_index : Int) : Bytes
+      slot_index, expected_stream_name = ordinary_uint64_read_target
+      @context.read_uint64_mark(
+        @column_name,
+        slot_index,
+        mark_index,
+        expected_stream_name,
+      )
+    end
+
+    # :nodoc:
+    # Writes the selected ordinary UInt64 mark directly into scan-owned typed
+    # storage after the same admission and physical-roster checks as the
+    # detached path above.
+    def read_ordinary_uint64_mark_into(
+      mark_index : Int,
+      destination : Bytes,
+      workspace : CompressedBlock::DecodeWorkspace,
+    ) : Nil
+      slot_index, expected_stream_name = ordinary_uint64_read_target
+      @context.read_uint64_mark_into(
+        @column_name,
+        slot_index,
+        mark_index,
+        expected_stream_name,
+        destination,
+        workspace,
+      )
+      nil
+    end
+
+    private def ordinary_uint64_read_target : {Int32, String?}
       unless @schema_declaration == "UInt64" && @projection_aggregate_descriptor.nil?
         raise UnsupportedFormatError.new("Compact direct UInt64 reading requires an ordinary exact UInt64 column")
       end
@@ -465,12 +496,7 @@ module CrystalClick
                              else
                                nil
                              end
-      @context.read_uint64_mark(
-        @column_name,
-        slot_index,
-        mark_index,
-        expected_stream_name,
-      )
+      {slot_index, expected_stream_name}
     end
 
     # Returns selected marks → parent rows → exact-type BinaryValues. LC forces
