@@ -338,34 +338,79 @@ module CrystalClickReadRowsScan
     scan_profile : CrystalClick::ReadRowsProfile::Scan?,
     scan_started : Time::Instant,
   ) : Nil
+    image = open_wide_scan_image(readers, scan_profile)
     worker = ->(worker_index : Int32) do
       mark_ids = worker_marks[worker_index]
       start_sequence = worker_starts[worker_index]
       scratch_keys = Array(UInt64).new(config.mark_rows, 0_u64)
       scratch_values = Array(UInt64).new(config.mark_rows, 0_u64)
-      scan_wide_column(readers[0], "pk", mark_ids, start_sequence, config.mark_rows, scratch_keys, keys)
-      scan_wide_column(readers[1], "value", mark_ids, start_sequence, config.mark_rows, scratch_values, values)
+      scan_wide_column(readers[0], "pk", mark_ids, start_sequence, config.mark_rows, scratch_keys, keys, image)
+      scan_wide_column(readers[1], "value", mark_ids, start_sequence, config.mark_rows, scratch_values, values, image)
       nil
     end
-    {% if flag?(:read_rows_profile) %}
-      profiled_worker = ->(worker_index : Int32) do
-        if profile = scan_profile
-          profile_worker = profile.workers[worker_index]
-          profile_worker.mark_start(scan_started)
-          CrystalClick::ReadRowsProfile.with_worker(profile_worker) do
-            begin
-              worker.call(worker_index)
-            ensure
-              profile_worker.mark_end(scan_started)
+    begin
+      {% if flag?(:read_rows_profile) %}
+        profiled_worker = ->(worker_index : Int32) do
+          if profile = scan_profile
+            profile_worker = profile.workers[worker_index]
+            profile_worker.mark_start(scan_started)
+            CrystalClick::ReadRowsProfile.with_worker(profile_worker) do
+              begin
+                worker.call(worker_index)
+              ensure
+                profile_worker.mark_end(scan_started)
+              end
             end
+          else
+            worker.call(worker_index)
           end
-        else
-          worker.call(worker_index)
         end
+        run_workers(config.workers, profiled_worker, scan_profile)
+      {% else %}
+        run_workers(config.workers, worker)
+      {% end %}
+    ensure
+      close_wide_scan_image(image, scan_profile)
+    end
+    nil
+  end
+
+  private def open_wide_scan_image(
+    readers : {CrystalClick::WidePart, CrystalClick::WidePart},
+    scan_profile : CrystalClick::ReadRowsProfile::Scan?,
+  ) : CrystalClick::WideScanImage
+    paths = readers.map(&.parallel_numeric_scan_data_path).to_a
+    {% if flag?(:read_rows_profile) %}
+      if profile = scan_profile
+        open_started = Time.instant
+        image = CrystalClick::WideScanImage.open(paths)
+        profile.shared_mmap.record_open(elapsed_ns(open_started), image.mapping_count, image.mapped_bytes)
+        image
+      else
+        CrystalClick::WideScanImage.open(paths)
       end
-      run_workers(config.workers, profiled_worker, scan_profile)
     {% else %}
-      run_workers(config.workers, worker)
+      CrystalClick::WideScanImage.open(paths)
+    {% end %}
+  end
+
+  private def close_wide_scan_image(
+    image : CrystalClick::WideScanImage,
+    scan_profile : CrystalClick::ReadRowsProfile::Scan?,
+  ) : Nil
+    {% if flag?(:read_rows_profile) %}
+      if profile = scan_profile
+        close_started = Time.instant
+        begin
+          image.close
+        ensure
+          profile.shared_mmap.record_close(elapsed_ns(close_started), image.mapping_count)
+        end
+      else
+        image.close
+      end
+    {% else %}
+      image.close
     {% end %}
     nil
   end
@@ -378,6 +423,7 @@ module CrystalClickReadRowsScan
     mark_rows : Int32,
     scratch_values : Array(UInt64),
     result : Array(UInt64),
+    image : CrystalClick::WideScanImage,
   ) : Nil
     scratch = scratch_values.to_unsafe.to_slice(scratch_values.size)
     sequence_offset = 0
@@ -388,7 +434,7 @@ module CrystalClickReadRowsScan
       end
       expected_marks = run_end - sequence_offset
       emitted_marks = 0
-      reader.scan_uint64_mark_range_into(column, mark_ids[sequence_offset], expected_marks, scratch) do |mark_values|
+      reader.scan_uint64_mark_range_into(column, mark_ids[sequence_offset], expected_marks, scratch, image) do |mark_values|
         unless mark_values.size == mark_rows
           raise CrystalClick::CorruptPartError.new("Wide #{column} scan returned a partial mark")
         end
@@ -591,6 +637,15 @@ module CrystalClickReadRowsScan
             json.object do
               json.field "version", 1
               json.field "transport_kind", "mmap"
+              json.field "shared_mmap" do
+                json.object do
+                  json.field "open_ns", profile.shared_mmap.open_ns
+                  json.field "close_ns", profile.shared_mmap.close_ns
+                  json.field "map_calls", profile.shared_mmap.map_calls
+                  json.field "unmap_calls", profile.shared_mmap.unmap_calls
+                  json.field "mapped_bytes", profile.shared_mmap.mapped_bytes
+                end
+              end
               if workers == 4
                 json.field "launch_ns", profile.launch_ns
                 json.field "join_ns", profile.join_ns

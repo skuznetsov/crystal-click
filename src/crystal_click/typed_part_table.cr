@@ -279,6 +279,25 @@ module CrystalClick
     end
 
     def scan_typed(batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS, & : WidePartTableBatch -> Nil) : Nil
+      scan_typed_parts(batch_rows, shared_wide_mmaps: false) { |batch| yield batch }
+    end
+
+    # :nodoc:
+    # The parallel facade uses this serial loop when one worker owns the
+    # schedule. It preserves the ordinary row/order path while sharing each
+    # admitted Wide part's direct numeric mappings for that part's lifetime.
+    private def scan_typed_with_shared_wide_mmaps(
+      batch_rows : Int,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      scan_typed_parts(batch_rows, shared_wide_mmaps: true) { |batch| yield batch }
+    end
+
+    private def scan_typed_parts(
+      batch_rows : Int,
+      shared_wide_mmaps : Bool,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
       validate_batch_rows(batch_rows)
       preflight_backends!
 
@@ -297,8 +316,18 @@ module CrystalClick
             end
           end
         else
-          entry.reader.as(WidePartTable).scan_typed(batch_rows: batch_rows) do |batch|
-            yield rebase_batch!(batch, part_index, source_row_offset)
+          wide_reader = entry.reader.as(WidePartTable)
+          if shared_wide_mmaps && wide_reader.parallel_primitive_numeric_scan_context &&
+             @part_mark_row_counts[part_index].any? { |rows| rows > 0_u64 }
+            with_wide_scan_image(wide_reader) do |image|
+              wide_reader.scan_typed_with_scan_image(batch_rows, image) do |batch|
+                yield rebase_batch!(batch, part_index, source_row_offset)
+              end
+            end
+          else
+            wide_reader.scan_typed(batch_rows: batch_rows) do |batch|
+              yield rebase_batch!(batch, part_index, source_row_offset)
+            end
           end
         end
         source_row_offset = checked_add_rows(source_row_offset, entry.row_count)

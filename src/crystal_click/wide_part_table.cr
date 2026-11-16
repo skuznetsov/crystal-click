@@ -317,11 +317,26 @@ module CrystalClick
     end
 
     # :nodoc:
+    # The TypedPartTable serial scan can scope an admitted read-only image to
+    # this Wide part while retaining the ordinary full-mark scan behavior.
+    def scan_typed_with_scan_image(
+      batch_rows : Int,
+      scan_image : WideScanImage,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
+        raise BoundsError.new("batch row count is out of range")
+      end
+      scan_typed_rows(batch_rows, scan_image: scan_image) { |batch| yield batch }
+    end
+
+    # :nodoc:
     # Materialize a selected ordered mark list for an independent parallel
     # reader while preserving the existing typed scan path and budgets.
     def scan_typed_mark_indices(
       mark_indices : Array(Int32),
       batch_rows : Int,
+      scan_image : WideScanImage? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
@@ -340,8 +355,19 @@ module CrystalClick
         previous = mark_index
       end
       raise BoundsError.new("parallel Wide mark list is empty") if selected_marks.empty?
-      scan_typed_rows(batch_rows, [selected_marks], whole_marks: false) { |batch| yield batch }
+      scan_typed_rows(batch_rows, [selected_marks], whole_marks: false, scan_image: scan_image) { |batch| yield batch }
       nil
+    end
+
+    # :nodoc:
+    # Open the selected direct numeric streams for one physical part. The
+    # caller is responsible for releasing the returned scan-scoped image.
+    def open_parallel_scan_image : WideScanImage
+      unless parallel_primitive_numeric_scan_context
+        raise UnsupportedFormatError.new("scan-scoped mapping requires admitted ordinary Wide primitive columns")
+      end
+      paths = @entries[0].readers.map { |selected| selected.reader.parallel_numeric_scan_data_path }
+      WideScanImage.open(paths, WidePart::MAX_DATA_FILE_BYTES)
     end
 
     # Return this already-admitted reader only for the ordinary direct
@@ -404,6 +430,7 @@ module CrystalClick
       candidate_marks : Array(Array(Int32))? = nil,
       whole_marks : Bool = false,
       window_rows : {UInt64, UInt64}? = nil,
+      scan_image : WideScanImage? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       # Validate selected W82/W83/W84 Array(Map) leaf marks before callbacks,
@@ -2614,7 +2641,7 @@ module CrystalClick
                 raise CorruptPartError.new("selected Nullable mark row count changed") unless nullable_array_size(values).to_u64 == mark_rows
                 nullable_values[selected.name] = values
               else
-                values = read_numeric_values(selected, mark_index)
+                values = read_numeric_values(selected, mark_index, scan_image)
                 raise CorruptPartError.new("selected column mark row count changed") unless values.size.to_u64 == mark_rows
                 numeric_values[selected.name] = values
               end
@@ -3237,7 +3264,11 @@ module CrystalClick
       nil
     end
 
-    private def read_numeric_values(selected : ColumnReader, mark_index : Int) : WidePartNumericArray
+    private def read_numeric_values(
+      selected : ColumnReader,
+      mark_index : Int,
+      scan_image : WideScanImage? = nil,
+    ) : WidePartNumericArray
       reader = selected.reader
       type = selected.column_type
       if WidePart.supports_uuid_type?(type)
@@ -3358,25 +3389,25 @@ module CrystalClick
         end
         reader.read_time64_ticks_mark_range(selected.name, mark_index, 1)
       when "UInt8"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt8)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt8, scan_image)
       when "UInt16"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt16)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt16, scan_image)
       when "UInt32"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt32)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt32, scan_image)
       when "UInt64"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt64)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, UInt64, scan_image)
       when "Int8"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, Int8)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, Int8, scan_image)
       when "Int16"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, Int16)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, Int16, scan_image)
       when "Int32"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, Int32)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, Int32, scan_image)
       when "Int64"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, Int64)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, Int64, scan_image)
       when "Float32"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, Float32)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, Float32, scan_image)
       when "Float64"
-        reader.read_numeric_mark_range(selected.name, mark_index, 1, Float64)
+        reader.read_numeric_mark_range(selected.name, mark_index, 1, Float64, scan_image)
       else
         raise UnsupportedFormatError.new("unsupported numeric column type")
       end

@@ -1904,11 +1904,29 @@ module CrystalClick
       @marks.map(&.rows)
     end
 
+    # :nodoc:
+    # Physical data path admitted for scan-scoped mapping of an ordinary
+    # direct primitive numeric `.mrk2` stream.
+    def parallel_numeric_scan_data_path : String
+      unless WidePart.supports_numeric_type?(@column_type) &&
+             @source_column_name == @column && @source_column_type == @column_type &&
+             !@json_typed_path && @flattened_nested_context.nil?
+        raise UnsupportedFormatError.new("scan-scoped mapping requires a direct primitive numeric column")
+      end
+      stream_name = direct_uint64_column? ? PhysicalStreamName.escape(@column) : @column
+      stream = @streams[stream_name]?
+      unless stream && stream.mark_path.ends_with?(".mrk2")
+        raise UnsupportedFormatError.new("scan-scoped mapping requires an ordinary .mrk2 stream")
+      end
+      stream.data_path
+    end
+
     def read_numeric_mark_range(
       column : String,
       first_mark : Int,
       mark_count : Int,
       type : T.class,
+      scan_image : WideScanImage? = nil,
     ) : Array(T) forall T
       expected_type = WidePart.numeric_type_name(type)
       element_width = numeric_type_width(expected_type)
@@ -1916,7 +1934,7 @@ module CrystalClick
 
       start_mark, end_mark, expected_bytes = checked_numeric_mark_range(column, first_mark, mark_count, expected_type, element_width)
       values = Array(T).new
-      each_mark_range_bytes(start_mark, end_mark, expected_bytes, element_width) do |bytes|
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, element_width, scan_image: scan_image) do |bytes|
         offset = 0
         while offset < bytes.size
           values << decode_numeric_value(bytes, offset, type)
@@ -11426,6 +11444,7 @@ module CrystalClick
       first_mark : Int,
       mark_count : Int,
       scratch : Slice(UInt64),
+      scan_image : WideScanImage? = nil,
       & : Slice(UInt64) -> Nil
     ) : Nil
       raise BoundsError.new("empty scratch") if scratch.size == 0
@@ -11433,7 +11452,7 @@ module CrystalClick
 
       start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count)
       chunk_size = 0
-      each_uint64_mark_range_bytes(start_mark, end_mark, expected_bytes) do |bytes|
+      each_uint64_mark_range_bytes(start_mark, end_mark, expected_bytes, scan_image) do |bytes|
         source_offset = 0
         while source_offset < bytes.size
           available = scratch.size - chunk_size
@@ -16525,8 +16544,14 @@ module CrystalClick
       end
     end
 
-    private def each_uint64_mark_range_bytes(start_mark : Mark?, end_mark : Mark, expected_bytes : Int, & : Bytes -> Nil) : Nil
-      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 8) do |bytes|
+    private def each_uint64_mark_range_bytes(
+      start_mark : Mark?,
+      end_mark : Mark,
+      expected_bytes : Int,
+      scan_image : WideScanImage? = nil,
+      & : Bytes -> Nil
+    ) : Nil
+      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 8, scan_image: scan_image) do |bytes|
         yield bytes
       end
     end
@@ -16536,6 +16561,7 @@ module CrystalClick
       end_mark : Mark,
       expected_bytes : Int,
       element_width : Int32,
+      scan_image : WideScanImage? = nil,
       & : Bytes -> Nil
     ) : Nil
       raise BoundsError.new("empty mark range") unless start_mark
@@ -16544,7 +16570,7 @@ module CrystalClick
                else
                  @streams[@column]
                end
-      each_mark_range_bytes(stream, start_mark.not_nil!, end_mark, expected_bytes, element_width) do |bytes|
+      each_mark_range_bytes(stream, start_mark.not_nil!, end_mark, expected_bytes, element_width, scan_image: scan_image) do |bytes|
         yield bytes
       end
     end
@@ -16556,16 +16582,24 @@ module CrystalClick
       expected_bytes : Int,
       element_width : Int32,
       exact_bytes : Bool = true,
+      scan_image : WideScanImage? = nil,
       & : Bytes -> Nil
     ) : Nil
-      {% if flag?(:read_rows_profile) %}
-        data_size_started = Time.instant
-      {% end %}
-      data_size = File.size(stream.data_path)
-      {% if flag?(:read_rows_profile) %}
-        data_size_finished = Time.instant
-        ReadRowsProfile.current_worker?.try &.add_file_size(ReadRowsProfile.elapsed_ns_between(data_size_started, data_size_finished))
-      {% end %}
+      mapped_data = nil.as(Bytes?)
+      data_size = if image = scan_image
+                    mapped_data = image.bytes_for(stream.data_path)
+                    mapped_data.not_nil!.size.to_i64
+                  else
+                    {% if flag?(:read_rows_profile) %}
+                      data_size_started = Time.instant
+                    {% end %}
+                    file_size = File.size(stream.data_path)
+                    {% if flag?(:read_rows_profile) %}
+                      data_size_finished = Time.instant
+                      ReadRowsProfile.current_worker?.try &.add_file_size(ReadRowsProfile.elapsed_ns_between(data_size_started, data_size_finished))
+                    {% end %}
+                    file_size
+                  end
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
       start_offset = start_mark.compressed_offset
       end_offset = end_mark.compressed_offset
@@ -16694,7 +16728,7 @@ module CrystalClick
         end
         return
       end
-      MMapDataSource.with_file(stream.data_path, data_size, MAX_DATA_FILE_BYTES) do |data|
+      with_scan_data_bytes(stream.data_path, data_size, mapped_data) do |data|
         raise CorruptPartError.new("mark frame offset exceeds data") if start_offset >= data_size || end_offset > data_size || end_offset == data_size && !eof_boundary
         raise CorruptPartError.new("mark frame offsets are reversed") if start_offset > end_offset
 
@@ -16793,6 +16827,22 @@ module CrystalClick
         end
         raise CorruptPartError.new("mark range byte count mismatch") if exact_bytes && selected_bytes != expected_bytes
       end
+    end
+
+    private def with_scan_data_bytes(
+      path : String,
+      data_size : Int64,
+      mapped_data : Bytes?,
+      & : Bytes -> Nil
+    ) : Nil
+      if data = mapped_data
+        yield data
+      else
+        MMapDataSource.with_file(path, data_size, MAX_DATA_FILE_BYTES) do |data|
+          yield data
+        end
+      end
+      nil
     end
 
     private def valid_compressed_frame_checksum?(data : Bytes, frame_offset : Int64) : Bool

@@ -75,12 +75,13 @@ the slab change restores the detached range buffers from `d46b678`.
 
 ### Wide reader admission
 
-An ordinary Wide scan of direct primitive numeric columns with `.mrk2`
-marks shares the admitted part metadata and each selected stream's mark
-offsets between workers. Admission validates the selected columns and their
-common row grid. Each worker keeps its decode storage private and checks
-its selected data ranges. The part files must stay immutable for the
-reader's lifetime.
+An ordinary parallel Wide scan of direct primitive numeric columns with
+`.mrk2` marks shares the admitted part metadata, stream mark offsets, and
+read-only data mappings between workers. Admission validates the selected
+columns and their common row grid. A touched part opens one mapping per
+selected data file and closes them after its last assigned worker finishes.
+Each worker keeps its decode storage private and checks its selected data
+ranges. The part files must stay immutable for the reader's lifetime.
 
 The direct benchmark prepares a fresh set of selected column readers for
 each scan of two `UInt64` columns. Its preparation timer includes reading
@@ -150,10 +151,11 @@ verification, decompression, typed batches, and one copy of each batch into
 the ordered output buffers.
 ClickHouse calls `IMergeTreeReader::readRows` once per selected mark and
 continues the reader across consecutive marks. It uses synchronous `pread`
-with asynchronous mark loads and reader caches disabled. Crystal Wide maps
-each column once per consecutive run of marks. Crystal Compact uses one
-mapping per part and a decode workspace per worker, then yields batches of
-at most 4,096 rows. Each runner validates the complete output against the
+with asynchronous mark loads and reader caches disabled. The current Crystal
+Wide runner opens one mapping per selected column for the duration of the
+scan, with the same views across workers and mark runs. Crystal Compact uses
+one mapping per part and a decode workspace per worker, then yields batches
+of at most 4,096 rows. Each runner validates the complete output against the
 column-major fixture oracle after stopping the timer.
 Parent-side checks require the same observed marks per worker and unchanged
 part files. Warmups populate the OS page cache. Two-runner comparisons
@@ -376,6 +378,12 @@ workers, and the remainder includes uninstrumented work, scheduling delays,
 and parts of the measurement overhead. Medians of individual stages can
 come from different samples.
 
+The scan-owned Wide mappings appear in a separate `shared_mmap` object.
+Its open and close intervals fall outside the workers' envelope and
+inside the scan interval. The validator checks one map and unmap per
+selected stream, the physical byte lengths, and zero worker-side mmap
+calls. The stage results below used the previous per-worker mapping path.
+
 For Crystal, build a second runner with `-Dread_rows_profile`. On the
 ClickHouse side, save the uninstrumented executable first, apply the
 benchmark probes to the disposable pinned checkout, and enable the profile
@@ -575,6 +583,90 @@ blocks with guard pages bounding the exact input and the padded output.
 | 1 → 4 report | `2861c4a226168b81c3cdec330443cf598445ccf98adb5ed59288ee4ecd8acdf2` |
 | 4 → 1 report | `d7dcb559166dfae5e408285d4ce4fd294f0b5f5bd75bf9d295f844c38885c2bc` |
 | Crystal LZ4 profile report | `7fb239626af96e1e64b43b26820c28f499a317d3a14a3a7d187beb445204e0c9` |
+
+### Wide shared data mappings
+
+The direct Wide `UInt64` runner opens both column files once per scan.
+Each worker borrows the same read-only views and checks its selected
+compressed frames with private decode storage. The scan interval includes
+both opening the mappings and closing them after workers finish.
+
+The comparison uses the same pinned ClickHouse `readRows` build
+configuration, Wide MRK2 fixture, and 16 positive marks as the padded-copy
+comparison. The Crystal baseline is `2a12eb1`, which already includes
+the padded LZ4 decoder. The three uninstrumented Release runners each
+read 131,072 rows from the same two `UInt64` streams, with the same
+ordered output and checksum checks. The driver uses six warmup and 48
+measured rounds per worker count. It balances all six runner orders and
+reverses the order of the worker counts in a second run. To reproduce,
+pass the baseline binary with `--crystal-baseline-bin` and select
+`--layout wide --warmups 6 --repeats 48`.
+
+The runs used warm file pages on an Apple M2 Max and external APFS SSD.
+Crystal 1.22.3 and the native Release build used LLVM 23.1.5. ClickHouse
+retains the storage context constructed before the timing loop and reads
+with synchronous `pread`. Crystal preparation includes opening the
+selected readers and parsing their marks. Total time adds each sample's
+preparation and scan intervals. Times are in milliseconds.
+
+| Worker order | Workers | Runner | Prepare p50 | Scan p50 / p95 | Total p50 / p95 |
+| --- | ---: | --- | ---: | ---: | ---: |
+| 1 → 4 | 1 | Crystal baseline | 0.2186 | 1.3989 / 1.6842 | 1.6311 / 1.9077 |
+| 1 → 4 | 1 | Crystal shared mmap | 0.2229 | 1.3615 / 1.6007 | 1.6059 / 1.9042 |
+| 1 → 4 | 1 | ClickHouse `readRows` | 0.0064 | 0.9165 / 1.0528 | 0.9226 / 1.0676 |
+| 1 → 4 | 4 | Crystal baseline | 0.2261 | 0.7048 / 0.8323 | 0.9367 / 1.0748 |
+| 1 → 4 | 4 | Crystal shared mmap | 0.2301 | 0.6381 / 0.7873 | 0.8548 / 1.0330 |
+| 1 → 4 | 4 | ClickHouse `readRows` | 0.0159 | 0.4379 / 0.4814 | 0.4554 / 0.4988 |
+| 4 → 1 | 4 | Crystal baseline | 0.2200 | 0.7065 / 0.8209 | 0.9265 / 1.0423 |
+| 4 → 1 | 4 | Crystal shared mmap | 0.2189 | 0.6743 / 0.7781 | 0.8916 / 1.0000 |
+| 4 → 1 | 4 | ClickHouse `readRows` | 0.0160 | 0.4357 / 0.5069 | 0.4526 / 0.5266 |
+| 4 → 1 | 1 | Crystal baseline | 0.2187 | 1.4220 / 1.7533 | 1.6515 / 1.9955 |
+| 4 → 1 | 1 | Crystal shared mmap | 0.2217 | 1.4407 / 1.7295 | 1.6687 / 1.9531 |
+| 4 → 1 | 1 | ClickHouse `readRows` | 0.0083 | 0.9409 / 1.0985 | 0.9502 / 1.1050 |
+
+With four workers, scan p50 fell by 4.6–9.5%, scan p95 by 5.2–5.4%,
+and total p50 by 3.8–8.8%. Median paired baseline-to-candidate ratios
+were 1.056× and 1.080×. With one worker the paired ratios were 0.998×
+and 1.004×. The one-to-four worker scan speedup was 2.13–2.14× with shared
+mmap and 2.09–2.16× with `readRows`. Crystal scan p50 was 1.49–1.53× the
+native time with one worker and 1.46–1.55× with four workers. Including
+preparation, those ratios were 1.74–1.76× and 1.88–1.97×.
+
+The separate profiles counted pairs of mappings and unmaps below. Each
+candidate scan mapped 1,386,725 bytes in total. All recorded checksum and
+LZ4 counts agreed with the independently counted physical frame geometry.
+
+| Selected marks | Workers | Baseline mmap pairs | Shared mmap pairs | Checksum and LZ4 calls each |
+| --- | ---: | ---: | ---: | ---: |
+| 16 consecutive marks | 1 | 2 | 2 | 512 |
+| 16 consecutive marks | 4 | 8 | 2 | 512 |
+| 8 gapped marks | 1 | 14 | 2 | 256 |
+| 8 gapped marks | 4 | 16 | 2 | 256 |
+
+All 576 timed scans matched the exact ordered oracle. Part manifests
+matched before and after both campaigns, and every first-frame corruption
+control failed with a data checksum error. In a separate gapped scan,
+each runner returned the selected rows while excluding corrupt mark 13,
+then reported a checksum error when that mark was assigned to worker four.
+All three rejected a one-byte change to the output oracle.
+
+The focused Wide, Compact, mmap, and LZ4 specs passed 81 examples. They
+cover scan-owned lifetimes, callback cancellation and exceptions, and
+partial mapping setup failure. The parallel mapping specs passed
+13 examples with `-Dwithout_mt`. The Wide metadata admission specs
+passed five examples, including a mixed primitive numeric selection.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Crystal baseline | `101b223562679b6f517b8840373e99f219cc61c563a2abe21807e34fa19ffd95` |
+| Crystal shared mmap | `e147d61348ecd90784a12c2aa828984a504994d2275205eba4bdff19d33ea3e2` |
+| ClickHouse `readRows` | `e225dcf04ef451b064bff9f6b24eafa050eb28021bc6f7748f6f26d6c3b30ab9` |
+| Crystal baseline profile | `8e000ca3b699c61658d3614df3fac58fe4e6b30f1d917756ed8aeb990452c9a4` |
+| Crystal shared mmap profile | `fa0024f97e5c553a96db957613cd2f7d9bc173e6ac0014ced0b4f02800b4ec9b` |
+| 1 → 4 report | `00888a9eae3bbe6d44c4b339c61e13599628c9cba7f81a0fdd126c4ca0a898ee` |
+| 4 → 1 report | `2e0f9671c354b2310132cf4f6b0bac8eba2e533235da646a341d40dc3d7579cb` |
 
 ### Compact pilot budget cutoff
 
@@ -1343,6 +1435,10 @@ parallel, mmap, and W124 transport specs passed 31 examples with
   map each accessed `data.bin` exactly once. Its workers must reuse the
   admitted column metadata. Aborting at an earlier part must close a later
   part's mapping even if an assigned worker never acquired it.
+- An admitted parallel Wide scan must map each selected data file once per
+  touched part, including when workers read disjoint mark ranges. A failed
+  mapping open, a worker error, or a stopped callback must release every
+  mapping opened by that scan.
 - Splitting Compact marks between workers must keep a cumulative per-part
   transport limit. For the shared `UInt64` path, file and header work is
   charged per mapping and selected range work accumulates across workers.

@@ -138,11 +138,39 @@ module CrystalClick
     end
 
     class Scan
+      class SharedMMap
+        getter open_ns : Int64
+        getter close_ns : Int64
+        getter map_calls : UInt64
+        getter unmap_calls : UInt64
+        getter mapped_bytes : UInt64
+
+        def initialize
+          @open_ns = 0_i64
+          @close_ns = 0_i64
+          @map_calls = 0_u64
+          @unmap_calls = 0_u64
+          @mapped_bytes = 0_u64
+        end
+
+        def record_open(ns : Int64, calls : UInt64, bytes : UInt64) : Nil
+          @open_ns += ns
+          @map_calls += calls
+          @mapped_bytes += bytes
+        end
+
+        def record_close(ns : Int64, calls : UInt64) : Nil
+          @close_ns += ns
+          @unmap_calls += calls
+        end
+      end
+
       getter workers : Array(Worker)
       getter launch_ns : Int64
       getter join_ns : Int64
       getter launch_calls : UInt64
       getter join_calls : UInt64
+      getter shared_mmap : SharedMMap
 
       def initialize(worker_count : Int32)
         @workers = Array(Worker).new(worker_count) { |index| Worker.new(index.to_i32) }
@@ -150,6 +178,7 @@ module CrystalClick
         @join_ns = 0_i64
         @launch_calls = 0_u64
         @join_calls = 0_u64
+        @shared_mmap = SharedMMap.new
       end
 
       def record_launch(ns : Int64) : Nil

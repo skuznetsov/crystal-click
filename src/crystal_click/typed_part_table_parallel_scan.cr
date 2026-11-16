@@ -34,9 +34,10 @@ module CrystalClick
     # Compact UInt64 and Wide primitive numeric tables, whose read-only bindings
     # and mark grids are shared.
     # Compact readers share the original part's synchronized cumulative
-    # transport budget. For workers: 1 this delegates to the ordinary serial
-    # API. A request that has at most one nonempty mark also uses the serial path
-    # when execution contexts exist.
+    # transport budget. For workers: 1, admitted ordinary Wide numeric parts
+    # reuse one scan-scoped read-only image per part; other layouts use the
+    # ordinary serial API. A request with at most one nonempty mark uses the
+    # same serial path when execution contexts exist.
     # True parallel mode admits only direct, non-projection primitive numeric
     # selections.
     #
@@ -51,7 +52,9 @@ module CrystalClick
     ) : Nil
       self.class.validate_parallel_workers!(workers)
       validate_batch_rows(batch_rows)
-      return scan_typed(batch_rows) { |batch| yield batch } if workers == 1
+      if workers == 1
+        return scan_typed_with_shared_wide_mmaps(batch_rows) { |batch| yield batch }
+      end
 
       {% if flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
         raise UnsupportedFormatError.new(
@@ -67,7 +70,9 @@ module CrystalClick
         end
 
         effective_workers = workers < positive_mark_count ? workers : positive_mark_count
-        return scan_typed(batch_rows) { |batch| yield batch } if effective_workers <= 1
+        if effective_workers <= 1
+          return scan_typed_with_shared_wide_mmaps(batch_rows) { |batch| yield batch }
+        end
 
         if @projection_selected
           raise UnsupportedFormatError.new("parallel typed scan does not admit projection selections")
@@ -105,6 +110,10 @@ module CrystalClick
           part_sources.map { |source| source[2] },
           expected_scan_image_users,
         )
+        wide_scan_image_registry = WideScanImageRegistry.new(
+          part_sources.map { |source| source[5] },
+          expected_scan_image_users,
+        )
 
         outputs = Array(Channel(WidePartTableBatch)).new(effective_workers) do
           Channel(WidePartTableBatch).new(1)
@@ -122,6 +131,7 @@ module CrystalClick
               worker_marks[worker_index],
               part_sources,
               scan_image_registry,
+              wide_scan_image_registry,
               batch_rows,
               outputs[worker_index],
               acknowledgements[worker_index],
@@ -173,13 +183,22 @@ module CrystalClick
               primary_error ||= ex
             end
           end
+          cleanup_error = nil.as(Error?)
           begin
             scan_image_registry.close_all
           rescue ex : Error
+            cleanup_error ||= ex
+          end
+          begin
+            wide_scan_image_registry.close_all
+          rescue ex : Error
+            cleanup_error ||= ex
+          end
+          if cleanup = cleanup_error
             if error = primary_error
-              primary_error = MMapCleanupError.new(error, ex)
+              primary_error = MMapCleanupError.new(error, cleanup)
             else
-              raise ex
+              raise cleanup
             end
           end
         end
@@ -199,6 +218,31 @@ module CrystalClick
         WidePart.supports_numeric_type?(type) &&
           source[0] == column && source[1] == column && source[2] == type
       end
+    end
+
+    private def with_wide_scan_image(
+      reader : WidePartTable,
+      & : WideScanImage -> Nil
+    ) : Nil
+      image = reader.open_parallel_scan_image
+      primary_error = nil.as(Exception?)
+      begin
+        yield image
+      rescue ex : Exception
+        primary_error = ex
+      ensure
+        begin
+          image.close
+        rescue cleanup_error : Error
+          if error = primary_error
+            raise MMapCleanupError.new(error, cleanup_error)
+          else
+            raise cleanup_error
+          end
+        end
+      end
+      raise primary_error.not_nil! if primary_error
+      nil
     end
 
     private def parallel_scan_plan(
@@ -237,13 +281,14 @@ module CrystalClick
         part_marks : Array(Array(Int32)),
         part_sources : Array(ParallelScanPartSource),
         scan_image_registry : CompactUInt64ScanImageRegistry,
+        wide_scan_image_registry : WideScanImageRegistry,
         batch_rows : Int,
         output : Channel(WidePartTableBatch),
         acknowledgement : Channel(Nil),
       ) : Fiber::ExecutionContext::Isolated
         name = "crystal-click typed scan worker #{worker_index}"
         Fiber::ExecutionContext::Isolated.new(name) do
-          run_parallel_worker(part_marks, part_sources, scan_image_registry, batch_rows, output, acknowledgement)
+          run_parallel_worker(part_marks, part_sources, scan_image_registry, wide_scan_image_registry, batch_rows, output, acknowledgement)
         end
       end
 
@@ -251,6 +296,7 @@ module CrystalClick
         part_marks : Array(Array(Int32)),
         part_sources : Array(ParallelScanPartSource),
         scan_image_registry : CompactUInt64ScanImageRegistry,
+        wide_scan_image_registry : WideScanImageRegistry,
         batch_rows : Int,
         output : Channel(WidePartTableBatch),
         acknowledgement : Channel(Nil),
@@ -286,9 +332,20 @@ module CrystalClick
               end
             end
           else
-            reader = admitted_wide_reader || WidePartTable.open_selected_typed([path], @columns)
-            reader.scan_typed_mark_indices(marks, batch_rows) do |batch|
-              send_parallel_batch!(batch, output, acknowledgement)
+            if reader = admitted_wide_reader
+              image = wide_scan_image_registry.acquire(part_index)
+              begin
+                reader.scan_typed_mark_indices(marks, batch_rows, image) do |batch|
+                  send_parallel_batch!(batch, output, acknowledgement)
+                end
+              ensure
+                wide_scan_image_registry.release(part_index)
+              end
+            else
+              reader = WidePartTable.open_selected_typed([path], @columns)
+              reader.scan_typed_mark_indices(marks, batch_rows) do |batch|
+                send_parallel_batch!(batch, output, acknowledgement)
+              end
             end
           end
         end

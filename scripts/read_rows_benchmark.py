@@ -25,6 +25,7 @@ from parallel_scan_benchmark import fail, sha256_path, validate_fixture_source
 PROFILE_TRANSPORTS = {"crystal_profile": "mmap", "clickhouse_profile": "pread"}
 PROFILE_STAGES = ("transport_ns", "io_lifecycle_ns", "checksum_ns", "lz4_ns",
                   "materialize_copy_ns", "output_copy_ns")
+SHARED_MMAP_FIELDS = ("open_ns", "close_ns", "map_calls", "unmap_calls", "mapped_bytes")
 
 
 class Runner:
@@ -164,16 +165,18 @@ def corrupt_first_frame(part: Path, scratch: Path) -> Path:
     return copy
 
 
-def count_wide_lz4_frames(part: Path, mark_count: int, mark_rows: int) -> list[int]:
-    """Count frames independently of either reader on the benchmark's aligned LZ4 streams."""
+def wide_lz4_geometry(part: Path, mark_count: int, mark_rows: int) -> tuple[list[int], int]:
+    """Count frames and data bytes independently of either reader."""
     mark_files = sorted(part.glob("*.mrk2"))
     if len(mark_files) != 2:
         fail("profile requires two Wide MRK2 column streams")
     counts = [0] * mark_count
+    mapped_bytes = 0
     for mark_file in mark_files:
         column = mark_file.stem
         mark_bytes = mark_file.read_bytes()
         data = mark_file.with_suffix(".bin").read_bytes()
+        mapped_bytes += len(data)
         if len(mark_bytes) != (mark_count + 1) * 24:
             fail(f"{column}: profile requires a complete Wide MRK2 stream")
         marks = list(struct.iter_unpack("<QQQ", mark_bytes))
@@ -195,11 +198,11 @@ def count_wide_lz4_frames(part: Path, mark_count: int, mark_rows: int) -> list[i
                 counts[index] += 1
             if offset != end or decoded != mark_rows * 8:
                 fail(f"{column}: frame range does not match mark extent")
-    return counts
+    return counts, mapped_bytes
 
 
 def validate_profile(runner: Runner, sample: dict, engine: str, expected_frames: list[int],
-                     worker_marks: list[list[int]], mark_rows: int) -> dict:
+                     worker_marks: list[list[int]], mark_rows: int, expected_mapped_bytes: int) -> dict:
     profile = sample.get("profile")
     runner.check(isinstance(profile, dict), "missing Wide stage profile")
     runner.check(profile.get("version") == 1, "unsupported Wide stage profile version")
@@ -207,10 +210,21 @@ def validate_profile(runner: Runner, sample: dict, engine: str, expected_frames:
     workers = profile.get("workers")
     runner.check(isinstance(workers, list) and len(workers) == len(worker_marks), "wrong profile worker count")
     crystal = engine == "crystal_profile"
+    shared_mmap = profile.get("shared_mmap")
+    if shared_mmap is not None:
+        runner.check(crystal and isinstance(shared_mmap, dict), "invalid scan-owned mmap profile")
+        for field in SHARED_MMAP_FIELDS:
+            value = shared_mmap.get(field)
+            runner.check(type(value) is int and value >= 0, f"invalid shared mmap field {field}")
+        runner.check(shared_mmap["map_calls"] == shared_mmap["unmap_calls"] == 2,
+                     "expected one mapping and unmapping per selected column")
+        runner.check(shared_mmap["mapped_bytes"] == expected_mapped_bytes, "wrong shared mapped byte count")
     stages = PROFILE_STAGES + (("frame_dispatch_ns",) if crystal else ())
     fields = ("start_ns", "end_ns", "checksum_calls", "lz4_calls", "transport_calls",
               "transport_bytes", "materialize_copy_bytes", "output_copy_bytes", *stages)
-    if not crystal:
+    if shared_mmap is not None:
+        fields += ("mmap_calls", "munmap_calls")
+    elif not crystal:
         fields += ("direct_decode_bytes", "direct_decode_calls")
     for index, (worker, frames, marks) in enumerate(zip(workers, expected_frames, worker_marks)):
         runner.check(isinstance(worker, dict) and worker.get("index") == index, "wrong profile worker index")
@@ -221,14 +235,23 @@ def validate_profile(runner: Runner, sample: dict, engine: str, expected_frames:
         runner.check(start < end <= sample["elapsed_ns"], "invalid scan-relative worker interval")
         measured = sum(worker[field] for field in stages)
         runner.check(measured <= end - start, "measured stages exceed worker interval")
-        runner.check(worker["transport_calls"] > 0 and worker["transport_bytes"] > 0,
-                     "the transport probe did not observe a read")
+        if shared_mmap is None:
+            runner.check(worker["transport_calls"] > 0 and worker["transport_bytes"] > 0,
+                         "the transport probe did not observe a read")
+        else:
+            runner.check(worker["transport_calls"] == worker["transport_bytes"] ==
+                         worker["mmap_calls"] == worker["munmap_calls"] == 0,
+                         "worker mapped or unmapped data in a scan with scan-owned mappings")
         runner.check(worker["checksum_calls"] == worker["lz4_calls"] == frames,
                      "the checksum or LZ4 call count differs from the physical frame count")
         expected_bytes = len(marks) * mark_rows * 16
         materialized_bytes = worker["materialize_copy_bytes"] + worker.get("direct_decode_bytes", 0)
         runner.check(materialized_bytes == expected_bytes, "wrong typed output byte count")
         runner.check(worker["output_copy_bytes"] == expected_bytes, "wrong ordered output copy byte count")
+    if shared_mmap is not None:
+        outside_workers = sample["elapsed_ns"] - max(w["end_ns"] for w in workers) + min(w["start_ns"] for w in workers)
+        runner.check(shared_mmap["open_ns"] + shared_mmap["close_ns"] <= outside_workers,
+                     "shared mapping lifetime work exceeds the scan interval outside workers")
     for field in ("launch_ns", "join_ns"):
         value = profile.get(field, 0 if len(worker_marks) == 1 else None)
         runner.check(type(value) is int and 0 <= value <= sample["elapsed_ns"],
@@ -266,26 +289,33 @@ def summarize_profiles(profiles: list[dict], elapsed: list[int]) -> dict:
             last_worker[field].append(last[field])
         for field in worker_sums:
             worker_sums[field].append(sum(worker[field] for worker in workers))
-    return {
+    summary = {
         "transport_kind": profiles[0]["transport_kind"],
         "last_worker_p50": {field: statistics.median(values) for field, values in last_worker.items()},
         "worker_sums_p50": {field: statistics.median(values) for field, values in worker_sums.items()},
         "orchestration_p50_ns": {field: statistics.median(values) for field, values in orchestration.items()},
         "samples": profiles,
     }
+    if profiles[0].get("shared_mmap") is not None:
+        summary["shared_mmap_p50"] = {
+            field: statistics.median(p["shared_mmap"][field] for p in profiles)
+            for field in SHARED_MMAP_FIELDS
+        }
+    return summary
 
 
 def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
               marks: list[int], mark_rows: int, workers: int, oracle: Path,
-              warmups: int, repeats: int, timeout: float, frame_counts: list[int] | None = None) -> dict:
+              warmups: int, repeats: int, timeout: float, frame_geometry: tuple[list[int], int] | None = None) -> dict:
     root.mkdir()
     split = [marks[len(marks) * i // workers:len(marks) * (i + 1) // workers] for i in range(workers)]
     samples = {name: [] for name in binaries}
     preparations = {name: [] for name in binaries}
     profiles = {name: [] for name in binaries if name in PROFILE_TRANSPORTS}
-    expected_frames = [
-        sum(frame_counts[mark] for mark in selection) for selection in split
-    ] if frame_counts is not None else []
+    expected_frames, expected_mapped_bytes = [], 0
+    if frame_geometry is not None:
+        frame_counts, expected_mapped_bytes = frame_geometry
+        expected_frames = [sum(frame_counts[mark] for mark in selection) for selection in split]
     warmup_orders = []
     orders = []
     with ExitStack() as stack:
@@ -308,7 +338,8 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
                 sample = runner.scan(split, mark_rows)
                 profile = None
                 if name in profiles:
-                    profile = validate_profile(runner, sample, name, expected_frames, split, mark_rows)
+                    profile = validate_profile(runner, sample, name, expected_frames, split, mark_rows,
+                                               expected_mapped_bytes)
                 elif profiles:
                     runner.check("profile" not in sample, "control runner emitted a profile")
                 if index >= warmups:
@@ -409,7 +440,7 @@ def compare(args: argparse.Namespace) -> dict:
                 fail(f"{layout} mark geometry differs from the fixture")
             if part_manifest_sha256(part) != expected:
                 fail(f"{layout} part files differ from the fixture manifest")
-            frame_counts = count_wide_lz4_frames(part, mark_count, mark_rows) if args.crystal_profile_bin else None
+            frame_geometry = wide_lz4_geometry(part, mark_count, mark_rows) if args.crystal_profile_bin else None
             for workers in args.workers:
                 for name, binary in binaries.items():
                     control_root = scratch / f"{layout}-{workers}-{name}-checksum-control"
@@ -418,7 +449,7 @@ def compare(args: argparse.Namespace) -> dict:
                                      mark_rows, workers, control_oracle, args.timeout) as runner:
                         runner.expect_corruption()
                 track = run_track(binaries, scratch / f"{layout}-{workers}", part, layout, marks, mark_rows,
-                                  workers, oracle, args.warmups, args.repeats, args.timeout, frame_counts)
+                                  workers, oracle, args.warmups, args.repeats, args.timeout, frame_geometry)
                 tracks.append(track)
             if part_manifest_sha256(part) != expected:
                 fail(f"{layout} part files changed during the comparison")
