@@ -14,6 +14,10 @@ module CrystalClick
       input_index = 0
       output_index = 0
 
+      {% if flag?(:read_rows_profile) %}
+        ReadRowsProfile.current_worker?.try &.add_lz4_call
+        lz4_started = Time.instant
+      {% end %}
       while input_index < input.size
         token = input[input_index]
         input_index += 1
@@ -61,6 +65,10 @@ module CrystalClick
         end
         output_index += match_length
       end
+      {% if flag?(:read_rows_profile) %}
+        lz4_finished = Time.instant
+        ReadRowsProfile.current_worker?.try &.add_lz4(ReadRowsProfile.elapsed_ns_between(lz4_started, lz4_finished))
+      {% end %}
 
       raise CorruptPartError.new("LZ4 output size mismatch") unless output_index == expected_size
       output

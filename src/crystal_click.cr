@@ -1,6 +1,9 @@
 require "file_utils"
 
 require "./crystal_click/errors"
+{% if flag?(:read_rows_profile) %}
+  require "./crystal_click/read_rows_profile"
+{% end %}
 require "./crystal_click/bool_value_codec"
 require "./crystal_click/binary_codec_limits"
 require "./crystal_click/binary_codec_budget"

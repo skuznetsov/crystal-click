@@ -21,6 +21,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+#include <ReadRowsProfile.h>
+#endif
+
 #include <Columns/ColumnVector.h>
 #include <Common/ErrorCodes.h>
 #include <Common/Exception.h>
@@ -303,7 +307,20 @@ struct WorkerState
     DB::MergeTreeReaderPtr reader;
     std::vector<size_t> processed_marks;
     std::exception_ptr exception;
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+    DB::ReadRowsProfile::WorkerCounters profile;
+#endif
 };
+
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+void copyToOrderedOutput(UInt64 * destination, const UInt64 * source, size_t bytes)
+{
+    DB::ReadRowsProfile::Timer timer(DB::ReadRowsProfile::Operation::OutputCopy);
+    std::memcpy(destination, source, bytes);
+    timer.finish();
+    DB::ReadRowsProfile::addOutputCopyBytes(bytes);
+}
+#endif
 
 void prepareWorkers(
     std::vector<WorkerState> & workers,
@@ -389,8 +406,13 @@ void runWorker(
 
         const size_t destination_offset = selected_index * options.mark_rows;
         const size_t copy_bytes = options.mark_rows * sizeof(UInt64);
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+        copyToOrderedOutput(ordered_pk.data() + destination_offset, pk_column.getData().data(), copy_bytes);
+        copyToOrderedOutput(ordered_values.data() + destination_offset, value_column.getData().data(), copy_bytes);
+#else
         std::memcpy(ordered_pk.data() + destination_offset, pk_column.getData().data(), copy_bytes);
         std::memcpy(ordered_values.data() + destination_offset, value_column.getData().data(), copy_bytes);
+#endif
         columns[0]->popBack(current_rows);
         columns[1]->popBack(current_rows);
         worker.processed_marks.push_back(mark);
@@ -412,18 +434,31 @@ void scanOnce(
     const UInt64 prepare_ns = static_cast<UInt64>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - prepare_started).count());
 
     const auto elapsed_started = Clock::now();
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+    UInt64 launch_ns = 0;
+    UInt64 join_ns = 0;
+#endif
     if (options.workers == 1)
     {
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+        DB::ReadRowsProfile::WorkerScope worker_scope(workers[0].profile, elapsed_started);
+#endif
         runWorker(workers[0], options, ordered_pk, ordered_values);
     }
     else
     {
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+        const auto launch_started = Clock::now();
+#endif
         std::vector<std::jthread> threads;
         threads.reserve(options.workers);
         for (size_t worker_index = 0; worker_index < options.workers; ++worker_index)
         {
             threads.emplace_back([&, worker_index]
             {
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+                DB::ReadRowsProfile::WorkerScope worker_scope(workers[worker_index].profile, elapsed_started);
+#endif
                 try
                 {
                     DB::ThreadStatus thread_status;
@@ -435,8 +470,15 @@ void scanOnce(
                 }
             });
         }
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+        launch_ns = static_cast<UInt64>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - launch_started).count());
+        const auto join_started = Clock::now();
+#endif
         for (auto & thread : threads)
             thread.join();
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+        join_ns = static_cast<UInt64>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - join_started).count());
+#endif
         for (const auto & worker : workers)
             if (worker.exception)
                 std::rethrow_exception(worker.exception);
@@ -470,7 +512,45 @@ void scanOnce(
         }
         std::cout << ']';
     }
-    std::cout << "],\"checksum_on_read\":true}\n" << std::flush;
+    std::cout << "],\"checksum_on_read\":true";
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+    std::cout << ",\"profile\":{\"version\":1,\"transport_kind\":\"pread\",\"launch_ns\":" << launch_ns
+              << ",\"join_ns\":" << join_ns << ",\"workers\":[";
+    for (size_t worker_index = 0; worker_index < workers.size(); ++worker_index)
+    {
+        if (worker_index)
+            std::cout << ',';
+        const auto & profile = workers[worker_index].profile;
+        const UInt64 io_lifecycle_ns = profile.open_ns + profile.fstat_ns + profile.close_ns;
+        std::cout << "{\"index\":" << worker_index
+                  << ",\"start_ns\":" << profile.start_ns
+                  << ",\"end_ns\":" << profile.end_ns
+                  << ",\"transport_ns\":" << profile.transport_ns
+                  << ",\"transport_calls\":" << profile.transport_calls
+                  << ",\"transport_bytes\":" << profile.transport_bytes
+                  << ",\"checksum_ns\":" << profile.checksum_ns
+                  << ",\"checksum_calls\":" << profile.checksum_calls
+                  << ",\"lz4_ns\":" << profile.lz4_ns
+                  << ",\"lz4_calls\":" << profile.lz4_calls
+                  << ",\"materialize_copy_ns\":" << profile.materialize_copy_ns
+                  << ",\"materialize_copy_calls\":" << profile.materialize_copy_calls
+                  << ",\"materialize_copy_bytes\":" << profile.materialize_copy_bytes
+                  << ",\"direct_decode_calls\":" << profile.direct_decode_calls
+                  << ",\"direct_decode_bytes\":" << profile.direct_decode_bytes
+                  << ",\"output_copy_ns\":" << profile.output_copy_ns
+                  << ",\"output_copy_calls\":" << profile.output_copy_calls
+                  << ",\"output_copy_bytes\":" << profile.output_copy_bytes
+                  << ",\"io_lifecycle_ns\":" << io_lifecycle_ns
+                  << ",\"open_ns\":" << profile.open_ns
+                  << ",\"open_calls\":" << profile.open_calls
+                  << ",\"fstat_ns\":" << profile.fstat_ns
+                  << ",\"fstat_calls\":" << profile.fstat_calls
+                  << ",\"close_ns\":" << profile.close_ns
+                  << ",\"close_calls\":" << profile.close_calls << '}';
+    }
+    std::cout << "]}";
+#endif
+    std::cout << "}\n" << std::flush;
 }
 
 int run(const Options & options)

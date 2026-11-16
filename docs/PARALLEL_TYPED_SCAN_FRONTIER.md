@@ -336,6 +336,167 @@ coordinates, a mixed numeric selection, and malformed metadata rejection.
 | Crystal shared runner | `3b4652c094d92fbd0670b9f33b569034765c6ec6de328a7fa64326a9010b3626` |
 | Wide shared benchmark report | `306c9ede439fce802063bada0ab2bdc7b01fc7207f57b6e0e63d3e4589b92b95` |
 
+### Wide stage profile
+
+The profile uses the same direct storage read and ordered oracle as the
+Wide shared admission comparison. Use one Release control and one
+instrumented Release binary per engine. The driver interleaves all four
+arms and retains preparation, scan, and per-worker stage samples. It
+independently walks the LZ4 frame headers between each selected pair of
+MRK2 boundaries and checks both the checksum and decode counts per worker.
+It also checks typed and ordered output byte counts, exact output, and
+checksum failure on the single-byte corruption control.
+
+| Stage | Crystal Wide scan | ClickHouse Wide readRows |
+| --- | --- | --- |
+| Transport syscall | `mmap` and `munmap` | `pread` |
+| File lifecycle | Data file size, open, descriptor stat, and close | Cached-path descriptor open and close, and observed descriptor stats |
+| Checksum | `CityHashV1.hash128` | `CityHash_v1_0_2::CityHash128` |
+| LZ4 | Token decode loop | Native LZ4 decoder call |
+| Materialization copy | Decoded byte slices into the typed scratch | Copies from the decompressed buffer into the typed column |
+| Ordered output copy | Typed scratch into the benchmark output | Typed column into the benchmark output |
+
+The two transport clocks cover different system calls. Crystal counts mapped
+lengths, and ClickHouse counts bytes returned by `pread`. A file-backed
+mapping can fault on first access in a later stage. The copy counters
+cover the two explicit boundaries above. Direct decode into the destination
+is already in LZ4 and has a separate byte counter on the native arm.
+The [native probe reference](../benchmarks/clickhouse_read_rows/PROFILE.md)
+gives the exact source scopes. The additional Crystal dispatch timer covers
+five type checks in each frame loop, a subset of reader control flow.
+
+Each worker interval spans entry into its scan body through its exit,
+including the reader cleanup in that body. The report retains stage sums
+across all workers and stages along the last-finishing worker. For each
+sample, scan wall time is time outside the worker envelope plus the delay
+until the last-finishing worker starts, followed by that worker's body.
+The worker body includes measured stages and a remainder. The caller's
+launch and join clocks overlap worker activity. Join includes waiting for
+workers, and the remainder includes uninstrumented work, scheduling delays,
+and parts of the measurement overhead. Medians of individual stages can
+come from different samples.
+
+For Crystal, build a second runner with `-Dread_rows_profile`. On the
+ClickHouse side, save the uninstrumented executable first, apply the
+benchmark probes to the disposable pinned checkout, and enable the profile
+option for the incremental build. Keep the same Release flags for each pair.
+Set `ch_runner` to the executable produced by the configured CMake target.
+
+```sh
+cp "$ch_runner" "$bench_work/read-rows-clickhouse-control"
+python3 -B benchmarks/clickhouse_read_rows/apply_profile_patch.py "$ch_src"
+cmake -S "$ch_src" -B "$bench_work/ch-build" -DCLICKHOUSE_READ_ROWS_PROFILE=ON
+cmake --build "$bench_work/ch-build" --target clickhouse-read-rows
+
+TMPDIR="$bench_work/read-rows-tmp" CRYSTAL_CACHE_DIR="$bench_work/read-rows-cache" \
+  crystal build --release -Dread_rows_profile benchmarks/read_rows_scan.cr \
+  -o "$bench_work/read-rows-crystal-profile"
+
+python3 -B scripts/read_rows_benchmark.py \
+  --manifest "$bench_fixture/fixture-manifest.json" --scratch "$bench_work" \
+  --crystal-bin "$bench_work/read-rows-crystal" \
+  --crystal-profile-bin "$bench_work/read-rows-crystal-profile" \
+  --cpp-bin "$bench_work/read-rows-clickhouse-control" --cpp-profile-bin "$ch_runner" \
+  --layout wide --workers 1 --workers 4 --warmups 8 --repeats 48 \
+  --output "$bench_work/read-rows-wide-profile.json"
+```
+
+#### Measurements
+
+The campaign used the byte-identical Wide part from the shared admission
+comparison on the same Apple M2 Max host with a warm OS page cache. Both
+runners scanned marks 0–15, with 8,192 rows per mark and two `UInt64`
+columns. Each run had eight warmup rounds and 48 measured rounds per
+worker count, with each of the 24 runner orders appearing twice. A second
+campaign reversed the worker-count order.
+
+Crystal reopened the shared metadata and mark indexes in its preparation
+timer. The native harness retained its loaded part context across requests
+and constructed fresh readers in the same timer. The native reader used
+`pread` with its usual descriptor cache and with prefetch disabled.
+
+Control binaries, in milliseconds. The total is calculated per sample before
+taking its quantiles.
+
+| Runner | Workers | Prepare p50 | Scan p50 / p95 | Total p50 / p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Crystal | 1 | 0.269 | 1.792 / 2.061 | 2.074 / 2.307 |
+| ClickHouse `readRows` | 1 | 0.016 | 1.023 / 1.139 | 1.038 / 1.156 |
+| Crystal | 4 | 0.246 | 0.742 / 0.974 | 0.993 / 1.228 |
+| ClickHouse `readRows` | 4 | 0.020 | 0.481 / 0.542 | 0.501 / 0.566 |
+
+The 1-to-4 scan p50 speedup was 2.42× in Crystal and 2.12× in ClickHouse.
+Including preparation, the speedup was 2.09× and 2.07×, respectively.
+Reversing the worker-count order gave scan p50s of 1.791 ms and 0.788 ms
+in Crystal, and 1.047 ms and 0.474 ms in ClickHouse. The matching speedups
+were 2.27× and 2.21×.
+
+Instrumented stage p50, in microseconds on the last-finishing worker in each
+sample. This is the sole worker in the one-worker track.
+
+| Worker stage | Crystal 1 | ClickHouse 1 | Crystal 4 | ClickHouse 4 |
+| --- | ---: | ---: | ---: | ---: |
+| Transport syscall | 16.3 | 67.8 | 13.0 | 48.7 |
+| File lifecycle | 34.0 | 59.9 | 59.6 | 2.9 |
+| CityHash128 | 277.2 | 77.9 | 79.4 | 20.6 |
+| LZ4 | 1,210.9 | 678.6 | 316.2 | 177.5 |
+| Materialization copy | 40.9 | 2.4 | 11.3 | 0.6 |
+| Ordered output copy | 30.9 | 41.1 | 8.1 | 11.1 |
+| Five Crystal type checks per frame | 31.0 | — | 9.6 | — |
+| Other worker time | 165.3 | 124.6 | 64.1 | 167.6 |
+| Worker body | 1,841.8 | 1,063.8 | 600.6 | 441.3 |
+
+| Four-worker orchestration, p50 µs | Crystal | ClickHouse |
+| --- | ---: | ---: |
+| Outside the worker envelope | 21.8 | 35.8 |
+| Last finisher's start delay relative to first start | 13.3 | 11.4 |
+| Caller launch | 28.2 | 29.4 |
+| Caller join, including waiting | 614.6 | 461.4 |
+
+The two copy paths have different byte volumes. The native `readBig` loop
+decoded 480 of the 512 frames directly into the typed columns, totaling
+1,966,080 bytes. The remaining 131,072 bytes were copied from decoded buffers.
+Crystal copied the full 2,097,152 decoded bytes into typed scratch. Both
+harnesses copied the same 2,097,152 bytes into their ordered outputs.
+
+Crystal mapped both column files per worker. The total mapped length was
+1,386,725 bytes with one worker and 5,546,900 bytes with four. ClickHouse
+returned 1,387,541 and 1,922,841 bytes from its `pread` calls, respectively.
+The four-worker sum of lifecycle timers had a median of 288.1 µs in Crystal
+and 80.5 µs in ClickHouse. Descriptor ownership can pass between ClickHouse
+workers, so opens and closes balance across the scan even when individual
+worker counts differ. The native probe observed four opens and four closes
+in every one-worker sample and four to six of each with four workers. The
+native descriptor stat hooks were idle on this fixture.
+
+The reversed order reproduced the LZ4 and checksum gaps. At one worker the
+paired profile-to-control scan ratios were 1.024–1.027 for Crystal and
+1.031–1.037 for ClickHouse. With four workers the Crystal profile scan p50
+was 0.673–0.682 ms and the control was 0.742–0.788 ms. The four-worker paired
+ratios were 0.958–0.984 in Crystal and 1.009–1.032 in ClickHouse. Use the
+instrumented results for stage attribution and the control results for total
+latency and scaling.
+
+All 768 recorded scans across the two campaigns matched the ordered oracle.
+Both profile arms checked and decoded exactly 512 physical frames per scan,
+with 128 per worker in the four-worker track. All first-frame checksum
+controls passed. In a separate gapped scan, each runner gave the exact
+selected rows when corrupt mark 13 was excluded, then rejected its checksum
+when the mark was assigned to worker four. All four rejected a wrong output
+oracle. The default Release parallel-scan specs passed 11 examples. The
+Release LZ4 and mmap specs built with the profile flag passed 23 examples.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Crystal control | `42254b66d7bdf7c9dc905203acced4586982746378f8c65d47b3d76de99e6950` |
+| Crystal profile | `2a1d865f444fab47197d16aa1a4a6c3ac5dd1a026d140f29086e10289c2cbb5c` |
+| ClickHouse control | `b0afd28ac3d810f1e7c5a43e070f85e47403f8da48de645d41951c33a97497bd` |
+| ClickHouse profile | `e703fea5dc1de7dacebf90f717ec0cc47ad1903fa9f6b4c631fabc47e9eb1026` |
+| Stage profile report | `d49c5642f41bf3b5801317fe5ff0af45ed42e81792decba6411c5d0f1588b66a` |
+| Reversed-order report | `64082fbc3e32073aafdfe23dc87cf4a3e633b774a35d65058219d5953794d9fe` |
+
 ### Compact pilot budget cutoff
 
 The first 524,288-row fixture had 64 data marks of 8,192 rows. On Compact

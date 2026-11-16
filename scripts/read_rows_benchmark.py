@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare direct readers against an existing parallel scan fixture manifest."""
+"""Compare direct readers and optionally profile their Wide scans."""
 
 import argparse
 import array
@@ -20,6 +20,11 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from parallel_scan_benchmark import fail, sha256_path, validate_fixture_source
+
+
+PROFILE_TRANSPORTS = {"crystal_profile": "mmap", "clickhouse_profile": "pread"}
+PROFILE_STAGES = ("transport_ns", "io_lifecycle_ns", "checksum_ns", "lz4_ns",
+                  "materialize_copy_ns", "output_copy_ns")
 
 
 class Runner:
@@ -55,7 +60,7 @@ class Runner:
                 tail = log.read().decode(errors="replace").strip()
             fail(f"{self.label}: {message}" + (f"\n{tail}" if tail else ""))
 
-    def scan(self, worker_marks: list[list[int]], mark_rows: int) -> tuple[int, int]:
+    def scan(self, worker_marks: list[list[int]], mark_rows: int) -> dict:
         self.process.stdin.write(b"scan\n")
         response = self.line()
         self.check(response is not None, "exited before reporting the scan")
@@ -69,7 +74,7 @@ class Runner:
         preparation = sample["prepare_ns"]
         self.check(type(elapsed) is int and elapsed > 0, "invalid scan duration")
         self.check(type(preparation) is int and preparation >= 0, "invalid preparation duration")
-        return elapsed, preparation
+        return sample
 
     def expect_corruption(self) -> None:
         self.process.stdin.write(b"scan\n")
@@ -159,13 +164,128 @@ def corrupt_first_frame(part: Path, scratch: Path) -> Path:
     return copy
 
 
+def count_wide_lz4_frames(part: Path, mark_count: int, mark_rows: int) -> list[int]:
+    """Count frames independently of either reader on the benchmark's aligned LZ4 streams."""
+    mark_files = sorted(part.glob("*.mrk2"))
+    if len(mark_files) != 2:
+        fail("profile requires two Wide MRK2 column streams")
+    counts = [0] * mark_count
+    for mark_file in mark_files:
+        column = mark_file.stem
+        mark_bytes = mark_file.read_bytes()
+        data = mark_file.with_suffix(".bin").read_bytes()
+        if len(mark_bytes) != (mark_count + 1) * 24:
+            fail(f"{column}: profile requires a complete Wide MRK2 stream")
+        marks = list(struct.iter_unpack("<QQQ", mark_bytes))
+        if marks[-1] != (len(data), 0, 0) or marks[0][0] != 0:
+            fail(f"{column}: profile requires a complete Wide MRK2 stream")
+        for index, (offset, in_frame_offset, rows) in enumerate(marks[:-1]):
+            end = marks[index + 1][0]
+            if in_frame_offset or rows != mark_rows or not offset < end <= len(data):
+                fail(f"{column}: profile requires positive frame-aligned marks")
+            decoded = 0
+            while offset < end:
+                if end - offset < 25 or data[offset + 16] != 0x82:
+                    fail(f"{column}: profile requires complete LZ4 frames")
+                compressed_size, decoded_size = struct.unpack_from("<II", data, offset + 17)
+                if compressed_size < 9 or decoded_size == 0:
+                    fail(f"{column}: invalid LZ4 frame size")
+                offset += 16 + compressed_size
+                decoded += decoded_size
+                counts[index] += 1
+            if offset != end or decoded != mark_rows * 8:
+                fail(f"{column}: frame range does not match mark extent")
+    return counts
+
+
+def validate_profile(runner: Runner, sample: dict, engine: str, expected_frames: list[int],
+                     worker_marks: list[list[int]], mark_rows: int) -> dict:
+    profile = sample.get("profile")
+    runner.check(isinstance(profile, dict), "missing Wide stage profile")
+    runner.check(profile.get("version") == 1, "unsupported Wide stage profile version")
+    runner.check(profile.get("transport_kind") == PROFILE_TRANSPORTS[engine], "wrong transport profile")
+    workers = profile.get("workers")
+    runner.check(isinstance(workers, list) and len(workers) == len(worker_marks), "wrong profile worker count")
+    crystal = engine == "crystal_profile"
+    stages = PROFILE_STAGES + (("frame_dispatch_ns",) if crystal else ())
+    fields = ("start_ns", "end_ns", "checksum_calls", "lz4_calls", "transport_calls",
+              "transport_bytes", "materialize_copy_bytes", "output_copy_bytes", *stages)
+    if not crystal:
+        fields += ("direct_decode_bytes", "direct_decode_calls")
+    for index, (worker, frames, marks) in enumerate(zip(workers, expected_frames, worker_marks)):
+        runner.check(isinstance(worker, dict) and worker.get("index") == index, "wrong profile worker index")
+        for field in fields:
+            value = worker.get(field)
+            runner.check(type(value) is int and value >= 0, f"invalid profile field {field}")
+        start, end = worker["start_ns"], worker["end_ns"]
+        runner.check(start < end <= sample["elapsed_ns"], "invalid scan-relative worker interval")
+        measured = sum(worker[field] for field in stages)
+        runner.check(measured <= end - start, "measured stages exceed worker interval")
+        runner.check(worker["transport_calls"] > 0 and worker["transport_bytes"] > 0,
+                     "the transport probe did not observe a read")
+        runner.check(worker["checksum_calls"] == worker["lz4_calls"] == frames,
+                     "the checksum or LZ4 call count differs from the physical frame count")
+        expected_bytes = len(marks) * mark_rows * 16
+        materialized_bytes = worker["materialize_copy_bytes"] + worker.get("direct_decode_bytes", 0)
+        runner.check(materialized_bytes == expected_bytes, "wrong typed output byte count")
+        runner.check(worker["output_copy_bytes"] == expected_bytes, "wrong ordered output copy byte count")
+    for field in ("launch_ns", "join_ns"):
+        value = profile.get(field, 0 if len(worker_marks) == 1 else None)
+        runner.check(type(value) is int and 0 <= value <= sample["elapsed_ns"],
+                     f"invalid profile field {field}")
+    return profile
+
+
+def summarize_profiles(profiles: list[dict], elapsed: list[int]) -> dict:
+    first_worker = profiles[0]["workers"][0]
+    stages = PROFILE_STAGES + (("frame_dispatch_ns",) if "frame_dispatch_ns" in first_worker else ())
+    counters = ("checksum_calls", "lz4_calls", "materialize_copy_bytes", "output_copy_bytes",
+                "transport_calls", "transport_bytes", "direct_decode_calls", "direct_decode_bytes")
+    last_worker = {field: [] for field in (*stages, "body_ns", "other_ns")}
+    worker_sums = {field: [] for field in last_worker}
+    worker_sums.update({field: [] for field in counters if field in first_worker})
+    orchestration = {field: [] for field in ("outside_workers_ns", "last_worker_start_delay_ns")}
+    for field in ("launch_ns", "join_ns"):
+        if field in profiles[0]:
+            orchestration[field] = []
+    for profile, scan_ns in zip(profiles, elapsed):
+        workers = profile["workers"]
+        last = max(workers, key=lambda worker: worker["end_ns"])
+        first_start = min(worker["start_ns"] for worker in workers)
+        # Scan wall time is the time outside this envelope, the last finisher's
+        # delay relative to the first start, and the last finisher's body.
+        orchestration["outside_workers_ns"].append(scan_ns - last["end_ns"] + first_start)
+        orchestration["last_worker_start_delay_ns"].append(last["start_ns"] - first_start)
+        for field in ("launch_ns", "join_ns"):
+            if field in orchestration:
+                orchestration[field].append(profile[field])
+        for worker in workers:
+            worker["body_ns"] = worker["end_ns"] - worker["start_ns"]
+            worker["other_ns"] = worker["body_ns"] - sum(worker[field] for field in stages)
+        for field in last_worker:
+            last_worker[field].append(last[field])
+        for field in worker_sums:
+            worker_sums[field].append(sum(worker[field] for worker in workers))
+    return {
+        "transport_kind": profiles[0]["transport_kind"],
+        "last_worker_p50": {field: statistics.median(values) for field, values in last_worker.items()},
+        "worker_sums_p50": {field: statistics.median(values) for field, values in worker_sums.items()},
+        "orchestration_p50_ns": {field: statistics.median(values) for field, values in orchestration.items()},
+        "samples": profiles,
+    }
+
+
 def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
               marks: list[int], mark_rows: int, workers: int, oracle: Path,
-              warmups: int, repeats: int, timeout: float) -> dict:
+              warmups: int, repeats: int, timeout: float, frame_counts: list[int] | None = None) -> dict:
     root.mkdir()
     split = [marks[len(marks) * i // workers:len(marks) * (i + 1) // workers] for i in range(workers)]
     samples = {name: [] for name in binaries}
     preparations = {name: [] for name in binaries}
+    profiles = {name: [] for name in binaries if name in PROFILE_TRANSPORTS}
+    expected_frames = [
+        sum(frame_counts[mark] for mark in selection) for selection in split
+    ] if frame_counts is not None else []
     warmup_orders = []
     orders = []
     with ExitStack() as stack:
@@ -184,10 +304,18 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
             else:
                 warmup_orders.append(order)
             for name in order:
-                elapsed, preparation = runners[name].scan(split, mark_rows)
+                runner = runners[name]
+                sample = runner.scan(split, mark_rows)
+                profile = None
+                if name in profiles:
+                    profile = validate_profile(runner, sample, name, expected_frames, split, mark_rows)
+                elif profiles:
+                    runner.check("profile" not in sample, "control runner emitted a profile")
                 if index >= warmups:
-                    samples[name].append(elapsed)
-                    preparations[name].append(preparation)
+                    samples[name].append(sample["elapsed_ns"])
+                    preparations[name].append(sample["prepare_ns"])
+                    if profile is not None:
+                        profiles[name].append(profile)
         for runner in runners.values():
             runner.quit()
 
@@ -211,6 +339,8 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
             "rows_per_second": rows * 1e9 / median,
             "decoded_gib_per_second": rows * 16 * 1e9 / (median * 2**30),
         }
+        if name in profiles:
+            engines[name]["profile"] = summarize_profiles(profiles[name], elapsed)
 
     result = {
         "layout": layout, "workers": workers, "worker_marks": split,
@@ -231,6 +361,12 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
         result["paired_clickhouse_to_crystal_baseline_time_ratio_p50"] = statistics.median(
             clickhouse / baseline for baseline, clickhouse in clickhouse_to_baseline
         )
+    if profiles:
+        result["expected_frames_per_worker"] = expected_frames
+        result["paired_profile_to_control_time_ratio_p50"] = {
+            name: statistics.median(profiled / plain for profiled, plain in zip(samples[name], samples[engine]))
+            for engine, name in (("crystal", "crystal_profile"), ("clickhouse", "clickhouse_profile"))
+        }
     return result
 
 
@@ -251,6 +387,9 @@ def compare(args: argparse.Namespace) -> dict:
     if args.crystal_baseline_bin is not None:
         binaries["crystal_baseline"] = args.crystal_baseline_bin.resolve(strict=True)
     binaries["clickhouse"] = args.cpp_bin.resolve(strict=True)
+    if args.crystal_profile_bin is not None:
+        binaries["crystal_profile"] = args.crystal_profile_bin.resolve(strict=True)
+        binaries["clickhouse_profile"] = args.cpp_profile_bin.resolve(strict=True)
     binary_hashes = {name: sha256_path(path) for name, path in binaries.items()}
     tracks = []
     part_hashes = {}
@@ -270,6 +409,7 @@ def compare(args: argparse.Namespace) -> dict:
                 fail(f"{layout} mark geometry differs from the fixture")
             if part_manifest_sha256(part) != expected:
                 fail(f"{layout} part files differ from the fixture manifest")
+            frame_counts = count_wide_lz4_frames(part, mark_count, mark_rows) if args.crystal_profile_bin else None
             for workers in args.workers:
                 for name, binary in binaries.items():
                     control_root = scratch / f"{layout}-{workers}-{name}-checksum-control"
@@ -278,7 +418,7 @@ def compare(args: argparse.Namespace) -> dict:
                                      mark_rows, workers, control_oracle, args.timeout) as runner:
                         runner.expect_corruption()
                 track = run_track(binaries, scratch / f"{layout}-{workers}", part, layout, marks, mark_rows,
-                                  workers, oracle, args.warmups, args.repeats, args.timeout)
+                                  workers, oracle, args.warmups, args.repeats, args.timeout, frame_counts)
                 tracks.append(track)
             if part_manifest_sha256(part) != expected:
                 fail(f"{layout} part files changed during the comparison")
@@ -300,6 +440,8 @@ def main() -> None:
     parser.add_argument("--crystal-baseline-bin", type=Path,
                         help="optional prior Crystal runner for a balanced three-arm campaign")
     parser.add_argument("--cpp-bin", type=Path, required=True)
+    parser.add_argument("--crystal-profile-bin", type=Path, help="Wide runner built with -Dread_rows_profile")
+    parser.add_argument("--cpp-profile-bin", type=Path, help="ClickHouse Wide runner with stage probes")
     parser.add_argument("--scratch", type=Path, required=True)
     parser.add_argument("--layout", choices=("wide", "compact"), action="append")
     parser.add_argument("--workers", type=int, choices=(1, 4), action="append")
@@ -309,8 +451,12 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=60)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    args.layout = list(dict.fromkeys(args.layout or ["wide", "compact"]))
+    profiling = args.crystal_profile_bin is not None or args.cpp_profile_bin is not None
+    args.layout = list(dict.fromkeys(args.layout or (["wide"] if profiling else ["wide", "compact"])))
     args.workers = list(dict.fromkeys(args.workers or [1, 4]))
+    if profiling and (not args.crystal_profile_bin or not args.cpp_profile_bin or args.crystal_baseline_bin
+                      or args.layout != ["wide"]):
+        parser.error("profiling requires both profile binaries, Wide layout, and two uninstrumented controls")
     if args.warmups < 1 or args.repeats < 1 or not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("warmups, repeats, and timeout must be positive")
     args.output.write_text(json.dumps(compare(args), indent=2, sort_keys=True) + "\n")

@@ -1,0 +1,250 @@
+--- a/src/IO/ReadBufferFromFileDescriptor.cpp
++++ b/src/IO/ReadBufferFromFileDescriptor.cpp
+@@ -16,6 +16,10 @@
+ #include <sys/stat.h>
+ #include <Interpreters/Context.h>
+
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++#include <ReadRowsProfile.h>
++#endif
++
+
+ #pragma clang diagnostic ignored "-Wreserved-identifier"
+
+@@ -72,7 +76,19 @@
+             CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
+
+             if (use_pread)
++            {
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++                ReadRowsProfile::Timer timer(ReadRowsProfile::Operation::Transport);
+                 res = ::pread(fd, to + bytes_read, to_read, offset + bytes_read);
++                const int saved_errno = errno;
++                timer.finish();
++                errno = saved_errno;
++                if (res > 0)
++                    ReadRowsProfile::addTransportBytes(static_cast<size_t>(res));
++#else
++                res = ::pread(fd, to + bytes_read, to_read, offset + bytes_read);
++#endif
++            }
+             else
+                 res = ::read(fd, to + bytes_read, to_read);
+         }
+@@ -316,13 +332,26 @@
+
+ std::optional<size_t> ReadBufferFromFileDescriptor::tryGetFileSize()
+ {
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++    ReadRowsProfile::Timer timer(ReadRowsProfile::Operation::FStat);
+     return getSizeFromFileDescriptor(fd, getFileName());
++#else
++    return getSizeFromFileDescriptor(fd, getFileName());
++#endif
+ }
+
+ bool ReadBufferFromFileDescriptor::checkIfActuallySeekable()
+ {
+     struct stat stat{};
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++    ReadRowsProfile::Timer timer(ReadRowsProfile::Operation::FStat);
++    const auto res = ::fstat(fd, &stat);
++    const int saved_errno = errno;
++    timer.finish();
++    errno = saved_errno;
++#else
+     auto res = ::fstat(fd, &stat);
++#endif
+     return res == 0 && S_ISREG(stat.st_mode);
+ }
+
+--- a/src/IO/OpenedFile.cpp
++++ b/src/IO/OpenedFile.cpp
+@@ -6,6 +6,10 @@
+ #include <Common/Exception.h>
+ #include <Common/ErrnoException.h>
+ #include <IO/OpenedFile.h>
++
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++#include <ReadRowsProfile.h>
++#endif
+
+
+ namespace ProfileEvents
+@@ -28,7 +32,17 @@
+ {
+     ProfileEvents::increment(ProfileEvents::FileOpen);
+
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++    {
++        ReadRowsProfile::Timer timer(ReadRowsProfile::Operation::Open);
++        fd = ::open(file_name.c_str(), (flags == -1 ? 0 : flags) | O_RDONLY | O_CLOEXEC);
++        const int saved_errno = errno;
++        timer.finish();
++        errno = saved_errno;
++    }
++#else
+     fd = ::open(file_name.c_str(), (flags == -1 ? 0 : flags) | O_RDONLY | O_CLOEXEC);
++#endif
+
+     if (-1 == fd)
+         DB::ErrnoException::throwFromPath(
+@@ -67,7 +81,19 @@
+     if (fd == -1)
+         return;
+
+-    if (0 != ::close(fd))
++    int close_result;
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++    {
++        ReadRowsProfile::Timer timer(ReadRowsProfile::Operation::Close);
++        close_result = ::close(fd);
++        const int saved_errno = errno;
++        timer.finish();
++        errno = saved_errno;
++    }
++#else
++    close_result = ::close(fd);
++#endif
++    if (0 != close_result)
+     {
+         fd = -1;
+         throw Exception(ErrorCodes::CANNOT_CLOSE_FILE, "Cannot close file");
+--- a/src/Compression/CompressedReadBufferBase.cpp
++++ b/src/Compression/CompressedReadBufferBase.cpp
+@@ -18,6 +18,10 @@
+ #include <IO/WriteHelpers.h>
+ #include <IO/Operators.h>
+
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++#include <ReadRowsProfile.h>
++#endif
++
+
+ namespace ProfileEvents
+ {
+@@ -48,7 +52,15 @@
+ /// Validate checksum of data, and if it mismatches, find out possible reason and throw exception.
+ static void validateChecksum(char * data, size_t size, const Checksum expected_checksum, bool external_data)
+ {
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++    Checksum calculated_checksum;
++    {
++        ReadRowsProfile::Timer timer(ReadRowsProfile::Operation::Checksum);
++        calculated_checksum = CityHash_v1_0_2::CityHash128(data, size);
++    }
++#else
+     auto calculated_checksum = CityHash_v1_0_2::CityHash128(data, size);
++#endif
+     if (expected_checksum == calculated_checksum)
+         return;
+
+--- a/src/Compression/CompressedReadBufferFromFile.cpp
++++ b/src/Compression/CompressedReadBufferFromFile.cpp
+@@ -3,6 +3,10 @@
+
+ #include <Common/logger_useful.h>
+ #include <IO/WriteHelpers.h>
++
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++#include <ReadRowsProfile.h>
++#endif
+
+
+ namespace DB
+@@ -115,10 +119,31 @@
+     try
+     {
+         size_t bytes_read = 0;
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++        auto copy_buffered = [this](char * destination, size_t count)
++        {
++            const size_t available = static_cast<size_t>(working_buffer.end() - pos);
++            // Time only copies fully covered by the current decoded buffer; a refill would nest I/O and decoding.
++
++            if (ReadRowsProfile::thread_state.counters && count <= available)
++            {
++                ReadRowsProfile::Timer timer(ReadRowsProfile::Operation::MaterializeCopy);
++                const size_t copied = read(destination, count);
++                timer.finish();
++                ReadRowsProfile::addMaterializeCopyBytes(copied);
++                return copied;
++            }
++            return read(destination, count);
++        };
++#endif
+
+         /// If there are unread bytes in the buffer, then we copy needed to `to`.
+         if (pos < working_buffer.end())
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++            bytes_read += copy_buffered(to, std::min(static_cast<size_t>(working_buffer.end() - pos), n));
++#else
+             bytes_read += read(to, std::min(static_cast<size_t>(working_buffer.end() - pos), n));
++#endif
+
+         /// If you need to read more - we will, if possible, decompress at once to `to`.
+         while (bytes_read < n)
+@@ -138,6 +163,9 @@
+             /// need to skip some bytes in decompressed data (seek happened before readBig call).
+             if (nextimpl_working_buffer_offset == 0 && size_decompressed + additional_size_at_the_end_of_buffer <= n - bytes_read)
+             {
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++                ReadRowsProfile::addDirectDecode(size_decompressed);
++#endif
+                 decompressTo(to + bytes_read, size_decompressed, size_compressed_without_checksum);
+                 bytes_read += size_decompressed;
+                 bytes += size_decompressed;
+@@ -167,7 +195,11 @@
+                 size_t size_partial = std::min((size_decompressed - nextimpl_working_buffer_offset),(n - bytes_read));
+                 pos = working_buffer.begin() + nextimpl_working_buffer_offset;
+                 nextimpl_working_buffer_offset = 0;
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++                bytes_read += copy_buffered(to + bytes_read, size_partial);
++#else
+                 bytes_read += read(to + bytes_read, size_partial);
++#endif
+             }
+             else
+             {
+@@ -183,7 +215,11 @@
+
+                 /// Read partial data from last block.
+                 pos = working_buffer.begin();
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++                bytes_read += copy_buffered(to + bytes_read, n - bytes_read);
++#else
+                 bytes_read += read(to + bytes_read, n - bytes_read);
++#endif
+                 break;
+             }
+         }
+--- a/src/Compression/CompressionCodecLZ4.cpp
++++ b/src/Compression/CompressionCodecLZ4.cpp
+@@ -9,6 +9,10 @@
+ #include <Parsers/IAST.h>
+ #include <Parsers/ASTLiteral.h>
+ #include <Common/Exception.h>
++
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++#include <ReadRowsProfile.h>
++#endif
+
+ #pragma clang diagnostic ignored "-Wold-style-cast"
+
+@@ -98,7 +102,15 @@
+
+ UInt32 CompressionCodecLZ4::doDecompressData(const char * source, UInt32 source_size, char * dest, UInt32 uncompressed_size) const
+ {
+-    bool success = LZ4::decompress(source, dest, source_size, uncompressed_size, lz4_stat);
++    bool success;
++#ifdef CLICKHOUSE_READ_ROWS_PROFILE
++    {
++        ReadRowsProfile::Timer timer(ReadRowsProfile::Operation::LZ4);
++        success = LZ4::decompress(source, dest, source_size, uncompressed_size, lz4_stat);
++    }
++#else
++    success = LZ4::decompress(source, dest, source_size, uncompressed_size, lz4_stat);
++#endif
+
+     if (!success)
+         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Cannot decompress LZ4-encoded data");

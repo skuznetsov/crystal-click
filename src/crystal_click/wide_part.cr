@@ -16557,7 +16557,14 @@ module CrystalClick
       exact_bytes : Bool = true,
       & : Bytes -> Nil
     ) : Nil
+      {% if flag?(:read_rows_profile) %}
+        data_size_started = Time.instant
+      {% end %}
       data_size = File.size(stream.data_path)
+      {% if flag?(:read_rows_profile) %}
+        data_size_finished = Time.instant
+        ReadRowsProfile.current_worker?.try &.add_file_size(ReadRowsProfile.elapsed_ns_between(data_size_started, data_size_finished))
+      {% end %}
       raise CorruptPartError.new("data file exceeds limit") if data_size > MAX_DATA_FILE_BYTES
       start_offset = start_mark.compressed_offset
       end_offset = end_mark.compressed_offset
@@ -16695,11 +16702,20 @@ module CrystalClick
         started = false
         workspace = CompressedBlock::DecodeWorkspace.new
         loop do
+          {% if flag?(:read_rows_profile) %}
+            dispatch_started = Time.instant
+          {% end %}
           qbit_profile = !QBitColumnType.for_type(@column_type).nil?
           geometry_profile = !GeometryColumnType.for_type(@column_type).nil?
           point_profile = !PointColumnType.for_type(@column_type).nil?
           geo_array_profile = !GeoArrayColumnType.for_type(@column_type).nil?
           count_profile = !WideAggregateCountStoragePlan.for_type_name(@column_type).nil?
+          {% if flag?(:read_rows_profile) %}
+            dispatch_finished = Time.instant
+            ReadRowsProfile.current_worker?.try &.add_frame_dispatch(
+              ReadRowsProfile.elapsed_ns_between(dispatch_started, dispatch_finished),
+            )
+          {% end %}
           if @verify_data_checksums && !valid_compressed_frame_checksum?(data, frame_offset)
             raise CorruptPartError.new("compressed frame checksum mismatch")
           end
@@ -16790,7 +16806,14 @@ module CrystalClick
       frame_size = CompressedBlock::CHECKSUM_SIZE.to_i64 + compressed_size
       return false if frame_size > data.size.to_i64 - frame_offset
 
+      {% if flag?(:read_rows_profile) %}
+        checksum_started = Time.instant
+      {% end %}
       actual_checksum = CityHashV1.hash128(data[header_offset + CompressedBlock::CHECKSUM_SIZE, compressed_size.to_i])
+      {% if flag?(:read_rows_profile) %}
+        checksum_finished = Time.instant
+        ReadRowsProfile.current_worker?.try &.add_checksum(ReadRowsProfile.elapsed_ns_between(checksum_started, checksum_finished))
+      {% end %}
       actual_checksum == {u64(data, header_offset), u64(data, header_offset + 8)}
     end
 
@@ -16861,12 +16884,26 @@ module CrystalClick
       {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
         # The destination is UInt64 storage; the source is deliberately byte-typed
         # because a decoded frame's base address need not be UInt64-aligned.
+        {% if flag?(:read_rows_profile) %}
+          copy_started = Time.instant
+        {% end %}
         destination_pointer = (destination.to_unsafe + destination_offset).unsafe_as(Pointer(UInt8))
         destination_pointer.copy_from(source.to_unsafe + source_offset, count * 8)
+        {% if flag?(:read_rows_profile) %}
+          copy_finished = Time.instant
+          ReadRowsProfile.current_worker?.try &.add_materialize_copy(ReadRowsProfile.elapsed_ns_between(copy_started, copy_finished), (count * 8).to_u64)
+        {% end %}
       {% else %}
+        {% if flag?(:read_rows_profile) %}
+          copy_started = Time.instant
+        {% end %}
         count.times do |index|
           destination[destination_offset + index] = u64(source, source_offset + index * 8)
         end
+        {% if flag?(:read_rows_profile) %}
+          copy_finished = Time.instant
+          ReadRowsProfile.current_worker?.try &.add_materialize_copy(ReadRowsProfile.elapsed_ns_between(copy_started, copy_finished), (count * 8).to_u64)
+        {% end %}
       {% end %}
       nil
     end

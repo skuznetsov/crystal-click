@@ -13,11 +13,29 @@ module CrystalClick
     {% if flag?(:unix) %}
       private struct NativeBackend
         def map(file : File, size : UInt64, offset : Int64) : Pointer(Void)
-          LibC.mmap(nil, size, LibC::PROT_READ, LibC::MAP_PRIVATE, file.fd, offset)
+          {% if flag?(:read_rows_profile) %}
+            started = Time.instant
+          {% end %}
+          pointer = LibC.mmap(nil, size, LibC::PROT_READ, LibC::MAP_PRIVATE, file.fd, offset)
+          {% if flag?(:read_rows_profile) %}
+            finished = Time.instant
+            if worker = ReadRowsProfile.current_worker?
+              worker.add_mapping(ReadRowsProfile.elapsed_ns_between(started, finished), size, pointer != LibC::MAP_FAILED)
+            end
+          {% end %}
+          pointer
         end
 
         def unmap(file : File, pointer : Pointer(Void), size : UInt64) : Int32
-          LibC.munmap(pointer, size)
+          {% if flag?(:read_rows_profile) %}
+            started = Time.instant
+          {% end %}
+          result = LibC.munmap(pointer, size)
+          {% if flag?(:read_rows_profile) %}
+            finished = Time.instant
+            ReadRowsProfile.current_worker?.try &.add_unmapping(ReadRowsProfile.elapsed_ns_between(started, finished))
+          {% end %}
+          result
         end
       end
 
@@ -125,7 +143,14 @@ module CrystalClick
             end
           end
         ensure
+          {% if flag?(:read_rows_profile) %}
+            close_started = Time.instant
+          {% end %}
           file.close
+          {% if flag?(:read_rows_profile) %}
+            close_finished = Time.instant
+            ReadRowsProfile.current_worker?.try &.add_file_close(ReadRowsProfile.elapsed_ns_between(close_started, close_finished))
+          {% end %}
         end
       end
 
@@ -133,14 +158,30 @@ module CrystalClick
         raise CorruptPartError.new("data file size is invalid") if expected_size <= 0 || expected_size > max_size
 
         file = begin
-          File.open(path, "rb")
+          {% if flag?(:read_rows_profile) %}
+            open_started = Time.instant
+          {% end %}
+          opened = File.open(path, "rb")
+          {% if flag?(:read_rows_profile) %}
+            open_finished = Time.instant
+            ReadRowsProfile.current_worker?.try &.add_file_open(ReadRowsProfile.elapsed_ns_between(open_started, open_finished))
+          {% end %}
+          opened
         rescue ex : IO::Error
           raise CorruptPartError.new(ex.message || "cannot open data file")
         end
 
         begin
           info = begin
-            file.info
+            {% if flag?(:read_rows_profile) %}
+              stat_started = Time.instant
+            {% end %}
+            result = file.info
+            {% if flag?(:read_rows_profile) %}
+              stat_finished = Time.instant
+              ReadRowsProfile.current_worker?.try &.add_file_stat(ReadRowsProfile.elapsed_ns_between(stat_started, stat_finished))
+            {% end %}
+            result
           rescue ex : IO::Error
             raise CorruptPartError.new(ex.message || "cannot stat data file")
           end

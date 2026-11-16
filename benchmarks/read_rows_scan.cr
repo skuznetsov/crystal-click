@@ -1,5 +1,6 @@
 require "json"
 require "../src/crystal_click"
+require "../src/crystal_click/read_rows_profile"
 
 # Direct native-part scan used by scripts/read_rows_benchmark.py. The process
 # admits one immutable part and oracle, then serves fresh scan readers for each
@@ -58,6 +59,7 @@ module CrystalClickReadRowsScan
           prepare_started = Time.instant
           prepared = prepare_scan(config)
           prepare_ns = elapsed_ns(prepare_started)
+          scan_profile = new_scan_profile(config)
 
           scan_started = Time.instant
           if config.layout == "wide"
@@ -68,6 +70,8 @@ module CrystalClickReadRowsScan
               worker_starts,
               keys,
               values,
+              scan_profile,
+              scan_started,
             )
           else
             table, budget, context = prepared.as({CrystalClick::CompactPartTable, CrystalClick::CompressedStreamBudget, CrystalClick::CompactPartPhysicalContext})
@@ -91,6 +95,7 @@ module CrystalClickReadRowsScan
             row_count,
             config.workers,
             worker_marks,
+            scan_profile,
           )
           STDOUT.flush
         when "quit"
@@ -330,6 +335,8 @@ module CrystalClickReadRowsScan
     worker_starts : Array(Int32),
     keys : Array(UInt64),
     values : Array(UInt64),
+    scan_profile : CrystalClick::ReadRowsProfile::Scan?,
+    scan_started : Time::Instant,
   ) : Nil
     worker = ->(worker_index : Int32) do
       mark_ids = worker_marks[worker_index]
@@ -340,7 +347,26 @@ module CrystalClickReadRowsScan
       scan_wide_column(readers[1], "value", mark_ids, start_sequence, config.mark_rows, scratch_values, values)
       nil
     end
-    run_workers(config.workers, worker)
+    {% if flag?(:read_rows_profile) %}
+      profiled_worker = ->(worker_index : Int32) do
+        if profile = scan_profile
+          profile_worker = profile.workers[worker_index]
+          profile_worker.mark_start(scan_started)
+          CrystalClick::ReadRowsProfile.with_worker(profile_worker) do
+            begin
+              worker.call(worker_index)
+            ensure
+              profile_worker.mark_end(scan_started)
+            end
+          end
+        else
+          worker.call(worker_index)
+        end
+      end
+      run_workers(config.workers, profiled_worker, scan_profile)
+    {% else %}
+      run_workers(config.workers, worker)
+    {% end %}
     nil
   end
 
@@ -433,7 +459,11 @@ module CrystalClickReadRowsScan
     nil
   end
 
-  private def run_workers(worker_count : Int32, work : Proc(Int32, Nil)) : Nil
+  private def run_workers(
+    worker_count : Int32,
+    work : Proc(Int32, Nil),
+    scan_profile : CrystalClick::ReadRowsProfile::Scan? = nil,
+  ) : Nil
     if worker_count == 1
       work.call(0_i32)
       return nil
@@ -443,6 +473,9 @@ module CrystalClickReadRowsScan
     contexts = [] of Fiber::ExecutionContext::Isolated
     launch_error = nil.as(Exception?)
     begin
+      {% if flag?(:read_rows_profile) %}
+        launch_started = Time.instant if scan_profile
+      {% end %}
       worker_count.times do |worker_index|
         index = worker_index.to_i32
         contexts << Fiber::ExecutionContext::Isolated.new("read_rows_scan worker #{index}") do
@@ -453,9 +486,17 @@ module CrystalClickReadRowsScan
           end
         end
       end
+      {% if flag?(:read_rows_profile) %}
+        if profile = scan_profile
+          profile.record_launch(elapsed_ns(launch_started.not_nil!))
+        end
+      {% end %}
     rescue ex : Exception
       launch_error = ex
     ensure
+      {% if flag?(:read_rows_profile) %}
+        join_started = Time.instant if scan_profile && !contexts.empty?
+      {% end %}
       contexts.each do |context|
         begin
           context.wait
@@ -463,6 +504,11 @@ module CrystalClickReadRowsScan
           launch_error ||= ex
         end
       end
+      {% if flag?(:read_rows_profile) %}
+        if profile = scan_profile
+          profile.record_join(elapsed_ns(join_started.not_nil!)) unless contexts.empty?
+        end
+      {% end %}
     end
     raise launch_error if launch_error
     errors.each do |error|
@@ -475,7 +521,17 @@ module CrystalClickReadRowsScan
     unless row_offset >= 0 && source.size <= destination.size - row_offset
       raise CrystalClick::CorruptPartError.new("scan output copy exceeds its preallocated result array")
     end
+    {% if flag?(:read_rows_profile) %}
+      copy_started = Time.instant
+    {% end %}
     source.copy_to(destination.to_unsafe + row_offset, source.size)
+    {% if flag?(:read_rows_profile) %}
+      copy_finished = Time.instant
+      CrystalClick::ReadRowsProfile.current_worker?.try &.add_output_copy(
+        CrystalClick::ReadRowsProfile.elapsed_ns_between(copy_started, copy_finished),
+        (source.size * sizeof(UInt64)).to_u64,
+      )
+    {% end %}
     nil
   end
 
@@ -493,6 +549,14 @@ module CrystalClickReadRowsScan
     (config.marks.size.to_u64 * config.mark_rows.to_u64).to_i32
   end
 
+  private def new_scan_profile(config : Config) : CrystalClick::ReadRowsProfile::Scan?
+    {% if flag?(:read_rows_profile) %}
+      config.layout == "wide" ? CrystalClick::ReadRowsProfile::Scan.new(config.workers) : nil
+    {% else %}
+      nil
+    {% end %}
+  end
+
   private def elapsed_ns(started : Time::Instant) : Int64
     elapsed = (Time.instant - started).total_nanoseconds.to_i64
     elapsed > 0 ? elapsed : 1_i64
@@ -504,6 +568,7 @@ module CrystalClickReadRowsScan
     rows : Int32,
     workers : Int32,
     worker_marks : Array(Array(Int32)),
+    scan_profile : CrystalClick::ReadRowsProfile::Scan?,
   ) : Nil
     STDOUT.puts(JSON.build do |json|
       json.object do
@@ -521,6 +586,54 @@ module CrystalClickReadRowsScan
           end
         end
         json.field "checksum_on_read", true
+        if profile = scan_profile
+          json.field "profile" do
+            json.object do
+              json.field "version", 1
+              json.field "transport_kind", "mmap"
+              if workers == 4
+                json.field "launch_ns", profile.launch_ns
+                json.field "join_ns", profile.join_ns
+                json.field "launch_calls", profile.launch_calls
+                json.field "join_calls", profile.join_calls
+              end
+              json.field "workers" do
+                json.array do
+                  profile.workers.each do |worker|
+                    json.object do
+                      json.field "index", worker.index
+                      json.field "start_ns", worker.start_ns
+                      json.field "end_ns", worker.end_ns
+                      json.field "transport_ns", worker.transport_ns
+                      json.field "checksum_ns", worker.checksum_ns
+                      json.field "lz4_ns", worker.lz4_ns
+                      json.field "frame_dispatch_ns", worker.frame_dispatch_ns
+                      json.field "materialize_copy_ns", worker.materialize_copy_ns
+                      json.field "output_copy_ns", worker.output_copy_ns
+                      json.field "checksum_calls", worker.checksum_calls
+                      json.field "lz4_calls", worker.lz4_calls
+                      json.field "materialize_copy_bytes", worker.materialize_copy_bytes
+                      json.field "output_copy_bytes", worker.output_copy_bytes
+                      json.field "transport_calls", worker.transport_calls
+                      json.field "transport_bytes", worker.transport_bytes
+                      json.field "mmap_calls", worker.mmap_calls
+                      json.field "munmap_calls", worker.munmap_calls
+                      json.field "io_lifecycle_ns", worker.io_lifecycle_ns
+                      json.field "file_size_ns", worker.file_size_ns
+                      json.field "file_open_ns", worker.file_open_ns
+                      json.field "file_stat_ns", worker.file_stat_ns
+                      json.field "file_close_ns", worker.file_close_ns
+                      json.field "file_size_calls", worker.file_size_calls
+                      json.field "file_open_calls", worker.file_open_calls
+                      json.field "file_stat_calls", worker.file_stat_calls
+                      json.field "file_close_calls", worker.file_close_calls
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
       end
     end)
   end
