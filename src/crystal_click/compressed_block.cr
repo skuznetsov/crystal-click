@@ -22,7 +22,7 @@ module CrystalClick
     # A slice returned by `decode_frame_into` is stable only until this
     # workspace is used again.
     class DecodeWorkspace
-      def initialize
+      def initialize(@padded_lz4 : Bool = false)
         @buffer = Bytes.new(0)
       end
 
@@ -30,6 +30,14 @@ module CrystalClick
         raise CorruptPartError.new("negative decode workspace size") if size < 0
         @buffer = Bytes.new(size) if size > @buffer.size
         @buffer
+      end
+
+      def decode_lz4(payload : Bytes, expected_size : Int32) : Bytes
+        if @padded_lz4 && expected_size <= Int32::MAX - LZ4::PADDING_SIZE
+          LZ4.decode_into_padded(payload, buffer_for(expected_size + LZ4::PADDING_SIZE), expected_size)
+        else
+          LZ4.decode_into(payload, buffer_for(expected_size), expected_size)
+        end
       end
     end
 
@@ -128,7 +136,7 @@ module CrystalClick
                  if exact_destination = destination
                    LZ4.decode_into(payload, exact_destination, decompressed_size.to_i)
                  else
-                   LZ4.decode_into(payload, workspace.not_nil!.buffer_for(decompressed_size.to_i), decompressed_size.to_i)
+                   workspace.not_nil!.decode_lz4(payload, decompressed_size.to_i)
                  end
                when METHOD_ZSTD
                  if exact_destination = destination

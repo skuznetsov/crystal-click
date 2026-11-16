@@ -1,5 +1,13 @@
 module CrystalClick
   module LZ4
+    PADDING_SIZE = 7
+
+    private struct ExactOutput
+    end
+
+    private struct PaddedOutput
+    end
+
     def self.decode(input : Bytes, expected_size : Int) : Bytes
       raise CorruptPartError.new("negative LZ4 output size") if expected_size < 0
       output = Bytes.new(expected_size)
@@ -10,7 +18,24 @@ module CrystalClick
       raise CorruptPartError.new("negative LZ4 output size") if expected_size < 0
       raise CorruptPartError.new("LZ4 destination is too small") if output.size < expected_size
       raise BoundsError.new("LZ4 destination must be writable") if output.read_only?
-      output = output[0, expected_size]
+      decode_into_impl(ExactOutput, input, output, expected_size)
+    end
+
+    # The output must not alias input. The supplied output slice needs seven
+    # writable padding bytes beyond the logical result; those bytes may change.
+    def self.decode_into_padded(input : Bytes, output : Bytes, expected_size : Int) : Bytes
+      raise CorruptPartError.new("negative LZ4 output size") if expected_size < 0
+      if output.size < expected_size || output.size - expected_size < PADDING_SIZE
+        raise CorruptPartError.new("LZ4 padded destination is too small")
+      end
+      raise BoundsError.new("LZ4 destination must be writable") if output.read_only?
+      decode_into_impl(PaddedOutput, input, output, expected_size)
+    end
+
+    private def self.decode_into_impl(mode : T.class, input : Bytes, output : Bytes, expected_size : Int) : Bytes forall T
+      {% unless T == PaddedOutput %}
+        output = output[0, expected_size]
+      {% end %}
       input_index = 0
       output_index = 0
 
@@ -24,8 +49,12 @@ module CrystalClick
 
         literal_length, input_index = length(input, input_index, token >> 4)
         ensure_input(input_index, literal_length, input.size)
-        ensure_output(output_index, literal_length, output.size)
-        copy_literals(input, input_index, output, output_index, literal_length)
+        ensure_output(output_index, literal_length, expected_size)
+        {% if T == PaddedOutput %}
+          copy_literals_padded(input, input_index, output, output_index, literal_length)
+        {% else %}
+          copy_literals(input, input_index, output, output_index, literal_length)
+        {% end %}
         input_index += literal_length
         output_index += literal_length
 
@@ -38,31 +67,12 @@ module CrystalClick
 
         match_length, input_index = length(input, input_index, token & 0x0f)
         match_length += 4
-        ensure_output(output_index, match_length, output.size)
-        match_start = output_index - distance
-        output_pointer = output.to_unsafe
-        match_source = output_pointer + match_start
-        match_destination = output_pointer + output_index
-        if distance >= match_length
-          if match_length <= 7
-            # Both four-byte copies stay within this non-overlapping match.
-            match_source.copy_to(match_destination, 4)
-            tail_offset = match_length - 4
-            (match_source + tail_offset).copy_to(match_destination + tail_offset, 4)
-          else
-            match_source.copy_to(match_destination, match_length)
-          end
-        else
-          # Seed one period, then grow from the initialized prefix. Each copy is disjoint.
-          match_source.copy_to(match_destination, distance)
-          copied_length = distance
-          while copied_length < match_length
-            remaining_length = match_length - copied_length
-            copy_length = copied_length < remaining_length ? copied_length : remaining_length
-            match_destination.copy_to(match_destination + copied_length, copy_length)
-            copied_length += copy_length
-          end
-        end
+        ensure_output(output_index, match_length, expected_size)
+        {% if T == PaddedOutput %}
+          copy_match_padded(output, output_index, distance, match_length)
+        {% else %}
+          copy_match_exact(output, output_index, distance, match_length)
+        {% end %}
         output_index += match_length
       end
       {% if flag?(:read_rows_profile) %}
@@ -71,7 +81,11 @@ module CrystalClick
       {% end %}
 
       raise CorruptPartError.new("LZ4 output size mismatch") unless output_index == expected_size
-      output
+      {% if T == PaddedOutput %}
+        output[0, expected_size]
+      {% else %}
+        output
+      {% end %}
     end
 
     @[AlwaysInline]
@@ -92,6 +106,65 @@ module CrystalClick
         source.copy_to(destination, 4)
       else
         source.copy_to(destination, length)
+      end
+      nil
+    end
+
+    @[AlwaysInline]
+    private def self.copy_literals_padded(input : Bytes, input_index : Int32, output : Bytes, output_index : Int32, length : Int32) : Nil
+      return if length == 0
+
+      if length < 8 && input.size - input_index >= 8
+        # The full load stays inside the compressed byte range. Bytes beyond
+        # this literal run are speculative and will be replaced by later output.
+        (input.to_unsafe + input_index).copy_to(output.to_unsafe + output_index, 8)
+      else
+        copy_literals(input, input_index, output, output_index, length)
+      end
+      nil
+    end
+
+    @[AlwaysInline]
+    private def self.copy_match_padded(output : Bytes, output_index : Int32, distance : Int32, match_length : Int32) : Nil
+      if distance >= 8 && match_length <= 8
+        output_pointer = output.to_unsafe
+        match_source = output_pointer + output_index - distance
+        match_destination = output_pointer + output_index
+        # The eight-byte source is initialized and disjoint when distance >= 8.
+        # Short matches can overstore only into the caller's seven-byte pad.
+        match_source.copy_to(match_destination, 8)
+      else
+        copy_match_exact(output, output_index, distance, match_length)
+      end
+      nil
+    end
+
+    @[AlwaysInline]
+    private def self.copy_match_exact(output : Bytes, output_index : Int32, distance : Int32, match_length : Int32) : Nil
+      output_pointer = output.to_unsafe
+      match_start = output_index - distance
+      match_source = output_pointer + match_start
+      match_destination = output_pointer + output_index
+
+      if distance >= match_length
+        if match_length <= 7
+          # Both four-byte copies stay within this non-overlapping match.
+          match_source.copy_to(match_destination, 4)
+          tail_offset = match_length - 4
+          (match_source + tail_offset).copy_to(match_destination + tail_offset, 4)
+        else
+          match_source.copy_to(match_destination, match_length)
+        end
+      else
+        # Seed one period, then grow from the initialized prefix. Each copy is disjoint.
+        match_source.copy_to(match_destination, distance)
+        copied_length = distance
+        while copied_length < match_length
+          remaining_length = match_length - copied_length
+          copy_length = copied_length < remaining_length ? copied_length : remaining_length
+          match_destination.copy_to(match_destination + copied_length, copy_length)
+          copied_length += copy_length
+        end
       end
       nil
     end

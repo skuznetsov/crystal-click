@@ -66,6 +66,69 @@ describe CrystalClick::LZ4 do
     CrystalClick::LZ4.decode(input, 7).should eq(Bytes[0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61])
   end
 
+  it "decodes into padded capacity without changing short-literal or sequential-token semantics" do
+    # The first three literals have at least eight bytes remaining in the exact
+    # compressed range. The following match must replace any speculative tail
+    # bytes before the second token appends its final literals.
+    encoded = Bytes[0x32, 0x61, 0x62, 0x63, 0x03, 0x00, 0x30, 0x78, 0x79, 0x7a]
+    input_storage = Bytes.new(encoded.size + 2, 0xee_u8)
+    input_storage[1, encoded.size].copy_from(encoded)
+    input = Bytes.new(input_storage[1, encoded.size].to_unsafe, encoded.size, read_only: true)
+    expected = Bytes[0x61, 0x62, 0x63, 0x61, 0x62, 0x63, 0x61, 0x62, 0x63, 0x78, 0x79, 0x7a]
+    output_storage = Bytes.new(expected.size + CrystalClick::LZ4::PADDING_SIZE + 33, 0xee_u8)
+    output = output_storage[17, expected.size + CrystalClick::LZ4::PADDING_SIZE]
+
+    result = CrystalClick::LZ4.decode_into_padded(input, output, expected.size)
+
+    CrystalClick::LZ4::PADDING_SIZE.should eq(7)
+    result.size.should eq(expected.size)
+    result.to_unsafe.should eq(output.to_unsafe)
+    result.should eq(expected)
+    input_storage[0].should eq(0xee_u8)
+    input_storage[-1].should eq(0xee_u8)
+    output_storage[0, 17].should eq(Bytes.new(17, 0xee_u8))
+    output_storage[17 + output.size, output_storage.size - 17 - output.size].should eq(Bytes.new(16, 0xee_u8))
+  end
+
+  it "keeps padded match copies correct below, at, and above the eight-byte distance boundary" do
+    {7, 8, 9}.each do |distance|
+      seed = Bytes.new(distance) { |index| (0x31 + index).to_u8 }
+      {4, 8, 17}.each do |match_length|
+        expected = LZ4SpecFixture.expected_periodic(seed, match_length)
+        encoded = LZ4SpecFixture.match_block(seed, distance, match_length)
+        guard_size = 16
+        output_storage = Bytes.new(guard_size + expected.size + CrystalClick::LZ4::PADDING_SIZE + guard_size, 0xee_u8)
+        output = output_storage[guard_size, expected.size + CrystalClick::LZ4::PADDING_SIZE]
+
+        result = CrystalClick::LZ4.decode_into_padded(encoded, output, expected.size)
+
+        result.size.should eq(expected.size)
+        result.should eq(expected)
+        output_storage[0, guard_size].should eq(Bytes.new(guard_size, 0xee_u8))
+        output_storage[guard_size + output.size, guard_size].should eq(Bytes.new(guard_size, 0xee_u8))
+      end
+    end
+  end
+
+  it "requires writable output with seven padding bytes and preserves corruption checks" do
+    input = Bytes[0x10, 0x61]
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::LZ4.decode_into_padded(input, Bytes.new(1 + CrystalClick::LZ4::PADDING_SIZE), 2)
+    end
+
+    read_only_storage = Bytes.new(2 + CrystalClick::LZ4::PADDING_SIZE)
+    read_only_output = Bytes.new(read_only_storage.to_unsafe, read_only_storage.size, read_only: true)
+    expect_raises(CrystalClick::BoundsError) do
+      CrystalClick::LZ4.decode_into_padded(input, read_only_output, 2)
+    end
+
+    {Bytes[0x20, 0x41], Bytes[0x10, 0x41, 0x01], Bytes[0xf0], Bytes[0x10, 0x41, 0x00, 0x00], Bytes[0x10, 0x41]}.each do |malformed|
+      expect_raises(CrystalClick::CorruptPartError) do
+        CrystalClick::LZ4.decode_into_padded(malformed, Bytes.new(40 + CrystalClick::LZ4::PADDING_SIZE), 40)
+      end
+    end
+  end
+
   it "copies zero through five literal bytes exactly at unaligned slice edges" do
     {0, 1, 2, 3, 4, 5}.each do |length|
       literals = Bytes.new(length) { |index| (0x31 + index).to_u8 }

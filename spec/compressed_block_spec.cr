@@ -16,6 +16,26 @@ def zstd_mark_file(path : String) : String
   Dir.glob(File.join(path, "*.cmrk2")).first.not_nil!
 end
 
+describe CrystalClick::CompressedBlock::DecodeWorkspace do
+  it "returns the exact LZ4 frame output from a padded workspace" do
+    payload = "\x8012345678\x08\x00".to_slice
+    expected = "123456781234".to_slice
+    frame_data = IO::Memory.new
+    frame_data.write(Bytes.new(CrystalClick::CompressedBlock::CHECKSUM_SIZE))
+    frame_data.write_byte(CrystalClick::CompressedBlock::METHOD_LZ4)
+    frame_data.write_bytes((CrystalClick::CompressedBlock::HEADER_SIZE + payload.size).to_u32, IO::ByteFormat::LittleEndian)
+    frame_data.write_bytes(expected.size.to_u32, IO::ByteFormat::LittleEndian)
+    frame_data.write(payload)
+
+    workspace = CrystalClick::CompressedBlock::DecodeWorkspace.new(padded_lz4: true)
+    frame = CrystalClick::CompressedBlock.decode_frame_into(frame_data.to_slice, 0_i64, workspace)
+
+    frame.output.should eq(expected)
+    frame.end_offset.should eq(frame_data.size)
+    workspace.buffer_for(expected.size).size.should eq(expected.size + 7)
+  end
+end
+
 describe "ClickHouse ZSTD compressed blocks and marks" do
   it "reads the complete UInt64 column" do
     CrystalClick::WidePart.open(ZSTD_FIXTURE).read_uint64.should eq((0_u64...200_000_u64).to_a)

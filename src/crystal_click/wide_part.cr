@@ -14079,13 +14079,17 @@ module CrystalClick
       raise CorruptPartError.new("row count does not match marks") unless total == @row_count
     end
 
+    private def direct_uint64_column? : Bool
+      @column_type == "UInt64" && @source_column_name == @column && !@json_typed_path && @flattened_nested_context.nil?
+    end
+
     private def primary_stream_name(stream_names : Array(String)) : String
       if plan = WideAggregateCountStoragePlan.for_type_name(@column_type)
         stream = plan.physical_streams(@column).first
         raise CorruptPartError.new("selected AggregateFunction(count) stream is missing from its plan") unless stream_names.includes?(stream)
         return stream
       end
-      if @column_type == "UInt64" && @source_column_name == @column && !@json_typed_path && @flattened_nested_context.nil?
+      if direct_uint64_column?
         stream = PhysicalStreamName.escape(@column)
         raise CorruptPartError.new("selected UInt64 stream is missing from its physical name binding") unless stream_names.includes?(stream)
         return stream
@@ -16535,10 +16539,7 @@ module CrystalClick
       & : Bytes -> Nil
     ) : Nil
       raise BoundsError.new("empty mark range") unless start_mark
-      stream = if @column_type == "UInt64" &&
-                  @source_column_name == @column &&
-                  !@json_typed_path &&
-                  @flattened_nested_context.nil?
+      stream = if direct_uint64_column?
                  @streams[PhysicalStreamName.escape(@column)]
                else
                  @streams[@column]
@@ -16700,7 +16701,7 @@ module CrystalClick
         selected_bytes = 0_i64
         frame_offset = start_offset.to_i64
         started = false
-        workspace = CompressedBlock::DecodeWorkspace.new
+        workspace = CompressedBlock::DecodeWorkspace.new(padded_lz4: @verify_data_checksums && direct_uint64_column?)
         loop do
           {% if flag?(:read_rows_profile) %}
             dispatch_started = Time.instant

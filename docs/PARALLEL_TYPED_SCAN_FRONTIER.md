@@ -497,6 +497,85 @@ Release LZ4 and mmap specs built with the profile flag passed 23 examples.
 | Stage profile report | `d49c5642f41bf3b5801317fe5ff0af45ed42e81792decba6411c5d0f1588b66a` |
 | Reversed-order report | `64082fbc3e32073aafdfe23dc87cf4a3e633b774a35d65058219d5953794d9fe` |
 
+### Wide LZ4 padded copies
+
+Checked reads of ordinary Wide `UInt64` streams use eight-byte copies for
+short LZ4 literals and matches. Each stream's reusable decode workspace
+reserves seven bytes past the logical frame end. A literal load requires
+eight bytes inside the exact compressed frame. A match load requires a
+distance of at least eight, so its source is initialized and disjoint from
+the store. Long runs and short-distance matches use the bounded copy helpers.
+Wide verifies CityHash128 before decoding and exposes the declared number of
+decoded bytes to the mark reader.
+
+An instrumented Crystal A/B used the same 512 physical LZ4 frames in every
+sample, with 128 frames per worker in the four-worker track. Each track used
+six warmup rounds and 24 alternating measured rounds. Median LZ4 time
+summed across workers fell from 1.164 to 0.954 ms with one worker and from
+1.263 to 1.029 ms with four. These sums measure decoder work across the group.
+
+The uninstrumented comparison uses the same Wide MRK2 part as the stage
+profile above. It reads two `UInt64` columns over 16 marks of 8,192 rows with
+warm file pages. The Release runners are Crystal baseline `35849f1`, Crystal
+with padded copies, and ClickHouse `readRows` at
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028`. Per worker count, each of the six
+runner orders occurs once during the six warmup rounds and eight times during
+the 48 measured rounds. The second run reverses the order of the worker-count
+tracks. All runs used an Apple M2 Max and the external APFS SSD. Crystal
+1.22.3 and the native compiler both used LLVM 23.1.5. The native runner
+retains the storage context and uses synchronous `pread` with jemalloc
+disabled. Total time adds each sample's preparation and scan intervals.
+Times are in milliseconds.
+
+| Worker order | Workers | Runner | Prepare p50 | Scan p50 / p95 | Total p50 / p95 |
+| --- | ---: | --- | ---: | ---: | ---: |
+| 1 → 4 | 1 | Crystal baseline | 0.2398 | 1.7409 / 2.1593 | 1.9832 / 2.4512 |
+| 1 → 4 | 1 | Crystal padded | 0.2438 | 1.4912 / 1.8001 | 1.7547 / 2.0818 |
+| 1 → 4 | 1 | ClickHouse `readRows` | 0.0094 | 0.9957 / 1.1332 | 1.0039 / 1.1451 |
+| 1 → 4 | 4 | Crystal baseline | 0.2343 | 0.7727 / 0.9091 | 0.9854 / 1.1565 |
+| 1 → 4 | 4 | Crystal padded | 0.2323 | 0.5822 / 0.8418 | 0.9486 / 1.0884 |
+| 1 → 4 | 4 | ClickHouse `readRows` | 0.0173 | 0.4643 / 0.5277 | 0.4837 / 0.5499 |
+| 4 → 1 | 4 | Crystal baseline | 0.2439 | 0.7448 / 0.9408 | 1.0000 / 1.2083 |
+| 4 → 1 | 4 | Crystal padded | 0.2431 | 0.7452 / 0.8817 | 0.9645 / 1.1611 |
+| 4 → 1 | 4 | ClickHouse `readRows` | 0.0177 | 0.4621 / 0.5398 | 0.4818 / 0.5611 |
+| 4 → 1 | 1 | Crystal baseline | 0.2203 | 1.6889 / 1.9524 | 1.9162 / 2.2265 |
+| 4 → 1 | 1 | Crystal padded | 0.2277 | 1.4509 / 1.7746 | 1.6765 / 2.0033 |
+| 4 → 1 | 1 | ClickHouse `readRows` | 0.0091 | 0.9521 / 1.0675 | 0.9634 / 1.0783 |
+
+The one-worker scan p50 fell by 14.1–14.3% across the two runs. The
+four-worker scan p50 fell by 24.7% in the first run and was nearly equal in
+the reversed run. Its p95 fell by 6.3–7.4% and its preparation-plus-scan
+p50 fell by 3.6–3.7% across both runs. The median of paired baseline-to-padded
+scan ratios was 1.17× in both one-worker tracks and 1.09–1.14× in the
+four-worker tracks.
+
+From one to four workers, padded Crystal scan p50 improved 2.56× in the
+first run and 1.95× in the reversed run. ClickHouse improved 2.14× and
+2.06×. Padded Crystal took 1.50–1.52× the ClickHouse scan p50 at one worker
+and 1.25–1.61× at four. With preparation included, the ratios were
+1.74–1.75× and 1.96–2.00×.
+
+All 576 timed scans matched the exact ordered oracle, with identical mark
+assignments and unchanged part files. The first-frame corruption controls
+passed. All three runners returned the expected gapped scan with corrupt
+mark 13 excluded, rejected the scan with that mark on worker four, and
+rejected an incorrect output oracle. A malformed LZ4 match was rejected
+before decompression with a stale checksum and during decompression after
+the checksum was recomputed. The focused Release specs passed 83 examples.
+The padded decoder also matched `liblz4` on 4,096 independently compressed
+blocks with guard pages bounding the exact input and the padded output.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Crystal baseline | `6c680afb67c431504703cd0461f3a94d3bf6641e6a69a39b56afa789d6d61d74` |
+| Crystal padded | `ba43ef869ea23b9790b6b28f7d113181b493fc32e33b66aaa93abd72b0602a00` |
+| ClickHouse `readRows` | `bdb72a790a8c196569f8c968d4309d9b68b97ce4e003ec7cb740be0097c522ac` |
+| 1 → 4 report | `2861c4a226168b81c3cdec330443cf598445ccf98adb5ed59288ee4ecd8acdf2` |
+| 4 → 1 report | `d7dcb559166dfae5e408285d4ce4fd294f0b5f5bd75bf9d295f844c38885c2bc` |
+| Crystal LZ4 profile report | `7fb239626af96e1e64b43b26820c28f499a317d3a14a3a7d187beb445204e0c9` |
+
 ### Compact pilot budget cutoff
 
 The first 524,288-row fixture had 64 data marks of 8,192 rows. On Compact
