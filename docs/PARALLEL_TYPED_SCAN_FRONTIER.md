@@ -117,6 +117,131 @@ On the modified Wide part, the Crystal typed scan produced the original
 aggregate. The Crystal Compact typed scan raised `CorruptPartError` with
 `compressed frame checksum mismatch` on the same single-byte fault.
 
+### Direct reader comparison contract
+
+The direct comparison uses the same generated Wide MRK2 and Compact MRK3
+parts, two ordinary `UInt64` columns, and an explicit ordered list of
+complete positive marks. Both runners read the same contiguous slices of
+that list with one or four workers and verify the compressed data frame
+checksums during the scan.
+
+Startup admits the immutable part and allocates the output buffers. Per-scan
+reader and budget preparation are timed separately. ClickHouse builds fresh
+readers on the retained storage context. Crystal Wide opens a pair of column
+readers per worker. Crystal Compact opens a typed table with a shared mark
+grid, frame index, and transport budget. The scan timer covers worker startup
+and joins, data stream opens and closes, checksum verification, decompression,
+typed batches, and one copy of each batch into the ordered output buffers.
+ClickHouse calls `IMergeTreeReader::readRows` once per selected mark and
+continues the reader across consecutive marks. It uses synchronous `pread`
+with asynchronous mark loads and reader caches disabled. Crystal Wide maps
+each column once per consecutive run of marks. Crystal Compact uses one
+mapping per part and a decode workspace per worker, then yields batches of
+at most 4,096 rows. Each runner validates the complete output against the
+column-major fixture oracle after stopping the timer.
+Parent-side checks require the same observed marks per worker and unchanged
+part files. Warmups populate the OS page cache, and paired samples alternate
+order.
+
+Before timing, both runners must admit a part whose first compressed frame
+differs by one checksum byte, then report a checksum error on `scan`. The
+original parts must produce exact values. This gate qualifies data-frame
+checksum coverage for the measured paths and fixture. The HTTP comparison
+above uses its own Wide checksum policy.
+
+Use a disposable ClickHouse source checkout at
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028` with its build dependencies.
+Include the benchmark target at the end of the checkout's root
+`CMakeLists.txt`, then build `clickhouse-read-rows` with the native
+ClickHouse toolchain in Release mode. Use build and source paths without
+spaces or shell metacharacters for the upstream build scripts. Run these
+commands from the CrystalClick repository root. `bench_work` is a disposable
+scratch directory, `bench_fixture` is the native fixture directory created
+by `native-start` and `prepare` below, and `ch_src` is the source checkout.
+Set `ch_clang` and `ch_clangxx` to the ClickHouse toolchain's compiler paths.
+Stop the fixture servers before timing to exclude their background work.
+
+```sh
+printf '\ninclude("%s/CMakeLists.txt")\n' \
+  "$PWD/benchmarks/clickhouse_read_rows" >> "$ch_src/CMakeLists.txt"
+cmake -S "$ch_src" -B "$bench_work/ch-build" -G Ninja \
+  -DCMAKE_C_COMPILER="$ch_clang" -DCMAKE_CXX_COMPILER="$ch_clangxx" \
+  -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=OFF \
+  -DENABLE_BENCHMARKS=ON -DENABLE_LIBRARIES=OFF
+cmake --build "$bench_work/ch-build" --target clickhouse-read-rows
+
+mkdir -p "$bench_work/read-rows-tmp" "$bench_work/read-rows-cache"
+TMPDIR="$bench_work/read-rows-tmp" CRYSTAL_CACHE_DIR="$bench_work/read-rows-cache" \
+  crystal build --release benchmarks/read_rows_scan.cr -o "$bench_work/read-rows-crystal"
+
+python3 -B scripts/parallel_scan_benchmark.py native-stop --root "$bench_fixture"
+python3 -B scripts/read_rows_benchmark.py \
+  --manifest "$bench_fixture/fixture-manifest.json" --scratch "$bench_work" \
+  --crystal-bin "$bench_work/read-rows-crystal" \
+  --cpp-bin "$bench_work/ch-build/clickhouse-read-rows" \
+  --warmups 6 --repeats 32 --output "$bench_work/read-rows.json"
+```
+
+The report includes binary and part hashes, the selected marks, paired
+scan durations, preparation durations, and the median per-scan total. To
+test gaps in the mark sequence, use `--marks 0,2,4,7,8,10,13,15` on the
+16-mark fixture.
+
+Clang 23.1.5 on macOS required three source-scoped changes to warning severity
+with the pinned ClickHouse checkout. Add these CMake lines after the `dbms`
+target is declared if that compiler treats the same diagnostics as errors.
+
+```cmake
+set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Interpreters/executeQuery.cpp"
+    TARGET_DIRECTORY dbms PROPERTIES COMPILE_OPTIONS "-Wno-error=unused-function")
+set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Interpreters/FileCache/FileCache.cpp"
+    TARGET_DIRECTORY dbms PROPERTIES COMPILE_OPTIONS "-Wno-error=unreachable-code")
+set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Storages/MergeTree/MergeTreeData.cpp"
+    TARGET_DIRECTORY dbms PROPERTIES COMPILE_OPTIONS "-Wno-error=unused-parameter")
+```
+
+### Direct reader measurements
+
+The warm-cache run used an Apple M2 Max, macOS 26.6.2 arm64, and the external
+APFS fixture. The ClickHouse C++ runner linked the pinned source in Release
+mode with Clang 23.1.5 and `ENABLE_LIBRARIES=OFF` (jemalloc disabled).
+The Crystal runner used Crystal 1.22.3 `--release`, LLVM 23.1.5, and Boehm
+8.2.12. Both read 131,072 rows of two `UInt64` columns in 16 marks of
+8,192 rows, with identical files and mark assignments for each layout and
+worker count. The decoded output per scan was 2 MiB.
+
+Each track used six warmup pairs and 32 alternating measured pairs. The
+scan p50 is the median and p95 is the 31st value in each sorted set of 32
+samples. The total p50 is the median of each sample's preparation plus scan.
+Times are in milliseconds.
+
+| Part | Workers | Crystal scan p50 / p95 | ClickHouse scan p50 / p95 | Crystal total p50 | ClickHouse total p50 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Wide | 1 | 1.7855 / 2.1300 | 1.0075 / 1.0993 | 2.0868 | 1.0188 |
+| Wide | 4 | 0.8595 / 1.0152 | 0.4717 / 0.5825 | 1.9173 | 0.4931 |
+| Compact | 1 | 1.5450 / 2.2028 | 1.1464 / 1.2195 | 2.0440 | 1.1527 |
+| Compact | 4 | 0.6805 / 0.8197 | 0.4296 / 0.4878 | 1.1514 | 0.4420 |
+
+| Part | Crystal 1-to-4 scan speedup | ClickHouse 1-to-4 scan speedup | Crystal 1-to-4 total speedup | ClickHouse 1-to-4 total speedup |
+| --- | ---: | ---: | ---: | ---: |
+| Wide | 2.08× | 2.14× | 1.09× | 2.07× |
+| Compact | 2.27× | 2.67× | 1.78× | 2.61× |
+
+Every sample matched the ordered oracle. All first-frame checksum controls
+passed. A second control flipped a checksum in mark 13. Both runners read
+the exact selected rows when the mark was excluded and failed when it was
+assigned to the fourth worker. A wrong output oracle also rejected clean
+scans. A separate run on eight nonconsecutive marks passed for both layouts
+and worker counts. Both part manifests matched before and after timing.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| ClickHouse readRows runner | `d1ce604c7f0a5a29d6d579103f908d68d7050ec07eac0208fe595e8b2d97183c` |
+| Crystal direct reader runner | `0cd29d622a8c614638556200032d56a9aa7cbbda96366d36d39d246905c1e8d9` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Compact part file manifest | `80f5aaa885eae58e7e5d6888b28977888706d7100e91c5adcc7cb9309929c62a` |
+
 ### Compact pilot budget cutoff
 
 The first 524,288-row fixture had 64 data marks of 8,192 rows. On Compact

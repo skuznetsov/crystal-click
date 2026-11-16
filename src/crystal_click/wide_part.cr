@@ -1772,8 +1772,15 @@ module CrystalClick
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
 
-    def self.open(path : String, column : String) : WidePart
-      new(path, column, :uint64)
+    # When enabled, verify each touched compressed data frame for this ordinary
+    # UInt64 reader before decoding it.
+    def self.open(
+      path : String,
+      column : String,
+      *,
+      verify_data_checksums : Bool = false,
+    ) : WidePart
+      new(path, column, :uint64, verify_data_checksums: verify_data_checksums)
     rescue ex : IO::Error
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
@@ -11488,6 +11495,7 @@ module CrystalClick
     @streams : Hash(String, PhysicalStream)
     @single_stream_string : Bool
     @low_cardinality_string_state : LowCardinalityStringState?
+    @verify_data_checksums : Bool
 
     private struct PhysicalStream
       getter name : String
@@ -11652,10 +11660,12 @@ module CrystalClick
       flattened_nested_context : FlattenedNestedStoragePlan? = nil,
       allow_projection_aggregate_roster : Bool = false,
       compressed_projection_child : Bool = false,
+      verify_data_checksums : Bool = false,
     )
       @path = path
       @flattened_nested_context = flattened_nested_context
       @compressed_projection_child = false
+      @verify_data_checksums = verify_data_checksums
       raise InvalidPartError.new("part is not a directory") unless Dir.exists?(@path)
       @checksum_verification = ChecksumVerification::Unverified
       @single_stream_string = false
@@ -16645,6 +16655,9 @@ module CrystalClick
           point_profile = !PointColumnType.for_type(@column_type).nil?
           geo_array_profile = !GeoArrayColumnType.for_type(@column_type).nil?
           count_profile = !WideAggregateCountStoragePlan.for_type_name(@column_type).nil?
+          if @verify_data_checksums && !valid_compressed_frame_checksum?(data, frame_offset)
+            raise CorruptPartError.new("compressed frame checksum mismatch")
+          end
           if count_profile && !valid_compressed_frame_checksum?(data, frame_offset)
             raise CorruptPartError.new("AggregateFunction(count) compressed frame checksum does not match")
           end
@@ -16705,6 +16718,11 @@ module CrystalClick
           next_offset = frame.end_offset
           break if eof_boundary && next_offset == data_size
           raise CorruptPartError.new("mark frame offset was not found") if next_offset <= frame_offset || next_offset > data_size
+          if @verify_data_checksums && @column_type == "UInt64" && end_mark != stream.sentinel &&
+             end_mark.decompressed_offset == 0 && next_offset.to_u64 == end_offset
+            validate_compressed_frame_header(data, next_offset)
+            break
+          end
           if tuple_profile && end_mark != stream.sentinel && end_mark.decompressed_offset == 0 &&
              next_offset.to_u64 == end_offset
             break
@@ -16729,6 +16747,26 @@ module CrystalClick
 
       actual_checksum = CityHashV1.hash128(data[header_offset + CompressedBlock::CHECKSUM_SIZE, compressed_size.to_i])
       actual_checksum == {u64(data, header_offset), u64(data, header_offset + 8)}
+    end
+
+    private def validate_compressed_frame_header(data : Bytes, frame_offset : Int64) : Nil
+      raise CorruptPartError.new("frame offset out of bounds") if frame_offset < 0 || frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE
+
+      header_offset = frame_offset.to_i
+      method = data[header_offset + CompressedBlock::CHECKSUM_SIZE]
+      compressed_size = u32(data, header_offset + CompressedBlock::CHECKSUM_SIZE + 1).to_i64
+      decompressed_size = u32(data, header_offset + CompressedBlock::CHECKSUM_SIZE + 5).to_i64
+      raise CorruptPartError.new("compressed frame size is invalid") if compressed_size < CompressedBlock::HEADER_SIZE || compressed_size > MAX_FRAME_COMPRESSED_BYTES
+      raise CorruptPartError.new("decompressed frame size is invalid") if decompressed_size <= 0 || decompressed_size > MAX_FRAME_DECOMPRESSED_BYTES
+
+      remaining = data.size.to_i64 - frame_offset - CompressedBlock::CHECKSUM_SIZE
+      raise CorruptPartError.new("compressed frame is truncated") if compressed_size > remaining
+      unless method == CompressedBlock::METHOD_LZ4 || method == CompressedBlock::METHOD_ZSTD ||
+             method == CompressedBlock::METHOD_MULTIPLE
+        raise UnsupportedFormatError.new("unsupported ClickHouse compression method")
+      end
+
+      nil
     end
 
     private def u64(bytes : Bytes, offset : Int) : UInt64

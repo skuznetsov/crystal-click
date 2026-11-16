@@ -1,5 +1,26 @@
 require "./spec_helper"
 
+private def wide_part_first_frame_boundary(path : String) : {Int32, Int64}
+  mark_path = Dir.glob(File.join(path, "*.mrk2")).first? || raise "fixture has no Wide marks"
+  data_path = Dir.glob(File.join(path, "*.bin")).first? || raise "fixture has no Wide data stream"
+  marks = writable_file_bytes(mark_path)
+  mark_count = marks.size // 24
+  data_size = File.size(data_path).to_u64
+  previous_offset = IO::ByteFormat::LittleEndian.decode(UInt64, marks[0, 8])
+
+  (1...mark_count).each do |mark_index|
+    mark_offset = mark_index * 24
+    compressed_offset = IO::ByteFormat::LittleEndian.decode(UInt64, marks[mark_offset, 8])
+    decompressed_offset = IO::ByteFormat::LittleEndian.decode(UInt64, marks[mark_offset + 8, 8])
+    if compressed_offset > previous_offset && decompressed_offset == 0 && compressed_offset < data_size
+      return {mark_index, compressed_offset.to_i64}
+    end
+    previous_offset = compressed_offset
+  end
+
+  raise "fixture has no non-EOF frame boundary"
+end
+
 describe CrystalClick::WidePart do
   it "reads the generated Wide UInt64 fixture and exposes unverified checksums" do
     part = CrystalClick::WidePart.open(FIXTURE)
@@ -12,6 +33,42 @@ describe CrystalClick::WidePart do
   it "reads a bounded mark range without returning adjacent rows" do
     part = CrystalClick::WidePart.open(FIXTURE)
     part.read_uint64_mark_range("value", 2, 2).should eq((2048_u64...4096_u64).to_a)
+  end
+
+  it "checks selected frames without hashing the next frame at an exclusive mark boundary" do
+    with_fixture_copy do |path|
+      mark_index, frame_offset = wide_part_first_frame_boundary(path)
+      data_path = Dir.glob(File.join(path, "*.bin")).first.not_nil!
+      data = writable_file_bytes(data_path)
+      data[frame_offset.to_i] = data[frame_offset.to_i] ^ 1_u8
+      File.open(data_path, "wb") { |io| io.write(data) }
+
+      part = CrystalClick::WidePart.open(path, "value", verify_data_checksums: true)
+      selected = part.read_uint64_mark_range("value", 0, mark_index)
+      selected.size.should eq(mark_index * 1024)
+      selected.should eq((0_u64...selected.size.to_u64).to_a)
+
+      error = expect_raises(CrystalClick::CorruptPartError) do
+        part.read_uint64_mark_range("value", mark_index, 1)
+      end
+      error.message.not_nil!.should contain("compressed frame checksum mismatch")
+    end
+  end
+
+  it "still validates the frame header at an exclusive checksum boundary" do
+    with_fixture_copy do |path|
+      mark_index, frame_offset = wide_part_first_frame_boundary(path)
+      data_path = Dir.glob(File.join(path, "*.bin")).first.not_nil!
+      data = writable_file_bytes(data_path)
+      4.times { |index| data[frame_offset.to_i + 21 + index] = 0xff_u8 }
+      File.open(data_path, "wb") { |io| io.write(data) }
+
+      part = CrystalClick::WidePart.open(path, "value", verify_data_checksums: true)
+      error = expect_raises(CrystalClick::CorruptPartError) do
+        part.read_uint64_mark_range("value", 0, mark_index)
+      end
+      error.message.not_nil!.should contain("decompressed frame size is invalid")
+    end
   end
 
   it "resolves the ClickHouse SipHash128 stream name rather than guessing a bin" do
