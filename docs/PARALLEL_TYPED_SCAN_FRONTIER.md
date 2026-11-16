@@ -16,7 +16,7 @@ this path. The threaded path admits exact
 parts with Crystal execution contexts enabled. It rejects projection children
 and flattened `Nested` bindings.
 
-Each worker decodes on its own system thread with private reader state. The
+Each worker decodes on its own system thread with private decode state. The
 calling fiber consumes one physical mark at a time in source order, with the
 same batch boundaries and offsets as `scan_typed`. Other workers can decode
 their next assigned mark during each callback. A worker has at most one
@@ -27,6 +27,11 @@ allowances apply across the complete worker group.
 Operation exit waits for the workers after normal completion, early exit,
 and decoder or callback failures. Keep selected part files stable for the
 lifetime of the reader and use a separate reader for each concurrent scan.
+
+For the admitted ordinary, direct `UInt64` Compact path on little-endian
+hosts, the workers borrow the table's selected column bindings and mark grid
+for that physical context. Each worker owns its decode workspace. Other
+selections open independent readers on the workers.
 
 ### Direct Compact UInt64 batches
 
@@ -653,6 +658,59 @@ The LZ4, checksum, and typed-scan regression run passed 69 examples.
 | Block-copy Crystal HTTP worker | `552b54d1700a33b7ef45e806799cb647183cdac66b6785fba535c36634723ea0` |
 | Short-copy Crystal HTTP worker | `03ec849329b2d075dc1876a6ff87a5ab1ed9ba03e8c3f5e267a385cf8fc64397` |
 
+### Fixed-width frame copies and prepared readers
+
+CityHash v1 reads little-endian 32- and 64-bit words from checked spans.
+Fixed-width copies accept unaligned input and compile to native loads on
+ARM64. LZ4 inlines length decoding and copies literals of one to four bytes
+at their exact widths after checking both ranges. Three bytes use a two-byte
+copy and a one-byte copy. The Release disassembly confirms the width of
+those loads and stores. The frame checksum still runs before decoding into
+the slab.
+
+The mapping spec counted four `columns.txt` reads after admission for one
+part scanned by four workers at `233783e`. With prepared reader reuse it
+counts zero, one `data.bin` mapping, and zero additional frame-index builds.
+The codec suites passed 21 examples in Debug and Release. The mapping and
+parallel scan suites passed 11 examples in Debug and Release, and nine
+with `-Dwithout_mt`. The affected codec, transport, Compact, Wide, and
+catalog regression run passed 269 examples.
+
+The three Crystal builds used `233783ec27b3930be7d01678a40eee6d4a93494e`
+as the reference, adding the codec changes in `e0f72f9` for the second arm
+and reader reuse for the third. All used Crystal 1.22.3, LLVM 23.1.5, and
+Boehm with `--release -Dparallel_scan_bench` on the M2 Max. The pinned
+ClickHouse 26.10.1.1201 binary read the same Compact MRK3 fixture with 131,072 rows,
+16 marks, and 32 LZ4 frames across two `UInt64` columns. The fixture and
+oracle hashes match the shared-scan profile above.
+
+Each worker count used four warmups per arm and 48 timed rounds, with
+each of the 24 arm orders appearing twice. The request timer and cache
+and checksum settings followed the comparison contract. All 384 timed
+responses matched the independent 48-byte oracle. The ordered 2 MiB
+exports and ten part file hashes matched before and after both tracks.
+`CHECK TABLE` passed and the native diagnostic observed one and four
+threads reading rows at the respective settings.
+
+| Workers | Reference, ms | Codec changes, ms | Codec changes and reader reuse, ms | ClickHouse, ms |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 3.704 ± 0.088 | 1.667 ± 0.070 | 1.672 ± 0.062 | 2.249 ± 0.142 |
+| 4 | 2.197 ± 0.132 | 1.717 ± 0.151 | 1.017 ± 0.157 | 1.715 ± 0.113 |
+
+Values are median ± MAD. The combined build took 45% and 46% of the
+reference median at one and four workers, respectively. At four workers,
+reader reuse saved a paired median of 0.819 ± 0.160 ms over the codec
+build and won 46 of 48 pairs. At one worker, which uses the serial path,
+the paired median difference was under 0.001 ms (24 wins in 48 pairs).
+The combined build won all pairs against ClickHouse at both counts. These
+results apply to warm reads of this part and this reduction.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Reference Crystal HTTP worker | `971ca414b728e811b4c39ade95fd9e792ae9ff0c6bc273f9986b706e9e53382a` |
+| Codec-only Crystal HTTP worker | `e33a1925fdde3f019c3b55f987cf1dc5cc74ff6f14769cf8d6afc920dcc60afc` |
+| Combined Crystal HTTP worker | `918b23ab82bee8b41a98c84b6eec2dc7ce1533e65a121d18ad6a9701ae95367e` |
+
 ## Reproduce the comparison
 
 Run from the repository root with Python 3, Crystal, and the pinned
@@ -755,6 +813,12 @@ script. Preserve all samples when recomputing paired differences.
 For the short-match comparison, use `70cba7b` and the short-copy revision
 with the same schedule. Substitute `("baseline", "candidate", "clickhouse")`
 for the three arm names.
+For the fixed-width comparison, use `233783e`, `e0f72f9`, and the revision
+with prepared-reader reuse.
+Build and prepare each as above. Shuffle two copies of all 24 permutations
+of `("clickhouse", "combined", "kernels_only", "stock")` with the same seed.
+Run four warmups per arm and verify ordered exports before and after each
+worker-count track.
 
 ```sh
 python3 -B scripts/parallel_scan_benchmark.py bench \
@@ -817,8 +881,9 @@ parallel, mmap, and W124 transport specs passed 31 examples with
 - A callback failure or a worker failure must release outstanding buffers and
   join the workers. A subsequent scan of valid parts must still succeed.
 - An ordinary `UInt64` Compact scan must build no additional frame index and
-  map each accessed `data.bin` exactly once. Aborting at an earlier part must
-  close a later part's mapping even if an assigned worker never acquired it.
+  map each accessed `data.bin` exactly once. Its workers must reuse the
+  admitted column metadata. Aborting at an earlier part must close a later
+  part's mapping even if an assigned worker never acquired it.
 - Splitting Compact marks between workers must keep a cumulative per-part
   transport limit. For the shared `UInt64` path, file and header work is
   charged per mapping and selected range work accumulates across workers.

@@ -1,6 +1,7 @@
 module CrystalClick
   class TypedPartTable
     MAX_PARALLEL_SCAN_WORKERS = 32
+    private alias ParallelScanPartSource = {String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?, CompactPartTable?}
 
     private struct ParallelScanMark
       getter part_index : Int32
@@ -29,10 +30,12 @@ module CrystalClick
     end
 
     # Scan round-robin physical marks on isolated worker contexts. Each worker
-    # opens one independent reader per touched part; Compact readers share the
-    # original part's synchronized cumulative transport budget. For workers: 1
-    # this delegates to the ordinary serial API. A request that has at most one
-    # nonempty mark also uses the serial path when execution contexts exist.
+    # opens one independent reader per touched part except admitted Compact
+    # ordinary UInt64 tables, whose read-only bindings and mark grid are shared.
+    # Compact readers share the original part's synchronized cumulative
+    # transport budget. For workers: 1 this delegates to the ordinary serial
+    # API. A request that has at most one nonempty mark also uses the serial path
+    # when execution contexts exist.
     # True parallel mode admits only direct, non-projection primitive numeric
     # selections.
     #
@@ -75,14 +78,15 @@ module CrystalClick
         # Preserve the serial facade's full pre-callback backend admission.
         preflight_backends!
         schedule, worker_marks = parallel_scan_plan(effective_workers, positive_mark_count)
-        part_sources = Array({String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?}).new(@entries.size)
+        part_sources = Array(ParallelScanPartSource).new(@entries.size)
         part_starts = Array(UInt64).new(@entries.size)
         source_row_offset = 0_u64
         @entries.each do |entry|
           compact_reader = entry.reader.as?(CompactPartTable)
           transport_budget = compact_reader.try(&.parallel_scan_transport_budget!)
           scan_context = compact_reader.try(&.parallel_uint64_scan_context)
-          part_sources << {String.new(entry.path.to_slice), !compact_reader.nil?, transport_budget, scan_context}
+          admitted_reader = scan_context ? compact_reader : nil
+          part_sources << {String.new(entry.path.to_slice), !compact_reader.nil?, transport_budget, scan_context, admitted_reader}
           part_starts << source_row_offset
           source_row_offset = checked_add_rows(source_row_offset, entry.row_count)
         end
@@ -229,7 +233,7 @@ module CrystalClick
       private def start_parallel_worker(
         worker_index : Int,
         part_marks : Array(Array(Int32)),
-        part_sources : Array({String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?}),
+        part_sources : Array(ParallelScanPartSource),
         scan_image_registry : CompactUInt64ScanImageRegistry,
         batch_rows : Int,
         output : Channel(WidePartTableBatch),
@@ -243,7 +247,7 @@ module CrystalClick
 
       private def run_parallel_worker(
         part_marks : Array(Array(Int32)),
-        part_sources : Array({String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?}),
+        part_sources : Array(ParallelScanPartSource),
         scan_image_registry : CompactUInt64ScanImageRegistry,
         batch_rows : Int,
         output : Channel(WidePartTableBatch),
@@ -252,10 +256,12 @@ module CrystalClick
         scan_workspace = nil.as(CompactUInt64ScanWorkspace?)
         part_marks.each_with_index do |marks, part_index|
           next if marks.empty?
-          path, compact, transport_budget, scan_context = part_sources[part_index]
+          path, compact, transport_budget, scan_context, admitted_reader = part_sources[part_index]
           if compact
-            budget = transport_budget || raise(CorruptPartError.new("parallel Compact part lost its transport budget"))
-            reader = CompactPartTable.open_selected_typed_with_transport_budget([path], @columns, budget, scan_context)
+            reader = admitted_reader || begin
+              budget = transport_budget || raise(CorruptPartError.new("parallel Compact part lost its transport budget"))
+              CompactPartTable.open_selected_typed_with_transport_budget([path], @columns, budget, scan_context)
+            end
             if reader.reusable_uint64_scan?
               scan_workspace ||= CompactUInt64ScanWorkspace.new
               if scan_context

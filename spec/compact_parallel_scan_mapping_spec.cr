@@ -4,7 +4,7 @@ require "./spec_helper"
 # acquisitions. Probes remain disabled outside this spec's bounded windows.
 module CrystalClick::CompactParallelScanMappingProbe
   alias Event = {String, UInt64}
-  alias Snapshot = {Array(Event), Array(Event), Int32, Array(String)}
+  alias Snapshot = {Array(Event), Array(Event), Int32, Array(String), Array(String)}
 
   class_property enabled = false
   class_property watched_data_paths = Set(String).new
@@ -12,17 +12,22 @@ module CrystalClick::CompactParallelScanMappingProbe
   class_property map_close_events = [] of Event
   class_property active_maps = {} of UInt64 => String
   class_property frame_index_builds = 0
+  class_property columns_metadata_reads = [] of String
+  class_property watched_part_paths = Set(String).new
   class_property lock = Thread::Mutex.new
 
   def self.begin_observing(paths : Array(String)) : Nil
     watched = Set(String).new
     paths.each { |path| watched << File.expand_path(path) }
+    watched_parts = paths.map { |path| File.expand_path(File.dirname(path)) }.to_set
     lock.synchronize do
       self.watched_data_paths = watched
+      self.watched_part_paths = watched_parts
       self.map_open_events = [] of Event
       self.map_close_events = [] of Event
       self.active_maps = {} of UInt64 => String
       self.frame_index_builds = 0
+      self.columns_metadata_reads = [] of String
       self.enabled = true
     end
   end
@@ -65,6 +70,16 @@ module CrystalClick::CompactParallelScanMappingProbe
     nil
   end
 
+  def self.record_columns_metadata_read(part_path : String) : Nil
+    expanded = File.expand_path(part_path)
+    lock.synchronize do
+      if enabled && watched_part_paths.includes?(expanded)
+        columns_metadata_reads << expanded
+      end
+    end
+    nil
+  end
+
   def self.snapshot : Snapshot
     lock.synchronize do
       {
@@ -72,8 +87,17 @@ module CrystalClick::CompactParallelScanMappingProbe
         map_close_events.dup,
         frame_index_builds,
         active_maps.values.dup,
+        columns_metadata_reads.dup,
       }
     end
+  end
+end
+
+class CrystalClick::PartMetadataFileReader
+  def read(name : String, maximum_bytes : Int64 = MAX_METADATA_FILE_BYTES) : String
+    text = previous_def(name, maximum_bytes)
+    CompactParallelScanMappingProbe.record_columns_metadata_read(@part_path) if name == "columns.txt"
+    text
   end
 end
 
@@ -167,6 +191,7 @@ private def compact_mapping_assert_one_scan_owner(paths : Array(String)) : Nil
   paths.each do |path|
     snapshot[0].count { |event| event[0] == path }.should eq(1)
     snapshot[1].count { |event| event[0] == path }.should eq(1)
+    snapshot[4].count { |part_path| part_path == File.dirname(path) }.should eq(0)
   end
 end
 
@@ -245,6 +270,11 @@ describe "Compact direct UInt64 scan mapping" do
       CrystalClick::CompactParallelScanMappingProbe.begin_observing(data_paths)
       table = CrystalClick::TypedPartTable.open_selected_typed(part_paths, ["pk", "value"])
       CrystalClick::CompactParallelScanMappingProbe.snapshot[2].should eq(part_paths.size)
+      admitted_metadata_reads = CrystalClick::CompactParallelScanMappingProbe.snapshot[4]
+      expected_metadata_paths = part_paths.flat_map do |path|
+        Array.new(2, File.expand_path(path))
+      end.sort
+      admitted_metadata_reads.sort.should eq(expected_metadata_paths)
       CrystalClick::CompactParallelScanMappingProbe.stop_observing
 
       expected = compact_mapping_scan_rows(table, 1)
