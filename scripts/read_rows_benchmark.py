@@ -4,6 +4,7 @@
 import argparse
 import array
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -15,7 +16,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from parallel_scan_benchmark import fail, sha256_path, validate_fixture_source
@@ -165,18 +166,23 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
     split = [marks[len(marks) * i // workers:len(marks) * (i + 1) // workers] for i in range(workers)]
     samples = {name: [] for name in binaries}
     preparations = {name: [] for name in binaries}
+    warmup_orders = []
     orders = []
-    with (
-        open_runner(binaries["crystal"], root / "crystal", part, layout, marks,
-                    mark_rows, workers, oracle, timeout) as crystal,
-        open_runner(binaries["clickhouse"], root / "clickhouse", part, layout, marks,
-                    mark_rows, workers, oracle, timeout) as clickhouse,
-    ):
-        runners = {"crystal": crystal, "clickhouse": clickhouse}
+    with ExitStack() as stack:
+        runners = {
+            name: stack.enter_context(
+                open_runner(binary, root / name, part, layout, marks,
+                            mark_rows, workers, oracle, timeout)
+            )
+            for name, binary in binaries.items()
+        }
+        schedule = tuple(itertools.permutations(runners))
         for index in range(warmups + repeats):
-            order = list(runners) if index % 2 == 0 else list(reversed(runners))
+            order = list(schedule[index % len(schedule)])
             if index >= warmups:
                 orders.append(order)
+            else:
+                warmup_orders.append(order)
             for name in order:
                 elapsed, preparation = runners[name].scan(split, mark_rows)
                 if index >= warmups:
@@ -190,23 +196,42 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
     for name, elapsed in samples.items():
         median = statistics.median(elapsed)
         preparation = preparations[name]
+        preparation_and_scan_samples = [prep + scan for prep, scan in zip(preparation, elapsed)]
         engines[name] = {
             "samples_ns": elapsed,
             "p50_ns": median,
             "p95_ns": sorted(elapsed)[math.ceil(len(elapsed) * 0.95) - 1],
             "prepare_samples_ns": preparation,
             "prepare_p50_ns": statistics.median(preparation),
-            "prepare_and_scan_p50_ns": statistics.median(prep + scan for prep, scan in zip(preparation, elapsed)),
+            "prepare_and_scan_samples_ns": preparation_and_scan_samples,
+            "prepare_and_scan_p50_ns": statistics.median(preparation_and_scan_samples),
+            "prepare_and_scan_p95_ns": sorted(preparation_and_scan_samples)[
+                math.ceil(len(preparation_and_scan_samples) * 0.95) - 1
+            ],
             "rows_per_second": rows * 1e9 / median,
             "decoded_gib_per_second": rows * 16 * 1e9 / (median * 2**30),
         }
-    paired = zip(samples["crystal"], samples["clickhouse"])
-    return {
+
+    result = {
         "layout": layout, "workers": workers, "worker_marks": split,
         "rows": rows, "decoded_bytes": rows * 16, "orders": orders,
+        "warmup_orders": warmup_orders,
         "checksum_on_read": True, "engines": engines,
-        "paired_clickhouse_to_crystal_time_ratio_p50": statistics.median(ch / cr for cr, ch in paired),
     }
+    paired = zip(samples["crystal"], samples["clickhouse"])
+    result["paired_clickhouse_to_crystal_time_ratio_p50"] = statistics.median(
+        clickhouse / crystal for crystal, clickhouse in paired
+    )
+    if "crystal_baseline" in samples:
+        baseline_to_candidate = zip(samples["crystal"], samples["crystal_baseline"])
+        clickhouse_to_baseline = zip(samples["crystal_baseline"], samples["clickhouse"])
+        result["paired_crystal_baseline_to_crystal_time_ratio_p50"] = statistics.median(
+            baseline / candidate for candidate, baseline in baseline_to_candidate
+        )
+        result["paired_clickhouse_to_crystal_baseline_time_ratio_p50"] = statistics.median(
+            clickhouse / baseline for baseline, clickhouse in clickhouse_to_baseline
+        )
+    return result
 
 
 def compare(args: argparse.Namespace) -> dict:
@@ -222,8 +247,10 @@ def compare(args: argparse.Namespace) -> dict:
         fail("marks must be distinct, increasing, in range, and sufficient for each worker")
     source_path = manifest_path.parent / "fixture.rowbinary"
     validate_fixture_source(source_path, fixture)
-    binaries = {"crystal": args.crystal_bin.resolve(strict=True),
-                "clickhouse": args.cpp_bin.resolve(strict=True)}
+    binaries = {"crystal": args.crystal_bin.resolve(strict=True)}
+    if args.crystal_baseline_bin is not None:
+        binaries["crystal_baseline"] = args.crystal_baseline_bin.resolve(strict=True)
+    binaries["clickhouse"] = args.cpp_bin.resolve(strict=True)
     binary_hashes = {name: sha256_path(path) for name, path in binaries.items()}
     tracks = []
     part_hashes = {}
@@ -259,6 +286,7 @@ def compare(args: argparse.Namespace) -> dict:
 
     return {
         "marks": marks, "mark_rows": mark_rows, "warmups": args.warmups, "repeats": args.repeats,
+        "arms": list(binaries),
         "binary_sha256": binary_hashes, "part_file_manifest_sha256": part_hashes,
         "fixture_manifest_sha256": sha256_path(manifest_path), "expected_columns_sha256": oracle_hash,
         "checksum_corruption_controls_passed": True, "tracks": tracks,
@@ -269,6 +297,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--crystal-bin", type=Path, required=True)
+    parser.add_argument("--crystal-baseline-bin", type=Path,
+                        help="optional prior Crystal runner for a balanced three-arm campaign")
     parser.add_argument("--cpp-bin", type=Path, required=True)
     parser.add_argument("--scratch", type=Path, required=True)
     parser.add_argument("--layout", choices=("wide", "compact"), action="append")

@@ -26,6 +26,7 @@ module CrystalClick
       def self.parse_columns_substreams(
         text : String,
         columns : Array({String, String}),
+        enforce_total_substream_limit : Bool = true,
       ) : Array({String, Array(String)})
         bytes = text.to_slice
         cursor = 0
@@ -49,7 +50,7 @@ module CrystalClick
           end
           raise UnsupportedFormatError.new("duplicate column block in columns_substreams.txt") if seen_columns.includes?(column)
           seen_columns << column
-          if stream_count > WidePart::MAX_METADATA_SUBSTREAMS - total_streams
+          if enforce_total_substream_limit && stream_count > WidePart::MAX_METADATA_SUBSTREAMS - total_streams
             raise UnsupportedFormatError.new("columns_substreams.txt exceeds substream limit")
           end
           total_streams += stream_count
@@ -241,8 +242,9 @@ module CrystalClick
     def self.parse_columns_substreams_metadata(
       text : String,
       columns : Array({String, String}),
+      enforce_total_substream_limit : Bool = true,
     ) : Array({String, Array(String)})
-      PartMetadataTextParser.parse_columns_substreams(text, columns)
+      PartMetadataTextParser.parse_columns_substreams(text, columns, enforce_total_substream_limit)
     end
 
     def self.parse_count_metadata(text : String, max_rows : UInt64) : UInt64

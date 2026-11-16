@@ -18,6 +18,11 @@
   mark. Complete LZ4 and ZSTD frames decode into typed storage after checksum
   verification. Refresh the [slab comparison and Boehm counters](docs/PARALLEL_TYPED_SCAN_FRONTIER.md#reusing-compact-decode-storage)
   after changing frame transport, slab lifetime, or the callback handshake.
+- Ordinary Wide scans of direct primitive numeric columns share the admitted
+  part metadata and selected `.mrk2` indexes across workers. Worker decode
+  state is local. Refresh the [direct reader comparison](docs/PARALLEL_TYPED_SCAN_FRONTIER.md#wide-shared-admission-comparison)
+  after changing Wide admission, mark indexing, worker scheduling, or the
+  benchmark's checksum and timing boundaries.
 
 ## Compressed Compact aggregate projection indexes — W301
 

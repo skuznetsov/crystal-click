@@ -1802,6 +1802,29 @@ module CrystalClick
       raise InvalidPartError.new(ex.message || "cannot read part")
     end
 
+    # Admit a direct scalar primitive selection from one ordinary Wide part.
+    # The read-only metadata snapshot is shared only during construction; each
+    # returned reader retains its own stream marks and decode state.
+    def self.open_primitive_numeric_columns(
+      path : String,
+      columns : Array(String),
+      *,
+      verify_data_checksums : Bool = false,
+    ) : Array(WidePart)?
+      metadata = WidePartSharedPrimitiveNumericMetadata.try_open(path, columns) || return nil
+      columns.map do |column|
+        new(
+          path,
+          column,
+          :typed,
+          verify_data_checksums: verify_data_checksums,
+          shared_primitive_metadata: metadata,
+        )
+      end
+    rescue ex : IO::Error
+      raise InvalidPartError.new(ex.message || "cannot read part")
+    end
+
     # :nodoc:
     # The WidePartTable projection route validates the parent-manifest binding
     # before calling this opener; direct callers must establish that binding.
@@ -11661,6 +11684,7 @@ module CrystalClick
       allow_projection_aggregate_roster : Bool = false,
       compressed_projection_child : Bool = false,
       verify_data_checksums : Bool = false,
+      shared_primitive_metadata : WidePartSharedPrimitiveNumericMetadata? = nil,
     )
       @path = path
       @flattened_nested_context = flattened_nested_context
@@ -11670,7 +11694,7 @@ module CrystalClick
       @checksum_verification = ChecksumVerification::Unverified
       @single_stream_string = false
       @low_cardinality_string_state = nil
-      @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, @aggregate_count_key_column_names, aggregate_projection_child, physical_streams = parse_metadata(requested_column, mode, allow_projection_aggregate_roster)
+      @column, @column_type, @source_column_name, @source_column_type, @json_typed_path, @row_count, @aggregate_count_key_column_names, aggregate_projection_child, physical_streams = parse_metadata(requested_column, mode, allow_projection_aggregate_roster, shared_primitive_metadata)
       @streams = Hash(String, PhysicalStream).new
       strict_projection_mark_profile = allow_projection_aggregate_roster &&
                                        aggregate_projection_child &&
@@ -11932,9 +11956,18 @@ module CrystalClick
       @element_width = stream_element_width(primary_stream)
     end
 
-    private def parse_metadata(requested_column : String?, mode : Symbol, allow_projection_aggregate_roster : Bool = false) : {String, String, String, String, Bool, UInt64, Array(String)?, Bool, Array(String)}
-      columns_text = read_metadata_file("columns.txt")
-      physical_columns = PartMetadataTextParser.parse_columns(columns_text)
+    private def parse_metadata(
+      requested_column : String?,
+      mode : Symbol,
+      allow_projection_aggregate_roster : Bool = false,
+      shared_primitive_metadata : WidePartSharedPrimitiveNumericMetadata? = nil,
+    ) : {String, String, String, String, Bool, UInt64, Array(String)?, Bool, Array(String)}
+      physical_columns = if shared = shared_primitive_metadata
+                           shared.columns
+                         else
+                           columns_text = read_metadata_file("columns.txt")
+                           PartMetadataTextParser.parse_columns(columns_text)
+                         end
       columns = physical_columns
       if columns.empty?
         raise UnsupportedFormatError.new("columns.txt contains no columns")
@@ -11974,7 +12007,11 @@ module CrystalClick
         raise UnsupportedFormatError.new("only exact UInt64 columns are supported") unless column_type == "UInt64"
       end
 
-      codec = validate_default_codec
+      codec = if shared = shared_primitive_metadata
+                shared.codec
+              else
+                validate_default_codec
+              end
       if (@flattened_nested_context || geometry_plan || geo_array_plan || point_plan || !WideAggregateCountStoragePlan.for_type_name(column_type).nil? || WidePart.supports_variant_type?(column_type) || column_type == "Dynamic" || generic_array_tuple || generic_nested || generic_map_tuple ||
          WidePart.supports_array_map_type?(column_type) || !QBitColumnType.for_type(column_type).nil?) && codec != "CODEC(LZ4)"
         message = if geo_array_plan
@@ -12000,7 +12037,11 @@ module CrystalClick
                   end
         raise UnsupportedFormatError.new(message)
       end
-      row_count = parse_count_file("count.txt")
+      row_count = if shared = shared_primitive_metadata
+                    shared.row_count
+                  else
+                    parse_count_file("count.txt")
+                  end
       raise CorruptPartError.new("row count exceeds limit") if row_count > MAX_ROWS
       aggregate_count_key_column_names = nil.as(Array(String)?)
 
@@ -12084,7 +12125,9 @@ module CrystalClick
         validate_type_serialization_version(column_type)
       end
 
-      physical_streams = if flattened_context = @flattened_nested_context
+      physical_streams = if shared = shared_primitive_metadata
+                           shared_primitive_physical_streams(shared, columns, selected, column_type)
+                         elsif flattened_context = @flattened_nested_context
                            binding = flattened_binding.not_nil!
                            file = File.join(@path, "columns_substreams.txt")
                            raise UnsupportedFormatError.new("columns_substreams.txt is required for flattened Nested") unless File.file?(file)
@@ -12097,6 +12140,30 @@ module CrystalClick
       {selected, column_type, source_column_name, source_column_type, json_typed_path, row_count, aggregate_count_key_column_names, aggregate_projection_child, physical_streams}
     rescue ex : ArgumentError
       raise CorruptPartError.new("invalid metadata")
+    end
+
+    private def shared_primitive_physical_streams(
+      metadata : WidePartSharedPrimitiveNumericMetadata,
+      columns : Array({String, String}),
+      selected_column : String,
+      selected_type : String,
+    ) : Array(String)
+      roster = metadata.substreams
+      unless roster
+        raise UnsupportedFormatError.new("columns_substreams.txt is required for multi-column parts") unless columns.size == 1
+        expected_streams = expected_physical_streams(selected_column, selected_type, escape_simple_uint64_column: true)
+        raise UnsupportedFormatError.new("columns_substreams.txt is required for this serialization shape") unless expected_streams == [selected_column]
+        return [selected_column]
+      end
+
+      streams = roster.find { |column, _streams| column == selected_column }
+        .try(&.[1]) || raise(UnsupportedFormatError.new("selected column substreams are missing"))
+      streams.each { |stream| PartMetadataTextParser.validate_selected_stream_name(stream) }
+      expected_streams = expected_physical_streams(selected_column, selected_type, escape_simple_uint64_column: true)
+      unless streams == expected_streams
+        raise UnsupportedFormatError.new(physical_stream_shape_mismatch(selected_column, selected_type, streams, expected_streams))
+      end
+      streams
     end
 
     private def validate_qbit_serialization_profile : Nil
@@ -12204,25 +12271,11 @@ module CrystalClick
     end
 
     private def read_metadata_file(name : String) : String
-      file = File.join(@path, name)
-      raise CorruptPartError.new("#{name} must not be a symbolic link") if File.symlink?(file)
-      size = File.size(file)
-      raise UnsupportedFormatError.new("#{name} exceeds metadata limit") if size > MAX_METADATA_FILE_BYTES
-      text = File.read(file)
-      raise UnsupportedFormatError.new("#{name} must end with LF") if text.empty? || text.bytesize != size || text.bytes.last != 10
-      text
+      WidePartMetadataFiles.read_metadata_file(@path, name)
     end
 
     private def validate_default_codec : String
-      file = File.join(@path, "default_compression_codec.txt")
-      raise CorruptPartError.new("default_compression_codec.txt must not be a symbolic link") if File.symlink?(file)
-      size = File.size(file)
-      raise UnsupportedFormatError.new("default codec exceeds metadata limit") if size > MAX_CODEC_FILE_BYTES
-      codec = File.read(file)
-      unless codec.bytesize == size && (codec == "CODEC(LZ4)" || codec == "CODEC(ZSTD(1))")
-        raise UnsupportedFormatError.new("only CODEC(LZ4) and CODEC(ZSTD(1)) are supported")
-      end
-      codec
+      WidePartMetadataFiles.read_default_codec(@path)
     end
 
     private def parse_substreams(
@@ -13801,15 +13854,7 @@ module CrystalClick
     end
 
     private def parse_count_file(name : String) : UInt64
-      path = File.join(@path, name)
-      raise CorruptPartError.new("#{name} must not be a symbolic link") if File.symlink?(path)
-      size = File.size(path)
-      raise CorruptPartError.new("invalid row count") if size == 0 || size > 32
-      text = File.read(path)
-      raise CorruptPartError.new("invalid row count") unless text.bytesize == size
-      text = String.new(text.to_slice[0, text.bytesize - 1]) if text.ends_with?("\n")
-      value = PartMetadataTextParser.parse_decimal(text, UInt64::MAX, name)
-      value
+      WidePartMetadataFiles.parse_count_file(@path, name)
     end
 
     private def resolve_stream(column : String) : {String, String, Bool}

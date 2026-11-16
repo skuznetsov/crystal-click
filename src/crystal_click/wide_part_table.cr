@@ -111,6 +111,7 @@ module CrystalClick
     @typed_mode : Bool
     @flattened_context : FlattenedNestedTableContext?
     @aggregate_count_key_names : Array(String)?
+    @projection_selected : Bool
 
     def self.open_selected(parts : Array(String), columns : Array(String)) : WidePartTable
       new(parts, columns, false, false)
@@ -341,6 +342,35 @@ module CrystalClick
       raise BoundsError.new("parallel Wide mark list is empty") if selected_marks.empty?
       scan_typed_rows(batch_rows, [selected_marks], whole_marks: false) { |batch| yield batch }
       nil
+    end
+
+    # Return this already-admitted reader only for the ordinary direct
+    # fixed-width primitive `.mrk2` profile. Its WidePart bindings retain
+    # immutable metadata and mark indexes; each scan keeps decode storage local
+    # to the worker, so parallel workers can safely borrow the same table.
+    def parallel_primitive_numeric_scan_context : WidePartTable?
+      return nil unless @typed_mode && !@numeric_mode && !@projection_selected && @flattened_context.nil?
+      return nil unless @entries.size == 1
+
+      entry = @entries[0]
+      return nil unless entry.readers.size == @columns.size
+      return nil unless entry.object_readers.empty? && entry.array_object_readers.empty? &&
+                        entry.recursive_readers.empty? && entry.dynamic_bulk_readers.empty? &&
+                        entry.binary_bulk_readers.empty?
+      return nil unless entry.column_sources.size == @columns.size && entry.column_types.size == @columns.size
+
+      entry.readers.each_with_index do |column_reader, index|
+        column = @columns[index]
+        column_type = entry.column_types[index]
+        source = entry.column_sources[index]
+        reader = column_reader.reader
+        return nil unless WidePart.supports_numeric_type?(column_type) &&
+                          column_reader.name == column && source == {column, column, column_type} &&
+                          reader.column_type == column_type &&
+                          reader.source_column_name == column && reader.source_column_type == column_type &&
+                          reader.mark_path.ends_with?(".mrk2")
+      end
+      self
     end
 
     # Scan a bounded physical-row interval in caller-selected part order.
@@ -4692,6 +4722,7 @@ module CrystalClick
       projection_name : String? = nil,
       flattened_context : FlattenedNestedTableContext? = nil,
     )
+      @projection_selected = !projection_name.nil?
       @flattened_context = flattened_context
       if flattened_context && (!@typed_mode || @numeric_mode || projection_name)
         raise UnsupportedFormatError.new("flattened Nested table context requires a direct typed reader")
@@ -4763,7 +4794,12 @@ module CrystalClick
           ProjectionChildSelection.validate_binding!(parent_path, selected_projection_name, checksums)
         end
 
-        @columns.each do |column|
+        shared_primitive_readers = if @typed_mode && !@numeric_mode && projection_name.nil? && flattened_context.nil?
+                                     WidePart.open_primitive_numeric_columns(path, @columns)
+                                   else
+                                     nil
+                                   end
+        @columns.each_with_index do |column, column_index|
           object_declaration = nil.as(String?)
           array_object_declaration = nil.as(String?)
           recursive_declaration = nil.as(String?)
@@ -4773,7 +4809,7 @@ module CrystalClick
           qbit_bulk_declaration = nil.as(String?)
           custom_geo_bulk_declaration = nil.as(String?)
           generic_static_bulk_declaration = nil.as(String?)
-          if @typed_mode && !@numeric_mode && flattened_context.nil?
+          if @typed_mode && !@numeric_mode && flattened_context.nil? && shared_primitive_readers.nil?
             object_declaration = WidePart.selected_json_declaration(path, column)
             array_object_declaration = WidePart.selected_array_json_declaration(path, column)
             recursive_declaration = WidePart.selected_recursive_json_declaration(path, column)
@@ -4853,7 +4889,9 @@ module CrystalClick
             selected_checksum_names = binary_reader.selected_checksum_names
             binary_bulk_readers << BinaryBulkTableReaderEntry.new(column, binary_reader, binary_value_type, column_type)
           else
-            reader = if context = flattened_context
+            reader = if shared_readers = shared_primitive_readers
+                       shared_readers[column_index]
+                     elsif context = flattened_context
                        context.open_reader(path, column)
                      elsif @numeric_mode
                        WidePart.open_numeric(path, column)

@@ -73,6 +73,21 @@ before a callback sees the affected mark. The slab tests also cover
 reentrant serial calls and distinct worker storage across parts. Reverting
 the slab change restores the detached range buffers from `d46b678`.
 
+### Wide reader admission
+
+An ordinary Wide scan of direct primitive numeric columns with `.mrk2`
+marks shares the admitted part metadata and each selected stream's mark
+offsets between workers. Admission validates the selected columns and their
+common row grid. Each worker keeps its decode storage private and checks
+its selected data ranges. The part files must stay immutable for the
+reader's lifetime.
+
+The direct benchmark prepares a fresh set of selected column readers for
+each scan of two `UInt64` columns. Its preparation timer includes reading
+the Wide metadata and parsing the selected mark files. Both engines verify
+data-frame checksums during the scan. The benchmark reports preparation
+and the per-sample sum of preparation and scan.
+
 ## Comparison contract
 
 - Scan the same ClickHouse-generated local Wide and Compact part files, with
@@ -127,11 +142,12 @@ checksums during the scan.
 
 Startup admits the immutable part and allocates the output buffers. Per-scan
 reader and budget preparation are timed separately. ClickHouse builds fresh
-readers on the retained storage context. Crystal Wide opens a pair of column
-readers per worker. Crystal Compact opens a typed table with a shared mark
-grid, frame index, and transport budget. The scan timer covers worker startup
-and joins, data stream opens and closes, checksum verification, decompression,
-typed batches, and one copy of each batch into the ordered output buffers.
+readers on the retained storage context. Crystal Wide prepares one shared
+set of column readers before starting workers. Crystal Compact opens a typed
+table with a shared mark grid, frame index, and transport budget. The scan
+timer covers worker startup and joins, data stream opens and closes, checksum
+verification, decompression, typed batches, and one copy of each batch into
+the ordered output buffers.
 ClickHouse calls `IMergeTreeReader::readRows` once per selected mark and
 continues the reader across consecutive marks. It uses synchronous `pread`
 with asynchronous mark loads and reader caches disabled. Crystal Wide maps
@@ -140,8 +156,9 @@ mapping per part and a decode workspace per worker, then yields batches of
 at most 4,096 rows. Each runner validates the complete output against the
 column-major fixture oracle after stopping the timer.
 Parent-side checks require the same observed marks per worker and unchanged
-part files. Warmups populate the OS page cache, and paired samples alternate
-order.
+part files. Warmups populate the OS page cache. Two-runner comparisons
+alternate order. Comparisons that include a second Crystal binary cycle
+through the six runner orders.
 
 Before timing, both runners must admit a part whose first compressed frame
 differs by one checksum byte, then report a checksum error on `scan`. The
@@ -182,10 +199,10 @@ python3 -B scripts/read_rows_benchmark.py \
   --warmups 6 --repeats 32 --output "$bench_work/read-rows.json"
 ```
 
-The report includes binary and part hashes, the selected marks, paired
-scan durations, preparation durations, and the median per-scan total. To
-test gaps in the mark sequence, use `--marks 0,2,4,7,8,10,13,15` on the
-16-mark fixture.
+The report includes binary and part hashes, the selected marks, scan and
+preparation durations, and p50 and p95 for the scan and for each sample's
+preparation plus scan. To test gaps in the mark sequence, use
+`--marks 0,2,4,7,8,10,13,15` on the 16-mark fixture.
 
 Clang 23.1.5 on macOS required three source-scoped changes to warning severity
 with the pinned ClickHouse checkout. Add these CMake lines after the `dbms`
@@ -202,9 +219,12 @@ set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Storages/MergeTree/MergeTre
 
 ### Direct reader measurements
 
-The warm-cache run used an Apple M2 Max, macOS 26.6.2 arm64, and the external
-APFS fixture. The ClickHouse C++ runner linked the pinned source in Release
-mode with Clang 23.1.5 and `ENABLE_LIBRARIES=OFF` (jemalloc disabled).
+The initial run used CrystalClick at
+`dfa0072cbbf8722d5a28c3a6d25705f59efd2ec5`, where the Wide benchmark opened
+a pair of column readers per worker. It used an Apple M2 Max, macOS 26.6.2
+arm64, and the external APFS fixture with a warm page cache. The ClickHouse
+C++ runner linked the pinned source in Release mode with Clang 23.1.5 and
+`ENABLE_LIBRARIES=OFF` (jemalloc disabled).
 The Crystal runner used Crystal 1.22.3 `--release`, LLVM 23.1.5, and Boehm
 8.2.12. Both read 131,072 rows of two `UInt64` columns in 16 marks of
 8,192 rows, with identical files and mark assignments for each layout and
@@ -241,6 +261,80 @@ and worker counts. Both part manifests matched before and after timing.
 | Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
 | Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
 | Compact part file manifest | `80f5aaa885eae58e7e5d6888b28977888706d7100e91c5adcc7cb9309929c62a` |
+
+### Wide shared admission comparison
+
+Build a baseline from `dfa0072cbbf8722d5a28c3a6d25705f59efd2ec5` with the
+same Crystal release flags as the current runner. Use the same fixture and
+ClickHouse target as above.
+
+```sh
+git worktree add --detach "$bench_work/crystal-baseline" \
+  dfa0072cbbf8722d5a28c3a6d25705f59efd2ec5
+(
+  cd "$bench_work/crystal-baseline" &&
+  TMPDIR="$bench_work/read-rows-tmp" CRYSTAL_CACHE_DIR="$bench_work/read-rows-cache" \
+    crystal build --release benchmarks/read_rows_scan.cr -o "$bench_work/read-rows-baseline"
+)
+python3 -B scripts/read_rows_benchmark.py \
+  --manifest "$bench_fixture/fixture-manifest.json" --scratch "$bench_work" \
+  --crystal-bin "$bench_work/read-rows-crystal" \
+  --crystal-baseline-bin "$bench_work/read-rows-baseline" \
+  --cpp-bin "$bench_work/ch-build/clickhouse-read-rows" \
+  --layout wide --workers 1 --workers 4 --warmups 6 --repeats 36 \
+  --output "$bench_work/wide-shared.json"
+git worktree remove "$bench_work/crystal-baseline"
+```
+
+The comparison used the same Wide part and ClickHouse binary hashes as the
+initial run. All three Release runners scanned marks 0 through 15, with
+8,192 rows per mark and 131,072 rows of two `UInt64` columns. The fixture was
+on the external APFS SSD with a warm OS page cache. Each worker track used
+six warmup rounds and 36 recorded rounds. Each of the six runner orders
+occurred six times in the recorded rounds.
+
+Both Crystal versions prepare their selected readers inside the preparation
+timer. ClickHouse retains the loaded storage part context and constructs
+fresh readers inside that timer. Each total sample is its own preparation
+plus scan. Times are in milliseconds.
+
+| Runner | Workers | Prepare p50 | Scan p50 / p95 | Total p50 / p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Crystal baseline | 1 | 0.2896 | 1.8000 / 2.1306 | 2.0907 / 2.4755 |
+| Crystal shared | 1 | 0.2551 | 1.7926 / 2.1035 | 2.0626 / 2.3945 |
+| ClickHouse readRows | 1 | 0.0086 | 1.0121 / 1.0931 | 1.0246 / 1.1268 |
+| Crystal baseline | 4 | 1.0222 | 0.7396 / 0.9557 | 1.7635 / 2.0054 |
+| Crystal shared | 4 | 0.2458 | 0.7302 / 0.9465 | 0.9909 / 1.2204 |
+| ClickHouse readRows | 4 | 0.0195 | 0.4744 / 0.5077 | 0.4917 / 0.5280 |
+
+| Runner | 1-to-4 scan p50 speedup | 1-to-4 total p50 speedup |
+| --- | ---: | ---: |
+| Crystal baseline | 2.43× | 1.19× |
+| Crystal shared | 2.46× | 2.08× |
+| ClickHouse readRows | 2.13× | 2.08× |
+
+With four workers, shared admission improved preparation p50 by 4.16× and
+total p50 by 1.78×. The observed scan p50 moved by 1.3%. Each of the three
+runner positions gave preparation p50 between 0.996 and 1.031 ms for the
+baseline and between 0.245 and 0.259 ms for the shared reader. The shared
+Crystal scan took 1.54× the ClickHouse scan p50 with four workers, or 2.02×
+including the per-scan preparation in both runners.
+
+All 216 recorded scans matched the complete ordered oracle. Part-file hashes
+were unchanged and all first-frame corruption controls passed. A separate
+four-worker control flipped a checksum in mark 13. All three runners read
+the exact rows when the mark was skipped and rejected the scan when the
+fourth worker was assigned that mark. All three also rejected a wrong oracle.
+The Release suite passed 48 examples. The `-Dwithout_mt` suite passed 12.
+The admission spec checks single parsing of both selected
+mark files and metadata for each of two distinct parts, exact values and batch
+coordinates, a mixed numeric selection, and malformed metadata rejection.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Crystal baseline runner | `7349305c0b818ec907b2384cd180d44be628996a030d23551add13f7428b6866` |
+| Crystal shared runner | `3b4652c094d92fbd0670b9f33b569034765c6ec6de328a7fa64326a9010b3626` |
+| Wide shared benchmark report | `306c9ede439fce802063bada0ab2bdc7b01fc7207f57b6e0e63d3e4589b92b95` |
 
 ### Compact pilot budget cutoff
 

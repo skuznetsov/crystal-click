@@ -63,7 +63,7 @@ module CrystalClickReadRowsScan
           if config.layout == "wide"
             run_wide_scan(
               config,
-              prepared.as(Array({CrystalClick::WidePart, CrystalClick::WidePart})),
+              prepared.as({CrystalClick::WidePart, CrystalClick::WidePart}),
               worker_marks,
               worker_starts,
               keys,
@@ -224,21 +224,14 @@ module CrystalClickReadRowsScan
     prepared = prepare_scan(config)
     case config.layout
     when "wide"
-      readers = prepared.as(Array({CrystalClick::WidePart, CrystalClick::WidePart}))
-      first = readers[0]
+      pair = prepared.as({CrystalClick::WidePart, CrystalClick::WidePart})
       validate_mark_grid!(
-        first[0].row_count,
-        first[0].mark_row_counts,
-        first[1].row_count,
-        first[1].mark_row_counts,
+        pair[0].row_count,
+        pair[0].mark_row_counts,
+        pair[1].row_count,
+        pair[1].mark_row_counts,
         config,
       )
-      readers.each do |pair|
-        unless pair[0].row_count == first[0].row_count && pair[1].row_count == first[1].row_count &&
-               pair[0].mark_row_counts == first[0].mark_row_counts && pair[1].mark_row_counts == first[1].mark_row_counts
-          raise CrystalClick::CorruptPartError.new("Wide worker readers disagree on the mark grid")
-        end
-      end
     when "compact"
       table, _budget, _context = prepared.as({CrystalClick::CompactPartTable, CrystalClick::CompressedStreamBudget, CrystalClick::CompactPartPhysicalContext})
       mark_counts = table.part_mark_row_counts
@@ -257,18 +250,19 @@ module CrystalClickReadRowsScan
     nil
   end
 
-  private def prepare_scan(config : Config) : Array({CrystalClick::WidePart, CrystalClick::WidePart}) |
+  private def prepare_scan(config : Config) : {CrystalClick::WidePart, CrystalClick::WidePart} |
                                               {CrystalClick::CompactPartTable, CrystalClick::CompressedStreamBudget, CrystalClick::CompactPartPhysicalContext}
     case config.layout
     when "wide"
-      readers = [] of {CrystalClick::WidePart, CrystalClick::WidePart}
-      config.workers.times do
-        key_reader = CrystalClick::WidePart.open(config.part, "pk", verify_data_checksums: true)
-        value_reader = CrystalClick::WidePart.open(config.part, "value", verify_data_checksums: true)
-        validate_wide_columns!(key_reader, value_reader)
-        readers << {key_reader, value_reader}
-      end
-      readers
+      readers = CrystalClick::WidePart.open_primitive_numeric_columns(
+        config.part,
+        COLUMNS,
+        verify_data_checksums: true,
+      ) || raise(CrystalClick::UnsupportedFormatError.new("Wide direct primitive numeric metadata sharing is unavailable"))
+      raise CrystalClick::CorruptPartError.new("Wide reader returned an invalid selected column count") unless readers.size == 2
+      key_reader, value_reader = readers
+      validate_wide_columns!(key_reader, value_reader)
+      {key_reader, value_reader}
     when "compact"
       table = CrystalClick::CompactPartTable.open_selected_typed([config.part], COLUMNS)
       validate_compact_columns!(table)
@@ -331,7 +325,7 @@ module CrystalClickReadRowsScan
 
   private def run_wide_scan(
     config : Config,
-    readers : Array({CrystalClick::WidePart, CrystalClick::WidePart}),
+    readers : {CrystalClick::WidePart, CrystalClick::WidePart},
     worker_marks : Array(Array(Int32)),
     worker_starts : Array(Int32),
     keys : Array(UInt64),
@@ -340,11 +334,10 @@ module CrystalClickReadRowsScan
     worker = ->(worker_index : Int32) do
       mark_ids = worker_marks[worker_index]
       start_sequence = worker_starts[worker_index]
-      pair = readers[worker_index]
       scratch_keys = Array(UInt64).new(config.mark_rows, 0_u64)
       scratch_values = Array(UInt64).new(config.mark_rows, 0_u64)
-      scan_wide_column(pair[0], "pk", mark_ids, start_sequence, config.mark_rows, scratch_keys, keys)
-      scan_wide_column(pair[1], "value", mark_ids, start_sequence, config.mark_rows, scratch_values, values)
+      scan_wide_column(readers[0], "pk", mark_ids, start_sequence, config.mark_rows, scratch_keys, keys)
+      scan_wide_column(readers[1], "value", mark_ids, start_sequence, config.mark_rows, scratch_values, values)
       nil
     end
     run_workers(config.workers, worker)

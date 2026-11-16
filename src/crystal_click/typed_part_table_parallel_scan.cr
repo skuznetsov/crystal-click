@@ -1,7 +1,7 @@
 module CrystalClick
   class TypedPartTable
     MAX_PARALLEL_SCAN_WORKERS = 32
-    private alias ParallelScanPartSource = {String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?, CompactPartTable?}
+    private alias ParallelScanPartSource = {String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?, CompactPartTable?, WidePartTable?}
 
     private struct ParallelScanMark
       getter part_index : Int32
@@ -30,8 +30,9 @@ module CrystalClick
     end
 
     # Scan round-robin physical marks on isolated worker contexts. Each worker
-    # opens one independent reader per touched part except admitted Compact
-    # ordinary UInt64 tables, whose read-only bindings and mark grid are shared.
+    # opens one independent reader per touched part except admitted ordinary
+    # Compact UInt64 and Wide primitive numeric tables, whose read-only bindings
+    # and mark grids are shared.
     # Compact readers share the original part's synchronized cumulative
     # transport budget. For workers: 1 this delegates to the ordinary serial
     # API. A request that has at most one nonempty mark also uses the serial path
@@ -86,7 +87,8 @@ module CrystalClick
           transport_budget = compact_reader.try(&.parallel_scan_transport_budget!)
           scan_context = compact_reader.try(&.parallel_uint64_scan_context)
           admitted_reader = scan_context ? compact_reader : nil
-          part_sources << {String.new(entry.path.to_slice), !compact_reader.nil?, transport_budget, scan_context, admitted_reader}
+          admitted_wide_reader = entry.reader.as?(WidePartTable).try(&.parallel_primitive_numeric_scan_context)
+          part_sources << {String.new(entry.path.to_slice), !compact_reader.nil?, transport_budget, scan_context, admitted_reader, admitted_wide_reader}
           part_starts << source_row_offset
           source_row_offset = checked_add_rows(source_row_offset, entry.row_count)
         end
@@ -256,7 +258,7 @@ module CrystalClick
         scan_workspace = nil.as(CompactUInt64ScanWorkspace?)
         part_marks.each_with_index do |marks, part_index|
           next if marks.empty?
-          path, compact, transport_budget, scan_context, admitted_reader = part_sources[part_index]
+          path, compact, transport_budget, scan_context, admitted_reader, admitted_wide_reader = part_sources[part_index]
           if compact
             reader = admitted_reader || begin
               budget = transport_budget || raise(CorruptPartError.new("parallel Compact part lost its transport budget"))
@@ -284,7 +286,7 @@ module CrystalClick
               end
             end
           else
-            reader = WidePartTable.open_selected_typed([path], @columns)
+            reader = admitted_wide_reader || WidePartTable.open_selected_typed([path], @columns)
             reader.scan_typed_mark_indices(marks, batch_rows) do |batch|
               send_parallel_batch!(batch, output, acknowledgement)
             end
