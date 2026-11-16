@@ -103,6 +103,32 @@ describe CrystalClick::CityHashV1 do
     end
   end
 
+  it "hashes unaligned exact byte spans with the same little-endian result" do
+    {0, 1, 3, 4, 7, 8, 9, 15, 16, 17, 63, 64, 127, 128, 129, 257}.each do |length|
+      expected_bytes = city_hash_spec_pattern(length)
+      storage = Bytes.new(length + 2, 0xee_u8)
+      storage[1, length].copy_from(expected_bytes) unless expected_bytes.empty?
+      unaligned = storage[1, length]
+
+      CrystalClick::CityHashV1.hash128(unaligned).should eq(
+        CrystalClick::CityHashV1.hash128(expected_bytes)
+      )
+      CrystalClick::CityHashV1.hash128_with_seed(
+        unaligned,
+        0x123456789abcdef0_u64,
+        0xfedcba9876543210_u64
+      ).should eq(
+        CrystalClick::CityHashV1.hash128_with_seed(
+          expected_bytes,
+          0x123456789abcdef0_u64,
+          0xfedcba9876543210_u64
+        )
+      )
+      storage[0].should eq(0xee_u8)
+      storage[-1].should eq(0xee_u8)
+    end
+  end
+
   it "matches a ClickHouse-produced compressed-frame checksum" do
     path = File.expand_path("../test/fixtures/public/wide_u64_pk_raw/part/caa7f9c8e43d2fa739d1e26d71e99843.bin", __DIR__)
     bin_contents = File.read(path)

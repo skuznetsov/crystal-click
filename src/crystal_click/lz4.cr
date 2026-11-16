@@ -21,7 +21,7 @@ module CrystalClick
         literal_length, input_index = length(input, input_index, token >> 4)
         ensure_input(input_index, literal_length, input.size)
         ensure_output(output_index, literal_length, output.size)
-        input[literal_start = input_index, literal_length].copy_to(output[output_index, literal_length])
+        copy_literals(input, input_index, output, output_index, literal_length)
         input_index += literal_length
         output_index += literal_length
 
@@ -66,6 +66,29 @@ module CrystalClick
       output
     end
 
+    @[AlwaysInline]
+    private def self.copy_literals(input : Bytes, input_index : Int32, output : Bytes, output_index : Int32, length : Int32) : Nil
+      return if length == 0
+
+      source = input.to_unsafe + input_index
+      destination = output.to_unsafe + output_index
+      case length
+      when 1
+        source.copy_to(destination, 1)
+      when 2
+        source.copy_to(destination, 2)
+      when 3
+        source.copy_to(destination, 2)
+        (source + 2).copy_to(destination + 2, 1)
+      when 4
+        source.copy_to(destination, 4)
+      else
+        source.copy_to(destination, length)
+      end
+      nil
+    end
+
+    @[AlwaysInline]
     private def self.length(input : Bytes, index : Int, nibble : UInt8) : {Int32, Int32}
       value = nibble.to_i
       return {value, index} unless value == 15

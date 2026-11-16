@@ -265,20 +265,28 @@ module CrystalClick
       value ^ (value >> 47)
     end
 
+    @[AlwaysInline]
     private def self.fetch64(bytes : Bytes, offset : Int) : UInt64
+      span = bytes[offset, sizeof(UInt64)]
       value = 0_u64
-      8.times do |index|
-        value |= bytes[offset + index].to_u64 << (index * 8)
-      end
-      value
+      span.to_unsafe.copy_to(pointerof(value).as(UInt8*), sizeof(UInt64))
+      {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+        value
+      {% else %}
+        value.byte_swap
+      {% end %}
     end
 
+    @[AlwaysInline]
     private def self.fetch32(bytes : Bytes, offset : Int) : UInt32
+      span = bytes[offset, sizeof(UInt32)]
       value = 0_u32
-      4.times do |index|
-        value |= bytes[offset + index].to_u32 << (index * 8)
-      end
-      value
+      span.to_unsafe.copy_to(pointerof(value).as(UInt8*), sizeof(UInt32))
+      {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
+        value
+      {% else %}
+        value.byte_swap
+      {% end %}
     end
   end
 end

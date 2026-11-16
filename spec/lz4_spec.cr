@@ -66,6 +66,27 @@ describe CrystalClick::LZ4 do
     CrystalClick::LZ4.decode(input, 7).should eq(Bytes[0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61])
   end
 
+  it "copies zero through five literal bytes exactly at unaligned slice edges" do
+    {0, 1, 2, 3, 4, 5}.each do |length|
+      literals = Bytes.new(length) { |index| (0x31 + index).to_u8 }
+      encoded = Bytes.new(length + 1)
+      encoded[0] = (length << 4).to_u8
+      encoded[1, length].copy_from(literals) unless literals.empty?
+
+      input_storage = Bytes.new(encoded.size + 2, 0xee_u8)
+      input_storage[1, encoded.size].copy_from(encoded)
+      input = input_storage[1, encoded.size]
+      output_storage = Bytes.new(length + 2, 0xee_u8)
+      output = output_storage[1, length]
+
+      CrystalClick::LZ4.decode_into(input, output, length).should eq(literals)
+      output_storage[0].should eq(0xee_u8)
+      output_storage[-1].should eq(0xee_u8)
+      input_storage[0].should eq(0xee_u8)
+      input_storage[-1].should eq(0xee_u8)
+    end
+  end
+
   it "copies non-overlapping matches and forward matches at distances one through three" do
     prefix = Bytes[0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48]
     input = LZ4SpecFixture.match_block(prefix, prefix.size, 5)
