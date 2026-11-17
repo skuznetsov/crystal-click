@@ -3,8 +3,8 @@ require "../src/crystal_click"
 require "../src/crystal_click/read_rows_profile"
 
 # Direct native-part scan used by scripts/read_rows_benchmark.py. The process
-# admits one immutable part and oracle, retaining Wide readers across requests
-# while Compact keeps its existing fresh-reader scan path.
+# admits one immutable part and oracle, retaining Wide readers and mappings
+# across requests while Compact keeps its existing fresh-reader scan path.
 module CrystalClickReadRowsScan
   extend self
 
@@ -33,6 +33,8 @@ module CrystalClickReadRowsScan
 
   def run(args : Array(String)) : Nil
     ready = false
+    retained_wide_image = nil.as(CrystalClick::WideScanImage?)
+    primary_error = nil.as(Exception?)
     begin
       config = parse_config(args)
       validate_work_dir!(config.work_dir)
@@ -44,6 +46,12 @@ module CrystalClickReadRowsScan
                      else
                        nil
                      end
+      mmap_prepare_ns = nil.as(Int64?)
+      if readers = retained_wide_readers
+        mmap_prepare_started = Time.instant
+        retained_wide_image = open_wide_scan_image(readers)
+        mmap_prepare_ns = elapsed_ns(mmap_prepare_started)
+      end
       oracle = read_oracle(config)
       row_count = selected_row_count(config)
       keys = Array(UInt64).new(row_count, 0_u64)
@@ -53,9 +61,9 @@ module CrystalClickReadRowsScan
         (config.marks.size * index // config.workers).to_i32
       end
 
-      # Wide metadata and marks were admitted and validated above. Keep the
-      # retained readers alive before READY; each request still creates a new
-      # scan image and performs its own data checksum and output verification.
+      # Wide metadata, marks, and read-only mappings are ready before READY.
+      # Each request reuses the image while performing fresh data checksums
+      # and output verification.
       STDOUT.puts "READY"
       STDOUT.flush
       ready = true
@@ -70,6 +78,7 @@ module CrystalClickReadRowsScan
             run_wide_scan(
               config,
               readers,
+              retained_wide_image || raise(CrystalClick::CorruptPartError.new("Wide scan image was not retained")),
               worker_marks,
               worker_starts,
               keys,
@@ -105,24 +114,42 @@ module CrystalClickReadRowsScan
             worker_marks,
             scan_profile,
             admission_ns,
+            mmap_prepare_ns,
+            retained_wide_image,
           )
           STDOUT.flush
         when "quit"
-          return nil
+          break
         else
           raise ArgumentError.new("expected scan or quit command")
         end
       end
     rescue ex
+      primary_error = ex
+    ensure
+      if image = retained_wide_image
+        retained_wide_image = nil
+        begin
+          image.close
+        rescue cleanup_error : CrystalClick::Error
+          if original_error = primary_error
+            primary_error = CrystalClick::MMapCleanupError.new(original_error, cleanup_error)
+          else
+            primary_error = cleanup_error
+          end
+        end
+      end
+    end
+    if error = primary_error
       if ready
-        if checksum_mismatch?(ex)
+        if checksum_mismatch?(error) && !error.is_a?(CrystalClick::MMapCleanupError)
           STDERR.puts "checksum mismatch"
         else
-          STDERR.puts "read_rows_scan: #{ex.message || ex.class.name}"
+          STDERR.puts "read_rows_scan: #{error.message || error.class.name}"
         end
         exit(3)
       else
-        STDERR.puts "read_rows_scan: #{ex.message || ex.class.name}"
+        STDERR.puts "read_rows_scan: #{error.message || error.class.name}"
         exit(64)
       end
     end
@@ -341,6 +368,7 @@ module CrystalClickReadRowsScan
   private def run_wide_scan(
     config : Config,
     readers : {CrystalClick::WidePart, CrystalClick::WidePart},
+    image : CrystalClick::WideScanImage,
     worker_marks : Array(Array(Int32)),
     worker_starts : Array(Int32),
     keys : Array(UInt64),
@@ -348,7 +376,6 @@ module CrystalClickReadRowsScan
     scan_profile : CrystalClick::ReadRowsProfile::Scan?,
     scan_started : Time::Instant,
   ) : Nil
-    image = open_wide_scan_image(readers, scan_profile)
     worker = ->(worker_index : Int32) do
       mark_ids = worker_marks[worker_index]
       start_sequence = worker_starts[worker_index]
@@ -358,71 +385,32 @@ module CrystalClickReadRowsScan
       scan_wide_column(readers[1], "value", mark_ids, start_sequence, config.mark_rows, scratch_values, values, image)
       nil
     end
-    begin
-      {% if flag?(:read_rows_profile) %}
-        profiled_worker = ->(worker_index : Int32) do
-          if profile = scan_profile
-            profile_worker = profile.workers[worker_index]
-            profile_worker.mark_start(scan_started)
-            CrystalClick::ReadRowsProfile.with_worker(profile_worker) do
-              begin
-                worker.call(worker_index)
-              ensure
-                profile_worker.mark_end(scan_started)
-              end
+    {% if flag?(:read_rows_profile) %}
+      profiled_worker = ->(worker_index : Int32) do
+        if profile = scan_profile
+          profile_worker = profile.workers[worker_index]
+          profile_worker.mark_start(scan_started)
+          CrystalClick::ReadRowsProfile.with_worker(profile_worker) do
+            begin
+              worker.call(worker_index)
+            ensure
+              profile_worker.mark_end(scan_started)
             end
-          else
-            worker.call(worker_index)
           end
+        else
+          worker.call(worker_index)
         end
-        run_workers(config.workers, profiled_worker, scan_profile)
-      {% else %}
-        run_workers(config.workers, worker)
-      {% end %}
-    ensure
-      close_wide_scan_image(image, scan_profile)
-    end
+      end
+      run_workers(config.workers, profiled_worker, scan_profile)
+    {% else %}
+      run_workers(config.workers, worker)
+    {% end %}
     nil
   end
 
-  private def open_wide_scan_image(
-    readers : {CrystalClick::WidePart, CrystalClick::WidePart},
-    scan_profile : CrystalClick::ReadRowsProfile::Scan?,
-  ) : CrystalClick::WideScanImage
+  private def open_wide_scan_image(readers : {CrystalClick::WidePart, CrystalClick::WidePart}) : CrystalClick::WideScanImage
     paths = readers.map(&.parallel_numeric_scan_data_path).to_a
-    {% if flag?(:read_rows_profile) %}
-      if profile = scan_profile
-        open_started = Time.instant
-        image = CrystalClick::WideScanImage.open(paths)
-        profile.shared_mmap.record_open(elapsed_ns(open_started), image.mapping_count, image.mapped_bytes)
-        image
-      else
-        CrystalClick::WideScanImage.open(paths)
-      end
-    {% else %}
-      CrystalClick::WideScanImage.open(paths)
-    {% end %}
-  end
-
-  private def close_wide_scan_image(
-    image : CrystalClick::WideScanImage,
-    scan_profile : CrystalClick::ReadRowsProfile::Scan?,
-  ) : Nil
-    {% if flag?(:read_rows_profile) %}
-      if profile = scan_profile
-        close_started = Time.instant
-        begin
-          image.close
-        ensure
-          profile.shared_mmap.record_close(elapsed_ns(close_started), image.mapping_count)
-        end
-      else
-        image.close
-      end
-    {% else %}
-      image.close
-    {% end %}
-    nil
+    CrystalClick::WideScanImage.open(paths, shared: true)
   end
 
   private def scan_wide_column(
@@ -626,6 +614,8 @@ module CrystalClickReadRowsScan
     worker_marks : Array(Array(Int32)),
     scan_profile : CrystalClick::ReadRowsProfile::Scan?,
     admission_ns : Int64?,
+    mmap_prepare_ns : Int64?,
+    retained_wide_image : CrystalClick::WideScanImage?,
   ) : Nil
     STDOUT.puts(JSON.build do |json|
       json.object do
@@ -633,6 +623,9 @@ module CrystalClickReadRowsScan
         json.field "prepare_ns", prepare_ns
         if admission = admission_ns
           json.field "admission_ns", admission
+        end
+        if mmap_prepare = mmap_prepare_ns
+          json.field "mmap_prepare_ns", mmap_prepare
         end
         json.field "rows", rows
         json.field "effective_workers", workers
@@ -658,6 +651,14 @@ module CrystalClickReadRowsScan
                   json.field "map_calls", profile.shared_mmap.map_calls
                   json.field "unmap_calls", profile.shared_mmap.unmap_calls
                   json.field "mapped_bytes", profile.shared_mmap.mapped_bytes
+                end
+              end
+              if image = retained_wide_image
+                json.field "retained_mmap" do
+                  json.object do
+                    json.field "map_calls", image.mapping_count
+                    json.field "mapped_bytes", image.mapped_bytes
+                  end
                 end
               end
               if workers == 4

@@ -142,22 +142,23 @@ that list with one or four workers and verify the compressed data frame
 checksums during the scan.
 
 Startup admits the immutable part and allocates the output buffers. Crystal
-Wide retains its selected column readers across commands. Its one-time
-admission timer covers opening those readers and validating the selected
-mark grid. ClickHouse retains the storage context and builds fresh reader
-cursors for each scan. Crystal Compact prepares a fresh typed table, mark
-grid, frame index, and transport budget for each scan. Per-scan preparation
-is timed separately. The scan timer covers worker startup and joins, data
-stream opens and closes, checksum verification, decompression, typed batches,
-and one copy of each batch into the ordered output buffers.
+Wide retains its selected column readers and one mapping per selected
+column across commands. Its one-time admission timer covers opening the
+readers and validating the selected mark grid. The mapping timer covers
+opening the data image before the first scan. ClickHouse retains the storage
+context and builds fresh reader cursors for each scan. Crystal Compact
+prepares a fresh typed table, mark grid, frame index, and transport budget
+for each scan. Per-scan preparation is timed separately. The scan timer
+covers worker startup and joins, checksum verification, decompression,
+typed batches, and one copy of each batch into the ordered output buffers.
+It includes stream opens and closes performed within that interval.
 ClickHouse calls `IMergeTreeReader::readRows` once per selected mark and
 continues the reader across consecutive marks. It uses synchronous `pread`
-with asynchronous mark loads and reader caches disabled. The current Crystal
-Wide runner opens one mapping per selected column for the duration of the
-scan, with the same views across workers and mark runs. Crystal Compact uses
-one mapping per part and a decode workspace per worker, then yields batches
-of at most 4,096 rows. Each runner validates the complete output against the
-column-major fixture oracle after stopping the timer.
+with asynchronous mark loads and reader caches disabled. Crystal Wide
+workers borrow the same read-only data views through each scan. Crystal
+Compact uses one mapping per part and a decode workspace per worker, then
+yields batches of at most 4,096 rows. Each runner validates the complete
+output against the column-major fixture oracle after stopping the timer.
 Parent-side checks require the same observed marks per worker and unchanged
 part files. Warmups populate the OS page cache. Two-runner comparisons
 alternate order. Comparisons that include a second Crystal binary cycle
@@ -204,9 +205,9 @@ python3 -B scripts/read_rows_benchmark.py \
 
 The report includes binary and part hashes, selected marks, p50 and p95 for
 per-scan preparation, scan time, and their per-sample sum. It records Wide
-reader admission once per retained Crystal process. ClickHouse storage
-context startup precedes the measured intervals. To test gaps in the mark
-sequence, use
+reader admission and data mapping time once per retained Crystal process.
+ClickHouse storage context startup precedes the measured intervals. To test
+gaps in the mark sequence, use
 `--marks 0,2,4,7,8,10,13,15` on the 16-mark fixture.
 
 Clang 23.1.5 on macOS required warning demotions scoped to three source files
@@ -381,11 +382,12 @@ workers, and the remainder includes uninstrumented work, scheduling delays,
 and parts of the measurement overhead. Medians of individual stages can
 come from different samples.
 
-The scan-owned Wide mappings appear in a separate `shared_mmap` object.
-Its open and close intervals fall outside the workers' envelope and
-inside the scan interval. The validator checks one map and unmap per
-selected stream, the physical byte lengths, and zero worker-side mmap
-calls. The stage results below used the previous per-worker mapping path.
+Wide mapping work inside a scan appears in `shared_mmap`. Its open and
+close intervals fall outside the workers' envelope. For scan-owned images
+the validator checks one map and unmap per stream and the physical byte
+lengths. For retained images it checks the startup counts and byte lengths
+in `retained_mmap` and zero mapping work inside the scan. Both cases require
+zero worker-side mmap calls. The stage results below used per-worker maps.
 
 For Crystal, build a second runner with `-Dread_rows_profile`. On the
 ClickHouse side, save the uninstrumented executable first, apply the
@@ -673,15 +675,15 @@ passed five examples, including a mixed primitive numeric selection.
 
 ### Retaining Wide metadata across scans
 
-The Crystal runner keeps the same validated Wide column readers for all
+Crystal `8d67d01` keeps the same validated Wide column readers for all
 `scan` commands in one process. Reader admission parses part metadata and
-the two selected `.mrk2` indexes and validates their row grid before `READY`.
-Each scan maps the two data files, checks the compressed frames, and
-materializes the selected rows with its own worker state.
+the two selected `.mrk2` indexes and validates their row grid before
+`READY`. Each scan maps the two data files, checks the compressed frames,
+and materializes the selected rows with its own worker state.
 
-Compare the retained runner with a Release build from `d2ff8c4`, which
-already shares data mappings within one scan and admits the columns again
-for each scan after its startup validation. Pass that binary with
+Compare a Release build from `8d67d01` with `d2ff8c4`, which already shares
+data mappings within one scan and admits the columns again for each scan
+after its startup validation. Pass `d2ff8c4` with
 `--crystal-baseline-bin` and use `--layout wide --require-admission --warmups 6
 --repeats 48`. Set `--workers 4 --workers 1` for the reversed worker order.
 The driver verifies consistent one-time
@@ -748,6 +750,109 @@ and reported per-scan preparation on both.
 | Benchmark driver | `1f34446b669d2d9134e2861fbcd69d1e8386e4d2b58d2146ec538fe6f2b8d3b7` |
 | 1 → 4 report | `921870e4c994cb38d899f1c832251f2d0e9ef4e769b1cee14e23ecce134ce776` |
 | 4 → 1 report | `8972d936197931a9c744508f7411dbd38a9e661498014c268968b7e9b57a242f` |
+
+### Retaining Wide data mappings across scans
+
+Baseline `8d67d01` already retains the admitted Wide metadata and marks.
+A retained data image belongs to one runner session over the same immutable
+part, with one mapping per selected file. Workers borrow its bytes during
+each scan and keep their decode state private. The image closes after the
+last worker joins on shutdown or error. The existing table facade scopes
+ordinary parallel scans to their own mappings.
+
+The retained image uses `PROT_READ | MAP_SHARED`. In the macOS APFS test,
+a resident `MAP_PRIVATE` view continued to return the original checksum
+byte after a same-inode write and `fsync`. The read-only shared view returned
+the updated byte. The session assumes the part files keep their lengths
+and identities. The corruption probe writes a single checksum byte to
+the same inode and preserves the file length.
+
+Time metadata admission and image opening separately from scan latency.
+Compare uninstrumented Release binaries against the pinned native
+`readRows` runner on the unchanged 16-mark Wide part. A secondary control
+opens and closes `MAP_SHARED` views on every scan to isolate the effect of
+lifetime from the mapping flags. Both worker orders must preserve exact
+mark coverage, bytewise output, and checksum errors. Repeated scans must
+avoid new mappings and recheck all selected frames. Reverting the runner
+change restores scan-owned mappings.
+
+Run the direct benchmark command above with the `8d67d01` Release baseline
+and the retained-mapping Release candidate. Add `--crystal-baseline-bin`,
+`--layout wide --require-retained-mmap --warmups 6 --repeats 48`, and run
+both `--workers 1 --workers 4` and `--workers 4 --workers 1`. For the
+same-flag control, rebuild `8d67d01` with `MAP_SHARED` in the offset-zero
+`mmap` call in `MMapDataSource.open_mapped_file`. That build still maps and
+unmaps both streams per scan.
+
+The Apple M2 Max comparison used Crystal 1.22.3 and uninstrumented
+ClickHouse `d9bcb5ab` built with LLVM 23.1.5. Each arm read the same
+warm-cache Wide MRK2 part, marks 0–15 with 8,192 rows per mark, and both
+`UInt64` columns. All six runner orders were balanced in each track. Each
+row of the table pools 96 timings across the two worker orders. Times are
+milliseconds. Total is computed by adding preparation and scan per sample.
+
+| Workers | Runner | Prepare p50 / p95 | Scan p50 / p95 | Total p50 / p95 |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | Crystal `8d67d01` | 0.0000 / 0.0000 | 1.5733 / 1.8039 | 1.5733 / 1.8039 |
+| 1 | Crystal retained mmap | 0.0000 / 0.0000 | 1.4267 / 1.6538 | 1.4267 / 1.6538 |
+| 1 | ClickHouse `readRows` | 0.0086 / 0.0166 | 1.0154 / 1.1098 | 1.0238 / 1.1251 |
+| 4 | Crystal `8d67d01` | 0.0000 / 0.0000 | 0.6891 / 0.8733 | 0.6891 / 0.8733 |
+| 4 | Crystal retained mmap | 0.0000 / 0.0000 | 0.5130 / 0.7419 | 0.5130 / 0.7419 |
+| 4 | ClickHouse `readRows` | 0.0174 / 0.0241 | 0.4589 / 0.5092 | 0.4763 / 0.5300 |
+
+One-time metadata admission took 0.360–0.453 ms and opening both mappings
+took 0.032–0.055 ms across the candidate's four primary processes. Opening
+the mappings leaves page faults to the first reads. The baseline maps and
+unmaps inside the scan timer. Candidate unmapping happens after the scan
+sequence. The native storage context is loaded before `READY`. Its per-scan
+preparation measures cursor creation, and cursor destruction follows the
+scan and oracle check.
+
+Retaining mappings lowered scan p50 by 9.3% at one worker and 25.6% at
+four. The same-flag control lowered p50 by 7.6% and 14.7%, respectively.
+Across the four campaigns, the candidate-to-native scan p50 ratio ranged
+from 1.40× to 1.43× at one worker and from 1.09× to 1.21× at four. In the
+primary pooled comparison, going from one to four workers sped up the
+median scan by 2.28× for the baseline, 2.78× for the candidate, and
+2.21× for `readRows`.
+
+All 1,152 timed scans passed the exact row oracle and mark partition checks.
+Every first-frame corruption control reported a checksum error. Both
+Crystal arms and `readRows` detected an in-place checksum change at mark
+13 between gapped scans at one and four workers. Each returned exact rows
+when the selected marks excluded the damaged frame and rejected a modified
+output oracle. The retained Crystal runner could read its admitted files
+after both data paths were renamed on a disposable copy. `8d67d01` failed
+when it tried to open those paths again. The original part manifest
+remained unchanged throughout.
+
+A diagnostic runner observed both mappings close on quit, EOF, invalid
+command, startup failure, and checksum failure. An injected cleanup failure
+left both the checksum and cleanup diagnostics available.
+
+Separate profile runs used six warmup pairs and 12 measured pairs per
+worker count. The median of the per-scan open and close interval sums was
+90.8 µs at one worker and 74.3 µs at four for `8d67d01`. The candidate
+opened two mappings covering 1,386,725 bytes at startup. Every measured
+scan had zero mapping work and checked and decompressed all 512 selected
+frames. The focused Wide and Compact mapping specs passed 10 examples in
+Release mode and eight with `-Dwithout_mt`.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Crystal `8d67d01` | `044c357c010fb26eff0bdc06b5c20acd9b0007fb1049ed7ae7e3b76b929d1cfb` |
+| Crystal retained mmap | `9292f5d0434a8e1b7d28b133d84b21bdf9af877e90ea76a00c648b1e16d3210b` |
+| Crystal scan-owned MAP_SHARED control | `3d67a4c76fa6e05ab5345cd15605cd9ea5613a02a5ef28156c77d17feb173503` |
+| ClickHouse `readRows` | `0a8fa83318635e32c92178517fd4114ac0ac7887e9ecd279dc19fd5040415114` |
+| Crystal `8d67d01` profile binary | `f161a958204821aed2686b04e5b84e545009779c64f17aa3ca043d261ef4956d` |
+| Crystal retained mmap profile binary | `e62f18457178bb718b672a63555eab41359b17de52528e65489fb1e0da363790` |
+| Benchmark driver | `47893c52529197be3afd002620dd76f0ca24313bc1d15f7e22d6e7642ac08959` |
+| Primary 1 → 4 report | `9038082844e6452e9bbd07a890210a59c67ecc294e07414451fcd8370af35340` |
+| Primary 4 → 1 report | `2c81a7cd5d32c2b2535ac1d22e49821e96c055b4dad0ea697489d60e78a966d2` |
+| Same-flag 1 → 4 report | `ba5948fc90d3d6615b3dc3fa336f162df3cb1d42c00c7ade782ac9512e30f2e4` |
+| Same-flag 4 → 1 report | `c685936e0830bf38a656733f5e2ba8274d5b748a227f5cb073c9590c85564c94` |
 
 ### Compact pilot budget cutoff
 
@@ -1520,8 +1625,9 @@ parallel, mmap, and W124 transport specs passed 31 examples with
   touched part, including when workers read disjoint mark ranges. A failed
   mapping open, a worker error, or a stopped callback must release every
   mapping opened by that scan.
-- The checked direct Wide runner must reuse the admitted columns and mark
-  indexes, return the same selected rows, and detect a data-frame checksum
+- The checked direct Wide runner must reuse the admitted columns, mark
+  indexes, and data image, then close the image when the runner exits. Each
+  scan must return the same selected rows and detect a data-frame checksum
   error introduced between scans on a disposable test part.
 - Splitting Compact marks between workers must keep a cumulative per-part
   transport limit. For the shared `UInt64` path, file and header work is

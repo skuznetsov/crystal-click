@@ -102,8 +102,8 @@ class CrystalClick::PartMetadataFileReader
 end
 
 module CrystalClick::MMapDataSource
-  def self.open_mapped_file(path : String, expected_size : Int64, max_size : Int64) : MappedFile
-    mapped_file = previous_def(path, expected_size, max_size)
+  def self.open_mapped_file(path : String, expected_size : Int64, max_size : Int64, shared : Bool = false) : MappedFile
+    mapped_file = previous_def(path, expected_size, max_size, shared: shared)
     if CompactParallelScanMappingProbe.watching?(path)
       CompactParallelScanMappingProbe.record_mapping_open(
         path,

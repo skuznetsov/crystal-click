@@ -60,8 +60,8 @@ module CrystalClick::WideParallelScanMappingProbe
 end
 
 module CrystalClick::MMapDataSource
-  def self.open_mapped_file(path : String, expected_size : Int64, max_size : Int64) : MappedFile
-    mapped_file = previous_def(path, expected_size, max_size)
+  def self.open_mapped_file(path : String, expected_size : Int64, max_size : Int64, shared : Bool = false) : MappedFile
+    mapped_file = previous_def(path, expected_size, max_size, shared: shared)
     if WideParallelScanMappingProbe.watching?(path)
       WideParallelScanMappingProbe.record_open(path, mapped_file.bytes.to_unsafe.address.to_u64)
     end
@@ -281,6 +281,111 @@ describe "Wide parallel typed scan mapping" do
         File.open(data_path, "wb") { |io| io.write(original) }
         CrystalClick::WideParallelScanMappingProbe.stop_observing
       end
+    ensure
+      CrystalClick::WideParallelScanMappingProbe.stop_observing
+      FileUtils.rm_rf(root)
+    end
+  end
+
+  it "serves consecutive checked scans from one borrowed Wide image" do
+    root = File.tempname("crystal-click-wide-scan-mapping-retained-")
+    Dir.mkdir(root)
+    begin
+      part_path = wide_mapping_copy_fixture(fixture, File.join(root, "all_1_1_0"))
+      readers = CrystalClick::WidePart.open_primitive_numeric_columns(
+        part_path,
+        ["pk", "value"],
+        verify_data_checksums: true,
+      ).not_nil!
+      mapped_paths = readers.map(&.parallel_numeric_scan_data_path)
+      data_paths = mapped_paths.dup
+      CrystalClick::WideParallelScanMappingProbe.begin_observing(data_paths)
+      image = CrystalClick::WideScanImage.open(mapped_paths)
+      begin
+        image.mapping_count.should eq(2_u64)
+        image.mapped_bytes.should eq(data_paths.sum { |path| File.size(path).to_u64 })
+
+        snapshots = [] of {Array(UInt64), Array(UInt64)}
+        2.times do
+          outputs = [] of Array(UInt64)
+          readers.each_with_index do |reader, index|
+            column = index == 0 ? "pk" : "value"
+            scratch = Array(UInt64).new(reader.mark_row_counts.max.to_i, 0_u64)
+            values = [] of UInt64
+            reader.scan_uint64_mark_range_into(
+              column,
+              0,
+              reader.mark_count,
+              scratch.to_unsafe.to_slice(scratch.size),
+              image,
+            ) do |mark_values|
+              mark_values.each { |value| values << value }
+            end
+            outputs << values
+          end
+          snapshots << {outputs[0], outputs[1]}
+        end
+        snapshots[1].should eq(snapshots[0])
+      ensure
+        image.close
+      end
+      wide_mapping_assert_one_per_path(data_paths)
+    ensure
+      CrystalClick::WideParallelScanMappingProbe.stop_observing
+      FileUtils.rm_rf(root)
+    end
+  end
+
+  it "verifies in-place file changes on a later borrowed image scan" do
+    root = File.tempname("crystal-click-wide-scan-mapping-mutation-")
+    Dir.mkdir(root)
+    begin
+      part_path = wide_mapping_copy_fixture(fixture, File.join(root, "all_1_1_0"))
+      readers = CrystalClick::WidePart.open_primitive_numeric_columns(
+        part_path,
+        ["pk", "value"],
+        verify_data_checksums: true,
+      ).not_nil!
+      mapped_paths = readers.map(&.parallel_numeric_scan_data_path)
+      data_path = mapped_paths[0]
+      original_checksum = File.open(data_path, "rb") { |io| io.read_byte.not_nil! }
+      data_paths = mapped_paths.dup
+      CrystalClick::WideParallelScanMappingProbe.begin_observing(data_paths)
+      image = CrystalClick::WideScanImage.open(mapped_paths, shared: true)
+      begin
+        scratch = Array(UInt64).new(readers[0].mark_row_counts.max.to_i, 0_u64)
+        readers[0].scan_uint64_mark_range_into(
+          "pk",
+          0,
+          readers[0].mark_count,
+          scratch.to_unsafe.to_slice(scratch.size),
+          image,
+        ) { |_mark_values| }
+
+        File.open(data_path, "r+b") do |io|
+          io.seek(0)
+          io.write_byte(original_checksum ^ 1_u8)
+          io.flush
+        end
+        error = expect_raises(CrystalClick::CorruptPartError) do
+          readers[0].scan_uint64_mark_range_into(
+            "pk",
+            0,
+            readers[0].mark_count,
+            scratch.to_unsafe.to_slice(scratch.size),
+            image,
+          ) { |_mark_values| }
+        end
+        error.message.not_nil!.should contain("checksum mismatch")
+      ensure
+        File.open(data_path, "r+b") do |io|
+          io.seek(0)
+          io.write_byte(original_checksum)
+          io.flush
+        end
+        image.close
+      end
+      wide_mapping_assert_one_per_path(data_paths)
     ensure
       CrystalClick::WideParallelScanMappingProbe.stop_observing
       FileUtils.rm_rf(root)

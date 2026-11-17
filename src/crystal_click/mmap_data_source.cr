@@ -8,7 +8,7 @@ module CrystalClick
     end
   end
 
-  # Owns a read-only mapping for exactly one bounded callback operation.
+  # Opens read-only mappings for bounded scan operations.
   module MMapDataSource
     {% if flag?(:unix) %}
       private struct NativeBackend
@@ -40,10 +40,11 @@ module CrystalClick
       end
 
       # :nodoc:
-      # Explicit scan-scoped owner for callers that must share one immutable
-      # mapping across isolated workers. The file descriptor is closed after
-      # mmap succeeds; workers retain only the read-only mapping until the
-      # scan owner closes it after joining them.
+      # Explicit owner for callers that retain a read-only mapping across
+      # scans or share it among isolated workers. The file descriptor is
+      # closed after mmap succeeds. The owner closes the mapping after users
+      # finish. By default mappings are private. A shared mapping exposes
+      # writes to the same file through the read-only view.
       class MappedFile
         getter bytes : Bytes
 
@@ -68,7 +69,7 @@ module CrystalClick
         end
       end
 
-      def self.open_mapped_file(path : String, expected_size : Int64, max_size : Int64) : MappedFile
+      def self.open_mapped_file(path : String, expected_size : Int64, max_size : Int64, shared : Bool = false) : MappedFile
         file = open_regular_file(path, expected_size, max_size)
 
         pointer = Pointer(Void).null
@@ -79,7 +80,8 @@ module CrystalClick
             raise CorruptPartError.new("data file exceeds supported in-memory domain")
           end
           size = expected_size.to_u64
-          pointer = LibC.mmap(nil, size, LibC::PROT_READ, LibC::MAP_PRIVATE, file.fd, 0_i64)
+          flags = shared ? LibC::MAP_SHARED : LibC::MAP_PRIVATE
+          pointer = LibC.mmap(nil, size, LibC::PROT_READ, flags, file.fd, 0_i64)
           raise CorruptPartError.new("cannot map data file") if pointer == LibC::MAP_FAILED
           mapped_size = size
           mapped = true
@@ -207,7 +209,7 @@ module CrystalClick
         end
       end
 
-      def self.open_mapped_file(path : String, expected_size : Int64, max_size : Int64) : MappedFile
+      def self.open_mapped_file(path : String, expected_size : Int64, max_size : Int64, shared : Bool = false) : MappedFile
         raise UnsupportedFormatError.new("mmap data source is unsupported on this platform")
       end
 

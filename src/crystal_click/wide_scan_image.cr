@@ -1,7 +1,7 @@
 module CrystalClick
   # Owns read-only mappings for the selected ordinary Wide numeric streams in
-  # one part during one scan. The caller controls the lifetime; this object is
-  # never retained by a WidePart reader.
+  # one part for a scan session. Readers borrow the mappings and the caller
+  # manages their lifetime across scans.
   class WideScanImage
     getter mapping_count : UInt64
     getter mapped_bytes : UInt64
@@ -9,17 +9,21 @@ module CrystalClick
     @files : Hash(String, MMapDataSource::MappedFile)
     @closed : Bool
 
-    def self.open(paths : Array(String), max_size : Int64 = WidePart::MAX_DATA_FILE_BYTES) : WideScanImage
-      new(paths, max_size)
+    def self.open(
+      paths : Array(String),
+      max_size : Int64 = WidePart::MAX_DATA_FILE_BYTES,
+      shared : Bool = false,
+    ) : WideScanImage
+      new(paths, max_size, shared)
     end
 
-    private def initialize(paths : Array(String), max_size : Int64)
+    private def initialize(paths : Array(String), max_size : Int64, shared : Bool)
       @files = Hash(String, MMapDataSource::MappedFile).new
       @closed = false
       @mapping_count = 0_u64
       @mapped_bytes = 0_u64
       begin
-        paths.each { |path| map_file(path, max_size) }
+        paths.each { |path| map_file(path, max_size, shared) }
       rescue ex
         begin
           close
@@ -53,13 +57,13 @@ module CrystalClick
       nil
     end
 
-    private def map_file(path : String, max_size : Int64) : Nil
+    private def map_file(path : String, max_size : Int64, shared : Bool) : Nil
       raise CorruptPartError.new("Wide scan image is closed") if @closed
       return nil if @files.has_key?(path)
 
       size = File.size(path)
       raise CorruptPartError.new("data file exceeds limit") if size <= 0 || size > max_size
-      file = MMapDataSource.open_mapped_file(path, size, max_size)
+      file = MMapDataSource.open_mapped_file(path, size, max_size, shared: shared)
       @files[path] = file
       @mapping_count += 1_u64
       @mapped_bytes += file.bytes.size.to_u64

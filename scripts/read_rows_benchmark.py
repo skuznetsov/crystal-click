@@ -26,6 +26,8 @@ PROFILE_TRANSPORTS = {"crystal_profile": "mmap", "clickhouse_profile": "pread"}
 PROFILE_STAGES = ("transport_ns", "io_lifecycle_ns", "checksum_ns", "lz4_ns",
                   "materialize_copy_ns", "output_copy_ns")
 SHARED_MMAP_FIELDS = ("open_ns", "close_ns", "map_calls", "unmap_calls", "mapped_bytes")
+RETAINED_MMAP_FIELDS = ("map_calls", "mapped_bytes")
+PROCESS_TIMING_FIELDS = ("admission_ns", "mmap_prepare_ns")
 
 
 class Runner:
@@ -116,6 +118,20 @@ def open_runner(binary: Path, root: Path, part: Path, layout: str, marks: list[i
                 process.kill()
 
 
+def observe_process_timing(runner: Runner, engine: str, sample: dict, field: str,
+                           values: dict[str, int | None]) -> int | None:
+    present = field in sample
+    value = sample[field] if present else None
+    if present:
+        runner.check(type(value) is int and value >= 0, f"invalid one-time {field} duration")
+    if engine in values:
+        runner.check(values[engine] == value,
+                     f"{field} presence or value changed within the runner process")
+    else:
+        values[engine] = value
+    return value
+
+
 def part_manifest_sha256(part: Path) -> str:
     files = []
     for path in sorted(part.rglob("*")):
@@ -202,7 +218,8 @@ def wide_lz4_geometry(part: Path, mark_count: int, mark_rows: int) -> tuple[list
 
 
 def validate_profile(runner: Runner, sample: dict, engine: str, expected_frames: list[int],
-                     worker_marks: list[list[int]], mark_rows: int, expected_mapped_bytes: int) -> dict:
+                     worker_marks: list[list[int]], mark_rows: int, expected_mapped_bytes: int,
+                     require_retained_mmap: bool = False) -> dict:
     profile = sample.get("profile")
     runner.check(isinstance(profile, dict), "missing Wide stage profile")
     runner.check(profile.get("version") == 1, "unsupported Wide stage profile version")
@@ -211,14 +228,33 @@ def validate_profile(runner: Runner, sample: dict, engine: str, expected_frames:
     runner.check(isinstance(workers, list) and len(workers) == len(worker_marks), "wrong profile worker count")
     crystal = engine == "crystal_profile"
     shared_mmap = profile.get("shared_mmap")
+    retained_mmap = profile.get("retained_mmap")
+    if require_retained_mmap and crystal:
+        runner.check(isinstance(retained_mmap, dict), "missing retained Wide mmap profile")
+    if retained_mmap is not None:
+        runner.check(crystal and isinstance(retained_mmap, dict), "invalid retained Wide mmap profile")
+        for field in RETAINED_MMAP_FIELDS:
+            value = retained_mmap.get(field)
+            runner.check(type(value) is int and value >= 0, f"invalid retained mmap field {field}")
+        runner.check(retained_mmap["map_calls"] == 2,
+                     "expected two retained mappings, one per selected column")
+        runner.check(retained_mmap["mapped_bytes"] == expected_mapped_bytes,
+                     "wrong retained mapped byte count")
+        runner.check(isinstance(shared_mmap, dict),
+                     "retained mmap profile must include zeroed shared_mmap counters")
     if shared_mmap is not None:
         runner.check(crystal and isinstance(shared_mmap, dict), "invalid scan-owned mmap profile")
         for field in SHARED_MMAP_FIELDS:
             value = shared_mmap.get(field)
             runner.check(type(value) is int and value >= 0, f"invalid shared mmap field {field}")
-        runner.check(shared_mmap["map_calls"] == shared_mmap["unmap_calls"] == 2,
-                     "expected one mapping and unmapping per selected column")
-        runner.check(shared_mmap["mapped_bytes"] == expected_mapped_bytes, "wrong shared mapped byte count")
+        if retained_mmap is not None:
+            runner.check(all(shared_mmap[field] == 0 for field in SHARED_MMAP_FIELDS),
+                         "retained mappings must not be counted as scan-owned shared mmap work")
+        else:
+            runner.check(shared_mmap["map_calls"] == shared_mmap["unmap_calls"] == 2,
+                         "expected one mapping and unmapping per selected column")
+            runner.check(shared_mmap["mapped_bytes"] == expected_mapped_bytes,
+                         "wrong shared mapped byte count")
     stages = PROFILE_STAGES + (("frame_dispatch_ns",) if crystal else ())
     fields = ("start_ns", "end_ns", "checksum_calls", "lz4_calls", "transport_calls",
               "transport_bytes", "materialize_copy_bytes", "output_copy_bytes", *stages)
@@ -301,6 +337,11 @@ def summarize_profiles(profiles: list[dict], elapsed: list[int]) -> dict:
             field: statistics.median(p["shared_mmap"][field] for p in profiles)
             for field in SHARED_MMAP_FIELDS
         }
+    if profiles[0].get("retained_mmap") is not None:
+        summary["retained_mmap_p50"] = {
+            field: statistics.median(p["retained_mmap"][field] for p in profiles)
+            for field in RETAINED_MMAP_FIELDS
+        }
     return summary
 
 
@@ -308,13 +349,14 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
               marks: list[int], mark_rows: int, workers: int, oracle: Path,
               warmups: int, repeats: int, timeout: float,
               frame_geometry: tuple[list[int], int] | None = None,
-              require_admission: bool = False) -> dict:
+              require_admission: bool = False,
+              require_retained_mmap: bool = False) -> dict:
     root.mkdir()
     split = [marks[len(marks) * i // workers:len(marks) * (i + 1) // workers] for i in range(workers)]
     samples = {name: [] for name in binaries}
     preparations = {name: [] for name in binaries}
-    admission_values: dict[str, int | None] = {}
-    admission_observations = {name: 0 for name in binaries}
+    process_timing_values = {field: {} for field in PROCESS_TIMING_FIELDS}
+    process_timing_observations = {name: 0 for name in binaries}
     profiles = {name: [] for name in binaries if name in PROFILE_TRANSPORTS}
     expected_frames, expected_mapped_bytes = [], 0
     if frame_geometry is not None:
@@ -340,32 +382,50 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
             for name in order:
                 runner = runners[name]
                 sample = runner.scan(split, mark_rows)
-                has_admission = "admission_ns" in sample
-                if has_admission:
-                    admission_ns = sample["admission_ns"]
-                    runner.check(type(admission_ns) is int and admission_ns >= 0,
-                                 "invalid one-time admission duration")
-                else:
-                    admission_ns = None
-                if name in admission_values:
-                    runner.check(admission_values[name] == admission_ns,
-                                 "admission_ns presence or value changed within the runner process")
-                else:
-                    admission_values[name] = admission_ns
-                admission_observations[name] += 1
+                timing_values = {
+                    field: observe_process_timing(
+                        runner, name, sample, field,
+                        process_timing_values[field],
+                    )
+                    for field in PROCESS_TIMING_FIELDS
+                }
+                process_timing_observations[name] += 1
                 if require_admission and name == "crystal":
-                    runner.check(has_admission, "Wide Crystal candidate omitted admission_ns")
+                    runner.check(timing_values["admission_ns"] is not None,
+                                 "Wide Crystal candidate omitted admission_ns")
                     runner.check(sample["prepare_ns"] == 0,
                                  "retained Wide Crystal candidate reported per-scan preparation")
                 if require_admission and name == "crystal_baseline":
-                    runner.check(not has_admission,
+                    runner.check(timing_values["admission_ns"] is None,
                                  "per-scan Crystal baseline unexpectedly emitted admission_ns")
                     runner.check(sample["prepare_ns"] > 0,
                                  "per-scan Crystal baseline omitted per-scan preparation")
+                if require_retained_mmap and name == "crystal":
+                    runner.check(timing_values["admission_ns"] is not None,
+                                 "retained Wide Crystal candidate omitted admission_ns")
+                    runner.check(timing_values["mmap_prepare_ns"] is not None,
+                                 "retained Wide Crystal candidate omitted mmap_prepare_ns")
+                    runner.check(sample["prepare_ns"] == 0,
+                                 "retained Wide Crystal candidate reported per-scan preparation")
+                if require_retained_mmap and name == "crystal_baseline":
+                    runner.check(timing_values["admission_ns"] is not None,
+                                 "retained-metadata baseline omitted admission_ns")
+                    runner.check(timing_values["mmap_prepare_ns"] is None,
+                                 "retained-metadata baseline unexpectedly emitted mmap_prepare_ns")
+                    runner.check(sample["prepare_ns"] == 0,
+                                 "retained-metadata baseline reported per-scan preparation")
                 profile = None
                 if name in profiles:
                     profile = validate_profile(runner, sample, name, expected_frames, split, mark_rows,
-                                               expected_mapped_bytes)
+                                               expected_mapped_bytes,
+                                               require_retained_mmap=require_retained_mmap and
+                                               name == "crystal_profile")
+                    if require_retained_mmap and name == "crystal_profile":
+                        runner.check(timing_values["admission_ns"] is not None and
+                                     timing_values["mmap_prepare_ns"] is not None,
+                                     "retained Wide Crystal profile omitted a process timing")
+                        runner.check(sample["prepare_ns"] == 0,
+                                     "retained Wide Crystal profile reported per-scan preparation")
                 elif profiles:
                     runner.check("profile" not in sample, "control runner emitted a profile")
                 if index >= warmups:
@@ -396,8 +456,10 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
             ],
             "rows_per_second": rows * 1e9 / median,
             "decoded_gib_per_second": rows * 16 * 1e9 / (median * 2**30),
-            "admission_ns": admission_values[name],
-            "admission_observations_verified": admission_observations[name],
+            "admission_ns": process_timing_values["admission_ns"][name],
+            "admission_observations_verified": process_timing_observations[name],
+            "mmap_prepare_ns": process_timing_values["mmap_prepare_ns"][name],
+            "mmap_prepare_observations_verified": process_timing_observations[name],
         }
         if name in profiles:
             engines[name]["profile"] = summarize_profiles(profiles[name], elapsed)
@@ -479,7 +541,8 @@ def compare(args: argparse.Namespace) -> dict:
                         runner.expect_corruption()
                 track = run_track(binaries, scratch / f"{layout}-{workers}", part, layout, marks, mark_rows,
                                   workers, oracle, args.warmups, args.repeats, args.timeout, frame_geometry,
-                                  require_admission=args.require_admission)
+                                  require_admission=args.require_admission,
+                                  require_retained_mmap=args.require_retained_mmap)
                 tracks.append(track)
             if part_manifest_sha256(part) != expected:
                 fail(f"{layout} part files changed during the comparison")
@@ -493,6 +556,7 @@ def compare(args: argparse.Namespace) -> dict:
         "benchmark_driver_sha256": sha256_path(Path(__file__).resolve(strict=True)),
         "checksum_corruption_controls_passed": True,
         "require_admission": args.require_admission,
+        "require_retained_mmap": args.require_retained_mmap,
         "tracks": tracks,
     }
 
@@ -503,8 +567,11 @@ def main() -> None:
     parser.add_argument("--crystal-bin", type=Path, required=True)
     parser.add_argument("--crystal-baseline-bin", type=Path,
                         help="optional prior Crystal runner for a balanced three-arm campaign")
-    parser.add_argument("--require-admission", action="store_true",
-                        help="require Wide candidate admission_ns and zero per-scan preparation; check old Crystal preparation when that arm is present")
+    timing_contract = parser.add_mutually_exclusive_group()
+    timing_contract.add_argument("--require-admission", action="store_true",
+                                 help="require Wide candidate admission_ns and zero per-scan preparation; check the old per-scan-preparation baseline when present")
+    timing_contract.add_argument("--require-retained-mmap", action="store_true",
+                                 help="require retained Wide admission_ns and mmap_prepare_ns; check a retained-metadata baseline when present")
     parser.add_argument("--cpp-bin", type=Path, required=True)
     parser.add_argument("--crystal-profile-bin", type=Path, help="Wide runner built with -Dread_rows_profile")
     parser.add_argument("--cpp-profile-bin", type=Path, help="ClickHouse Wide runner with stage probes")
@@ -522,6 +589,8 @@ def main() -> None:
     args.workers = list(dict.fromkeys(args.workers or [1, 4]))
     if args.require_admission and args.layout != ["wide"]:
         parser.error("--require-admission requires Wide-only layout")
+    if args.require_retained_mmap and args.layout != ["wide"]:
+        parser.error("--require-retained-mmap requires Wide-only layout")
     if profiling and (not args.crystal_profile_bin or not args.cpp_profile_bin or args.crystal_baseline_bin
                       or args.layout != ["wide"]):
         parser.error("profiling requires both profile binaries, Wide layout, and two uninstrumented controls")
