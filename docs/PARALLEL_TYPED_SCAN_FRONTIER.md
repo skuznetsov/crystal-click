@@ -83,11 +83,11 @@ selected data file and closes them after its last assigned worker finishes.
 Each worker keeps its decode storage private and checks its selected data
 ranges. The part files must stay immutable for the reader's lifetime.
 
-The direct benchmark prepares a fresh set of selected column readers for
-each scan of two `UInt64` columns. Its preparation timer includes reading
-the Wide metadata and parsing the selected mark files. Both engines verify
-data-frame checksums during the scan. The benchmark reports preparation
-and the per-sample sum of preparation and scan.
+A retained `TypedPartTable` also reuses admitted Wide metadata and mark
+indexes across sequential calls to `scan_typed_parallel`. Each call opens
+its own data mappings and uses fresh decode state. Open a new reader when
+the selected parts or columns change. The catalog convenience methods open
+a new reader for each call.
 
 ## Comparison contract
 
@@ -141,14 +141,15 @@ complete positive marks. Both runners read the same contiguous slices of
 that list with one or four workers and verify the compressed data frame
 checksums during the scan.
 
-Startup admits the immutable part and allocates the output buffers. Per-scan
-reader and budget preparation are timed separately. ClickHouse builds fresh
-readers on the retained storage context. Crystal Wide prepares one shared
-set of column readers before starting workers. Crystal Compact opens a typed
-table with a shared mark grid, frame index, and transport budget. The scan
-timer covers worker startup and joins, data stream opens and closes, checksum
-verification, decompression, typed batches, and one copy of each batch into
-the ordered output buffers.
+Startup admits the immutable part and allocates the output buffers. Crystal
+Wide retains its selected column readers across commands. Its one-time
+admission timer covers opening those readers and validating the selected
+mark grid. ClickHouse retains the storage context and builds fresh reader
+cursors for each scan. Crystal Compact prepares a fresh typed table, mark
+grid, frame index, and transport budget for each scan. Per-scan preparation
+is timed separately. The scan timer covers worker startup and joins, data
+stream opens and closes, checksum verification, decompression, typed batches,
+and one copy of each batch into the ordered output buffers.
 ClickHouse calls `IMergeTreeReader::readRows` once per selected mark and
 continues the reader across consecutive marks. It uses synchronous `pread`
 with asynchronous mark loads and reader caches disabled. The current Crystal
@@ -201,12 +202,14 @@ python3 -B scripts/read_rows_benchmark.py \
   --warmups 6 --repeats 32 --output "$bench_work/read-rows.json"
 ```
 
-The report includes binary and part hashes, the selected marks, scan and
-preparation durations, and p50 and p95 for the scan and for each sample's
-preparation plus scan. To test gaps in the mark sequence, use
+The report includes binary and part hashes, selected marks, p50 and p95 for
+per-scan preparation, scan time, and their per-sample sum. It records Wide
+reader admission once per retained Crystal process. ClickHouse storage
+context startup precedes the measured intervals. To test gaps in the mark
+sequence, use
 `--marks 0,2,4,7,8,10,13,15` on the 16-mark fixture.
 
-Clang 23.1.5 on macOS required three source-scoped changes to warning severity
+Clang 23.1.5 on macOS required warning demotions scoped to three source files
 with the pinned ClickHouse checkout. Add these CMake lines after the `dbms`
 target is declared if that compiler treats the same diagnostics as errors.
 
@@ -216,7 +219,7 @@ set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Interpreters/executeQuery.c
 set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Interpreters/FileCache/FileCache.cpp"
     TARGET_DIRECTORY dbms PROPERTIES COMPILE_OPTIONS "-Wno-error=unreachable-code")
 set_source_files_properties("${CMAKE_SOURCE_DIR}/src/Storages/MergeTree/MergeTreeData.cpp"
-    TARGET_DIRECTORY dbms PROPERTIES COMPILE_OPTIONS "-Wno-error=unused-parameter")
+    TARGET_DIRECTORY dbms PROPERTIES COMPILE_OPTIONS "-Wno-error=unused-variable;-Wno-error=unused-parameter")
 ```
 
 ### Direct reader measurements
@@ -667,6 +670,84 @@ passed five examples, including a mixed primitive numeric selection.
 | Crystal shared mmap profile | `fa0024f97e5c553a96db957613cd2f7d9bc173e6ac0014ced0b4f02800b4ec9b` |
 | 1 → 4 report | `00888a9eae3bbe6d44c4b339c61e13599628c9cba7f81a0fdd126c4ca0a898ee` |
 | 4 → 1 report | `2e0f9671c354b2310132cf4f6b0bac8eba2e533235da646a341d40dc3d7579cb` |
+
+### Retaining Wide metadata across scans
+
+The Crystal runner keeps the same validated Wide column readers for all
+`scan` commands in one process. Reader admission parses part metadata and
+the two selected `.mrk2` indexes and validates their row grid before `READY`.
+Each scan maps the two data files, checks the compressed frames, and
+materializes the selected rows with its own worker state.
+
+Compare the retained runner with a Release build from `d2ff8c4`, which
+already shares data mappings within one scan and admits the columns again
+for each scan after its startup validation. Pass that binary with
+`--crystal-baseline-bin` and use `--layout wide --require-admission --warmups 6
+--repeats 48`. Set `--workers 4 --workers 1` for the reversed worker order.
+The driver verifies consistent one-time
+admission and zero per-scan reader preparation for the retained runner.
+The ClickHouse runner loads the storage context before `READY`, prepares
+fresh worker cursors for each scan, and uses synchronous `pread` with
+the reader mark cache disabled. Each scan time includes checksum checks
+and materialization in order, with bytewise oracle validation after the
+timer stops.
+
+The comparison on an Apple M2 Max used the same Wide MRK2 part file
+manifest and oracle as the shared-mapping comparison. It read marks 0–15
+and 131,072 rows of `pk` and `value`, both `UInt64`, on warm OS file pages.
+The uninstrumented Release binaries used Crystal 1.22.3 and ClickHouse
+`d9bcb5ab` with LLVM 23.1.5. Each worker order used six warmups and 48
+measured rounds per worker count, balanced across all six runner orders.
+The table pools the two worker orders, giving 96 samples per runner and
+worker count. Times are in milliseconds. Each total adds that sample's
+preparation and scan intervals.
+
+| Workers | Runner | Prepare p50 / p95 | Scan p50 / p95 | Prepare + scan p50 / p95 |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | Crystal `d2ff8c4` | 0.2291 / 0.2843 | 1.4948 / 1.7849 | 1.7409 / 2.0383 |
+| 1 | Crystal retained | 0.0000 / 0.0000 | 1.4982 / 1.7398 | 1.4982 / 1.7398 |
+| 1 | ClickHouse `readRows` | 0.0070 / 0.0139 | 0.9736 / 1.0478 | 0.9821 / 1.0590 |
+| 4 | Crystal `d2ff8c4` | 0.2416 / 0.2843 | 0.6731 / 0.7988 | 0.9010 / 1.0678 |
+| 4 | Crystal retained | 0.0000 / 0.0000 | 0.6620 / 0.7897 | 0.6620 / 0.7897 |
+| 4 | ClickHouse `readRows` | 0.0172 / 0.0238 | 0.4316 / 0.4970 | 0.4491 / 0.5176 |
+
+One-time Crystal admission took 0.3763–0.4084 ms across four fresh
+processes. The driver verified the same reported duration in all 54
+responses from each process. The pooled repeated preparation-plus-scan
+p50 fell by 13.9% with one worker and 26.5% with four. Scan-only p50
+varied between worker orders and remained within 2% of the pooled
+Crystal baseline at both worker counts. Crystal scan p50 was 1.54× and
+1.53× native for one and four workers, respectively. Increasing the
+worker count cut scan p50 by a factor of 2.26 in both runners.
+
+All 576 timed scans matched the oracle and observed the assigned mark
+ranges. The part file manifest was unchanged after each campaign. All
+first-frame checksum controls failed as expected. On disposable copies,
+removing the `.mrk2` files after a successful scan left later retained
+scans bytewise correct. The baseline failed to reopen the indexes. The
+retained runner rejected a truncated index during admission. All three
+runners detected a checksum change at mark 13 between scans when reading
+that mark with one and four workers. Scans excluding the corrupted mark
+still matched their oracle, and all three runners rejected a modified oracle.
+
+The retained `TypedPartTable` regression checks W1/W4/W1 sequential scans
+against the expected row batch coordinates and values. The Wide admission
+spec passed five examples in Release mode and five with `-Dwithout_mt`.
+In separate instrumented runs, two successive scans each with one and four
+workers opened and closed two mappings per scan and checked 512 frame
+checksums. The Compact direct runner returned exact results on two calls
+and reported per-scan preparation on both.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Crystal baseline | `efe909d10f27df5ed323b39f973590eff23884b63b00ab48188c43e033b91a0c` |
+| Crystal retained | `8e01826fa848d24bafc9809fffd50d89a8c08226d9f21cd659cdbd8b872ba59e` |
+| ClickHouse `readRows` | `7b418b6b770f72ba9b5ab593a33855de2b2f2ebd46058245b0d96bab7424eac8` |
+| Benchmark driver | `1f34446b669d2d9134e2861fbcd69d1e8386e4d2b58d2146ec538fe6f2b8d3b7` |
+| 1 → 4 report | `921870e4c994cb38d899f1c832251f2d0e9ef4e769b1cee14e23ecce134ce776` |
+| 4 → 1 report | `8972d936197931a9c744508f7411dbd38a9e661498014c268968b7e9b57a242f` |
 
 ### Compact pilot budget cutoff
 
@@ -1439,6 +1520,9 @@ parallel, mmap, and W124 transport specs passed 31 examples with
   touched part, including when workers read disjoint mark ranges. A failed
   mapping open, a worker error, or a stopped callback must release every
   mapping opened by that scan.
+- The checked direct Wide runner must reuse the admitted columns and mark
+  indexes, return the same selected rows, and detect a data-frame checksum
+  error introduced between scans on a disposable test part.
 - Splitting Compact marks between workers must keep a cumulative per-part
   transport limit. For the shared `UInt64` path, file and header work is
   charged per mapping and selected range work accumulates across workers.

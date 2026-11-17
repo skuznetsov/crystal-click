@@ -140,29 +140,34 @@ describe "Wide parallel metadata admission" do
         mark_events.map(&.[1]).to_set.should eq(expected_mark_paths)
       end
 
-      baseline = [] of {Int32, String, Int32, UInt64, UInt64, Array(UInt64), Array(UInt64)}
-      CrystalClick::WideParallelMetadataAdmissionProbe.begin_observing(part_paths)
-      observed = [] of {Int32, String, Int32, UInt64, UInt64, Array(UInt64), Array(UInt64)}
-      table.scan_typed_parallel(workers: 1, batch_rows: 1) do |batch|
-        observed << {
-          batch.part_index,
-          batch.part_path,
-          batch.mark_index,
-          batch.part_row_offset,
-          batch.source_row_offset,
-          batch.values_for("left", UInt64).to_a,
-          batch.values_for("right", UInt64).to_a,
-        }
+      scan_and_assert_no_readmission = ->(workers : Int32) do
+        CrystalClick::WideParallelMetadataAdmissionProbe.begin_observing(part_paths)
+        rows = [] of {Int32, String, Int32, UInt64, UInt64, Array(UInt64), Array(UInt64)}
+        begin
+          table.scan_typed_parallel(workers: workers, batch_rows: 1) do |batch|
+            rows << {
+              batch.part_index,
+              batch.part_path,
+              batch.mark_index,
+              batch.part_row_offset,
+              batch.source_row_offset,
+              batch.values_for("left", UInt64).to_a,
+              batch.values_for("right", UInt64).to_a,
+            }
+          end
+          scan_events = CrystalClick::WideParallelMetadataAdmissionProbe.snapshot
+          [:legacy_roster_parse, :shared_roster_parse, :columns_parse, :mark_parse].each do |kind|
+            scan_events.select { |event| event[0] == kind }.should be_empty
+          end
+        ensure
+          CrystalClick::WideParallelMetadataAdmissionProbe.stop_observing
+        end
+        rows
       end
-      baseline = observed.dup
-      scan_events = CrystalClick::WideParallelMetadataAdmissionProbe.snapshot
-      CrystalClick::WideParallelMetadataAdmissionProbe.stop_observing
-      scan_events.select { |event| event[0] == :legacy_roster_parse }.should be_empty
-      scan_events.select { |event| event[0] == :shared_roster_parse }.should be_empty
-      scan_events.select { |event| event[0] == :columns_parse }.should be_empty
-      scan_events.select { |event| event[0] == :mark_parse }.should be_empty
-      observed.size.should eq(2 * 17_001)
-      observed.each_with_index do |row, index|
+
+      baseline = scan_and_assert_no_readmission.call(1_i32)
+      baseline.size.should eq(2 * 17_001)
+      baseline.each_with_index do |row, index|
         part_index = index < 17_001 ? 0 : 1
         part_row = (index % 17_001).to_u64
         row[0].should eq(part_index.to_i32)
@@ -181,30 +186,13 @@ describe "Wide parallel metadata admission" do
 
       {% if flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
         expect_raises(CrystalClick::UnsupportedFormatError, /execution context/) do
-          table.scan_typed_parallel(workers: 4, batch_rows: 1) { |_batch| }
+          scan_and_assert_no_readmission.call(4_i32)
         end
       {% else %}
-        CrystalClick::WideParallelMetadataAdmissionProbe.begin_observing(part_paths)
-        observed = [] of {Int32, String, Int32, UInt64, UInt64, Array(UInt64), Array(UInt64)}
-        table.scan_typed_parallel(workers: 4, batch_rows: 1) do |batch|
-          observed << {
-            batch.part_index,
-            batch.part_path,
-            batch.mark_index,
-            batch.part_row_offset,
-            batch.source_row_offset,
-            batch.values_for("left", UInt64).to_a,
-            batch.values_for("right", UInt64).to_a,
-          }
-        end
-        scan_events = CrystalClick::WideParallelMetadataAdmissionProbe.snapshot
-        CrystalClick::WideParallelMetadataAdmissionProbe.stop_observing
-        scan_events.select { |event| event[0] == :legacy_roster_parse }.should be_empty
-        scan_events.select { |event| event[0] == :shared_roster_parse }.should be_empty
-        scan_events.select { |event| event[0] == :columns_parse }.should be_empty
-        scan_events.select { |event| event[0] == :mark_parse }.should be_empty
-        observed.should eq(baseline)
+        scan_and_assert_no_readmission.call(4_i32).should eq(baseline)
       {% end %}
+
+      scan_and_assert_no_readmission.call(1_i32).should eq(baseline)
     ensure
       CrystalClick::WideParallelMetadataAdmissionProbe.stop_observing
       FileUtils.rm_rf(root)

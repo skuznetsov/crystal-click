@@ -306,11 +306,15 @@ def summarize_profiles(profiles: list[dict], elapsed: list[int]) -> dict:
 
 def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
               marks: list[int], mark_rows: int, workers: int, oracle: Path,
-              warmups: int, repeats: int, timeout: float, frame_geometry: tuple[list[int], int] | None = None) -> dict:
+              warmups: int, repeats: int, timeout: float,
+              frame_geometry: tuple[list[int], int] | None = None,
+              require_admission: bool = False) -> dict:
     root.mkdir()
     split = [marks[len(marks) * i // workers:len(marks) * (i + 1) // workers] for i in range(workers)]
     samples = {name: [] for name in binaries}
     preparations = {name: [] for name in binaries}
+    admission_values: dict[str, int | None] = {}
+    admission_observations = {name: 0 for name in binaries}
     profiles = {name: [] for name in binaries if name in PROFILE_TRANSPORTS}
     expected_frames, expected_mapped_bytes = [], 0
     if frame_geometry is not None:
@@ -336,6 +340,28 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
             for name in order:
                 runner = runners[name]
                 sample = runner.scan(split, mark_rows)
+                has_admission = "admission_ns" in sample
+                if has_admission:
+                    admission_ns = sample["admission_ns"]
+                    runner.check(type(admission_ns) is int and admission_ns >= 0,
+                                 "invalid one-time admission duration")
+                else:
+                    admission_ns = None
+                if name in admission_values:
+                    runner.check(admission_values[name] == admission_ns,
+                                 "admission_ns presence or value changed within the runner process")
+                else:
+                    admission_values[name] = admission_ns
+                admission_observations[name] += 1
+                if require_admission and name == "crystal":
+                    runner.check(has_admission, "Wide Crystal candidate omitted admission_ns")
+                    runner.check(sample["prepare_ns"] == 0,
+                                 "retained Wide Crystal candidate reported per-scan preparation")
+                if require_admission and name == "crystal_baseline":
+                    runner.check(not has_admission,
+                                 "per-scan Crystal baseline unexpectedly emitted admission_ns")
+                    runner.check(sample["prepare_ns"] > 0,
+                                 "per-scan Crystal baseline omitted per-scan preparation")
                 profile = None
                 if name in profiles:
                     profile = validate_profile(runner, sample, name, expected_frames, split, mark_rows,
@@ -362,6 +388,7 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
             "p95_ns": sorted(elapsed)[math.ceil(len(elapsed) * 0.95) - 1],
             "prepare_samples_ns": preparation,
             "prepare_p50_ns": statistics.median(preparation),
+            "prepare_p95_ns": sorted(preparation)[math.ceil(len(preparation) * 0.95) - 1],
             "prepare_and_scan_samples_ns": preparation_and_scan_samples,
             "prepare_and_scan_p50_ns": statistics.median(preparation_and_scan_samples),
             "prepare_and_scan_p95_ns": sorted(preparation_and_scan_samples)[
@@ -369,6 +396,8 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
             ],
             "rows_per_second": rows * 1e9 / median,
             "decoded_gib_per_second": rows * 16 * 1e9 / (median * 2**30),
+            "admission_ns": admission_values[name],
+            "admission_observations_verified": admission_observations[name],
         }
         if name in profiles:
             engines[name]["profile"] = summarize_profiles(profiles[name], elapsed)
@@ -449,7 +478,8 @@ def compare(args: argparse.Namespace) -> dict:
                                      mark_rows, workers, control_oracle, args.timeout) as runner:
                         runner.expect_corruption()
                 track = run_track(binaries, scratch / f"{layout}-{workers}", part, layout, marks, mark_rows,
-                                  workers, oracle, args.warmups, args.repeats, args.timeout, frame_geometry)
+                                  workers, oracle, args.warmups, args.repeats, args.timeout, frame_geometry,
+                                  require_admission=args.require_admission)
                 tracks.append(track)
             if part_manifest_sha256(part) != expected:
                 fail(f"{layout} part files changed during the comparison")
@@ -460,7 +490,10 @@ def compare(args: argparse.Namespace) -> dict:
         "arms": list(binaries),
         "binary_sha256": binary_hashes, "part_file_manifest_sha256": part_hashes,
         "fixture_manifest_sha256": sha256_path(manifest_path), "expected_columns_sha256": oracle_hash,
-        "checksum_corruption_controls_passed": True, "tracks": tracks,
+        "benchmark_driver_sha256": sha256_path(Path(__file__).resolve(strict=True)),
+        "checksum_corruption_controls_passed": True,
+        "require_admission": args.require_admission,
+        "tracks": tracks,
     }
 
 
@@ -470,6 +503,8 @@ def main() -> None:
     parser.add_argument("--crystal-bin", type=Path, required=True)
     parser.add_argument("--crystal-baseline-bin", type=Path,
                         help="optional prior Crystal runner for a balanced three-arm campaign")
+    parser.add_argument("--require-admission", action="store_true",
+                        help="require Wide candidate admission_ns and zero per-scan preparation; check old Crystal preparation when that arm is present")
     parser.add_argument("--cpp-bin", type=Path, required=True)
     parser.add_argument("--crystal-profile-bin", type=Path, help="Wide runner built with -Dread_rows_profile")
     parser.add_argument("--cpp-profile-bin", type=Path, help="ClickHouse Wide runner with stage probes")
@@ -485,6 +520,8 @@ def main() -> None:
     profiling = args.crystal_profile_bin is not None or args.cpp_profile_bin is not None
     args.layout = list(dict.fromkeys(args.layout or (["wide"] if profiling else ["wide", "compact"])))
     args.workers = list(dict.fromkeys(args.workers or [1, 4]))
+    if args.require_admission and args.layout != ["wide"]:
+        parser.error("--require-admission requires Wide-only layout")
     if profiling and (not args.crystal_profile_bin or not args.cpp_profile_bin or args.crystal_baseline_bin
                       or args.layout != ["wide"]):
         parser.error("profiling requires both profile binaries, Wide layout, and two uninstrumented controls")

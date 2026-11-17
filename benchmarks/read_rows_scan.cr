@@ -3,8 +3,8 @@ require "../src/crystal_click"
 require "../src/crystal_click/read_rows_profile"
 
 # Direct native-part scan used by scripts/read_rows_benchmark.py. The process
-# admits one immutable part and oracle, then serves fresh scan readers for each
-# request so fixture setup stays outside the measured read interval.
+# admits one immutable part and oracle, retaining Wide readers across requests
+# while Compact keeps its existing fresh-reader scan path.
 module CrystalClickReadRowsScan
   extend self
 
@@ -37,7 +37,13 @@ module CrystalClickReadRowsScan
       config = parse_config(args)
       validate_work_dir!(config.work_dir)
       validate_little_endian!
-      validate_part!(config)
+      admission_started = Time.instant
+      retained_wide_readers = admit_part!(config)
+      admission_ns = if retained_wide_readers
+                       elapsed_ns(admission_started)
+                     else
+                       nil
+                     end
       oracle = read_oracle(config)
       row_count = selected_row_count(config)
       keys = Array(UInt64).new(row_count, 0_u64)
@@ -47,8 +53,9 @@ module CrystalClickReadRowsScan
         (config.marks.size * index // config.workers).to_i32
       end
 
-      # Each scan admits fresh readers and reports its preparation cost
-      # separately from read, decode, materialization, and output copies.
+      # Wide metadata and marks were admitted and validated above. Keep the
+      # retained readers alive before READY; each request still creates a new
+      # scan image and performs its own data checksum and output verification.
       STDOUT.puts "READY"
       STDOUT.flush
       ready = true
@@ -56,16 +63,13 @@ module CrystalClickReadRowsScan
       while line = STDIN.gets
         case line.chomp
         when "scan"
-          prepare_started = Time.instant
-          prepared = prepare_scan(config)
-          prepare_ns = elapsed_ns(prepare_started)
           scan_profile = new_scan_profile(config)
-
-          scan_started = Time.instant
-          if config.layout == "wide"
+          if readers = retained_wide_readers
+            prepare_ns = 0_i64
+            scan_started = Time.instant
             run_wide_scan(
               config,
-              prepared.as({CrystalClick::WidePart, CrystalClick::WidePart}),
+              readers,
               worker_marks,
               worker_starts,
               keys,
@@ -74,7 +78,11 @@ module CrystalClickReadRowsScan
               scan_started,
             )
           else
+            prepare_started = Time.instant
+            prepared = prepare_scan(config)
+            prepare_ns = elapsed_ns(prepare_started)
             table, budget, context = prepared.as({CrystalClick::CompactPartTable, CrystalClick::CompressedStreamBudget, CrystalClick::CompactPartPhysicalContext})
+            scan_started = Time.instant
             run_compact_scan(
               config,
               table,
@@ -96,6 +104,7 @@ module CrystalClickReadRowsScan
             config.workers,
             worker_marks,
             scan_profile,
+            admission_ns,
           )
           STDOUT.flush
         when "quit"
@@ -225,7 +234,7 @@ module CrystalClickReadRowsScan
     raise ArgumentError.new(ex.message || "cannot read oracle")
   end
 
-  private def validate_part!(config : Config) : Nil
+  private def admit_part!(config : Config) : {CrystalClick::WidePart, CrystalClick::WidePart}?
     prepared = prepare_scan(config)
     case config.layout
     when "wide"
@@ -237,6 +246,7 @@ module CrystalClickReadRowsScan
         pair[1].mark_row_counts,
         config,
       )
+      pair
     when "compact"
       table, _budget, _context = prepared.as({CrystalClick::CompactPartTable, CrystalClick::CompressedStreamBudget, CrystalClick::CompactPartPhysicalContext})
       mark_counts = table.part_mark_row_counts
@@ -249,10 +259,10 @@ module CrystalClickReadRowsScan
         mark_counts[0],
         config,
       )
+      nil
     else
       raise ArgumentError.new("unsupported layout")
     end
-    nil
   end
 
   private def prepare_scan(config : Config) : {CrystalClick::WidePart, CrystalClick::WidePart} |
@@ -615,11 +625,15 @@ module CrystalClickReadRowsScan
     workers : Int32,
     worker_marks : Array(Array(Int32)),
     scan_profile : CrystalClick::ReadRowsProfile::Scan?,
+    admission_ns : Int64?,
   ) : Nil
     STDOUT.puts(JSON.build do |json|
       json.object do
         json.field "elapsed_ns", elapsed_ns
         json.field "prepare_ns", prepare_ns
+        if admission = admission_ns
+          json.field "admission_ns", admission
+        end
         json.field "rows", rows
         json.field "effective_workers", workers
         json.field "worker_marks" do
