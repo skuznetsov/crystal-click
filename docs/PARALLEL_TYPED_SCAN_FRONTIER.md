@@ -977,6 +977,135 @@ specs passed 50 examples.
 | Candidate profile report | `c39cbcda4d25c6d072b33ace15a55269db684376ca9d1492917b3509632add33` |
 | Wide integrity probes and Compact smoke report | `8390ed783282e1f15f373de028dc17fff99e1de64e38be8fd55a8160375bc4c5` |
 
+### Four-worker Wide scan tail
+
+The retained-worker `8c79d1b` and ClickHouse `d9bcb5ab` Release runners
+read the same warm-cache Wide MRK2 part described above. The 16 marks
+were partitioned into four consecutive ranges of four marks. Each scan
+verified 512 compressed LZ4 frames and materialized 131,072 rows of two
+`UInt64` columns. The benchmark checked the complete ordered output after
+the timer. Both runners rejected a modified frame checksum on a separate
+copy, and the measured part manifest stayed unchanged.
+
+Run the direct benchmark command with `--layout wide --workers 4
+--require-retained-workers --warmups 12 --repeats 240` and the two plain
+binaries. Two blocks alternated runner order and started with opposite
+runners. The second block enumerated the benchmark driver's runner
+permutations in reverse. Times below are in microseconds. The p95 is the
+228th sorted sample in each block. Fresh native cursor preparation was
+separate from the scan, with a median of 14.1–15.6 µs. Crystal retained
+its metadata, mappings, and worker state for the entire session.
+
+| First runner | Crystal scan p50 / p95 | ClickHouse scan p50 / p95 | Crystal p95 excess |
+| --- | ---: | ---: | ---: |
+| Crystal | 406.6 / 718.0 | 499.0 / 540.5 | 177.5 |
+| ClickHouse | 396.8 / 659.0 | 461.1 / 497.8 | 161.2 |
+
+Two additional blocks ran the same plain Crystal binary with normal
+Boehm behavior and with `GC_DONT_GC=1` set at process startup. The
+setting suppresses collection in Boehm 8.2.12. Each mode had a fresh
+process with 12 warmups and 240 measured scans. The blocks reversed the
+mode order. They used back-to-back requests to one reader at a time.
+[Boehm startup setting](https://github.com/bdwgc/bdwgc/blob/v8.2.12/misc.c#L1048-L1054)
+
+| First mode | Default scan p50 / p95 | Collection suppressed p50 / p95 | p95 drop |
+| --- | ---: | ---: | ---: |
+| Default | 382.5 / 645.2 | 396.4 / 423.2 | 222.0 |
+| Suppressed | 383.4 / 671.7 | 394.0 / 424.6 | 247.0 |
+
+Suppressing collection reduced p95 by 34–37% in these two blocks. Every
+one of the 12 slowest default scans in each block had a zero-based request
+index divisible by nine, counting warmups. This control changes the
+process-wide heap lifecycle and ran at a different request cadence from
+the two-engine comparison.
+
+A three-arm control interleaved the same two Crystal modes and the plain
+native runner. The suppressed arm set `GC_DONT_GC=1` in a wrapper before
+executing the byte-identical Crystal binary. The six runner orders each
+occurred 40 times after 12 warmups. Scan p50/p95 were 385.2/678.8 µs for
+default Crystal, 398.6/427.4 µs for suppressed Crystal, and 434.0/477.0 µs
+for native `readRows`. The intervention reduced Crystal p95 by 251.4 µs
+in that block and put it 49.6 µs below the native p95. Collection suppression
+was a bounded diagnostic run.
+
+Two separate LZ4 profile blocks interleaved the Release and instrumented
+binaries from both engines. Each of the 24 orders occurred five times in
+the 120 measured rounds, after 24 warmups. Each profiled worker verified
+and decoded exactly 128 frames. Stage values below are medians on the
+last-finishing worker in each sample. The middle 10% and slowest 5% are
+selected by outer scan time within each engine's profile. Each range gives
+the two block medians in microseconds.
+
+| Profiled stage | Middle 10% | Slowest 5% |
+| --- | ---: | ---: |
+| Crystal LZ4 | 260.6–261.6 | 263.7–265.8 |
+| ClickHouse LZ4 | 176.5–177.5 | 177.8–178.6 |
+| Crystal last worker body | 397.1–398.4 | 834.5–857.0 |
+
+The median Crystal LZ4 stage was about 1.47× the native stage, with a
+small rise in the slowest scans. Most of the increase in those scans
+was in the remainder of the last worker's body. In the same slow-scan
+bands, the median time from scan start to last-finishing worker start
+was 9.4–10.6 µs in Crystal and 22.3–31.2 µs in ClickHouse. From that
+worker's finish to the timer stop, it was 3.2–4.3 µs in Crystal and
+19.6–20.2 µs in ClickHouse. The Crystal profile emitted a JSON trace
+after each scan and added work between timed requests. The plain
+Release timings above provide the comparison for latency percentiles.
+
+A separate Crystal Release trace stored Boehm events and worker timestamps
+in fixed native buffers outside the GC root set. It exported the buffers
+after the session, and every recorded scan interval matched the regular
+runner timer. A forced collection inside the scan produced a pause in
+the trace. The control with collection disabled produced zero events. The
+pause interval runs from `GC_EVENT_POST_STOP_WORLD` to
+`GC_EVENT_PRE_START_WORLD`. The enclosing interval from
+`GC_EVENT_PRE_STOP_WORLD` to `GC_EVENT_POST_START_WORLD` includes stopping
+and resuming threads. [Boehm event boundaries](https://github.com/bdwgc/bdwgc/blob/v8.2.12/alloc.c)
+
+Two trace blocks used 12 warmups and 240 measured scans per mode and
+reversed mode order. In each block, 26 default scans overlapped a pause,
+including all 12 slowest scans. Default p95 was 647.9 and 652.4 µs. With
+collection disabled during each scan, p95 was 424.0 and 418.0 µs and no
+scan overlapped a pause. The table gives the two block medians for the
+last-finishing worker under default GC behavior, in microseconds.
+
+| Trace interval | Middle 10% | Slowest 5% |
+| --- | ---: | ---: |
+| Scan start to worker start | 7.5–7.6 | 7.8–8.1 |
+| Dispatch to worker start | 6.2–6.3 | 6.2–6.3 |
+| Worker body, elapsed | 369.9–370.3 | 649.4–650.0 |
+| Worker body, thread CPU | 368.1–369.4 | 388.6–395.9 |
+| Worker finish to scan timer stop | 4.0–6.3 | 3.8 |
+| Worker body overlapping a fully stopped world | 0 | 192.9–207.9 |
+
+The enclosing stop/resume interval overlapped 226–237 µs of the last
+worker's body in the slowest scans. It includes the fully stopped
+interval above. Dispatch and completion delays stayed small at the tail.
+LZ4 was slower throughout the Crystal profile, and the matched GC
+intervention and worker trace identify collection as the main source of
+the observed p95 gap. The measurements cover this warm-cache fixture on
+one M2 Max under varying background load, with Crystal 1.22.3, Boehm
+8.2.12, and a ClickHouse Release build with jemalloc disabled. Re-run the
+paired controls after changes to runtime, worker count, part geometry, or
+request cadence.
+
+Two preliminary comparison blocks used the instrumented native binary
+after a rebuild replaced the default output path. The first table uses
+only the corrected blocks with the saved plain binary.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Plain Crystal runner | `f2bf2d17975980776192e385ef2a035f03b84086686ea64b3754d1abc55d4454` |
+| Plain native runner | `cee70910c484dc8aa0ae64879b04f3da28ba887c6ac3bbb96481bc16c45e6f8b` |
+| Plain comparison, Crystal first | `2526fd3ad9a8dbd0cf9f2718467d5e950cd5e939f4c26e3f7dedbdf57761c34d` |
+| Plain comparison, ClickHouse first | `6212c1aaa92cbb7d33c754fd78374357bd51426848b792e538319568132de6b3` |
+| Plain Crystal GC control report | `f65e20b29c42b87e1db50fc5fedac1c00a2253894a79d104329b54123d9e9c89` |
+| Interleaved three-arm report | `da770cc10c78f49ac15e74ea41ce813771b9d84104f305dd27f772d140df8b34` |
+| LZ4 stage analysis | `8508744aedb35c6bc194691f5ce5f4d9d2ca3e565820bdd1f87289f4db7fb288` |
+| Quiet trace runner | `686310ac93695bb581980351ac5fedfef95c5187a48297f2c3815df8675428a8` |
+| Default quiet trace, first block | `0cdfd85482096cda39de035aad187db83592996b4ed20f27105cf7fd828c02e8` |
+| Default quiet trace, second block | `0d5a3b761fec8b3e28155f06ae98b776d68a13f3ceafbd6ec43e0ea02bd243ea` |
+
 ### Compact pilot budget cutoff
 
 The first 524,288-row fixture had 64 data marks of 8,192 rows. On Compact
