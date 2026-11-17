@@ -34,5 +34,15 @@ module CrystalClick
     def decode_workspace : CompressedBlock::DecodeWorkspace
       @decode_workspace
     end
+
+    # Payload bytes held across the selected-column lanes and frame buffer.
+    # Object headers and allocator rounding are intentionally excluded.
+    def retained_payload_bytes : UInt64
+      bytes = @decode_workspace.buffer_capacity.to_u64
+      @scratch.each do |values|
+        bytes += values.size.to_u64 * sizeof(UInt64).to_u64
+      end
+      bytes
+    end
   end
 end

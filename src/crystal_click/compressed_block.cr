@@ -38,11 +38,13 @@ module CrystalClick
         def buffer_identity : UInt64
           @buffer.to_unsafe.address.to_u64
         end
-
-        def buffer_capacity : Int
-          @buffer.size
-        end
       {% end %}
+
+      # Bytes retained by this workspace's backing buffer. Callers that cache
+      # workspaces use this to enforce a payload-retention bound.
+      def buffer_capacity : Int
+        @buffer.size
+      end
 
       def decode_lz4(payload : Bytes, expected_size : Int32) : Bytes
         if @padded_lz4 && expected_size <= Int32::MAX - LZ4::PADDING_SIZE

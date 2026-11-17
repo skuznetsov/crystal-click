@@ -485,13 +485,9 @@ module CrystalClick
           while mark_row_offset < mark_rows_for_batch
             remaining = mark_rows_for_batch - mark_row_offset
             batch_size = batch_rows < remaining ? batch_rows : remaining
-            batch_values = Array(Slice(UInt64)).new(readers.size)
-            selected_values.each do |values|
-              batch_values << values[mark_row_offset, batch_size]
-            end
             batch_offset = mark_row_offset.to_u64
             local_row_offset = checked_total_rows(part_row_offset, batch_offset)
-            yield WidePartTableBatch.new(
+            yield WidePartTableBatch.direct_uint64_window(
               0_i32,
               part.name,
               part.path,
@@ -500,8 +496,10 @@ module CrystalClick
               local_row_offset,
               local_row_offset,
               @columns,
-              batch_values,
-              batch_size.to_u64,
+              part.column_types,
+              selected_values,
+              mark_row_offset,
+              batch_size,
             )
             mark_row_offset += batch_size
           end

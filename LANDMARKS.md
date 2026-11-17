@@ -23,6 +23,12 @@
   state is local. Refresh the [direct reader comparison](docs/PARALLEL_TYPED_SCAN_FRONTIER.md#wide-shared-admission-comparison)
   after changing Wide admission, mark indexing, worker scheduling, or the
   benchmark's checksum and timing boundaries.
+- Ordinary direct Wide UInt64 batches borrow a bounded window of a decoded
+  mark. Repeated public scans lease up to four cached workspaces, and each
+  idle slot holds at most 512 KiB of buffer payload. Refresh the
+  [public allocation comparison](docs/PARALLEL_TYPED_SCAN_FRONTIER.md#allocations-in-repeated-public-wide-uint64-scans)
+  after changing batch storage, the callback handshake, worker or mapping
+  lifetime, the retention bound, or the Crystal runtime.
 
 ## Compressed Compact aggregate projection indexes — W301
 

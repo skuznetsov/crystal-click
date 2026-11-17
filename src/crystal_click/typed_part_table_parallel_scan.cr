@@ -102,7 +102,7 @@ module CrystalClick
           scan_context = compact_reader.try(&.parallel_uint64_scan_context)
           admitted_reader = scan_context ? compact_reader : nil
           admitted_wide_reader = entry.reader.as?(WidePartTable).try(&.parallel_primitive_numeric_scan_context)
-          part_sources << {String.new(entry.path.to_slice), !compact_reader.nil?, transport_budget, scan_context, admitted_reader, admitted_wide_reader, direct_wide_uint64}
+          part_sources << {entry.path, !compact_reader.nil?, transport_budget, scan_context, admitted_reader, admitted_wide_reader, direct_wide_uint64}
           part_starts << source_row_offset
           source_row_offset = checked_add_rows(source_row_offset, entry.row_count)
         end
@@ -267,16 +267,21 @@ module CrystalClick
       raise CorruptPartError.new("source row count mismatch") unless source_row_offset == @total_row_count
       raise CorruptPartError.new("parallel Wide UInt64 schedule has an unexpected worker") unless schedule.all? { |mark| mark.worker_index == 0 }
 
-      workspace = WideUInt64ScanWorkspace.new(@columns.size)
-      @entries.each_with_index do |entry, part_index|
-        marks = worker_marks[0][part_index]
-        next if marks.empty?
-        reader = entry.reader.as(WidePartTable)
-        with_wide_scan_image(reader) do |image|
-          reader.scan_typed_uint64_mark_indices(marks, batch_rows, image, workspace) do |batch|
-            yield rebase_batch!(batch, part_index, part_starts[part_index])
+      pool = WideUInt64ScanWorkspacePool.global
+      workspace = pool.try_acquire(0, @columns.size) || WideUInt64ScanWorkspace.new(@columns.size)
+      begin
+        @entries.each_with_index do |entry, part_index|
+          marks = worker_marks[0][part_index]
+          next if marks.empty?
+          reader = entry.reader.as(WidePartTable)
+          with_wide_scan_image(reader) do |image|
+            reader.scan_typed_uint64_mark_indices(marks, batch_rows, image, workspace) do |batch|
+              yield rebase_batch!(batch, part_index, part_starts[part_index])
+            end
           end
         end
+      ensure
+        pool.release(0, workspace)
       end
       nil
     end
@@ -349,11 +354,12 @@ module CrystalClick
       ) : Fiber::ExecutionContext::Isolated
         name = "crystal-click typed scan worker #{worker_index}"
         Fiber::ExecutionContext::Isolated.new(name) do
-          run_parallel_worker(part_marks, part_sources, scan_image_registry, wide_scan_image_registry, batch_rows, output, acknowledgement)
+          run_parallel_worker(worker_index, part_marks, part_sources, scan_image_registry, wide_scan_image_registry, batch_rows, output, acknowledgement)
         end
       end
 
       private def run_parallel_worker(
+        worker_index : Int,
         part_marks : Array(Array(Int32)),
         part_sources : Array(ParallelScanPartSource),
         scan_image_registry : CompactUInt64ScanImageRegistry,
@@ -399,7 +405,8 @@ module CrystalClick
               begin
                 if direct_wide_uint64
                   workspace = wide_uint64_workspace || begin
-                    created = WideUInt64ScanWorkspace.new(@columns.size)
+                    pool = WideUInt64ScanWorkspacePool.global
+                    created = pool.try_acquire(worker_index, @columns.size) || WideUInt64ScanWorkspace.new(@columns.size)
                     wide_uint64_workspace = created
                     created
                   end
@@ -425,7 +432,16 @@ module CrystalClick
       rescue ex : Channel::ClosedError
         # Closing the acknowledgement channel cancels any outstanding batch.
       ensure
-        output.close
+        begin
+          # No callback can still observe this worker's borrowed slices after
+          # its final acknowledgement or cancellation. The outer scan still
+          # joins all contexts before it returns or closes residual mappings.
+          if workspace = wide_uint64_workspace
+            WideUInt64ScanWorkspacePool.global.release(worker_index, workspace)
+          end
+        ensure
+          output.close
+        end
       end
 
       private def send_parallel_batch!(

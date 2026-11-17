@@ -85,9 +85,9 @@ ranges. The part files must stay immutable for the reader's lifetime.
 
 A retained `TypedPartTable` also reuses admitted Wide metadata and mark
 indexes across sequential calls to `scan_typed_parallel`. Each call opens
-its own data mappings and uses fresh decode state. Open a new reader when
-the selected parts or columns change. The catalog convenience methods open
-a new reader for each call.
+its own data mappings and uses exclusively owned decode storage. Open a new
+reader when the selected parts or columns change. The catalog convenience
+methods open a new reader for each call.
 
 ### Direct Wide UInt64 batches
 
@@ -101,7 +101,16 @@ full range for every selected column before publishing the first batch from
 that mark. The callback receives `Slice(UInt64)` views over the corresponding
 rows with the same batch limits, source order, and coordinates as the
 general typed scan. The worker keeps the current mark through its last
-callback acknowledgement.
+callback acknowledgement. A direct batch stores the window into the
+worker's selected slices and uses the admitted column metadata. The
+ordinary `values_for` accessors read that window without constructing
+per-batch slice arrays or the generic typed-carrier maps.
+
+Repeated scans can borrow typed value and decode buffers from four
+process-wide workspace slots. Each idle slot retains at most 512 KiB of
+buffer payload. Busy slots and additional workers use scan-local buffers.
+Oversized workspaces are dropped when released. Mappings and worker
+execution contexts still belong to each scan.
 
 This path inherits the ordinary Wide data-frame verification policy.
 The checked range reader validates frame sizes and boundaries and the exact
@@ -1431,6 +1440,80 @@ rows with `workers: 1` and observed zero callbacks for an empty table.
 | Plain run samples | `9c06270c3389511f6440fb2189dc3a220f236fd42df420cf5c2a673eea86ebfb` |
 | Allocation run samples | `f4627aa2083d2deec87f565840ac0e436c8537ac878efaba0f14dac22c1843db` |
 
+### Allocations in repeated public Wide UInt64 scans
+
+The comparison starts at `9d0c47e` and uses the same ordinary Wide
+`.mrk2` part as the preceding measurement. Two exact `UInt64` columns
+cover 131,072 rows, 16 marks, and 512 LZ4 frames. The baseline allocated
+about 3,809 bytes per generic numeric batch in an isolated construction
+probe. Its generic batch maps and per-batch slice vectors were rebuilt
+32 times per scan. Constructing 1,000 direct callback windows registered
+zero Boehm bytes in the same isolation. A separate probe measured about
+135,491 bytes per fresh worker workspace, including its typed lanes and
+frame buffer.
+
+The direct path now constructs a callback window over the current mark
+and borrows an exclusive workspace. The idle pool holds at most four
+512 KiB payloads. This fixture needs 135,184 payload bytes per slot, or
+540,736 bytes after warming four workers. A nested or concurrent scan
+uses fresh storage when it finds a busy slot. The limit applies to idle
+buffer payload, with object headers and allocator rounding accounted for
+separately.
+
+The matched comparison used the same public API, batch size, SSD part,
+and ClickHouse 26.10.1.1201 oracle. `CHECK TABLE` returned `1` before
+timing. Each measured scan included preflight, mappings, worker startup,
+and ordered copies into preallocated arrays. Every scan checked its 32
+batch coordinates and compared all returned values with the native
+RowBinary export. Table open and the value comparison ran outside the
+timer. Both versions reported `SizeChecked` and rejected corruption of a
+selected mark offset on a disposable copy.
+
+The Apple M2 Max run used macOS 26.6.2, Crystal 1.22.3, and Boehm 8.2.12
+with `GC_DONT_GC` unset. Each series used 24 interleaved warmups and
+480 measured scans per arm, in four blocks of 120 with alternating
+pair order. Nearest-rank latency percentiles come from plain Release
+builds. Four-worker latency pools both series for 960 scans per arm with
+opposite starting orders. A separate Release diagnostic series measured
+`GC.stats.total_bytes` deltas after verifying the counter with a 1 MiB
+positive control in each process.
+
+| Workers | Baseline p50 / p95 (ms) | Updated p50 / p95 (ms) | Baseline allocation p50 / p95 (bytes) | Updated allocation p50 / p95 (bytes) |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 1.646 / 1.924 | 1.608 / 1.719 | 267,760 / 275,552 | 2,608 / 8,608 |
+| 4 | 1.063 / 1.671 | 0.840 / 1.425 | 684,576 / 695,952 | 13,104 / 23,280 |
+
+Median allocated bytes fell 99.0% with one worker and 98.1% with four.
+The first scan in each diagnostic process paid for the workspace buffers.
+Its allocations went from 268,192 to 138,096 bytes with one worker and
+from 695,824 to 559,888 bytes with four. Each call still prepares the
+scan. The parallel call creates its worker contexts and channels.
+Isolated probes measured approximately 11 KiB of Boehm allocation for
+four context and channel pairs together.
+
+On the host with background activity, p95 fell 10.7% with one worker,
+with lower p95 in all four blocks. It fell 14.7% in the pooled
+four-worker samples, with lower p95 in six of eight blocks. The other two
+blocks had approximately 23% higher p95 after the change.
+
+`crystal spec spec/typed_part_table_parallel_scan_spec.cr spec/wide_parallel_scan_mapping_spec.cr spec/wide_parallel_metadata_admission_spec.cr`
+passed 24 examples. The same command with `-Dwithout_mt` passed 22.
+These cover callback-scoped writable slices, same-worker-count nested
+scans with forced GC, callback failure and `break`, the retained payload
+limit, legacy batch construction, and failure before publishing a mark
+with a malformed adjacent or final frame.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Candidate changed-source manifest | `e7a2d78f261082e8413ee2794af6d9aa9fac9d230cac11cf6da868d5f3242c77` |
+| Shared public scan driver source | `0e95d62d2a40f61dfa2936fa0c07d57f9aad607d6926ae3f4b6fff79a62d2283` |
+| Paired runner source | `c50cb5a8b2d6d1fc93d25c18246025b6c8a92b5e9d3e2789b122327a45a642e2` |
+| Plain run, one worker | `3e2aa1c1399370cf9e778c41deddada452071003f84281c219245091c5fb7254` |
+| Plain run, four workers, first series | `a53a5447d843953c5d6438950021778e21cf711f2918e05d2de14aa7c8a1f754` |
+| Plain run, four workers, second series | `dfa25bd312cded64c8b2011b960186c58d66c494f7151437cde97f7476664075` |
+| Allocation run, one worker | `b7d6ed121f56f63de05d2b4f5b62187183e5b734b2e84be2568c3f31378e1325` |
+| Allocation run, four workers | `62ad9774076238de26e399ed9a86adaca4478222ff7100ea56b28140a06f763c` |
+
 ### Compact pilot budget cutoff
 
 The first 524,288-row fixture had 64 data marks of 8,192 rows. On Compact
@@ -2206,6 +2289,10 @@ parallel, mmap, and W124 transport specs passed 31 examples with
   every selected stream before exposing its first batch. A malformed frame
   visited at the mark boundary must fail before that callback, including
   when the first selected column has already decoded successfully.
+- A nested Wide `UInt64` scan of the same table with the same worker count
+  must leave the enclosing callback's slices writable and intact. Batch
+  coordinates and column metadata must still identify the original batch
+  after later callbacks and subsequent scans.
 - The checked direct Wide runner must reuse the admitted columns, mark
   indexes, and data image, then close the image when the runner exits. Each
   scan must return the same selected rows and detect a data-frame checksum

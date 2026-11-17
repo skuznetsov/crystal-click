@@ -61,9 +61,9 @@ private def parallel_scan_assert_wide_uint64_batch_coordinates(batch : CrystalCl
   nil
 end
 
-private def parallel_scan_wide_uint64_nested_values(table : CrystalClick::TypedPartTable) : Array(UInt64)
+private def parallel_scan_wide_uint64_nested_values(table : CrystalClick::TypedPartTable, workers : Int) : Array(UInt64)
   values = [] of UInt64
-  table.scan_typed_parallel(workers: 1, batch_rows: 5) do |batch|
+  table.scan_typed_parallel(workers: workers, batch_rows: 5) do |batch|
     values.concat(batch.values_for("value", UInt64).to_a)
   end
   values
@@ -86,6 +86,17 @@ private def parallel_scan_assert_wide_uint64_mutable_batch(
   nil
 end
 
+private def parallel_scan_assert_wide_uint64_accessors(batch : CrystalClick::WidePartTableBatch, keys : Slice(UInt64)) : Nil
+  batch.values_for("pk").to_unsafe.should eq(keys.to_unsafe)
+  expect_raises(CrystalClick::UnsupportedFormatError, "typed accessor does not match selected column type") do
+    batch.values_for("pk", Int64)
+  end
+  expect_raises(CrystalClick::UnsupportedFormatError, "column is not selected") do
+    batch.values_for("absent")
+  end
+  nil
+end
+
 private def parallel_scan_assert_wide_uint64_order_and_lifetime(
   table : CrystalClick::TypedPartTable,
   workers : Int,
@@ -96,7 +107,9 @@ private def parallel_scan_assert_wide_uint64_order_and_lifetime(
   observed_values = [] of UInt64
   callback_count = 0
   reentered = false
+  first_batch = nil.as(CrystalClick::WidePartTableBatch?)
   table.scan_typed_parallel(workers: workers, batch_rows: 3) do |batch|
+    first_batch ||= batch
     keys = batch.values_for("pk", UInt64)
     values = batch.values_for("value", UInt64)
     parallel_scan_assert_wide_uint64_batch_coordinates(batch)
@@ -106,7 +119,8 @@ private def parallel_scan_assert_wide_uint64_order_and_lifetime(
     observed_values.concat(values.to_a)
 
     unless reentered
-      parallel_scan_wide_uint64_nested_values(table).should eq(expected_values)
+      parallel_scan_assert_wide_uint64_accessors(batch, keys)
+      parallel_scan_wide_uint64_nested_values(table, workers).should eq(expected_values)
       GC.collect
       reentered = true
     end
@@ -118,6 +132,10 @@ private def parallel_scan_assert_wide_uint64_order_and_lifetime(
   observed_values.should eq(expected_values)
   callback_count.should be > 0
   reentered.should be_true
+  first = first_batch.not_nil!
+  parallel_scan_assert_wide_uint64_batch_coordinates(first)
+  first.source_row_offset.should eq(0_u64)
+  first.row_count.should eq(3_u64)
   nil
 end
 
@@ -181,6 +199,43 @@ private def parallel_scan_assert_wide_uint64_bad_boundary_frame(
     File.write(data_path, original)
   end
   nil
+end
+
+describe CrystalClick::WidePartTableBatch do
+  it "keeps the selected slices when the input slice vector changes" do
+    keys = [1_u64, 2_u64]
+    replacement = [7_u64, 8_u64]
+    slices = [keys.to_unsafe.to_slice(keys.size)]
+    batch = CrystalClick::WidePartTableBatch.new(
+      0_i32, "part", "part", 0_i32, 0_u64, 0_u64, 0_u64, ["pk"], slices, 2_u64,
+    )
+    slices[0] = replacement.to_unsafe.to_slice(replacement.size)
+
+    batch.values_for("pk", UInt64).to_unsafe.should eq(keys.to_unsafe)
+    batch.values_for("pk", UInt64).to_a.should eq([1_u64, 2_u64])
+  end
+end
+
+describe CrystalClick::WideUInt64ScanWorkspacePool do
+  it "leases an idle workspace exclusively and drops storage above the retained payload limit" do
+    pool = CrystalClick::WideUInt64ScanWorkspacePool.new
+    workspace = pool.try_acquire(0, 2).not_nil!
+    workspace.prepare(8_192_u64)
+    pool.try_acquire(0, 2).should be_nil
+    pool.try_acquire(CrystalClick::WideUInt64ScanWorkspacePool::MAX_CACHED_WORKERS, 2).should be_nil
+    pool.release(0, CrystalClick::WideUInt64ScanWorkspace.new(2))
+    pool.try_acquire(0, 2).should be_nil
+    pool.release(0, workspace)
+
+    reused = pool.try_acquire(0, 2).not_nil!
+    reused.same?(workspace).should be_true
+    reused.decode_workspace.buffer_for(CrystalClick::WideUInt64ScanWorkspacePool::MAX_CACHED_PAYLOAD_BYTES_PER_WORKER)
+    pool.release(0, reused)
+
+    replacement = pool.try_acquire(0, 2).not_nil!
+    replacement.same?(workspace).should be_false
+    pool.release(0, replacement)
+  end
 end
 
 describe "CompressedStreamBudget parallel reservations" do
