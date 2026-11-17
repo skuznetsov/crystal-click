@@ -1106,6 +1106,108 @@ only the corrected blocks with the saved plain binary.
 | Default quiet trace, first block | `0cdfd85482096cda39de035aad187db83592996b4ed20f27105cf7fd828c02e8` |
 | Default quiet trace, second block | `0d5a3b761fec8b3e28155f06ae98b776d68a13f3ceafbd6ec43e0ea02bd243ea` |
 
+### Wide frame-policy allocations
+
+The direct Wide `UInt64` reader skips composite type classification when
+checking empty-payload and frame codec policy. The shared decoder classifies
+other column types once per range and applies their policy to every frame.
+The frame loop uses the existing checksum policy and enforces codec,
+alignment, and mark boundaries.
+
+A standalone Release probe on `3e0be10` measured process allocation
+counters after warmup across 20,000 calls per case using an existing
+`UInt64` type string. The `Array(Map)` probe allocated about 368 bytes
+per call, including temporary prefixes and a parsed type expression.
+The `AggregateFunction(count)` probe allocated about 48 bytes per call
+constructing codec limits. The checks ran on every frame of the direct
+scalar scan, where both returned false. Together they account for about
+208 KiB of allocations for 512 frames. The no-op control allocated zero
+bytes over the same iteration count.
+
+The comparison used the same Wide MRK2 part, all 16 data marks, four
+workers assigned four consecutive marks each, and checksum verification
+for all 512 LZ4 frames. Each scan returned 131,072 rows of two `UInt64`
+columns. The driver compared all 2 MiB of ordered output with the
+independent oracle after each scan. Both Crystal runners retained
+metadata, mappings, worker threads, and scratch buffers for the session.
+Native `readRows` was rebuilt from ClickHouse `d9bcb5ab` in Release mode
+with jemalloc disabled. Its per-request preparation median was 17.2–19.3 µs
+and stayed outside the scan timer. The native scan timer included launching
+and joining its workers. The test ran with warm filesystem caches on the
+same M2 Max and SSD, using Crystal 1.22.3 and Boehm 8.2.12.
+
+Each block compared the plain Release binaries for Crystal `3e0be10`,
+the change above, and native `readRows`. Boehm collection was enabled
+for both Crystal runners. The driver used `--layout wide --workers 4
+--require-retained-workers --warmups 12 --repeats 240`. A scratch copy
+applied the retained-worker check to both Crystal arms and reversed
+the permutation order for the reverse blocks. Each of the six runner
+orders occurred 40 times. Two confirmation blocks followed the initial
+pair because several slow rounds were shared across runners. All four
+blocks are shown in chronological order. Times are in microseconds and
+p95 is the 228th sorted sample in each block.
+
+| Block | Crystal before p50 / p95 | Crystal after p50 / p95 | ClickHouse p50 / p95 |
+| --- | ---: | ---: | ---: |
+| Forward | 421.417 / 757.208 | 358.353 / 546.791 | 503.938 / 889.709 |
+| Reverse | 409.438 / 674.875 | 351.708 / 386.042 | 489.313 / 582.375 |
+| Confirmation, reverse | 417.271 / 705.833 | 355.459 / 474.375 | 503.229 / 694.500 |
+| Confirmation, forward | 414.583 / 747.167 | 353.354 / 390.250 | 495.959 / 550.042 |
+
+Paired p95 fell 28–48% from the Crystal baseline and was 29–39% below
+native `readRows` on this part. The four blocks show the variation in
+warm-cache tail latency on the shared host.
+
+Separate Boehm traces reversed the Crystal runner order across two
+blocks, again using 12 warmups and 240 measured scans per runner. The
+mean allocation per scan divides the sum of process-wide
+`GC.stats.total_bytes` deltas within measured scan intervals by 240.
+Boehm synchronizes the underlying heap usage snapshot.
+[Boehm heap usage counters](https://github.com/bdwgc/bdwgc/blob/v8.2.12/include/gc.h#L654-L702)
+
+| First runner | Mean allocated bytes per scan, before / after | Scans overlapping a stopped-world interval, before / after |
+| --- | ---: | ---: |
+| Before | 218,827 / 1,386 | 26 / 0 |
+| After | 218,876 / 1,383 | 26 / 0 |
+
+The baseline pauses covered all 12 slowest scans in each trace. The
+median overlap among paused scans was about 0.2 ms. The updated
+runner recorded a startup collection and zero collections during the
+measured requests in each trace. Collection stayed enabled throughout.
+A separate forced-collection process verified that the trace captures
+the interval from `GC_EVENT_POST_STOP_WORLD` to
+`GC_EVENT_PRE_START_WORLD`. [Boehm event boundaries](https://github.com/bdwgc/bdwgc/blob/v8.2.12/alloc.c)
+An isolated probe measured about 960 bytes across the eight stream-name
+escapes made by each scan.
+
+A separate profile confirmed 128 checksum verifications and decodes per
+worker and stable mappings and scratch buffers across repeated scans.
+All three plain runners rejected a mutated checksum when mark 13 was
+selected and returned the exact rows when it was skipped. This included
+an adjacent selected mark whose end offset is the corrupt frame's
+header. The wrong-oracle control failed in each runner and the
+measured part manifest stayed unchanged. The focused Release suites
+passed 55 scan and transport, 31 reader and type, and 70 Wide type
+and codec examples in three runs.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Crystal `3e0be10` Release runner | `e469a22259bdf60245383ab6de4b5cc674821cc3d63f6c62bf51f519d3d2cbf5` |
+| Updated Crystal Release runner | `fc91809cc128d06aac90ceef44b11edaddff6eca6987ced47c2035fedf1d365f` |
+| Rebuilt native `readRows` Release runner | `fd433bd1882cdfe4b294d6031b8b361985e486886eed48f084bd76c3bee10962` |
+| Benchmark driver | `4632292bc12e55523be591e2109cc540ba0aa3fe595a4fdd0f79179f81493bfc` |
+| Forward report | `47ba86738bb568f49c6c24f13b5d563e77589d6e98207f3a85c80a593762d734` |
+| Reverse report | `bc7003e4e5eff3eb35bfc8e67effcbe5535259bebe82ae6d285eacba3e08a6b2` |
+| Confirmation reverse report | `36ac4aa2321552c4c082b3e7b2b1a163c02cb910acb70fc0e1064985149cf377` |
+| Confirmation forward report | `f967f49f193270ea8e0ea51fd288b2e3ba81f302a3938d876b557585759cac09` |
+| GC trace, baseline first block | `a9a6bef9298d84b06c01954136eb64f16ff23bcb0057773e09b17e8a6bbfc0ad` |
+| GC trace, updated first block | `2ad66e3b9ca715408744819d48b3e04af912c8719e1af11ba239002aa3312baf` |
+| GC trace, baseline second block | `1062e4ef4c2de8016e75066e22f237746b1ec786e8169e7769dc318d2e57b818` |
+| GC trace, updated second block | `3c237d9ac276767d26c5f5351cf5c299b67ae33763a16ff63098ee512e1c8dd4` |
+| GC trace, forced positive control | `1a8b11ad59973207c66c6a86458bf71e4a7c3ea170ee1b929bf8b2a07e0dbc57` |
+
 ### Compact pilot budget cutoff
 
 The first 524,288-row fixture had 64 data marks of 8,192 rows. On Compact

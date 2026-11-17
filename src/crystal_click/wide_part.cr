@@ -16626,7 +16626,12 @@ module CrystalClick
       start_offset = start_mark.compressed_offset
       end_offset = end_mark.compressed_offset
       tuple_profile = false
-      empty_payload_stream = if plan = WidePart.variant_type_plan(@column_type)
+      direct_uint64 = direct_uint64_column?
+      # Direct UInt64 is a fixed-width value stream, so it cannot have the
+      # empty-payload stream semantics used by the composite type plans.
+      empty_payload_stream = if direct_uint64
+                               false
+                             elsif plan = WidePart.variant_type_plan(@column_type)
                                stream.name != plan.discriminator_stream(@column)
                              elsif plan = GeometryColumnType.for_type(@column_type)
                                tuple_profile = true
@@ -16757,33 +16762,45 @@ module CrystalClick
         selected_bytes = 0_i64
         frame_offset = start_offset.to_i64
         started = false
-        workspace = decode_workspace || CompressedBlock::DecodeWorkspace.new(padded_lz4: @verify_data_checksums && direct_uint64_column?)
-        loop do
-          {% if flag?(:read_rows_profile) %}
-            dispatch_started = Time.instant
-          {% end %}
+        workspace = decode_workspace || CompressedBlock::DecodeWorkspace.new(padded_lz4: @verify_data_checksums && direct_uint64)
+        {% if flag?(:read_rows_profile) %}
+          dispatch_started = Time.instant
+        {% end %}
+        qbit_profile = false
+        geometry_profile = false
+        point_profile = false
+        geo_array_profile = false
+        count_profile = false
+        variant_profile = false
+        dynamic_profile = false
+        array_map_profile = false
+        unless direct_uint64
           qbit_profile = !QBitColumnType.for_type(@column_type).nil?
           geometry_profile = !GeometryColumnType.for_type(@column_type).nil?
           point_profile = !PointColumnType.for_type(@column_type).nil?
           geo_array_profile = !GeoArrayColumnType.for_type(@column_type).nil?
           count_profile = !WideAggregateCountStoragePlan.for_type_name(@column_type).nil?
-          {% if flag?(:read_rows_profile) %}
-            dispatch_finished = Time.instant
-            ReadRowsProfile.current_worker?.try &.add_frame_dispatch(
-              ReadRowsProfile.elapsed_ns_between(dispatch_started, dispatch_finished),
-            )
-          {% end %}
+          variant_profile = WidePart.supports_variant_type?(@column_type)
+          dynamic_profile = @column_type == "Dynamic"
+          array_map_profile = WidePart.supports_array_map_type?(@column_type)
+        end
+        {% if flag?(:read_rows_profile) %}
+          dispatch_finished = Time.instant
+          ReadRowsProfile.current_worker?.try &.add_frame_dispatch(
+            ReadRowsProfile.elapsed_ns_between(dispatch_started, dispatch_finished),
+          )
+        {% end %}
+        loop do
           if @verify_data_checksums && !valid_compressed_frame_checksum?(data, frame_offset)
             raise CorruptPartError.new("compressed frame checksum mismatch")
           end
           if count_profile && !valid_compressed_frame_checksum?(data, frame_offset)
             raise CorruptPartError.new("AggregateFunction(count) compressed frame checksum does not match")
           end
-          if WidePart.supports_variant_type?(@column_type) || @column_type == "Dynamic" ||
-             WidePart.supports_array_map_type?(@column_type) || qbit_profile || geometry_profile || point_profile || geo_array_profile || count_profile
+          if variant_profile || dynamic_profile || array_map_profile || qbit_profile || geometry_profile || point_profile || geo_array_profile || count_profile
             if frame_offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE ||
                data[frame_offset.to_i + CompressedBlock::CHECKSUM_SIZE] != CompressedBlock::METHOD_LZ4
-              if WidePart.supports_array_map_type?(@column_type) &&
+              if array_map_profile &&
                  !valid_compressed_frame_checksum?(data, frame_offset)
                 raise CorruptPartError.new("mark does not start at a valid compressed frame")
               end
@@ -16791,7 +16808,7 @@ module CrystalClick
                           "Dynamic requires LZ4 compressed streams"
                         elsif count_profile
                           "AggregateFunction(count) requires LZ4 compressed streams"
-                        elsif WidePart.supports_array_map_type?(@column_type)
+                        elsif array_map_profile
                           "Array(Map) numeric profile requires LZ4 compressed streams"
                         elsif qbit_profile
                           "QBit requires LZ4 compressed streams"
@@ -16825,7 +16842,7 @@ module CrystalClick
           end
           selected_size = (local_end - local_start).to_i64
           raise CorruptPartError.new("selected data exceeds expected byte count") if selected_size > expected_bytes.to_i64 - selected_bytes
-          frame_alignment = QBitColumnType.for_type(@column_type) ? 1 : element_width
+          frame_alignment = qbit_profile ? 1 : element_width
           raise CorruptPartError.new("numeric bytes are not column-type-aligned") unless selected_size % frame_alignment == 0
           yield frame.output[local_start.to_i, selected_size.to_i] if selected_size > 0
           selected_bytes += selected_size
