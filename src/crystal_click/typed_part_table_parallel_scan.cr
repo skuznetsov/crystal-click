@@ -1,7 +1,7 @@
 module CrystalClick
   class TypedPartTable
     MAX_PARALLEL_SCAN_WORKERS = 32
-    private alias ParallelScanPartSource = {String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?, CompactPartTable?, WidePartTable?}
+    private alias ParallelScanPartSource = {String, Bool, CompressedStreamBudget?, CompactPartPhysicalContext?, CompactPartTable?, WidePartTable?, Bool}
 
     private struct ParallelScanMark
       getter part_index : Int32
@@ -53,6 +53,9 @@ module CrystalClick
       self.class.validate_parallel_workers!(workers)
       validate_batch_rows(batch_rows)
       if workers == 1
+        if parallel_direct_wide_uint64_scan? && @part_mark_row_counts.any? { |marks| marks.any? { |rows| rows > 0_u64 } }
+          return scan_typed_wide_uint64_serial(batch_rows) { |batch| yield batch }
+        end
         return scan_typed_with_shared_wide_mmaps(batch_rows) { |batch| yield batch }
       end
 
@@ -71,6 +74,9 @@ module CrystalClick
 
         effective_workers = workers < positive_mark_count ? workers : positive_mark_count
         if effective_workers <= 1
+          if parallel_direct_wide_uint64_scan?
+            return scan_typed_wide_uint64_serial(batch_rows) { |batch| yield batch }
+          end
           return scan_typed_with_shared_wide_mmaps(batch_rows) { |batch| yield batch }
         end
 
@@ -81,7 +87,10 @@ module CrystalClick
           raise UnsupportedFormatError.new("parallel typed scan admits only direct non-null primitive numeric columns")
         end
 
-        # Preserve the serial facade's full pre-callback backend admission.
+        direct_wide_uint64 = parallel_direct_wide_uint64_scan?
+        # Preserve the full pre-callback backend admission. The selected
+        # direct UInt64 lane still avoids per-mark generic materialization and
+        # its composite preflight hashes after this empty-schedule check.
         preflight_backends!
         schedule, worker_marks = parallel_scan_plan(effective_workers, positive_mark_count)
         part_sources = Array(ParallelScanPartSource).new(@entries.size)
@@ -93,7 +102,7 @@ module CrystalClick
           scan_context = compact_reader.try(&.parallel_uint64_scan_context)
           admitted_reader = scan_context ? compact_reader : nil
           admitted_wide_reader = entry.reader.as?(WidePartTable).try(&.parallel_primitive_numeric_scan_context)
-          part_sources << {String.new(entry.path.to_slice), !compact_reader.nil?, transport_budget, scan_context, admitted_reader, admitted_wide_reader}
+          part_sources << {String.new(entry.path.to_slice), !compact_reader.nil?, transport_budget, scan_context, admitted_reader, admitted_wide_reader, direct_wide_uint64}
           part_starts << source_row_offset
           source_row_offset = checked_add_rows(source_row_offset, entry.row_count)
         end
@@ -220,6 +229,58 @@ module CrystalClick
       end
     end
 
+    # :nodoc:
+    # Narrow admission shared with OfflineTable's W1 convenience path.
+    def parallel_direct_wide_uint64_scan? : Bool
+      return false if @projection_selected || @entries.empty?
+      return false unless @column_types.size == @column_sources.size && @column_types.size == @columns.size
+      return false unless @column_types.each_with_index.all? do |typed_column, index|
+                            column, type = typed_column
+                            source = @column_sources[index]
+                            type == "UInt64" && source == {column, column, "UInt64"}
+                          end
+
+      @entries.all? do |entry|
+        wide_reader = entry.reader.as?(WidePartTable)
+        wide_reader && !wide_reader.parallel_uint64_scan_context.nil?
+      end
+    end
+
+    private def scan_typed_wide_uint64_serial(
+      batch_rows : Int,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      preflight_backends!
+      positive_mark_count = 0
+      @part_mark_row_counts.each do |marks|
+        marks.each { |rows| positive_mark_count += 1 if rows > 0_u64 }
+      end
+      return scan_typed_with_shared_wide_mmaps(batch_rows) { |batch| yield batch } if positive_mark_count == 0
+
+      schedule, worker_marks = parallel_scan_plan(1, positive_mark_count)
+      part_starts = Array(UInt64).new(@entries.size)
+      source_row_offset = 0_u64
+      @entries.each do |entry|
+        part_starts << source_row_offset
+        source_row_offset = checked_add_rows(source_row_offset, entry.row_count)
+      end
+      raise CorruptPartError.new("source row count mismatch") unless source_row_offset == @total_row_count
+      raise CorruptPartError.new("parallel Wide UInt64 schedule has an unexpected worker") unless schedule.all? { |mark| mark.worker_index == 0 }
+
+      workspace = WideUInt64ScanWorkspace.new(@columns.size)
+      @entries.each_with_index do |entry, part_index|
+        marks = worker_marks[0][part_index]
+        next if marks.empty?
+        reader = entry.reader.as(WidePartTable)
+        with_wide_scan_image(reader) do |image|
+          reader.scan_typed_uint64_mark_indices(marks, batch_rows, image, workspace) do |batch|
+            yield rebase_batch!(batch, part_index, part_starts[part_index])
+          end
+        end
+      end
+      nil
+    end
+
     private def with_wide_scan_image(
       reader : WidePartTable,
       & : WideScanImage -> Nil
@@ -302,9 +363,10 @@ module CrystalClick
         acknowledgement : Channel(Nil),
       ) : Nil
         scan_workspace = nil.as(CompactUInt64ScanWorkspace?)
+        wide_uint64_workspace = nil.as(WideUInt64ScanWorkspace?)
         part_marks.each_with_index do |marks, part_index|
           next if marks.empty?
-          path, compact, transport_budget, scan_context, admitted_reader, admitted_wide_reader = part_sources[part_index]
+          path, compact, transport_budget, scan_context, admitted_reader, admitted_wide_reader, direct_wide_uint64 = part_sources[part_index]
           if compact
             reader = admitted_reader || begin
               budget = transport_budget || raise(CorruptPartError.new("parallel Compact part lost its transport budget"))
@@ -335,8 +397,19 @@ module CrystalClick
             if reader = admitted_wide_reader
               image = wide_scan_image_registry.acquire(part_index)
               begin
-                reader.scan_typed_mark_indices(marks, batch_rows, image) do |batch|
-                  send_parallel_batch!(batch, output, acknowledgement)
+                if direct_wide_uint64
+                  workspace = wide_uint64_workspace || begin
+                    created = WideUInt64ScanWorkspace.new(@columns.size)
+                    wide_uint64_workspace = created
+                    created
+                  end
+                  reader.scan_typed_uint64_mark_indices(marks, batch_rows, image, workspace) do |batch|
+                    send_parallel_batch!(batch, output, acknowledgement)
+                  end
+                else
+                  reader.scan_typed_mark_indices(marks, batch_rows, image) do |batch|
+                    send_parallel_batch!(batch, output, acknowledgement)
+                  end
                 end
               ensure
                 wide_scan_image_registry.release(part_index)

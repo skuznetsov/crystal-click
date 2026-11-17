@@ -399,6 +399,122 @@ module CrystalClick
       self
     end
 
+    # :nodoc:
+    # Return this table only for the ordinary direct UInt64 profile used by
+    # the public typed scan's bounded scratch lane.
+    def parallel_uint64_scan_context : WidePartTable?
+      return nil unless parallel_primitive_numeric_scan_context
+      return nil unless @entries[0].column_types.all? { |column_type| column_type == "UInt64" }
+      self
+    end
+
+    # :nodoc:
+    # Decode each selected mark into worker-private per-column storage. All
+    # columns, including the existing end-boundary frame visit, finish before
+    # the first callback for that mark is exposed.
+    def scan_typed_uint64_mark_indices(
+      mark_indices : Array(Int32),
+      batch_rows : Int,
+      scan_image : WideScanImage,
+      workspace : WideUInt64ScanWorkspace,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      raise BoundsError.new("batch row count is out of range") if batch_rows <= 0 || batch_rows > MAX_BATCH_ROWS
+      unless parallel_uint64_scan_context
+        raise UnsupportedFormatError.new("scan requires ordinary direct Wide UInt64 columns")
+      end
+      raise BoundsError.new("parallel mark range requires one physical Wide part") unless @entries.size == 1
+
+      part = @entries[0]
+      readers = part.readers
+      raise BoundsError.new("Wide UInt64 scan workspace differs from selected columns") unless workspace.column_count == readers.size
+      mark_rows = part.mark_row_counts
+      raise BoundsError.new("parallel Wide mark list is empty") if mark_indices.empty?
+
+      selected_marks = mark_indices.dup
+      previous = -1
+      selected_marks.each do |mark_index|
+        unless mark_index >= 0 && mark_index < mark_rows.size && mark_index > previous
+          raise BoundsError.new("parallel Wide mark indices are outside the physical grid or unordered")
+        end
+        previous = mark_index
+      end
+
+      total_rows = 0_u64
+      max_mark_rows = 0_u64
+      mark_rows.each do |rows|
+        total_rows = checked_total_rows(total_rows, rows)
+      end
+      raise CorruptPartError.new("part mark rows differ from the selected row count") unless total_rows == part.row_count
+      selected_marks.each do |mark_index|
+        rows = mark_rows[mark_index]
+        max_mark_rows = rows if rows > max_mark_rows
+      end
+      workspace.prepare(max_mark_rows)
+
+      selected_values = Array(Slice(UInt64)).new(readers.size, Slice(UInt64).empty)
+      selected_index = 0
+      part_row_offset = 0_u64
+      mark_rows.each_with_index do |rows, mark_index|
+        selected = selected_index < selected_marks.size && selected_marks[selected_index] == mark_index
+        selected_index += 1 if selected
+
+        if selected && rows > 0_u64
+          readers.each_with_index do |column_reader, column_index|
+            chunk_count = 0
+            values = Slice(UInt64).empty
+            column_reader.reader.scan_uint64_mark_range_into(
+              column_reader.name,
+              mark_index,
+              1,
+              workspace.scratch_slice(column_index),
+              scan_image,
+              workspace.decode_workspace,
+            ) do |chunk|
+              chunk_count += 1
+              values = chunk
+            end
+            unless chunk_count == 1 && values.size == rows.to_i
+              raise CorruptPartError.new("selected UInt64 mark row count changed")
+            end
+            selected_values[column_index] = values
+          end
+
+          mark_row_offset = 0
+          mark_rows_for_batch = rows.to_i
+          while mark_row_offset < mark_rows_for_batch
+            remaining = mark_rows_for_batch - mark_row_offset
+            batch_size = batch_rows < remaining ? batch_rows : remaining
+            batch_values = Array(Slice(UInt64)).new(readers.size)
+            selected_values.each do |values|
+              batch_values << values[mark_row_offset, batch_size]
+            end
+            batch_offset = mark_row_offset.to_u64
+            local_row_offset = checked_total_rows(part_row_offset, batch_offset)
+            yield WidePartTableBatch.new(
+              0_i32,
+              part.name,
+              part.path,
+              mark_index.to_i32,
+              batch_offset,
+              local_row_offset,
+              local_row_offset,
+              @columns,
+              batch_values,
+              batch_size.to_u64,
+            )
+            mark_row_offset += batch_size
+          end
+        end
+
+        part_row_offset = checked_total_rows(part_row_offset, rows)
+      end
+
+      raise CorruptPartError.new("parallel Wide mark selection was not fully consumed") unless selected_index == selected_marks.size
+      raise CorruptPartError.new("part mark rows differ from the selected row count") unless part_row_offset == part.row_count
+      nil
+    end
+
     # Scan a bounded physical-row interval in caller-selected part order.
     # Only marks intersecting the interval have selected column payloads
     # materialized; each selected mark is still decoded under the existing

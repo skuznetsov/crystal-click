@@ -9,9 +9,9 @@ The sequential reference is `main` at
 selected immutable Wide and Compact parts to workers in round-robin order.
 It accepts 1–32 workers, capped by the number of those marks.
 `OfflineTable#scan_typed_parallel` uses the same catalog resolution and DDL
-checks as `scan_typed`. A request for one worker uses the existing serial
-scan. With execution contexts enabled, a single nonempty mark also takes
-this path. The threaded path admits exact
+checks as `scan_typed`. A request for one worker runs the scan on the caller.
+With execution contexts enabled, a single nonempty mark also takes this
+path. The threaded path admits exact
 `UInt8`–`UInt64`, `Int8`–`Int64`, `Float32`, and `Float64` columns in ordinary
 parts with Crystal execution contexts enabled. It rejects projection children
 and flattened `Nested` bindings.
@@ -88,6 +88,25 @@ indexes across sequential calls to `scan_typed_parallel`. Each call opens
 its own data mappings and uses fresh decode state. Open a new reader when
 the selected parts or columns change. The catalog convenience methods open
 a new reader for each call.
+
+### Direct Wide UInt64 batches
+
+When every selected part is ordinary Wide `.mrk2` and every selected
+column is a direct `UInt64`, the parallel typed scan uses the checked
+Wide mark-range reader on each worker, including the one-worker path.
+Each worker reuses one frame decode workspace and writable storage for the
+selected columns, sized to its largest assigned mark. Every selected part
+passes backend preflight before the first callback. The worker validates the
+full range for every selected column before publishing the first batch from
+that mark. The callback receives `Slice(UInt64)` views over the corresponding
+rows with the same batch limits, source order, and coordinates as the
+general typed scan. The worker keeps the current mark through its last
+callback acknowledgement.
+
+This path inherits the ordinary Wide data-frame verification policy.
+The checked range reader validates frame sizes and boundaries and the exact
+logical width of each mark. With `SizeChecked` admission the reader also
+checks persisted file sizes.
 
 ## Comparison contract
 
@@ -1363,6 +1382,55 @@ native `readRows`. The pooled p95 is the 4,560th sorted sample.
 | Confirmation forward report, third block | `f09a75392c8ad215146ea3bf754aa4394e72aae71ca505bcefdb2070c8f727d9` |
 | Confirmation reverse report, fourth block | `0310a16e64783da4dc2afc60b328976612c52035f2d486fe2ff2fdbb41408ec0` |
 
+### Public Wide UInt64 scan measurements
+
+Each Crystal `--release` process opened one `TypedPartTable` and reused
+it across calls to `scan_typed_parallel`. The baseline was `eda882a`.
+The restored ClickHouse 26.10.1.1201 Wide part has the same file manifest
+as the Wide mmap comparison and passed `CHECK TABLE`. It contains `pk`
+and `value` as `UInt64`, with 131,072 rows in 16 marks of 8,192 rows each.
+
+The timer covered the scan, including preflight, mappings, workers, and
+copying the 32 ordered 4,096-row batches into a preallocated destination.
+The initial table open and the byte-for-byte comparison against ClickHouse
+RowBinary values ran outside the timer. Both versions reported
+`SizeChecked`, returned the exact bytes and coordinates, and rejected a
+size-preserving corruption of the adjacent LZ4 frame header.
+
+The Apple M2 Max run used macOS 26.6.2, Crystal 1.22.3, and Boehm 8.2.12
+with `GC_DONT_GC` unset. Each worker count and version had 24 warmups and
+480 measured scans across four blocks with alternating pair order.
+Latency uses nearest-rank percentiles from the plain builds. A separate
+Release run measured `GC.stats.total_bytes` deltas after a known 1 MiB
+allocation verified the counter in each process.
+
+| Workers | Baseline p50 / p95 (ms) | Updated p50 / p95 (ms) | Baseline allocation p50 / p95 (bytes) | Updated allocation p50 / p95 (bytes) |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 3.441 / 3.744 | 1.684 / 1.934 | 10,574,272 / 10,583,808 | 267,760 / 274,704 |
+| 4 | 2.073 / 2.618 | 0.930 / 1.236 | 10,587,024 / 10,602,592 | 684,640 / 696,640 |
+
+Updated p95 was lower in all four blocks for each worker count. It fell
+48.35% with one worker and 52.80% with four on this part. Median bytes
+allocated per scan fell 97.47% and 93.53%, respectively.
+
+`crystal spec spec/typed_part_table_parallel_scan_spec.cr` passed ten
+examples. The `-Dwithout_mt` run passed nine. The checks cover writable
+callback-scoped slices, nested scans and forced GC inside a callback,
+callback failures followed by successful retries, and invalid adjacent
+and final Wide frame headers. The Wide mapping and metadata-admission
+specs passed twelve examples covering shared mappings, stable multi-part
+coordinates, and mapping release after a stopped callback.
+An `OfflineTable` probe matched serial values and coordinates for 17,001
+rows with `workers: 1` and observed zero callbacks for an empty table.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Shared public scan driver source | `915ba91130ca50614221743461e2ae1beba35282a1214b2fd0c20111f4dff480` |
+| Plain run samples | `9c06270c3389511f6440fb2189dc3a220f236fd42df420cf5c2a673eea86ebfb` |
+| Allocation run samples | `f4627aa2083d2deec87f565840ac0e436c8537ac878efaba0f14dac22c1843db` |
+
 ### Compact pilot budget cutoff
 
 The first 524,288-row fixture had 64 data marks of 8,192 rows. On Compact
@@ -2134,6 +2202,10 @@ parallel, mmap, and W124 transport specs passed 31 examples with
   touched part, including when workers read disjoint mark ranges. A failed
   mapping open, a worker error, or a stopped callback must release every
   mapping opened by that scan.
+- An admitted Wide `UInt64` scan must validate the complete mark range for
+  every selected stream before exposing its first batch. A malformed frame
+  visited at the mark boundary must fail before that callback, including
+  when the first selected column has already decoded successfully.
 - The checked direct Wide runner must reuse the admitted columns, mark
   indexes, and data image, then close the image when the runner exits. Each
   scan must return the same selected rows and detect a data-frame checksum

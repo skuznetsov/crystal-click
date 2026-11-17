@@ -3,11 +3,184 @@ require "atomic"
 
 PARALLEL_SCAN_WIDE_FIXTURE              = File.expand_path("../test/fixtures/public/wide_map_nullable_w53/part", __DIR__)
 PARALLEL_SCAN_WIDE_NONPRIMITIVE_FIXTURE = File.expand_path("../test/fixtures/public/wide_variant_w56/compact/part", __DIR__)
+PARALLEL_SCAN_WIDE_UINT64_PAIR_FIXTURE  = File.expand_path("../test/fixtures/public/wide_u64_pk_cidx/part", __DIR__)
 
 private def parallel_scan_copy_fixture(source : String, root : String, part_name : String) : String
   target = File.join(root, part_name)
   FileUtils.cp_r(source, target)
   target
+end
+
+private def parallel_scan_wide_mark_compressed_offset(part_path : String, column : String, mark_index : Int) : Int
+  reader = CrystalClick::WidePart.open_typed(part_path, column)
+  bytes = File.read(reader.mark_path).to_slice
+  offset = mark_index * 24
+  value = 0_u64
+  8.times do |index|
+    value |= bytes[offset + index].to_u64 << (index * 8)
+  end
+  value.to_i
+end
+
+private def parallel_scan_corrupt_wide_frame_header(path : String, frame_offset : Int) : Bytes
+  original = File.read(path).to_slice.dup
+  corrupted = original.dup
+  4.times { |index| corrupted[frame_offset + 17 + index] = 0_u8 }
+  File.write(path, corrupted)
+  original
+end
+
+private def parallel_scan_wide_uint64_worker_counts : Array(Int32)
+  {% if flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+    [1]
+  {% else %}
+    [1, 4]
+  {% end %}
+end
+
+private def parallel_scan_wide_uint64_pair_expected(
+  table : CrystalClick::TypedPartTable,
+) : {Array(UInt64), Array(UInt64)}
+  keys = [] of UInt64
+  values = [] of UInt64
+  table.scan_typed do |batch|
+    keys.concat(batch.values_for("pk", UInt64).to_a)
+    values.concat(batch.values_for("value", UInt64).to_a)
+  end
+  {keys, values}
+end
+
+private def parallel_scan_assert_wide_uint64_batch_coordinates(batch : CrystalClick::WidePartTableBatch) : Nil
+  batch.column_names.should eq(["pk", "value"])
+  batch.column_type_for("pk").should eq("UInt64")
+  batch.column_type_for("value").should eq("UInt64")
+  batch.part_index.should eq(0)
+  batch.part_row_offset.should eq(batch.source_row_offset)
+  batch.mark_row_offset.should eq(batch.source_row_offset % 8_u64)
+  batch.mark_index.should eq((batch.source_row_offset // 8_u64).to_i32)
+  nil
+end
+
+private def parallel_scan_wide_uint64_nested_values(table : CrystalClick::TypedPartTable) : Array(UInt64)
+  values = [] of UInt64
+  table.scan_typed_parallel(workers: 1, batch_rows: 5) do |batch|
+    values.concat(batch.values_for("value", UInt64).to_a)
+  end
+  values
+end
+
+private def parallel_scan_assert_wide_uint64_mutable_batch(
+  keys : Slice(UInt64),
+  values : Slice(UInt64),
+  expected_key : UInt64,
+  expected_value : UInt64,
+) : Nil
+  original_key = keys[0]
+  original_value = values[0]
+  keys[0] = UInt64::MAX
+  values[0] = 0_u64
+  keys[0].should eq(UInt64::MAX)
+  values[0].should eq(0_u64)
+  original_key.should eq(expected_key)
+  original_value.should eq(expected_value)
+  nil
+end
+
+private def parallel_scan_assert_wide_uint64_order_and_lifetime(
+  table : CrystalClick::TypedPartTable,
+  workers : Int,
+  expected_keys : Array(UInt64),
+  expected_values : Array(UInt64),
+) : Nil
+  observed_keys = [] of UInt64
+  observed_values = [] of UInt64
+  callback_count = 0
+  reentered = false
+  table.scan_typed_parallel(workers: workers, batch_rows: 3) do |batch|
+    keys = batch.values_for("pk", UInt64)
+    values = batch.values_for("value", UInt64)
+    parallel_scan_assert_wide_uint64_batch_coordinates(batch)
+    batch.row_count.should eq(keys.size.to_u64)
+    values.size.should eq(keys.size)
+    observed_keys.concat(keys.to_a)
+    observed_values.concat(values.to_a)
+
+    unless reentered
+      parallel_scan_wide_uint64_nested_values(table).should eq(expected_values)
+      GC.collect
+      reentered = true
+    end
+
+    parallel_scan_assert_wide_uint64_mutable_batch(keys, values, expected_keys[0], expected_values[0]) if callback_count == 0
+    callback_count += 1
+  end
+  observed_keys.should eq(expected_keys)
+  observed_values.should eq(expected_values)
+  callback_count.should be > 0
+  reentered.should be_true
+  nil
+end
+
+private def parallel_scan_assert_wide_uint64_callback_failure(
+  table : CrystalClick::TypedPartTable,
+  workers : Int,
+) : Nil
+  callback_error = IO::Error.new("Wide UInt64 callback failure")
+  raised = expect_raises(IO::Error) do
+    failed = false
+    table.scan_typed_parallel(workers: workers, batch_rows: 3) do |_batch|
+      unless failed
+        failed = true
+        raise callback_error
+      end
+    end
+  end
+  raised.object_id.should eq(callback_error.object_id)
+  nil
+end
+
+private def parallel_scan_assert_wide_uint64_retry(
+  table : CrystalClick::TypedPartTable,
+  workers : Int,
+  expected_keys : Array(UInt64),
+  expected_values : Array(UInt64),
+) : Nil
+  retried = [] of {UInt64, UInt64}
+  table.scan_typed_parallel(workers: workers, batch_rows: 3) do |batch|
+    keys = batch.values_for("pk", UInt64)
+    values = batch.values_for("value", UInt64)
+    keys.each_with_index do |key, row_index|
+      retried << {key, values[row_index]}
+    end
+  end
+  retried.should eq(expected_keys.zip(expected_values))
+  nil
+end
+
+private def parallel_scan_assert_wide_uint64_bad_boundary_frame(
+  table : CrystalClick::TypedPartTable,
+  wide_path : String,
+  data_path : String,
+  workers : Int,
+  mark_index : Int,
+  expected_callbacks : Int,
+) : Nil
+  original = parallel_scan_corrupt_wide_frame_header(
+    data_path,
+    parallel_scan_wide_mark_compressed_offset(wide_path, "value", mark_index),
+  )
+  begin
+    callbacks = 0
+    expect_raises(CrystalClick::CorruptPartError) do
+      table.scan_typed_parallel(workers: workers, batch_rows: 1) do |_batch|
+        callbacks += 1
+      end
+    end
+    callbacks.should eq(expected_callbacks)
+  ensure
+    File.write(data_path, original)
+  end
+  nil
 end
 
 describe "CompressedStreamBudget parallel reservations" do
@@ -349,6 +522,50 @@ describe "TypedPartTable parallel typed scan" do
         source_offsets.should eq((0_u64...expected.size.to_u64).to_a)
         part_indices.should eq(Array(Int32).new(7, 0_i32) + Array(Int32).new(7, 1_i32))
       {% end %}
+    ensure
+      FileUtils.rm_rf(root)
+    end
+  end
+
+  it "keeps two-column Wide UInt64 slices ordered, writable, reentrant, and callback-scoped" do
+    root = File.tempname("crystal-click-parallel-typed-wide-u64-pair")
+    Dir.mkdir(root)
+    begin
+      wide_path = parallel_scan_copy_fixture(PARALLEL_SCAN_WIDE_UINT64_PAIR_FIXTURE, root, "all_1_1_0")
+      table = CrystalClick::TypedPartTable.open_selected_typed([wide_path], ["pk", "value"])
+      expected_keys, expected_values = parallel_scan_wide_uint64_pair_expected(table)
+      parallel_scan_wide_uint64_worker_counts.each do |workers|
+        parallel_scan_assert_wide_uint64_order_and_lifetime(table, workers, expected_keys, expected_values)
+        parallel_scan_assert_wide_uint64_callback_failure(table, workers)
+        parallel_scan_assert_wide_uint64_retry(table, workers, expected_keys, expected_values)
+      end
+    ensure
+      FileUtils.rm_rf(root)
+    end
+  end
+
+  it "rejects malformed adjacent and final Wide UInt64 frames before exposing their boundary mark" do
+    root = File.tempname("crystal-click-parallel-typed-wide-u64-boundary")
+    Dir.mkdir(root)
+    begin
+      keys = [1_u64, 2_u64, 3_u64, 4_u64, 5_u64, 6_u64, 7_u64, 8_u64]
+      values = keys.map { |key| key * 10_u64 }
+      wide_path = CrystalClick::WidePartWriter.write_uint64_pair(
+        File.join(root, "all_1_1_0"),
+        "pk",
+        keys.to_unsafe.to_slice(keys.size),
+        "value",
+        values.to_unsafe.to_slice(values.size),
+        rows_per_mark: 2,
+      )
+      table = CrystalClick::TypedPartTable.open_selected_typed([wide_path], ["pk", "value"])
+
+      data_path = CrystalClick::WidePart.open_typed(wide_path, "value").data_path
+      parallel_scan_wide_uint64_worker_counts.each do |workers|
+        parallel_scan_assert_wide_uint64_bad_boundary_frame(table, wide_path, data_path, workers, 1, 0)
+        parallel_scan_assert_wide_uint64_bad_boundary_frame(table, wide_path, data_path, workers, 3, 4)
+        parallel_scan_assert_wide_uint64_retry(table, workers, keys, values)
+      end
     ensure
       FileUtils.rm_rf(root)
     end

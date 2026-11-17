@@ -1702,7 +1702,21 @@ module CrystalClick
       &block : WidePartTableBatch -> Nil
     ) : Nil
       TypedPartTable.validate_parallel_workers!(workers)
-      return scan_typed(columns, batch_rows, &block) if workers == 1
+      if workers == 1
+        case reader = open_typed_reader(columns, batch_rows, "batch")
+        when TypedPartTable
+          if reader.parallel_direct_wide_uint64_scan?
+            reader.scan_typed_parallel(workers, batch_rows, &block)
+          else
+            reader.scan_typed(batch_rows: batch_rows, &block)
+          end
+        when WidePartTable
+          # Preserve the flattened Nested serial dispatch and its admitted
+          # layout-specific behavior on the one-worker convenience path.
+          reader.scan_typed(batch_rows: batch_rows, &block)
+        end
+        return nil
+      end
 
       case reader = open_typed_reader(columns, batch_rows, "batch")
       when TypedPartTable
