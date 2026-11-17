@@ -37,6 +37,7 @@ module CrystalClickReadRowsScan
     ready = false
     retained_wide_image = nil.as(CrystalClick::WideScanImage?)
     retained_wide_workers = nil.as(WorkerPool?)
+    retained_wide_worker_job = nil.as(WorkerJob?)
     primary_error = nil.as(Exception?)
     begin
       config = parse_config(args)
@@ -64,9 +65,13 @@ module CrystalClickReadRowsScan
         (config.marks.size * index // config.workers).to_i32
       end
       worker_prepare_ns = nil.as(Int64?)
-      if retained_wide_readers
+      if readers = retained_wide_readers
+        image = retained_wide_image || raise(CrystalClick::CorruptPartError.new("Wide scan image was not retained"))
         worker_prepare_started = Time.instant
         retained_wide_workers = WorkerPool.new(config.workers, config.mark_rows)
+        retained_wide_worker_job = new_wide_worker_job(
+          config, readers, image, worker_marks, worker_starts, keys, values,
+        )
         worker_prepare_ns = elapsed_ns(worker_prepare_started)
       end
 
@@ -81,18 +86,12 @@ module CrystalClickReadRowsScan
         case line.chomp
         when "scan"
           scan_profile = new_scan_profile(config)
-          if readers = retained_wide_readers
+          if retained_wide_readers
             prepare_ns = 0_i64
             scan_started = Time.instant
             run_wide_scan(
-              config,
-              readers,
-              retained_wide_image || raise(CrystalClick::CorruptPartError.new("Wide scan image was not retained")),
               retained_wide_workers || raise(CrystalClick::CorruptPartError.new("Wide scan workers were not retained")),
-              worker_marks,
-              worker_starts,
-              keys,
-              values,
+              retained_wide_worker_job || raise(CrystalClick::CorruptPartError.new("Wide scan worker job was not retained")),
               scan_profile,
               scan_started,
             )
@@ -381,19 +380,16 @@ module CrystalClickReadRowsScan
     end
   end
 
-  private def run_wide_scan(
+  private def new_wide_worker_job(
     config : Config,
     readers : {CrystalClick::WidePart, CrystalClick::WidePart},
     image : CrystalClick::WideScanImage,
-    workers : WorkerPool,
     worker_marks : Array(Array(Int32)),
     worker_starts : Array(Int32),
     keys : Array(UInt64),
     values : Array(UInt64),
-    scan_profile : CrystalClick::ReadRowsProfile::Scan?,
-    scan_started : Time::Instant,
-  ) : Nil
-    worker = ->(worker_index : Int32, state : WorkerState) do
+  ) : WorkerJob
+    ->(worker_index : Int32, state : WorkerState) do
       mark_ids = worker_marks[worker_index]
       start_sequence = worker_starts[worker_index]
       scan_wide_column(
@@ -420,25 +416,33 @@ module CrystalClickReadRowsScan
       )
       nil
     end
+  end
+
+  private def run_wide_scan(
+    workers : WorkerPool,
+    job : WorkerJob,
+    scan_profile : CrystalClick::ReadRowsProfile::Scan?,
+    scan_started : Time::Instant,
+  ) : Nil
     {% if flag?(:read_rows_profile) %}
-      profiled_worker = ->(worker_index : Int32, state : WorkerState) do
+      profiled_job = ->(worker_index : Int32, state : WorkerState) do
         if profile = scan_profile
           profile_worker = profile.workers[worker_index]
           profile_worker.mark_start(scan_started)
           CrystalClick::ReadRowsProfile.with_worker(profile_worker) do
             begin
-              worker.call(worker_index, state)
+              job.call(worker_index, state)
             ensure
               profile_worker.mark_end(scan_started)
             end
           end
         else
-          worker.call(worker_index, state)
+          job.call(worker_index, state)
         end
       end
-      workers.run(profiled_worker, scan_profile)
+      workers.run(profiled_job, scan_profile)
     {% else %}
-      workers.run(worker)
+      workers.run(job)
     {% end %}
     nil
   end

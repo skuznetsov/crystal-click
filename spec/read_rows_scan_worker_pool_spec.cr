@@ -30,6 +30,7 @@ describe CrystalClickReadRowsScan::WorkerPool do
         end
 
         pool.run(observe.call(first_run, 256_i32))
+        GC.collect
         pool.run(observe.call(second_run, 64_i32))
         first = Array(ReadRowsWorkerObservation).new(4) { first_run.receive }.sort_by(&.[0])
         second = Array(ReadRowsWorkerObservation).new(4) { second_run.receive }.sort_by(&.[0])
@@ -76,7 +77,7 @@ describe CrystalClickReadRowsScan::WorkerPool do
     {% end %}
   end
 
-  it "drains dispatched work after one worker fails" do
+  it "drains dispatched work after a worker fails and accepts the next job" do
     {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
       pool = CrystalClickReadRowsScan::WorkerPool.new(4, 2)
       worker_one_started = Channel(Nil).new(1)
@@ -132,11 +133,21 @@ describe CrystalClickReadRowsScan::WorkerPool do
                        end
         runner.not_nil!.wait
 
-        pool.close
         returned_early.should be_false
         result_error.should_not be_nil
         result_error.not_nil!.message.should eq("injected worker failure")
+
+        recovered = Channel(Int32).new(4)
+        pool.run(->(index : Int32, _state : CrystalClickReadRowsScan::WorkerState) do
+          recovered.send(index)
+          nil
+        end)
+        recovered.close
+        Array(Int32).new(4) { recovered.receive }.sort.should eq([0, 1, 2, 3])
+
+        pool.close
         {% if flag?(:read_rows_profile) %}
+          pool.dispatch_count.should eq(2_u64)
           pool.context_create_count.should eq(4)
           pool.context_join_count.should eq(4)
         {% end %}

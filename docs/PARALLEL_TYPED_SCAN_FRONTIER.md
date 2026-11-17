@@ -1208,6 +1208,161 @@ and codec examples in three runs.
 | GC trace, updated second block | `3c237d9ac276767d26c5f5351cf5c299b67ae33763a16ff63098ee512e1c8dd4` |
 | GC trace, forced positive control | `1a8b11ad59973207c66c6a86458bf71e4a7c3ea170ee1b929bf8b2a07e0dbc57` |
 
+### Wide steady-state scan allocations
+
+The preceding 240-scan traces reported 1,383–1,386 Boehm-accounted
+bytes per scan. On the `0a1fc08` baseline, the longer traces below
+sampled Boehm's synchronized process counters at the scan boundaries
+and interposed `GC_malloc`, `GC_malloc_atomic`, and `GC_realloc` to
+attribute requested sizes to callers. The two counters measure allocator
+accounting and requested payload sizes, respectively.
+[Boehm profiling counters](https://github.com/bdwgc/bdwgc/blob/v8.2.12/include/gc.h#L779-L831)
+
+| Scan allocation source | Requested bytes per scan | Change |
+| --- | ---: | --- |
+| Eight physical stream-name escapes | 772 | Use the stream name already resolved and validated at Wide reader admission. |
+| Wide worker job closure | 104 | Construct the job once during worker preparation. |
+| Four worker waits | About 96 | Use a one-job command slot and a stack record for the blocking wait. |
+
+The final allocation comparison used two blocks of 24 warmups and 1,200
+measured scans per arm, reversing the initial arm order in the second
+block. The accepted diagnostic companion used `crystal build --release
+--threads 1` and its DWARF reported `DW_AT_APPLE_optimized(true)`. An initial
+companion built with `--debug` had disabled optimization and its trace
+was discarded. The allocator probe and per-scan synchronized counters
+were separate from the plain timing campaign.
+
+| Block | Requested bytes per scan, baseline / updated | Boehm-accounted bytes per scan, baseline / updated | In-scan collections, baseline / updated |
+| --- | ---: | ---: | ---: |
+| Baseline first | 972.487 / 1.133 | 1,211.533 / 1.000 | 0 / 0 |
+| Updated first | 972.847 / 1.167 | 1,205.573 / 2.200 | 0 / 0 |
+
+The updated runner recorded zero `GC_malloc` and `GC_realloc` calls in
+all 2,400 measured scan intervals. It recorded 34 and 35 atomic allocations
+of 40 bytes, all symbolized to `Fiber::ExecutionContext::Monitor#run_loop`.
+There were zero allocations in 1,166 and 1,165 of the 1,200 scan intervals,
+respectively. Boehm's counters account for thread allocation buffers in
+batches, so their per-interval deltas differ from the requested sizes.
+GC was enabled at entry, READY, every scan boundary, and exit. The probe's
+positive control requested 5,632 bytes and independently observed 6,032
+Boehm-accounted bytes.
+
+The command slot is used by the direct benchmark's isolated workers on
+Darwin with Boehm and Crystal 1.22 or newer. The pool holds each worker's
+scratch and decoder through join and retains the running job until every
+dispatched completion is drained. The native wait passes only condition,
+mutex, and status through the callback. A forced collection caught a
+buffer address change in the initial native-wait variant with stack-local
+worker state. The regression spec collects between jobs and verifies that
+both buffer addresses survive.
+[Boehm blocking callback contract](https://github.com/bdwgc/bdwgc/blob/v8.2.12/include/gc.h#L1485-L1501)
+
+Release checks passed 69 reader and codec examples and three worker-pool
+examples in both plain and profiled builds. A separate worker stress check
+ran 800 jobs per pass with forced collections while workers waited and
+while a job was active. It checked buffer identity and contents, error
+drain, and reuse after failure.
+
+The reader and worker-pool verification commands were
+
+```sh
+crystal spec --release --threads 1 \
+  spec/wide_part_spec.cr spec/multicolumn_wide_part_spec.cr \
+  spec/wide_part_schema_binding_w257_spec.cr \
+  spec/wide_parallel_metadata_admission_spec.cr \
+  spec/wide_parallel_scan_mapping_spec.cr \
+  spec/wide_part_numeric_map_owner_spec.cr spec/compressed_block_spec.cr
+crystal spec --release --threads 1 spec/read_rows_scan_worker_pool_spec.cr
+crystal spec --release --threads 1 -Dread_rows_profile spec/read_rows_scan_worker_pool_spec.cr
+```
+
+All runners read the same regenerated Wide MRK2 part. The archived
+source RowBinary and full-mark oracle hashes reproduced exactly. The
+new physical file-set hash differs from the preceding campaign's hash.
+ClickHouse 26.10.1.1201 generated the fixture and passed `CHECK TABLE`.
+Each scan covered all 16 marks of 8,192 rows with four workers and
+verified the checksums of 512 LZ4 frames. The runner compared 2 MiB
+of ordered output byte for byte with the oracle after each scan.
+All three runners rejected a corrupted frame checksum in selected mark
+13, returned the exact rows when that mark was omitted, and rejected an
+altered oracle.
+
+Timing used plain Release builds on an Apple M2 Max with warm filesystem
+caches. Both Crystal runners used Crystal 1.22.3 and Boehm 8.2.12 with
+collection enabled. They retained admission metadata, mmap regions, and
+worker contexts. Native ClickHouse `readRows` was built from `d9bcb5ab`
+using Clang 23.1.5 with jemalloc disabled. It used `pread` and timed
+starting and joining its four workers. Its per-request reader preparation
+was measured separately from the scan. Crystal's one-time preparation
+was reported before the measured scans.
+
+The initial plain comparison used four fresh-process blocks in chronological
+forward, reverse, forward, and reverse order. Each arm completed 24 warmups
+and 1,200 measured scans per block. Each of the six runner permutations
+occurred 200 times. A scratch driver required stable positive
+`worker_prepare_ns` on both Crystal arms and reversed the permutation
+schedule in alternating blocks. Times below are microseconds. Each p95 is
+the 1,140th sorted sample within its block.
+
+| Block | Crystal `0a1fc08` p50 / p95 | Updated Crystal p50 / p95 | ClickHouse p50 / p95 |
+| --- | ---: | ---: | ---: |
+| Forward | 361.438 / 1,161.417 | 361.125 / 1,191.333 | 496.729 / 1,358.541 |
+| Reverse | 356.291 / 398.875 | 356.209 / 404.375 | 479.853 / 553.750 |
+| Forward | 356.812 / 424.875 | 355.521 / 417.083 | 477.938 / 594.292 |
+| Reverse | 360.584 / 615.333 | 359.021 / 623.083 | 494.416 / 887.792 |
+
+The updated p95 varied from 1.83% lower to 2.58% higher than the Crystal
+baseline and was 12.31–29.82% lower than native `readRows` in these blocks.
+The measurements leave the p95 effect of removing the residual
+allocations unresolved. The first block's p95 was elevated for all three
+arms. Native per-request preparation p50 ranged from 15.25 to 16.29 µs.
+Crystal's one-time reader, mapping, and worker preparation ranged from
+0.597 to 0.768 ms in the updated runner.
+
+The initial plain driver inherited its launch environment. A final
+four-block confirmation started each driver with `env -u GC_DONT_GC`
+and saved the explicit command. It used the same binaries, fixture,
+scan boundaries, balanced runner orders, 24 warmups, and 1,200 measured
+scans per arm. All checksum controls and per-scan oracles passed again.
+
+| Confirmation block | Crystal `0a1fc08` p50 / p95 | Updated Crystal p50 / p95 | ClickHouse p50 / p95 |
+| --- | ---: | ---: | ---: |
+| Forward | 359.500 / 670.292 | 356.979 / 662.792 | 498.646 / 881.458 |
+| Reverse | 358.833 / 683.333 | 358.812 / 687.333 | 491.042 / 887.959 |
+| Forward | 358.250 / 536.584 | 355.166 / 544.292 | 490.250 / 769.458 |
+| Reverse | 357.709 / 547.708 | 356.042 / 552.750 | 490.063 / 760.958 |
+
+In this confirmation, updated p95 varied from 1.12% lower to 1.44% higher
+than the Crystal baseline and was 22.59–29.26% lower than native
+`readRows`. Native preparation p50 ranged from 15.58 to 16.29 µs.
+Crystal's one-time preparation ranged from 0.561 to 0.667 ms.
+Pooling the four confirmation blocks gives 4,800 measured scans per arm.
+Pooled p50 / p95 were 358.500 / 603.208 µs for the Crystal baseline,
+356.833 / 601.167 µs for updated Crystal, and 492.563 / 838.083 µs for
+native `readRows`. The pooled p95 is the 4,560th sorted sample.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `ec6d0eaad8680ced27b2c3a8178902a37f1143332e4dba1902d339d79764f1dc` |
+| Source RowBinary | `5103eb0b689c92f3ebe4c23ae58816b4d120b12d5a543c2e274a58a547a075b5` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Frozen `0a1fc08` Release runner | `fe7c1a8b9b3da11ed159bb139451263695bc760e62f099a631b8b6cb1b0ec1ca` |
+| Updated Crystal Release runner | `e0c5fcc09cdc0fbd467a4f3011729cbbbc3253c21e0a2dea7f69e160883f2f47` |
+| Native `readRows` Release runner | `2e2680b959d52b435fb2a77c7af571297447effc38b767f62f1897eca9d58749` |
+| Native compiled Gitlink input audit | `adc78e12c215475c33f9bb66c20c24e693fdf755f68f98cd556667056b220219` |
+| Scratch benchmark driver | `9536788882971e1564b053b5c5bb106b2bd0b554bbdbe6c20be4bf141ba6b766` |
+| Forward report, first block | `91190a45304c8f8052df85763eb8a79b561e75ac7aefbdd9b141d7f68aea1b01` |
+| Reverse report, second block | `e73fd82fe209cec22f7cc8129ea0259afa804ef65c84fea40e022c8b981f5bd8` |
+| Forward report, third block | `bd0a87d6649f36da694981564c28aba7d0be57fc8f64e0f5497785a8a057d1d1` |
+| Reverse report, fourth block | `bb563e4e6a6460b6310e925d263c8f43cbbde2affa078c3340282fd3b0a15501` |
+| Optimized allocation diagnostic runner | `1e822ed05829496f1bf9aecb5ed04650bca2f33faa6544c64e4dbfa7a4450b58` |
+| Optimized allocation comparison, two blocks | `19086a79fcf6a325dd51c599e1c9ba94b6c45a215d65806962a1204bc9323f30` |
+| Explicit-environment confirmation commands | `34ad05669dc74d3166d9dfa7dd8b5cde0168b78abbeefa9e08c6dc4872db31a1` |
+| Confirmation forward report, first block | `57d0ec2fe18d79f97b49f6483814a36124f0c4335357f8e47cfed3d273b378c6` |
+| Confirmation reverse report, second block | `9c2cc2fdd62ef4c1adff1e8f98af72230744fc288173826b8669ee43e67265b9` |
+| Confirmation forward report, third block | `f09a75392c8ad215146ea3bf754aa4394e72aae71ca505bcefdb2070c8f727d9` |
+| Confirmation reverse report, fourth block | `0310a16e64783da4dc2afc60b328976612c52035f2d486fe2ff2fdbb41408ec0` |
+
 ### Compact pilot budget cutoff
 
 The first 524,288-row fixture had 64 data marks of 8,192 rows. On Compact

@@ -1,6 +1,6 @@
-module CrystalClickReadRowsScan
-  alias WorkerJob = Proc(Int32, WorkerState, Nil)
+require "./read_rows_worker_command_slot"
 
+module CrystalClickReadRowsScan
   # Owns one inline W1 worker or a stable set of isolated W4 workers for a
   # complete direct Wide reader session.
   class WorkerPool
@@ -20,17 +20,31 @@ module CrystalClickReadRowsScan
       end
     end
 
+    # The pool retains Runtime through context join, keeping worker scratch
+    # rooted while the command slot waits in native code.
     private class Runtime
       getter startup : Channel(Startup)
-      getter commands : Channel(WorkerJob)
+      getter state : WorkerState
+      {% if flag?(:darwin) && !flag?(:gc_none) && compare_versions(Crystal::VERSION, "1.22.0") >= 0 %}
+        alias Commands = WorkerCommandSlot
+      {% else %}
+        alias Commands = Channel(WorkerJob)
+      {% end %}
+      @commands : Commands
+      getter commands : Commands
       getter completions : Channel(Completion)
       {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
         property context : Fiber::ExecutionContext::Isolated?
       {% end %}
 
-      def initialize
+      def initialize(mark_rows : Int32)
+        @state = WorkerState.new(mark_rows)
         @startup = Channel(Startup).new(1)
-        @commands = Channel(WorkerJob).new(1)
+        @commands = {% if flag?(:darwin) && !flag?(:gc_none) && compare_versions(Crystal::VERSION, "1.22.0") >= 0 %}
+                      WorkerCommandSlot.new
+                    {% else %}
+                      Channel(WorkerJob).new(1)
+                    {% end %}
         @completions = Channel(Completion).new(1)
         {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
           @context = nil.as(Fiber::ExecutionContext::Isolated?)
@@ -47,7 +61,8 @@ module CrystalClickReadRowsScan
     @inline_state : WorkerState?
     @runtimes : Array(Runtime)
     @closed : Bool
-    @running : Bool
+    # Keep the dispatched closure and captures reachable until all completions drain.
+    @running_job : WorkerJob?
 
     def initialize(worker_count : Int32, mark_rows : Int32)
       @worker_count = worker_count
@@ -58,7 +73,7 @@ module CrystalClickReadRowsScan
       @context_join_count = 0_i32
       @dispatch_count = 0_u64
       @closed = false
-      @running = false
+      @running_job = nil.as(WorkerJob?)
 
       unless @worker_count == 1 || @worker_count == 4
         raise ArgumentError.new("read_rows worker count must be 1 or 4")
@@ -95,9 +110,9 @@ module CrystalClickReadRowsScan
     # before returning or raising the first job error.
     def run(work : WorkerJob, scan_profile : CrystalClick::ReadRowsProfile::Scan? = nil) : Nil
       raise ArgumentError.new("read_rows worker session is closed") if @closed
-      raise ArgumentError.new("read_rows worker session already has an active scan") if @running
+      raise ArgumentError.new("read_rows worker session already has an active scan") if @running_job
 
-      @running = true
+      @running_job = work
       {% if flag?(:read_rows_profile) %}
         @dispatch_count += 1_u64
       {% end %}
@@ -164,7 +179,7 @@ module CrystalClickReadRowsScan
         raise first_error if first_error
         nil
       ensure
-        @running = false
+        @running_job = nil
       end
     end
 
@@ -193,6 +208,7 @@ module CrystalClickReadRowsScan
           rescue ex : Exception
             first_error ||= ex
           ensure
+            runtime.context = nil
             {% if flag?(:read_rows_profile) %}
               @context_join_count += 1_i32
             {% end %}
@@ -200,6 +216,7 @@ module CrystalClickReadRowsScan
         {% end %}
       end
 
+      @runtimes.clear
       @inline_state = nil
       raise first_error if first_error
       nil
@@ -207,7 +224,7 @@ module CrystalClickReadRowsScan
 
     {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
     private def start_worker(index : Int32, mark_rows : Int32) : Nil
-      runtime = Runtime.new
+      runtime = Runtime.new(mark_rows)
       @runtimes << runtime
       startup = runtime.startup
       commands = runtime.commands
@@ -216,7 +233,7 @@ module CrystalClickReadRowsScan
       context = Fiber::ExecutionContext::Isolated.new("read_rows_scan worker #{index}") do
         startup_sent = false
         begin
-          state = WorkerState.new(mark_rows)
+          state = runtime.state
           {% if flag?(:read_rows_profile) %}
             startup.send(Startup.new(state.identity, nil))
           {% else %}

@@ -1913,7 +1913,7 @@ module CrystalClick
              !@json_typed_path && @flattened_nested_context.nil?
         raise UnsupportedFormatError.new("scan-scoped mapping requires a direct primitive numeric column")
       end
-      stream_name = direct_uint64_column? ? PhysicalStreamName.escape(@column) : @column
+      stream_name = @direct_uint64_stream_name || @column
       stream = @streams[stream_name]?
       unless stream && stream.mark_path.ends_with?(".mrk2")
         raise UnsupportedFormatError.new("scan-scoped mapping requires an ordinary .mrk2 stream")
@@ -11539,6 +11539,7 @@ module CrystalClick
     @marks : Array(Mark)
     @sentinel : Mark
     @streams : Hash(String, PhysicalStream)
+    @direct_uint64_stream_name : String?
     @single_stream_string : Bool
     @low_cardinality_string_state : LowCardinalityStringState?
     @verify_data_checksums : Bool
@@ -11977,6 +11978,7 @@ module CrystalClick
       @marks = selected_stream.marks
       @sentinel = selected_stream.sentinel
       @element_width = stream_element_width(primary_stream)
+      @direct_uint64_stream_name = direct_uint64_column? ? selected_stream.name : nil
     end
 
     private def parse_metadata(
@@ -16578,11 +16580,7 @@ module CrystalClick
       & : Bytes -> Nil
     ) : Nil
       raise BoundsError.new("empty mark range") unless start_mark
-      stream = if direct_uint64_column?
-                 @streams[PhysicalStreamName.escape(@column)]
-               else
-                 @streams[@column]
-               end
+      stream = @streams[@direct_uint64_stream_name || @column]
       each_mark_range_bytes(
         stream,
         start_mark.not_nil!,
