@@ -145,12 +145,17 @@ Startup admits the immutable part and allocates the output buffers. Crystal
 Wide retains its selected column readers and one mapping per selected
 column across commands. Its one-time admission timer covers opening the
 readers and validating the selected mark grid. The mapping timer covers
-opening the data image before the first scan. ClickHouse retains the storage
-context and builds fresh reader cursors for each scan. Crystal Compact
-prepares a fresh typed table, mark grid, frame index, and transport budget
-for each scan. Per-scan preparation is timed separately. The scan timer
-covers worker startup and joins, checksum verification, decompression,
-typed batches, and one copy of each batch into the ordered output buffers.
+opening the data image before the first scan. The worker preparation timer
+covers Wide's typed scratch allocation, decode workspace initialization, and
+parallel worker readiness before `READY`. The decode workspace allocates
+its byte storage on the first frame that needs it. ClickHouse retains the
+storage context and builds fresh reader cursors for each scan. Crystal
+Compact prepares a fresh typed table, mark grid, frame index, and transport
+budget for each scan. Per-scan preparation
+is timed separately. The scan timer covers dispatch and waiting for workers,
+checksum verification, decompression, typed batches, and one copy of each
+batch into the ordered output buffers. For scan-owned workers it includes
+their startup and joins.
 It includes stream opens and closes performed within that interval.
 ClickHouse calls `IMergeTreeReader::readRows` once per selected mark and
 continues the reader across consecutive marks. It uses synchronous `pread`
@@ -205,7 +210,9 @@ python3 -B scripts/read_rows_benchmark.py \
 
 The report includes binary and part hashes, selected marks, p50 and p95 for
 per-scan preparation, scan time, and their per-sample sum. It records Wide
-reader admission and data mapping time once per retained Crystal process.
+reader admission and data mapping once per retained Crystal process. In
+retained-worker mode it also records the worker preparation and the elapsed
+time to `READY`.
 ClickHouse storage context startup precedes the measured intervals. To test
 gaps in the mark sequence, use
 `--marks 0,2,4,7,8,10,13,15` on the 16-mark fixture.
@@ -381,6 +388,10 @@ launch and join clocks overlap worker activity. Join includes waiting for
 workers, and the remainder includes uninstrumented work, scheduling delays,
 and parts of the measurement overhead. Medians of individual stages can
 come from different samples.
+
+For retained Crystal workers, the profile's `launch_ns` measures dispatch
+and `join_ns` measures the completion barrier. It records worker setup
+separately and joins the retained contexts when the session ends.
 
 Wide mapping work inside a scan appears in `shared_mmap`. Its open and
 close intervals fall outside the workers' envelope. For scan-owned images
@@ -805,8 +816,8 @@ took 0.032–0.055 ms across the candidate's four primary processes. Opening
 the mappings leaves page faults to the first reads. The baseline maps and
 unmaps inside the scan timer. Candidate unmapping happens after the scan
 sequence. The native storage context is loaded before `READY`. Its per-scan
-preparation measures cursor creation, and cursor destruction follows the
-scan and oracle check.
+preparation measures cursor creation. The scan includes releasing the
+reader cursors before the oracle check.
 
 Retaining mappings lowered scan p50 by 9.3% at one worker and 25.6% at
 four. The same-flag control lowered p50 by 7.6% and 14.7%, respectively.
@@ -853,6 +864,118 @@ Release mode and eight with `-Dwithout_mt`.
 | Primary 4 → 1 report | `2c81a7cd5d32c2b2535ac1d22e49821e96c055b4dad0ea697489d60e78a966d2` |
 | Same-flag 1 → 4 report | `ba5948fc90d3d6615b3dc3fa336f162df3cb1d42c00c7ade782ac9512e30f2e4` |
 | Same-flag 4 → 1 report | `c685936e0830bf38a656733f5e2ba8274d5b748a227f5cb073c9590c85564c94` |
+
+### Retaining Wide workers and scan buffers
+
+The direct Wide runner admits one immutable part, fixed mark partitions,
+and one output range per worker for the session. The one-worker path keeps
+its scratch in the caller. The parallel path starts its workers before
+`READY`. Each worker keeps its own typed scratch and decompression storage
+across requests. It derives frame and mark positions again on every scan.
+The caller verifies the complete ordered output after all workers finish.
+Every scan checks the selected frame checksums again.
+
+The runner accepts one scan at a time. A startup, scan, or protocol failure
+ends the session. All started workers must stop and join before the runner
+closes its data image. A failed scan must drain the dispatched work before
+shutdown so that workers can finish reading their mappings. Reverting the
+runner change restores fresh workers and scratch per scan.
+
+Use the direct benchmark command above with the `7d339bd` Release baseline
+and the retained-worker Release runner. Add `--crystal-baseline-bin`,
+`--layout wide --require-retained-workers --warmups 6 --repeats 48`, and run
+both `--workers 1 --workers 4` and `--workers 4 --workers 1`. Compare the
+uninstrumented runs for p50 and p95. For a separate diagnostic run, use
+`--warmups 1 --repeats 1` and replace the baseline option with
+`--crystal-profile-bin` pointing to the retained runner built with
+`-Dread_rows_profile`. The diagnostic checks direct scratch and decode
+buffer addresses and capacities, worker counts, mapping counts, and
+selected frame coverage on each repeated scan.
+
+Measure worker setup before `READY`, alongside metadata admission and
+mapping setup. Each of these three durations is measured once per process.
+The scan timer includes dispatch and completion waiting for retained
+Crystal workers. The native runner measures cursor creation separately on
+every request. Its scan includes W4 thread launch and joins and reader resets.
+Both runners verify the ordered output after their scan timer stops.
+
+The Apple M2 Max run used Crystal 1.22.3 and ClickHouse `d9bcb5ab` with
+LLVM 23.1.5. Each runner scanned the same warm-cache Wide MRK2 part at
+marks 0–15. Each mark has 8,192 rows and two `UInt64` columns. Each
+worker order used six warmups and 48 measured scans per runner and worker
+count, balanced across the six possible runner orders. Each table row
+pools 96 measurements. Times are in milliseconds. Total adds the
+preparation and scan times within each sample before computing percentiles.
+
+| Workers | Runner | Prepare p50 / p95 | Scan p50 / p95 | Total p50 / p95 |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | Crystal `7d339bd` | 0.0000 / 0.0000 | 1.3994 / 1.6595 | 1.3994 / 1.6595 |
+| 1 | Crystal retained workers | 0.0000 / 0.0000 | 1.3927 / 1.5800 | 1.3927 / 1.5800 |
+| 1 | ClickHouse `readRows` | 0.0077 / 0.0127 | 0.9887 / 1.0755 | 0.9984 / 1.0848 |
+| 4 | Crystal `7d339bd` | 0.0000 / 0.0000 | 0.5894 / 0.7673 | 0.5894 / 0.7673 |
+| 4 | Crystal retained workers | 0.0000 / 0.0000 | 0.3949 / 0.6853 | 0.3949 / 0.6853 |
+| 4 | ClickHouse `readRows` | 0.0172 / 0.0224 | 0.4572 / 0.5261 | 0.4741 / 0.5452 |
+
+Retaining workers and scratch reduced Crystal's four-worker scan p50 by
+33.0% and p95 by 10.7% relative to `7d339bd`. At four workers the candidate
+scan p50 was 13.6% lower than the native runner's and p95 was 30.3% higher.
+Both worker orders gave those directions. At one worker, retaining
+scratch changed Crystal's scan p50 by less than 1%. Its scan p50 was
+40.9% higher than the native runner's. Going from one to four workers sped
+up the median scan by 3.53× for retained Crystal workers, 2.37× for the
+Crystal baseline, and 2.16× for `readRows`.
+
+The retained runner's one-time metadata admission took 0.369–0.437 ms and
+mapping setup took 0.034–0.046 ms across all four candidate processes.
+Preparing the inline worker took 4.7–5.3 µs. Starting the four workers
+and allocating their typed scratch took 134.3–162.4 µs. Each worker range
+has two process observations. The decoder backing buffer grows during the
+first scan, which the latency campaign counts as a warmup.
+
+| Workers | Crystal `7d339bd` start to `READY` | Crystal retained workers start to `READY` | ClickHouse `readRows` start to `READY` |
+| ---: | ---: | ---: | ---: |
+| 1 | 5.237–5.486 ms | 5.932–5.978 ms | 10.627–11.460 ms |
+| 4 | 5.087–5.728 ms | 5.321–6.357 ms | 10.077–11.887 ms |
+
+All 576 timed scans matched the ordered oracle and assigned marks. The
+part manifest was unchanged and all first-frame checksum controls failed
+as expected. The separate candidate profile verified 512 frame checksums
+and 512 LZ4 decodes on each repeated scan, including 128 per worker in
+the four-worker track. It observed two retained mappings and zero mapping
+operations during the scans. Each worker kept a distinct scratch buffer of
+8,192 `UInt64` values and a decode buffer of 4,103 bytes with the same
+addresses across requests. The four contexts started once and remained
+active throughout the profile session.
+
+At both worker counts, all three runners rejected a same-inode checksum
+mutation between two scans that selected mark 13. Gapped scans that omitted
+mark 13 returned the exact selected rows before and after the same mutation.
+All three runners rejected an oracle with one altered byte. The candidate's
+Compact smoke scans at both worker counts returned all 131,072 rows and
+reported per-scan preparation.
+
+The focused worker spec checked thread and backing storage reuse and
+blocked one worker while another failed to verify that the scan drains
+every completion before raising. A separate diagnostic runner observed
+all started contexts stop before closing the mappings on quit, EOF,
+invalid commands, partial worker startup failure, and an in-session
+checksum failure. An injected mmap cleanup failure preserved both error
+diagnostics. The Release mapping, streaming, LZ4, and compressed block
+specs passed 50 examples.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Crystal `7d339bd` | `ed6b2aa0cdf5e06a0b80dcfeb178abcb687700e1f54d7c0664b8690cb0560d85` |
+| Crystal retained workers | `f98a5246b5c2946e788cc170cc5799ae6ebd84193a1610a843170c0fcf34f617` |
+| Crystal retained workers profile | `b2bf1a5ad14c1a9731d25740b4749af61b7639a93c987ec0b3ae80ab88f34f74` |
+| ClickHouse `readRows` | `86f1823a7d2e051e9cce9608e9058dc60c7c366b0e5d629fcf045736680a47fa` |
+| Benchmark driver | `e3ab11714f4327d22c39aecb1d5fdd08db56e49a41a283f84f0f1d72829d1b47` |
+| 1 → 4 report | `9af0eff907bac129969663102eebbd2e6fae833065d6f8310f7e9f334a5798c9` |
+| 4 → 1 report | `9ec61138281cf3eee81b8f058d151203598d6088f9ab95f32d73fe37aef9b25d` |
+| Candidate profile report | `c39cbcda4d25c6d072b33ace15a55269db684376ca9d1492917b3509632add33` |
+| Wide integrity probes and Compact smoke report | `8390ed783282e1f15f373de028dc17fff99e1de64e38be8fd55a8160375bc4c5` |
 
 ### Compact pilot budget cutoff
 

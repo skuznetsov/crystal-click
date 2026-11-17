@@ -18,9 +18,10 @@ module CrystalClick
       end
     end
 
-    # Operation-local high-water storage for borrowed frame output.
-    # A slice returned by `decode_frame_into` is stable only until this
-    # workspace is used again.
+    # Caller-owned high-water storage for borrowed frame output. A caller may
+    # retain and reuse the workspace across operations when access is
+    # exclusive. A slice returned by `decode_frame_into` is stable only until
+    # this workspace is used again.
     class DecodeWorkspace
       def initialize(@padded_lz4 : Bool = false)
         @buffer = Bytes.new(0)
@@ -31,6 +32,17 @@ module CrystalClick
         @buffer = Bytes.new(size) if size > @buffer.size
         @buffer
       end
+
+      {% if flag?(:read_rows_profile) %}
+        # Profile-only lifecycle evidence for the direct read_rows runner.
+        def buffer_identity : UInt64
+          @buffer.to_unsafe.address.to_u64
+        end
+
+        def buffer_capacity : Int
+          @buffer.size
+        end
+      {% end %}
 
       def decode_lz4(payload : Bytes, expected_size : Int32) : Bytes
         if @padded_lz4 && expected_size <= Int32::MAX - LZ4::PADDING_SIZE

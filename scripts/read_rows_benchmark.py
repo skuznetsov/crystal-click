@@ -37,6 +37,7 @@ class Runner:
         self.log_path = log_path
         self.timeout = timeout
         self.buffer = bytearray()
+        self.startup_ns: int | None = None
 
     def line(self) -> bytes | None:
         deadline = time.monotonic() + self.timeout
@@ -105,13 +106,16 @@ def open_runner(binary: Path, root: Path, part: Path, layout: str, marks: list[i
                "--workers", str(workers), "--oracle", str(oracle), "--work-dir", str(work_dir)]
     environment = os.environ.copy()
     environment["TMPDIR"] = str(work_dir)
+    startup_started_ns = time.monotonic_ns()
     with log_path.open("wb") as log, subprocess.Popen(
         command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
         env=environment, cwd=work_dir, bufsize=0,
     ) as process:
         runner = Runner(process, root.name, log_path, timeout)
         try:
-            runner.check(runner.line() == b"READY", "runner did not admit the part")
+            ready = runner.line()
+            runner.startup_ns = time.monotonic_ns() - startup_started_ns
+            runner.check(ready == b"READY", "runner did not admit the part")
             yield runner
         finally:
             if process.poll() is None:
@@ -130,6 +134,63 @@ def observe_process_timing(runner: Runner, engine: str, sample: dict, field: str
     else:
         values[engine] = value
     return value
+
+
+def validate_worker_session_profile(
+    runner: Runner,
+    profile: dict,
+    worker_count: int,
+    mark_rows: int,
+    expected_dispatch_count: int,
+    stable_worker_ids: tuple[tuple[int, int, int, int, int, int], ...] | None,
+) -> tuple[tuple[int, int, int, int, int, int], ...]:
+    session = profile.get("worker_session")
+    runner.check(isinstance(session, dict), "missing retained worker-session profile")
+    observed_worker_count = session.get("worker_count")
+    runner.check(type(observed_worker_count) is int and observed_worker_count == worker_count,
+                 "wrong retained worker count")
+    expected_contexts = 0 if worker_count == 1 else worker_count
+    context_create_count = session.get("context_create_count")
+    runner.check(type(context_create_count) is int and context_create_count == expected_contexts,
+                 "retained worker contexts were not created once before READY")
+    context_join_count = session.get("context_join_count")
+    runner.check(type(context_join_count) is int and context_join_count == 0,
+                 "retained worker context joined during a scan session")
+    runner.check(session.get("decode_buffer_allocation") == "lazy_on_first_decode",
+                 "retained decoder backing storage allocation mode changed")
+    dispatch_count = session.get("dispatch_count")
+    runner.check(type(dispatch_count) is int and dispatch_count == expected_dispatch_count,
+                 "retained worker dispatch count did not advance once per scan")
+    workers = session.get("workers")
+    runner.check(isinstance(workers, list) and len(workers) == worker_count,
+                 "wrong retained worker profile roster")
+    snapshot = []
+    identities = {field: [] for field in
+                  ("worker_id", "mark_scratch_id", "decode_workspace_id", "decode_buffer_id")}
+    for index, worker in enumerate(workers):
+        runner.check(isinstance(worker, dict) and worker.get("index") == index,
+                     "wrong retained worker profile index")
+        fields = ("worker_id", "mark_scratch_id", "mark_scratch_capacity",
+                  "decode_workspace_id", "decode_buffer_id", "decode_buffer_capacity")
+        values = tuple(worker.get(field) for field in fields)
+        runner.check(all(type(value) is int and value > 0 for value in values),
+                     "invalid retained worker allocation identity")
+        worker_id, scratch_id, scratch_capacity, workspace_id, decode_buffer_id, decode_capacity = values
+        runner.check(scratch_capacity >= mark_rows,
+                     "retained mark scratch is smaller than one physical mark")
+        snapshot.append(values)
+        identities["worker_id"].append(worker_id)
+        identities["mark_scratch_id"].append(scratch_id)
+        identities["decode_workspace_id"].append(workspace_id)
+        identities["decode_buffer_id"].append(decode_buffer_id)
+    for field, values in identities.items():
+        runner.check(len(set(values)) == worker_count,
+                     f"retained worker {field} identities are not disjoint")
+    current = tuple(snapshot)
+    if stable_worker_ids is not None:
+        runner.check(stable_worker_ids == current,
+                     "retained worker, scratch, or decode storage identity/capacity changed between scans")
+    return current
 
 
 def part_manifest_sha256(part: Path) -> str:
@@ -350,13 +411,18 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
               warmups: int, repeats: int, timeout: float,
               frame_geometry: tuple[list[int], int] | None = None,
               require_admission: bool = False,
-              require_retained_mmap: bool = False) -> dict:
+              require_retained_mmap: bool = False,
+              require_retained_workers: bool = False) -> dict:
     root.mkdir()
     split = [marks[len(marks) * i // workers:len(marks) * (i + 1) // workers] for i in range(workers)]
     samples = {name: [] for name in binaries}
     preparations = {name: [] for name in binaries}
     process_timing_values = {field: {} for field in PROCESS_TIMING_FIELDS}
     process_timing_observations = {name: 0 for name in binaries}
+    worker_prepare_values: dict[str, int | None] = {}
+    worker_prepare_observations = {name: 0 for name in binaries}
+    worker_profile_dispatches = {name: 0 for name in binaries}
+    worker_profile_ids: dict[str, tuple[tuple[int, int, int, int, int, int], ...]] = {}
     profiles = {name: [] for name in binaries if name in PROFILE_TRANSPORTS}
     expected_frames, expected_mapped_bytes = [], 0
     if frame_geometry is not None:
@@ -372,6 +438,7 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
             )
             for name, binary in binaries.items()
         }
+        startup_values = {name: runner.startup_ns for name, runner in runners.items()}
         schedule = tuple(itertools.permutations(runners))
         for index in range(warmups + repeats):
             order = list(schedule[index % len(schedule)])
@@ -390,6 +457,17 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
                     for field in PROCESS_TIMING_FIELDS
                 }
                 process_timing_observations[name] += 1
+                if require_retained_workers and name in {"crystal", "crystal_baseline", "crystal_profile"}:
+                    worker_prepare_ns = observe_process_timing(
+                        runner, name, sample, "worker_prepare_ns", worker_prepare_values,
+                    )
+                    worker_prepare_observations[name] += 1
+                    if name in {"crystal", "crystal_profile"}:
+                        runner.check(type(worker_prepare_ns) is int and worker_prepare_ns > 0,
+                                     "retained Wide Crystal candidate omitted positive worker_prepare_ns")
+                    else:
+                        runner.check("worker_prepare_ns" not in sample,
+                                     "pre-worker-reuse Crystal baseline unexpectedly emitted worker_prepare_ns")
                 if require_admission and name == "crystal":
                     runner.check(timing_values["admission_ns"] is not None,
                                  "Wide Crystal candidate omitted admission_ns")
@@ -414,12 +492,42 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
                                  "retained-metadata baseline unexpectedly emitted mmap_prepare_ns")
                     runner.check(sample["prepare_ns"] == 0,
                                  "retained-metadata baseline reported per-scan preparation")
+                if require_retained_workers and name in {"crystal", "crystal_profile"}:
+                    runner.check(type(timing_values["admission_ns"]) is int and
+                                 timing_values["admission_ns"] > 0,
+                                 "retained-worker Wide Crystal candidate omitted positive admission_ns")
+                    runner.check(type(timing_values["mmap_prepare_ns"]) is int and
+                                 timing_values["mmap_prepare_ns"] > 0,
+                                 "retained-worker Wide Crystal candidate omitted positive mmap_prepare_ns")
+                    runner.check(sample["prepare_ns"] == 0,
+                                 "retained-worker Wide Crystal candidate reported per-scan preparation")
+                if require_retained_workers and name == "crystal_baseline":
+                    runner.check(type(timing_values["admission_ns"]) is int and
+                                 timing_values["admission_ns"] > 0,
+                                 "retained-worker baseline omitted positive admission_ns")
+                    runner.check(type(timing_values["mmap_prepare_ns"]) is int and
+                                 timing_values["mmap_prepare_ns"] > 0,
+                                 "retained-worker baseline omitted positive mmap_prepare_ns")
+                    runner.check(sample["prepare_ns"] == 0,
+                                 "retained-worker baseline reported per-scan preparation")
                 profile = None
                 if name in profiles:
                     profile = validate_profile(runner, sample, name, expected_frames, split, mark_rows,
                                                expected_mapped_bytes,
-                                               require_retained_mmap=require_retained_mmap and
+                                               require_retained_mmap=(require_retained_mmap or
+                                                                      require_retained_workers) and
                                                name == "crystal_profile")
+                    if require_retained_workers and name == "crystal_profile":
+                        worker_profile_dispatches[name] += 1
+                        worker_profile_ids[name] = validate_worker_session_profile(
+                            runner, profile, workers, mark_rows, worker_profile_dispatches[name],
+                            worker_profile_ids.get(name),
+                        )
+                        if workers == 4:
+                            for field in ("launch_calls", "join_calls"):
+                                value = profile.get(field)
+                                runner.check(type(value) is int and value == 1,
+                                             f"expected one retained worker {field} phase per scan")
                     if require_retained_mmap and name == "crystal_profile":
                         runner.check(timing_values["admission_ns"] is not None and
                                      timing_values["mmap_prepare_ns"] is not None,
@@ -461,6 +569,11 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
             "mmap_prepare_ns": process_timing_values["mmap_prepare_ns"][name],
             "mmap_prepare_observations_verified": process_timing_observations[name],
         }
+        if require_retained_workers and name in {"crystal", "crystal_baseline", "crystal_profile"}:
+            engines[name]["worker_prepare_ns"] = worker_prepare_values[name]
+            engines[name]["worker_prepare_observations_verified"] = worker_prepare_observations[name]
+        if require_retained_workers:
+            engines[name]["startup_ns"] = startup_values[name]
         if name in profiles:
             engines[name]["profile"] = summarize_profiles(profiles[name], elapsed)
 
@@ -485,9 +598,10 @@ def run_track(binaries: dict[str, Path], root: Path, part: Path, layout: str,
         )
     if profiles:
         result["expected_frames_per_worker"] = expected_frames
+        profile_controls = {"crystal_profile": "crystal", "clickhouse_profile": "clickhouse"}
         result["paired_profile_to_control_time_ratio_p50"] = {
             name: statistics.median(profiled / plain for profiled, plain in zip(samples[name], samples[engine]))
-            for engine, name in (("crystal", "crystal_profile"), ("clickhouse", "clickhouse_profile"))
+            for name, engine in profile_controls.items() if name in samples
         }
     return result
 
@@ -511,6 +625,7 @@ def compare(args: argparse.Namespace) -> dict:
     binaries["clickhouse"] = args.cpp_bin.resolve(strict=True)
     if args.crystal_profile_bin is not None:
         binaries["crystal_profile"] = args.crystal_profile_bin.resolve(strict=True)
+    if args.cpp_profile_bin is not None:
         binaries["clickhouse_profile"] = args.cpp_profile_bin.resolve(strict=True)
     binary_hashes = {name: sha256_path(path) for name, path in binaries.items()}
     tracks = []
@@ -542,13 +657,14 @@ def compare(args: argparse.Namespace) -> dict:
                 track = run_track(binaries, scratch / f"{layout}-{workers}", part, layout, marks, mark_rows,
                                   workers, oracle, args.warmups, args.repeats, args.timeout, frame_geometry,
                                   require_admission=args.require_admission,
-                                  require_retained_mmap=args.require_retained_mmap)
+                                  require_retained_mmap=args.require_retained_mmap,
+                                  require_retained_workers=args.require_retained_workers)
                 tracks.append(track)
             if part_manifest_sha256(part) != expected:
                 fail(f"{layout} part files changed during the comparison")
             part_hashes[layout] = expected
 
-    return {
+    result = {
         "marks": marks, "mark_rows": mark_rows, "warmups": args.warmups, "repeats": args.repeats,
         "arms": list(binaries),
         "binary_sha256": binary_hashes, "part_file_manifest_sha256": part_hashes,
@@ -559,6 +675,9 @@ def compare(args: argparse.Namespace) -> dict:
         "require_retained_mmap": args.require_retained_mmap,
         "tracks": tracks,
     }
+    if args.require_retained_workers:
+        result["require_retained_workers"] = True
+    return result
 
 
 def main() -> None:
@@ -572,8 +691,11 @@ def main() -> None:
                                  help="require Wide candidate admission_ns and zero per-scan preparation; check the old per-scan-preparation baseline when present")
     timing_contract.add_argument("--require-retained-mmap", action="store_true",
                                  help="require retained Wide admission_ns and mmap_prepare_ns; check a retained-metadata baseline when present")
+    timing_contract.add_argument("--require-retained-workers", action="store_true",
+                                 help="require stable positive Wide worker_prepare_ns on the candidate; check admission and mmap preparation on both Crystal builds and absence of worker preparation on the baseline")
     parser.add_argument("--cpp-bin", type=Path, required=True)
-    parser.add_argument("--crystal-profile-bin", type=Path, help="Wide runner built with -Dread_rows_profile")
+    parser.add_argument("--crystal-profile-bin", type=Path,
+                        help="Wide runner built with -Dread_rows_profile; may be supplied alone for retained-worker diagnostics")
     parser.add_argument("--cpp-profile-bin", type=Path, help="ClickHouse Wide runner with stage probes")
     parser.add_argument("--scratch", type=Path, required=True)
     parser.add_argument("--layout", choices=("wide", "compact"), action="append")
@@ -591,9 +713,16 @@ def main() -> None:
         parser.error("--require-admission requires Wide-only layout")
     if args.require_retained_mmap and args.layout != ["wide"]:
         parser.error("--require-retained-mmap requires Wide-only layout")
-    if profiling and (not args.crystal_profile_bin or not args.cpp_profile_bin or args.crystal_baseline_bin
-                      or args.layout != ["wide"]):
-        parser.error("profiling requires both profile binaries, Wide layout, and two uninstrumented controls")
+    if args.require_retained_workers and args.layout != ["wide"]:
+        parser.error("--require-retained-workers requires Wide-only layout")
+    if profiling:
+        candidate_only_profile = (
+            args.require_retained_workers and args.crystal_profile_bin is not None and
+            args.cpp_profile_bin is None and args.crystal_baseline_bin is None
+        )
+        paired_profile = args.crystal_profile_bin is not None and args.cpp_profile_bin is not None
+        if (not candidate_only_profile and not paired_profile) or args.crystal_baseline_bin or args.layout != ["wide"]:
+            parser.error("profiling requires Wide layout and either both profile binaries or a retained-worker candidate profile with no baseline")
     if args.warmups < 1 or args.repeats < 1 or not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("warmups, repeats, and timeout must be positive")
     args.output.write_text(json.dumps(compare(args), indent=2, sort_keys=True) + "\n")

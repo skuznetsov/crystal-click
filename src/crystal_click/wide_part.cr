@@ -11439,12 +11439,16 @@ module CrystalClick
       values
     end
 
+    # If `decode_workspace` is supplied, this synchronous scan exclusively
+    # borrows it for the duration of the call. Do not share one workspace
+    # across concurrent scans; decoded slices are consumed before returning.
     def scan_uint64_mark_range_into(
       column : String,
       first_mark : Int,
       mark_count : Int,
       scratch : Slice(UInt64),
       scan_image : WideScanImage? = nil,
+      decode_workspace : CompressedBlock::DecodeWorkspace? = nil,
       & : Slice(UInt64) -> Nil
     ) : Nil
       raise BoundsError.new("empty scratch") if scratch.size == 0
@@ -11452,7 +11456,7 @@ module CrystalClick
 
       start_mark, end_mark, expected_bytes = checked_mark_range(column, first_mark, mark_count)
       chunk_size = 0
-      each_uint64_mark_range_bytes(start_mark, end_mark, expected_bytes, scan_image) do |bytes|
+      each_uint64_mark_range_bytes(start_mark, end_mark, expected_bytes, scan_image, decode_workspace) do |bytes|
         source_offset = 0
         while source_offset < bytes.size
           available = scratch.size - chunk_size
@@ -16549,9 +16553,17 @@ module CrystalClick
       end_mark : Mark,
       expected_bytes : Int,
       scan_image : WideScanImage? = nil,
+      decode_workspace : CompressedBlock::DecodeWorkspace? = nil,
       & : Bytes -> Nil
     ) : Nil
-      each_mark_range_bytes(start_mark, end_mark, expected_bytes, 8, scan_image: scan_image) do |bytes|
+      each_mark_range_bytes(
+        start_mark,
+        end_mark,
+        expected_bytes,
+        8,
+        scan_image: scan_image,
+        decode_workspace: decode_workspace,
+      ) do |bytes|
         yield bytes
       end
     end
@@ -16562,6 +16574,7 @@ module CrystalClick
       expected_bytes : Int,
       element_width : Int32,
       scan_image : WideScanImage? = nil,
+      decode_workspace : CompressedBlock::DecodeWorkspace? = nil,
       & : Bytes -> Nil
     ) : Nil
       raise BoundsError.new("empty mark range") unless start_mark
@@ -16570,7 +16583,15 @@ module CrystalClick
                else
                  @streams[@column]
                end
-      each_mark_range_bytes(stream, start_mark.not_nil!, end_mark, expected_bytes, element_width, scan_image: scan_image) do |bytes|
+      each_mark_range_bytes(
+        stream,
+        start_mark.not_nil!,
+        end_mark,
+        expected_bytes,
+        element_width,
+        scan_image: scan_image,
+        decode_workspace: decode_workspace,
+      ) do |bytes|
         yield bytes
       end
     end
@@ -16583,6 +16604,7 @@ module CrystalClick
       element_width : Int32,
       exact_bytes : Bool = true,
       scan_image : WideScanImage? = nil,
+      decode_workspace : CompressedBlock::DecodeWorkspace? = nil,
       & : Bytes -> Nil
     ) : Nil
       mapped_data = nil.as(Bytes?)
@@ -16735,7 +16757,7 @@ module CrystalClick
         selected_bytes = 0_i64
         frame_offset = start_offset.to_i64
         started = false
-        workspace = CompressedBlock::DecodeWorkspace.new(padded_lz4: @verify_data_checksums && direct_uint64_column?)
+        workspace = decode_workspace || CompressedBlock::DecodeWorkspace.new(padded_lz4: @verify_data_checksums && direct_uint64_column?)
         loop do
           {% if flag?(:read_rows_profile) %}
             dispatch_started = Time.instant

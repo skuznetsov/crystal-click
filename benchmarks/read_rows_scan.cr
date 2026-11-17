@@ -1,6 +1,8 @@
 require "json"
 require "../src/crystal_click"
 require "../src/crystal_click/read_rows_profile"
+require "./read_rows_scan_worker_state"
+require "./read_rows_scan_worker_pool"
 
 # Direct native-part scan used by scripts/read_rows_benchmark.py. The process
 # admits one immutable part and oracle, retaining Wide readers and mappings
@@ -34,6 +36,7 @@ module CrystalClickReadRowsScan
   def run(args : Array(String)) : Nil
     ready = false
     retained_wide_image = nil.as(CrystalClick::WideScanImage?)
+    retained_wide_workers = nil.as(WorkerPool?)
     primary_error = nil.as(Exception?)
     begin
       config = parse_config(args)
@@ -60,10 +63,16 @@ module CrystalClickReadRowsScan
       worker_starts = Array(Int32).new(config.workers) do |index|
         (config.marks.size * index // config.workers).to_i32
       end
+      worker_prepare_ns = nil.as(Int64?)
+      if retained_wide_readers
+        worker_prepare_started = Time.instant
+        retained_wide_workers = WorkerPool.new(config.workers, config.mark_rows)
+        worker_prepare_ns = elapsed_ns(worker_prepare_started)
+      end
 
-      # Wide metadata, marks, and read-only mappings are ready before READY.
-      # Each request reuses the image while performing fresh data checksums
-      # and output verification.
+      # Wide metadata, mappings, worker contexts, typed scratch and decoder
+      # workspace objects are ready before READY. Decoder byte storage grows
+      # lazily on each worker's first frame and remains available afterward.
       STDOUT.puts "READY"
       STDOUT.flush
       ready = true
@@ -79,6 +88,7 @@ module CrystalClickReadRowsScan
               config,
               readers,
               retained_wide_image || raise(CrystalClick::CorruptPartError.new("Wide scan image was not retained")),
+              retained_wide_workers || raise(CrystalClick::CorruptPartError.new("Wide scan workers were not retained")),
               worker_marks,
               worker_starts,
               keys,
@@ -116,6 +126,8 @@ module CrystalClickReadRowsScan
             admission_ns,
             mmap_prepare_ns,
             retained_wide_image,
+            worker_prepare_ns,
+            retained_wide_workers,
           )
           STDOUT.flush
         when "quit"
@@ -127,22 +139,26 @@ module CrystalClickReadRowsScan
     rescue ex
       primary_error = ex
     ensure
+      if workers = retained_wide_workers
+        retained_wide_workers = nil
+        begin
+          workers.close
+        rescue cleanup_error : Exception
+          primary_error = cleanup_failure(primary_error, cleanup_error, "worker shutdown")
+        end
+      end
       if image = retained_wide_image
         retained_wide_image = nil
         begin
           image.close
-        rescue cleanup_error : CrystalClick::Error
-          if original_error = primary_error
-            primary_error = CrystalClick::MMapCleanupError.new(original_error, cleanup_error)
-          else
-            primary_error = cleanup_error
-          end
+        rescue cleanup_error : Exception
+          primary_error = cleanup_failure(primary_error, cleanup_error, "mmap cleanup")
         end
       end
     end
     if error = primary_error
       if ready
-        if checksum_mismatch?(error) && !error.is_a?(CrystalClick::MMapCleanupError)
+        if checksum_mismatch?(error) && !error.is_a?(CrystalClick::MMapCleanupError) && !error.is_a?(CleanupFailure)
           STDERR.puts "checksum mismatch"
         else
           STDERR.puts "read_rows_scan: #{error.message || error.class.name}"
@@ -369,6 +385,7 @@ module CrystalClickReadRowsScan
     config : Config,
     readers : {CrystalClick::WidePart, CrystalClick::WidePart},
     image : CrystalClick::WideScanImage,
+    workers : WorkerPool,
     worker_marks : Array(Array(Int32)),
     worker_starts : Array(Int32),
     keys : Array(UInt64),
@@ -376,34 +393,52 @@ module CrystalClickReadRowsScan
     scan_profile : CrystalClick::ReadRowsProfile::Scan?,
     scan_started : Time::Instant,
   ) : Nil
-    worker = ->(worker_index : Int32) do
+    worker = ->(worker_index : Int32, state : WorkerState) do
       mark_ids = worker_marks[worker_index]
       start_sequence = worker_starts[worker_index]
-      scratch_keys = Array(UInt64).new(config.mark_rows, 0_u64)
-      scratch_values = Array(UInt64).new(config.mark_rows, 0_u64)
-      scan_wide_column(readers[0], "pk", mark_ids, start_sequence, config.mark_rows, scratch_keys, keys, image)
-      scan_wide_column(readers[1], "value", mark_ids, start_sequence, config.mark_rows, scratch_values, values, image)
+      scan_wide_column(
+        readers[0],
+        "pk",
+        mark_ids,
+        start_sequence,
+        config.mark_rows,
+        state.mark_scratch,
+        state.decode_workspace,
+        keys,
+        image,
+      )
+      scan_wide_column(
+        readers[1],
+        "value",
+        mark_ids,
+        start_sequence,
+        config.mark_rows,
+        state.mark_scratch,
+        state.decode_workspace,
+        values,
+        image,
+      )
       nil
     end
     {% if flag?(:read_rows_profile) %}
-      profiled_worker = ->(worker_index : Int32) do
+      profiled_worker = ->(worker_index : Int32, state : WorkerState) do
         if profile = scan_profile
           profile_worker = profile.workers[worker_index]
           profile_worker.mark_start(scan_started)
           CrystalClick::ReadRowsProfile.with_worker(profile_worker) do
             begin
-              worker.call(worker_index)
+              worker.call(worker_index, state)
             ensure
               profile_worker.mark_end(scan_started)
             end
           end
         else
-          worker.call(worker_index)
+          worker.call(worker_index, state)
         end
       end
-      run_workers(config.workers, profiled_worker, scan_profile)
+      workers.run(profiled_worker, scan_profile)
     {% else %}
-      run_workers(config.workers, worker)
+      workers.run(worker)
     {% end %}
     nil
   end
@@ -419,7 +454,8 @@ module CrystalClickReadRowsScan
     mark_ids : Array(Int32),
     start_sequence : Int32,
     mark_rows : Int32,
-    scratch_values : Array(UInt64),
+    scratch_values : Slice(UInt64),
+    decode_workspace : CrystalClick::CompressedBlock::DecodeWorkspace,
     result : Array(UInt64),
     image : CrystalClick::WideScanImage,
   ) : Nil
@@ -432,7 +468,14 @@ module CrystalClickReadRowsScan
       end
       expected_marks = run_end - sequence_offset
       emitted_marks = 0
-      reader.scan_uint64_mark_range_into(column, mark_ids[sequence_offset], expected_marks, scratch, image) do |mark_values|
+      reader.scan_uint64_mark_range_into(
+        column,
+        mark_ids[sequence_offset],
+        expected_marks,
+        scratch,
+        image,
+        decode_workspace,
+      ) do |mark_values|
         unless mark_values.size == mark_rows
           raise CrystalClick::CorruptPartError.new("Wide #{column} scan returned a partial mark")
         end
@@ -506,59 +549,46 @@ module CrystalClickReadRowsScan
   private def run_workers(
     worker_count : Int32,
     work : Proc(Int32, Nil),
-    scan_profile : CrystalClick::ReadRowsProfile::Scan? = nil,
   ) : Nil
     if worker_count == 1
       work.call(0_i32)
       return nil
     end
 
-    errors = Array(Exception?).new(worker_count, nil)
-    contexts = [] of Fiber::ExecutionContext::Isolated
-    launch_error = nil.as(Exception?)
-    begin
-      {% if flag?(:read_rows_profile) %}
-        launch_started = Time.instant if scan_profile
-      {% end %}
-      worker_count.times do |worker_index|
-        index = worker_index.to_i32
-        contexts << Fiber::ExecutionContext::Isolated.new("read_rows_scan worker #{index}") do
+    {% if flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+      raise CrystalClick::UnsupportedFormatError.new("four-worker Compact read_rows requires isolated execution contexts")
+    {% else %}
+      errors = Array(Exception?).new(worker_count, nil)
+      contexts = [] of Fiber::ExecutionContext::Isolated
+      launch_error = nil.as(Exception?)
+      begin
+        worker_count.times do |worker_index|
+          index = worker_index.to_i32
+          contexts << Fiber::ExecutionContext::Isolated.new("read_rows_scan worker #{index}") do
+            begin
+              work.call(index)
+            rescue ex : Exception
+              errors[index] = ex
+            end
+          end
+        end
+      rescue ex : Exception
+        launch_error = ex
+      ensure
+        contexts.each do |context|
           begin
-            work.call(index)
+            context.wait
           rescue ex : Exception
-            errors[index] = ex
+            launch_error ||= ex
           end
         end
       end
-      {% if flag?(:read_rows_profile) %}
-        if profile = scan_profile
-          profile.record_launch(elapsed_ns(launch_started.not_nil!))
-        end
-      {% end %}
-    rescue ex : Exception
-      launch_error = ex
-    ensure
-      {% if flag?(:read_rows_profile) %}
-        join_started = Time.instant if scan_profile && !contexts.empty?
-      {% end %}
-      contexts.each do |context|
-        begin
-          context.wait
-        rescue ex : Exception
-          launch_error ||= ex
-        end
+      raise launch_error if launch_error
+      errors.each do |error|
+        raise error if error
       end
-      {% if flag?(:read_rows_profile) %}
-        if profile = scan_profile
-          profile.record_join(elapsed_ns(join_started.not_nil!)) unless contexts.empty?
-        end
-      {% end %}
-    end
-    raise launch_error if launch_error
-    errors.each do |error|
-      raise error if error
-    end
-    nil
+      nil
+    {% end %}
   end
 
   private def copy_values_once!(source : Slice(UInt64), destination : Array(UInt64), row_offset : Int32) : Nil
@@ -616,6 +646,8 @@ module CrystalClickReadRowsScan
     admission_ns : Int64?,
     mmap_prepare_ns : Int64?,
     retained_wide_image : CrystalClick::WideScanImage?,
+    worker_prepare_ns : Int64?,
+    retained_wide_workers : WorkerPool?,
   ) : Nil
     STDOUT.puts(JSON.build do |json|
       json.object do
@@ -626,6 +658,9 @@ module CrystalClickReadRowsScan
         end
         if mmap_prepare = mmap_prepare_ns
           json.field "mmap_prepare_ns", mmap_prepare
+        end
+        if worker_prepare = worker_prepare_ns
+          json.field "worker_prepare_ns", worker_prepare
         end
         json.field "rows", rows
         json.field "effective_workers", workers
@@ -661,6 +696,34 @@ module CrystalClickReadRowsScan
                   end
                 end
               end
+              {% if flag?(:read_rows_profile) %}
+                if worker_session = retained_wide_workers
+                  json.field "worker_session" do
+                    json.object do
+                      json.field "worker_count", worker_session.worker_count
+                      json.field "context_create_count", worker_session.context_create_count
+                      json.field "context_join_count", worker_session.context_join_count
+                      json.field "dispatch_count", worker_session.dispatch_count
+                      json.field "decode_buffer_allocation", "lazy_on_first_decode"
+                      json.field "workers" do
+                        json.array do
+                          worker_session.identities.each_with_index do |identity, index|
+                            json.object do
+                              json.field "index", index
+                              json.field "worker_id", identity.worker
+                              json.field "mark_scratch_id", identity.mark_scratch
+                              json.field "mark_scratch_capacity", identity.mark_scratch_capacity
+                              json.field "decode_workspace_id", identity.decode_workspace
+                              json.field "decode_buffer_id", identity.decode_buffer
+                              json.field "decode_buffer_capacity", identity.decode_buffer_capacity
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              {% end %}
               if workers == 4
                 json.field "launch_ns", profile.launch_ns
                 json.field "join_ns", profile.join_ns
@@ -711,6 +774,20 @@ module CrystalClickReadRowsScan
   private def checksum_mismatch?(error : Exception) : Bool
     message = error.message || ""
     message.includes?("checksum mismatch") || message.includes?("checksum does not match")
+  end
+
+  private def cleanup_failure(primary_error : Exception?, cleanup_error : Exception, operation : String) : Exception
+    if original = primary_error
+      CleanupFailure.new(original, cleanup_error, operation)
+    else
+      cleanup_error
+    end
+  end
+
+  private class CleanupFailure < Exception
+    def initialize(primary : Exception, cleanup : Exception, operation : String)
+      super("#{operation} failed after #{primary.message || primary.class.name}: #{cleanup.message || cleanup.class.name}")
+    end
   end
 end
 
