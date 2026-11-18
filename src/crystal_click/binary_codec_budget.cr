@@ -9,11 +9,13 @@ module CrystalClick
     getter wire_byte_count : Int64
 
     @writing : Bool
+    @replayed_preparation : Tuple(BinaryCodecBudget, Int64, Int64, Int64)?
 
     def initialize(@limits : BinaryCodecLimits, @writing : Bool = false)
       @node_count = 0_i64
       @element_count = 0_i64
       @wire_byte_count = 0_i64
+      @replayed_preparation = nil
     end
 
     def writing? : Bool
@@ -25,6 +27,59 @@ module CrystalClick
     def charge_node : Nil
       ensure_future_nodes(1_u64)
       @node_count += 1_i64
+    end
+
+    # Replay one completed preparation operation into this independent read
+    # operation. Counts are copied from the exact source budget used to build
+    # prepared owners, and the provenance is recorded only after every bound
+    # has passed and all counters have been charged.
+    def replay_preparation_from!(source : BinaryCodecBudget) : Nil
+      if @writing || source.writing?
+        raise ArgumentError.new("binary codec preparation replay requires read-direction budgets")
+      end
+      return nil if same?(source)
+      if prior = @replayed_preparation
+        unless prior[0].same?(source)
+          raise ArgumentError.new("binary codec budget already contains a different preparation receipt")
+        end
+        unless prior[1] == source.node_count && prior[2] == source.element_count && prior[3] == source.wire_byte_count
+          raise ArgumentError.new("binary codec preparation source changed after its receipt was replayed")
+        end
+        return nil
+      end
+      unless @limits == source.limits
+        raise ArgumentError.new("binary codec preparation replay requires matching limits")
+      end
+
+      source_nodes = source.node_count
+      source_elements = source.element_count
+      source_wire_bytes = source.wire_byte_count
+      nodes = source_nodes.to_u64
+      elements = source_elements.to_u64
+      wire_bytes = source_wire_bytes.to_u64
+      ensure_future_nodes(nodes)
+      ensure_future_elements(elements)
+      ensure_wire_bytes(wire_bytes)
+      unless source.node_count == source_nodes && source.element_count == source_elements && source.wire_byte_count == source_wire_bytes
+        raise ArgumentError.new("binary codec preparation source changed during receipt replay")
+      end
+      @node_count += nodes.to_i64
+      @element_count += elements.to_i64
+      @wire_byte_count += wire_bytes.to_i64
+      @replayed_preparation = {source, source_nodes, source_elements, source_wire_bytes}
+      nil
+    end
+
+    # Read-only provenance query used by retained prepared owners. A true
+    # result means this budget already paid the source operation's exact
+    # counters through `replay_preparation_from!`.
+    def includes_preparation_from?(source : BinaryCodecBudget) : Bool
+      if receipt = @replayed_preparation
+        receipt[0].same?(source) && receipt[1] == source.node_count &&
+          receipt[2] == source.element_count && receipt[3] == source.wire_byte_count
+      else
+        false
+      end
     end
 
     def visit_node(depth : Int) : Nil

@@ -132,9 +132,9 @@ module CrystalClick
       @logical_row_count
     end
 
-    # Decode this prepared mark using the exact budget operation that captured
-    # it. Workspace notifications are named logical-owner boundaries after
-    # materialization; they are not a preallocation limit or RSS estimate.
+    # Decode using the original operation's budget or a read budget with its
+    # exact preparation receipt. Workspace notifications measure logical
+    # ownership after materialization.
     def decode_with_budget(
       budget : BinaryCodecBudget,
       workspace_observer : Proc(UInt64, Nil)? = nil,
@@ -143,25 +143,29 @@ module CrystalClick
       if budget.writing?
         raise ArgumentError.new("prepared Compact Advanced decode requires a read-direction budget")
       end
-      unless @budget.same?(budget)
-        raise ArgumentError.new("prepared Compact Advanced decode requires the same budget operation")
+      unless @budget.same?(budget) || budget.includes_preparation_from?(@budget)
+        raise ArgumentError.new("prepared Compact Advanced decode requires its preparation receipt")
       end
       @shared_prepared.validate_decode_operation!(budget)
 
-      advanced_rows = ObjectSharedAdvancedInlineDecoder.decode_prepared(@shared_prepared, budget)
+      advanced_rows = ObjectSharedAdvancedInlineDecoder.decode_prepared(
+        @shared_prepared,
+        budget,
+      )
+      retained_bytes = @budget.same?(budget) ? retained_workspace_bytes : 0_u64
       unless advanced_rows.size == 1 && advanced_rows[0].size.to_u64 == @logical_row_count
         raise CorruptPartError.new("prepared Compact Advanced decode returned the wrong mark grid")
       end
       observe_workspace(
         workspace_observer,
-        checked_add(retained_workspace_bytes, shared_rows_workspace_bytes(advanced_rows)),
+        checked_add(retained_bytes, shared_rows_workspace_bytes(advanced_rows)),
       )
 
       streams = streams_with_advanced_rows(advanced_rows)
       observe_workspace(
         workspace_observer,
         checked_add(
-          checked_add(retained_workspace_bytes, shared_rows_workspace_bytes(advanced_rows)),
+          checked_add(retained_bytes, shared_rows_workspace_bytes(advanced_rows)),
           stream_shell_workspace_bytes(streams),
         ),
       )
@@ -200,7 +204,7 @@ module CrystalClick
         raise CorruptPartError.new("prepared Compact Advanced decoder returned the wrong mark grid")
       end
       documents = decoded_marks[0]
-      active = checked_add(retained_workspace_bytes, shared_rows_workspace_bytes(advanced_rows))
+      active = checked_add(retained_bytes, shared_rows_workspace_bytes(advanced_rows))
       active = checked_add(active, stream_shell_workspace_bytes(streams))
       observe_workspace(workspace_observer, checked_add(active, documents_workspace_bytes(documents)))
       documents

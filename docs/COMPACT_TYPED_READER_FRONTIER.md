@@ -61,6 +61,35 @@ is top-level Compact MRK4 data with an explicit `UInt32` path and supported
 serialization metadata. An ordinary column present in `columns.txt` takes
 precedence over the path interpretation.
 
+## Shared Advanced JSON part plan
+
+The scan builds one plan per admitted Compact MRK4 part for a selected
+top-level JSON column with Advanced SharedData v2 or v3 and two buckets.
+The selection can include ordinary `UInt64` columns. The plan keeps an
+authenticated callback schedule and the selected payload for all granules.
+Every participating worker uses the same plan for its assigned granules and
+owns its codec operation, assembly workspace and decoded output values.
+The part plan lives for one scan or candidate-mark operation. Other Compact
+JSON layouts keep the existing serial path.
+
+Complete-grid source and schedule admission must finish for every selected
+part before the first callback. The delivery loop checks the current source
+binding before each callback, including a split granule and a result queued
+by another worker. A changed authenticated source invalidates the plan for
+that operation. Reopened paths must take part in the check, so a replaced
+file and an in-place edit have the same failure boundary. Selected payload
+retention and read operations stay subject to the existing logical limits.
+Parallel admission requires a plan for every selected part within the
+64 MiB shared retention allowance. Per-mark checks also include the retained
+plan. Serial reads can fall back to per-mark preparation if the shared
+workspace does not fit.
+
+The acceptance cases cover ordered W1/W4 output, corruption before the first
+batch and between batches, a valid replacement with different bytes, and
+empty/nested scans. The benchmark measures the whole read including plan
+construction and compares exact RowBinary with ClickHouse `readRows` on the
+same mark assignments. See the [Compact JSON benchmark](COMPACT_JSON_SCAN_BENCHMARK.md).
+
 ## Target contract and composition laws
 
 1. Keep `WidePartTable.open_selected_typed` genuinely Wide. Introduce

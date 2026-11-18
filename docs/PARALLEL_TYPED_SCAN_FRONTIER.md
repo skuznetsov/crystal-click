@@ -13,8 +13,11 @@ checks as `scan_typed`. A request for one worker runs the scan on the caller.
 With execution contexts enabled, a single nonempty mark also takes this
 path. The threaded path admits exact
 `UInt8`–`UInt64`, `Int8`–`Int64`, `Float32`, and `Float64` columns in ordinary
-parts with Crystal execution contexts enabled. It rejects projection children
-and flattened `Nested` bindings.
+parts with Crystal execution contexts enabled. It also admits one root JSON
+column with Advanced SharedData v2 or v3 and two buckets in Compact MRK4
+parts. That selection can include ordinary `UInt64` columns. It rejects
+projection children and flattened `Nested` bindings. See the
+[shared part plan](COMPACT_TYPED_READER_FRONTIER.md#shared-advanced-json-part-plan).
 
 Each worker decodes on its own system thread with private decode state. The
 calling fiber consumes one physical mark at a time in source order, with the
@@ -30,8 +33,9 @@ lifetime of the reader and use a separate reader for each concurrent scan.
 
 For the admitted ordinary, direct `UInt64` Compact path on little-endian
 hosts, the workers borrow the table's selected column bindings and mark grid
-for that physical context. Each worker owns its decode workspace. Other
-selections open independent readers on the workers.
+for that physical context. Each worker owns its decode workspace. Compact
+Advanced JSON workers also share the authenticated part plan. The caller
+validates the source again after any prefetch and before each callback.
 
 ### Direct Compact UInt64 batches
 

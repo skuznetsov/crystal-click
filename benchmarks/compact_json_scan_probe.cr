@@ -17,6 +17,9 @@ module CrystalClick
     @@unique_checked_frames = Set(Int64).new
     @@checksum_bytes_hashed = 0_u64
     @@checksum_ns = 0_u64
+    @@source_recheck_calls = 0_u64
+    @@source_recheck_ns = 0_u64
+    @@source_rechecked_frames = 0_u64
     @@decompression_calls = 0_u64
     @@decompression_payload_bytes = 0_u64
     @@decompressed_bytes = 0_u64
@@ -36,6 +39,9 @@ module CrystalClick
       @@unique_checked_frames.clear
       @@checksum_bytes_hashed = 0_u64
       @@checksum_ns = 0_u64
+      @@source_recheck_calls = 0_u64
+      @@source_recheck_ns = 0_u64
+      @@source_rechecked_frames = 0_u64
       @@decompression_calls = 0_u64
       @@decompression_payload_bytes = 0_u64
       @@decompressed_bytes = 0_u64
@@ -70,6 +76,12 @@ module CrystalClick
       @@checksum_ns += elapsed_ns
     end
 
+    def self.record_source_recheck!(frame_count : Int, elapsed_ns : UInt64) : Nil
+      @@source_recheck_calls += 1_u64
+      @@source_recheck_ns += elapsed_ns
+      @@source_rechecked_frames += frame_count.to_u64
+    end
+
     def self.record_decompression!(method : UInt8, payload_size : Int64, output_size : Int64, elapsed_ns : UInt64) : Nil
       @@decompression_calls += 1_u64
       @@decompression_payload_bytes += payload_size.to_u64
@@ -98,6 +110,9 @@ module CrystalClick
         unique_checked_frames:       @@unique_checked_frames.size.to_u64,
         checksum_bytes_hashed:       @@checksum_bytes_hashed,
         checksum_ns:                 @@checksum_ns,
+        source_recheck_calls:        @@source_recheck_calls,
+        source_recheck_ns:           @@source_recheck_ns,
+        source_rechecked_frames:     @@source_rechecked_frames,
         decompression_calls:         @@decompression_calls,
         decompression_payload_bytes: @@decompression_payload_bytes,
         decompressed_bytes:          @@decompressed_bytes,
@@ -116,8 +131,9 @@ module CompactJSONScanProbe
   struct Job
     getter run_id : Int32
     getter marks : Array(Int32)
+    getter shared_plan : CrystalClick::CompactStaticJsonAdvancedPartPlan?
 
-    def initialize(@run_id : Int32, @marks : Array(Int32))
+    def initialize(@run_id : Int32, @marks : Array(Int32), @shared_plan : CrystalClick::CompactStaticJsonAdvancedPartPlan?)
     end
   end
 
@@ -235,16 +251,31 @@ module CompactJSONScanProbe
 
   def self.open_table(backend : String, part_path : String) : CrystalClick::CompactPartTable | CrystalClick::TypedPartTable
     case backend
-    when "compact"
+    when "compact", "shared"
       CrystalClick::CompactPartTable.open_selected_typed([part_path], ["id", "doc"])
     when "typed"
       CrystalClick::TypedPartTable.open_selected_typed([part_path], ["id", "doc"])
     else
-      error("backend must be compact or typed")
+      error("backend must be compact, typed, or shared")
     end
   end
 
-  def self.scan_payload(table : CrystalClick::CompactPartTable | CrystalClick::TypedPartTable, marks : Array(Int32)) : NamedTuple(
+  def self.scan_marks(
+    table : CrystalClick::CompactPartTable | CrystalClick::TypedPartTable,
+    job : Job,
+    & : CrystalClick::WidePartTableBatch -> Nil
+  ) : Nil
+    if plan = job.shared_plan
+      table.as(CrystalClick::CompactPartTable).scan_shared_advanced_json_mark_indices(job.marks, ROWS_PER_MARK, plan, guard_delivery: false) do |batch|
+        yield batch
+      end
+    else
+      table.scan_typed_candidate_marks([job.marks]) { |batch| yield batch }
+    end
+    nil
+  end
+
+  def self.scan_payload(table : CrystalClick::CompactPartTable | CrystalClick::TypedPartTable, job : Job) : NamedTuple(
     rows: Int32,
     first_id: UInt64?,
     last_id: UInt64?,
@@ -258,7 +289,7 @@ module CompactJSONScanProbe
     last_id = nil.as(UInt64?)
     serialization_ns = 0_i64
     worker_started = Time.instant
-    table.scan_typed_candidate_marks([marks]) do |batch|
+    scan_marks(table, job) do |batch|
       serialization_started = Time.instant
       ids = batch.values_for("id", UInt64)
       documents = batch.object_documents_for("doc")
@@ -276,7 +307,7 @@ module CompactJSONScanProbe
     {rows: rows, first_id: first_id, last_id: last_id, payload: io.to_slice, worker_scan_ns: elapsed_ns - serialization_ns, serialization_ns: serialization_ns}
   end
 
-  def self.scan_retained(table : CrystalClick::CompactPartTable | CrystalClick::TypedPartTable, marks : Array(Int32)) : NamedTuple(
+  def self.scan_retained(table : CrystalClick::CompactPartTable | CrystalClick::TypedPartTable, job : Job) : NamedTuple(
     rows: Int32,
     first_id: UInt64?,
     last_id: UInt64?,
@@ -288,7 +319,7 @@ module CompactJSONScanProbe
     first_id = nil.as(UInt64?)
     last_id = nil.as(UInt64?)
     worker_started = Time.instant
-    table.scan_typed_candidate_marks([marks]) do |batch|
+    scan_marks(table, job) do |batch|
       ids = batch.values_for("id", UInt64).to_a
       documents = batch.object_documents_for("doc").to_a
       raise CrystalClick::CorruptPartError.new("probe id/doc row counts differ") unless ids.size == documents.size
@@ -374,7 +405,7 @@ module CompactJSONScanProbe
     unless workers == 1 || workers == 4
       error("worker count must be 1 or 4")
     end
-    error("backend must be compact or typed") unless backend == "compact" || backend == "typed"
+    error("backend must be compact, typed, or shared") unless backend.in?("compact", "typed", "shared")
     error("track must be callback or retained") unless track == "callback" || track == "retained"
     error("warmups and repeats must be nonnegative and repeats positive") if warmups < 0 || repeats <= 0
     error("use 0 warmups when the caller sends scan commands") if interactive && warmups != 0
@@ -395,19 +426,24 @@ module CompactJSONScanProbe
     contexts = Array(Fiber::ExecutionContext::Isolated).new(workers)
     begin
       prepare_started = Time.instant
+      shared_table = if backend == "shared"
+                       owner = CrystalClick::CompactPartTable.open_selected_typed([part_path], ["id", "doc"])
+                       owner.parallel_scan_transport_budget! if workers > 1
+                       owner
+                     end
       workers.times do |worker|
         worker_index = worker
         contexts << Fiber::ExecutionContext::Isolated.new("compact-json-worker-#{worker_index}") do
           begin
             open_started = Time.instant
-            table = open_table(backend, part_path)
+            table = shared_table || open_table(backend, part_path)
             open_ns = (Time.instant - open_started).total_nanoseconds.to_i64
             ready.send({worker: worker_index, open_ns: open_ns, thread_id: Thread.current.object_id.to_u64})
             loop do
               job = jobs[worker_index].receive?
               break unless job
               if track == "callback"
-                outcome = scan_payload(table, job.marks)
+                outcome = scan_payload(table, job)
                 results.send(WorkerResult.new(
                   job.run_id,
                   worker_index,
@@ -422,7 +458,7 @@ module CompactJSONScanProbe
                   outcome[:serialization_ns],
                 ))
               else
-                outcome = scan_retained(table, job.marks)
+                outcome = scan_retained(table, job)
                 results.send(WorkerResult.new(
                   job.run_id,
                   worker_index,
@@ -477,10 +513,15 @@ module CompactJSONScanProbe
         gc_total_bytes_before = GC.stats.total_bytes
         gc_collections_before = GC.prof_stats.gc_no
         started = Time.instant
+        shared_plan = shared_table.try do |owner|
+          owner.prepare_shared_advanced_json_scan ||
+            raise(CrystalClick::UnsupportedFormatError.new("probe requires an admitted Advanced JSON part plan"))
+        end
+        shared_plan_ns = (Time.instant - started).total_nanoseconds.to_i64 if shared_plan
         active_count = 0
         assignments.each_with_index do |worker_marks, worker|
           if selected = worker_marks
-            jobs[worker].send(Job.new(run_id, selected))
+            jobs[worker].send(Job.new(run_id, selected, shared_plan))
             active_count += 1
           end
         end
@@ -492,6 +533,11 @@ module CompactJSONScanProbe
           when exception = errors.receive
             raise exception
           end
+        end
+        # The coordinator owns the release of retained rows, as in the public
+        # parallel scan. This probe has exactly one batch per selected mark.
+        if plan = shared_plan
+          marks.each { plan.validate_source! }
         end
         read_wall_ns = (Time.instant - started).total_nanoseconds.to_i64
         completed.sort_by! do |result|
@@ -554,6 +600,8 @@ module CompactJSONScanProbe
           workers_active:               active_count,
           worker_opens:                 ready_records,
           prepare_wall_ns:              prepare_wall_ns,
+          shared_part_plan_ns:          shared_plan_ns,
+          shared_part_plan_marks:       shared_plan.try(&.prepared_mark_count),
           selected_marks:               marks,
           worker_rows:                  worker_rows,
           rows:                         total_rows,
@@ -583,7 +631,7 @@ end
 interactive = ARGV.last? == "--stdin"
 ARGV.pop if interactive
 unless ARGV.size == 8
-  STDERR.puts "usage: compact_json_scan_probe <backend:compact|typed> <part-dir> <full-part-rowbinary-oracle> <workers:1|4> <mode:none|first|all> <track:callback|retained> <warmups> <repeats> [--stdin]"
+  STDERR.puts "usage: compact_json_scan_probe <backend:compact|typed|shared> <part-dir> <full-part-rowbinary-oracle> <workers:1|4> <mode:none|first|all> <track:callback|retained> <warmups> <repeats> [--stdin]"
   exit(2)
 end
 

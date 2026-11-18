@@ -24,6 +24,7 @@ module CrystalClick
     @source_declaration : String
     @physical_stream_names : Array(String)
     @selected_checksum_names : Array(String)
+    @admission_source_files : Array(CompactStaticJsonPartFileFingerprint)
     @prepared_context : CompactStaticJsonPreparedContext?
     @frozen_event_names : Array(String)?
     @advanced_layout : Bool?
@@ -146,6 +147,15 @@ module CrystalClick
       @mark_count = @mark_row_counts.size.to_i32
       @selected_checksum_names = ["data.bin", @context.marks_name]
       @logical_read_bytes = @context.logical_bytes_for(@column_name)
+      @admission_source_files = if @context.mode.mrk4? && advanced_shared_plan_candidate?
+                                  CompactStaticJsonAdvancedPartPlan.capture_source_files(
+                                    @part_path,
+                                    @context.marks_name,
+                                    @transport_limits,
+                                  )
+                                else
+                                  [] of CompactStaticJsonPartFileFingerprint
+                                end
       @prepared_context = nil
       @frozen_event_names = nil
       @advanced_layout = nil
@@ -153,6 +163,88 @@ module CrystalClick
 
     def schema_declaration : String
       String.new(@schema_declaration.to_slice)
+    end
+
+    # :nodoc:
+    def codec_limits : BinaryCodecLimits
+      @limits
+    end
+
+    # Build the one shared Advanced MRK4 plan for this exact reader selection.
+    # Other layouts complete their established legacy full-grid validation
+    # and return nil so callers keep the old route.
+    def prepare_advanced_part_plan(
+      workspace_observer : Proc(UInt64, Nil),
+      extra_uint64_columns : Array(String),
+    ) : CompactStaticJsonAdvancedPartPlan?
+      unless @context.mode.mrk4? && @codec_budget.nil? && advanced_shared_plan_candidate?
+        # Preserve the serial schedule gate and its existing prepared state
+        # for ordinary layouts and readers with a caller-owned codec budget.
+        budget = @codec_budget || BinaryCodecBudget.new(@limits)
+        read_marks_with_budget(0, 0, budget, workspace_observer)
+        return nil
+      end
+
+      names = extra_uint64_columns.map { |name| String.new(name.to_slice) }
+      if names.uniq.size != names.size || names.any?(&.empty?)
+        raise ArgumentError.new("Compact Advanced plan companion selection is empty or duplicated")
+      end
+      names.each do |name|
+        declaration = @context.columns.find { |column, _type| column == name }.try(&.[1])
+        unless declaration == "UInt64"
+          raise UnsupportedFormatError.new("Compact Advanced plan companion must be a UInt64 column")
+        end
+        @context.validate_uint64_single_callback_spans!(name, PhysicalStreamName.escape(name))
+      end
+
+      capture_workspace = shared_capture_workspace_bytes(names)
+      workspace_observer.call(checked_add(retained_workspace_bytes, capture_workspace))
+      capture = CompactPartPhysicalWindowCapture.read_complete_columns(@context, @column_name, names)
+      budget = BinaryCodecBudget.new(@limits)
+      owners = ensure_prepared!(budget, workspace_observer, publish_advanced_state: false, window_capture: capture)
+      unless owners
+        # MAP is outside the shared-plan route. The complete pass above also
+        # published the legacy prepared context; preserve that exact path.
+        return nil
+      end
+
+      current_files = CompactStaticJsonAdvancedPartPlan.capture_source_files(
+        @part_path,
+        @context.marks_name,
+        @transport_limits,
+      )
+      unless same_source_file_fingerprints?(@admission_source_files, current_files)
+        raise CorruptPartError.new("Compact Advanced plan metadata changed since reader admission")
+      end
+      plan = CompactStaticJsonAdvancedPartPlan.build(
+        self,
+        @part_path,
+        @context.data_path,
+        @context.data_size,
+        @transport_limits,
+        @context.frame_index,
+        current_files,
+        capture,
+        owners,
+        @mark_row_counts,
+        names,
+        budget,
+      )
+      plan.validate_source!
+      workspace_observer.call(checked_add(retained_workspace_bytes, plan.retained_workspace_bytes))
+      plan
+    end
+
+    # :nodoc:
+    def validate_advanced_part_plan!(
+      plan : CompactStaticJsonAdvancedPartPlan,
+      extra_uint64_columns : Array(String),
+    ) : Nil
+      plan.validate_reader!(self)
+      unless plan.companion_columns == extra_uint64_columns
+        raise CorruptPartError.new("Compact Advanced plan differs from its companion selection")
+      end
+      nil
     end
 
     def source_declaration : String
@@ -207,6 +299,10 @@ module CrystalClick
       bytes = checked_add(bytes, string_owner_bytes(@manifest.callback_prefix))
       bytes = checked_add(bytes, string_array_bytes(@physical_stream_names))
       bytes = checked_add(bytes, string_array_bytes(@selected_checksum_names))
+      bytes = checked_add(bytes, instance_sizeof(Array(CompactStaticJsonPartFileFingerprint)).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(@admission_source_files.size.to_u64, sizeof(CompactStaticJsonPartFileFingerprint).to_u64))
+      @admission_source_files.each { |fingerprint| bytes = checked_add(bytes, string_owner_bytes(fingerprint.name)) }
       bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
       bytes = checked_add(bytes, checked_multiply(@mark_row_counts.size.to_u64, sizeof(UInt64).to_u64))
       if prepared = @prepared_context
@@ -245,6 +341,7 @@ module CrystalClick
       request_budget : BinaryCodecBudget,
       workspace_observer : Proc(UInt64, Nil),
       assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
+      advanced_part_plan : CompactStaticJsonAdvancedPartPlan? = nil,
     ) : Array(Array(ObjectDocument))
       if request_budget.writing?
         raise ArgumentError.new("Compact static JSON read requires a read-direction codec budget")
@@ -259,18 +356,28 @@ module CrystalClick
       end
       validate_selection!(first_mark, mark_count)
       advanced_marks = nil.as(Array(CompactStaticJsonAdvancedPreparedMark)?)
-      if @advanced_layout == true || @prepared_context.nil?
-        advanced_marks = ensure_prepared!(request_budget, workspace_observer)
+      prepared = nil.as(CompactStaticJsonPreparedContext?)
+      if plan = advanced_part_plan
+        plan.validate_reader!(self)
+        unless plan.mark_count == @mark_count
+          raise CorruptPartError.new("Compact Advanced plan mark grid differs from its root reader")
+        end
+        plan.replay_preparation_budget!(request_budget)
+      else
+        if @advanced_layout == true || @prepared_context.nil?
+          advanced_marks = ensure_prepared!(request_budget, workspace_observer)
+        end
+        prepared = @prepared_context || raise(CorruptPartError.new("Compact static JSON prepared context is missing"))
       end
-
-      prepared = @prepared_context || raise(CorruptPartError.new("Compact static JSON prepared context is missing"))
       selected_rows = selected_rows(first_mark, mark_count)
-      advanced_layout = @advanced_layout
+      advanced_layout = plan ? true : @advanced_layout
       if advanced_layout.nil?
         raise CorruptPartError.new("Compact static JSON layout was not prepared")
       end
       advanced_layout = advanced_layout.not_nil!
-      request_owner_bytes = if advanced_layout
+      request_owner_bytes = if plan
+                              0_u64
+                            elsif advanced_layout
                               owners = advanced_marks || raise(CorruptPartError.new("Advanced Compact request owners are missing"))
                               advanced_request_workspace_bytes(owners)
                             else
@@ -283,30 +390,44 @@ module CrystalClick
           checked_multiply(selected_rows, sizeof(Pointer(ObjectDocument)).to_u64),
         ),
       )
+      plan_workspace = plan.try(&.retained_workspace_bytes) || 0_u64
       workspace_observer.call(checked_add(retained_workspace_bytes,
-        checked_add(request_owner_bytes, output_reservation)))
+        checked_add(plan_workspace, checked_add(request_owner_bytes, output_reservation))))
 
       output = Array(Array(ObjectDocument)).new(mark_count)
       mark_count.times do |selection_index|
         mark_index = first_mark + selection_index
         documents = if advanced_layout
-                      owners = advanced_marks || raise(CorruptPartError.new("Advanced Compact request owners are missing"))
-                      owner = owners[mark_index]?
-                      unless owner && owner.logical_row_count == prepared.mark_row_count_at(mark_index)
-                        raise CorruptPartError.new("Advanced Compact prepared mark differs from the validated row grid")
-                      end
                       owner_observer = ->(owner_bytes : UInt64) do
                         active = checked_add(retained_workspace_bytes, request_owner_bytes)
+                        active = checked_add(active, plan_workspace)
                         active = checked_add(active, documents_workspace_bytes(output))
                         workspace_observer.call(checked_add(active, owner_bytes))
                         nil
                       end
-                      owner.decode_with_budget(request_budget, owner_observer, assembly_workspace)
+                      if shared_plan = plan
+                        shared_plan.decode_mark_with_budget(
+                          mark_index,
+                          request_budget,
+                          owner_observer,
+                          assembly_workspace,
+                        )
+                      else
+                        owners = advanced_marks || raise(CorruptPartError.new("Advanced Compact request owners are missing"))
+                        owner = owners[mark_index]?
+                        expected_rows = prepared.not_nil!.mark_row_count_at(mark_index)
+                        unless owner && owner.logical_row_count == expected_rows
+                          raise CorruptPartError.new("Advanced Compact prepared mark differs from the validated row grid")
+                        end
+                        owner.decode_with_budget(request_budget, owner_observer, assembly_workspace)
+                      end
                     else
-                      prepared.decode_mark_with_budget(mark_index, request_budget, @ordinary_profile)
+                      context = prepared || raise(CorruptPartError.new("Compact static JSON prepared context is missing"))
+                      context.decode_mark_with_budget(mark_index, request_budget, @ordinary_profile)
                     end
         output << documents
         active = checked_add(retained_workspace_bytes, request_owner_bytes)
+        active = checked_add(active, plan_workspace)
         workspace_observer.call(checked_add(active, documents_workspace_bytes(output)))
       end
       output
@@ -315,9 +436,11 @@ module CrystalClick
     private def ensure_prepared!(
       budget : BinaryCodecBudget,
       workspace_observer : Proc(UInt64, Nil),
+      publish_advanced_state : Bool = true,
+      window_capture : CompactPartPhysicalWindowCapture? = nil,
     ) : Array(CompactStaticJsonAdvancedPreparedMark)?
       base_workspace = retained_workspace_bytes
-      physical_workspace = checked_add(
+      physical_workspace = window_capture.try(&.retained_workspace_bytes) || checked_add(
         physical_window_workspace_bytes,
         instance_sizeof(CompactPartPhysicalWindowCapture).to_u64,
       )
@@ -328,8 +451,8 @@ module CrystalClick
       # parsing starts. The sealed capture lets each mark framer bind to that
       # exact snapshot without rereading the same compressed source ranges.
       # A later preparation creates a new capture and reopens the current path.
-      window_capture = CompactPartPhysicalWindowCapture.read_complete(@context, @column_name)
-      granules = window_capture.granules
+      capture = window_capture || CompactPartPhysicalWindowCapture.read_complete(@context, @column_name)
+      granules = capture.granules
       unless granules.size == @mark_count
         raise CorruptPartError.new("Compact static JSON physical window has the wrong mark count")
       end
@@ -357,7 +480,7 @@ module CrystalClick
           budget,
           @context,
           site_identity,
-          window_capture,
+          capture,
           mark_index,
         )
         nested_context = ObjectSharedNestedSerializationContext.for_read(0_u64, @ordinary_profile)
@@ -575,9 +698,11 @@ module CrystalClick
         ))
       workspace_observer.call(active_bytes)
 
-      @prepared_context = prepared_context
-      @frozen_event_names = frozen_names || [] of String
-      @advanced_layout = is_advanced
+      unless is_advanced && !publish_advanced_state
+        @prepared_context = prepared_context
+        @frozen_event_names = frozen_names || [] of String
+        @advanced_layout = is_advanced
+      end
       is_advanced ? advanced_marks : nil
     end
 
@@ -760,10 +885,46 @@ module CrystalClick
     end
 
     private def physical_window_workspace_bytes : UInt64
+      physical_window_workspace_bytes_for(
+        @logical_read_bytes,
+        (@context.mode.mrk3? ? 1 : @physical_stream_names.size).to_u64,
+        @physical_stream_names,
+      )
+    end
+
+    private def shared_capture_workspace_bytes(extra_uint64_columns : Array(String)) : UInt64
+      bytes = physical_window_workspace_bytes
+      extra_uint64_columns.each do |name|
+        logical_bytes = @context.logical_bytes_for(name)
+        bytes = checked_add(bytes, physical_window_workspace_bytes_for(logical_bytes, 1_u64, [name] of String))
+      end
+      frame_count = @context.frame_index.frames.size.to_u64
+      fingerprint_owner = checked_add(
+        instance_sizeof(Array(CompressedFrameFingerprint)).to_u64,
+        checked_multiply(frame_count, sizeof(CompressedFrameFingerprint).to_u64),
+      )
+      # The capture and plan each own a detached fingerprint vector, while
+      # range assembly may hold one transient vector at the same time.
+      bytes = checked_add(bytes, checked_multiply(fingerprint_owner, 3_u64))
+      checked_add(bytes, instance_sizeof(CompactPartPhysicalWindowCapture).to_u64)
+    end
+
+    private def advanced_shared_plan_candidate? : Bool
+      copy_sizes = PhysicalStreamName.append_literal(
+        @manifest.physical_prefix,
+        ".object_shared_data.copy.sizes",
+      )
+      @physical_stream_names.includes?(copy_sizes)
+    end
+
+    private def physical_window_workspace_bytes_for(
+      logical_bytes : UInt64,
+      slots : UInt64,
+      names : Array(String),
+    ) : UInt64
       marks = @mark_count.to_u64
-      slots = (@context.mode.mrk3? ? 1 : @physical_stream_names.size).to_u64
       shard_count = checked_multiply(marks, slots)
-      bytes = checked_multiply(@logical_read_bytes, 4_u64)
+      bytes = checked_multiply(logical_bytes, 4_u64)
       shard_owner = checked_add(
         instance_sizeof(CompactPartPhysicalShard).to_u64,
         checked_add(sizeof(Pointer(CompactPartPhysicalShard)).to_u64,
@@ -778,10 +939,23 @@ module CrystalClick
       bytes = checked_add(bytes, checked_multiply(checked_multiply(marks, granule_owner), 4_u64))
       bytes = checked_add(bytes,
         checked_multiply(checked_multiply(shard_count, sizeof(Pointer(CompactPartPhysicalShard)).to_u64), 4_u64))
-      @physical_stream_names.each do |name|
+      names.each do |name|
         bytes = checked_add(bytes, checked_multiply(string_owner_bytes(name), marks + 1_u64))
       end
       bytes
+    end
+
+    private def same_source_file_fingerprints?(
+      expected : Array(CompactStaticJsonPartFileFingerprint),
+      actual : Array(CompactStaticJsonPartFileFingerprint),
+    ) : Bool
+      return false unless expected.size == actual.size
+      expected.each_with_index do |fingerprint, index|
+        other = actual[index]
+        return false unless fingerprint.name == other.name && fingerprint.present == other.present &&
+                            fingerprint.size == other.size && fingerprint.hash == other.hash
+      end
+      true
     end
 
     private def documents_workspace_bytes(marks : Array(Array(ObjectDocument))) : UInt64

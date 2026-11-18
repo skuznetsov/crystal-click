@@ -1,4 +1,33 @@
 module CrystalClick
+  # Authenticated identity of one compressed frame as observed during a
+  # bounded source read. The digest is the exact ClickHouse CityHash128 value
+  # stored in the frame header, after the payload has been checked against it.
+  struct CompressedFrameFingerprint
+    getter compressed_offset : Int64
+    getter end_offset : Int64
+    getter logical_start : Int64
+    getter logical_end : Int64
+    getter method : UInt8
+    getter checksum : {UInt64, UInt64}
+
+    def initialize(
+      @compressed_offset : Int64,
+      @end_offset : Int64,
+      @logical_start : Int64,
+      @logical_end : Int64,
+      @method : UInt8,
+      @checksum : {UInt64, UInt64},
+    )
+    end
+
+    def self.from_authenticated_frame(
+      frame : CompressedFrameDescriptor,
+      checksum : {UInt64, UInt64},
+    ) : CompressedFrameFingerprint
+      new(frame.compressed_offset, frame.end_offset, frame.logical_start, frame.logical_end, frame.method, checksum)
+    end
+  end
+
   # Indexes every outer frame header without hashing or decompressing payloads.
   # Descriptor allocation happens only after the aggregate frame-record charge.
   class CompressedFrameIndex
@@ -93,6 +122,36 @@ module CrystalClick
 
       unless offset == @data_size
         raise CorruptPartError.new("compressed data frame geometry changed since Compact mark-grid admission")
+      end
+      nil
+    end
+
+    # Read-only geometry guard for a previously admitted index. It checks all
+    # frame headers against the same mapped image used by a range read or
+    # delivery guard, without charging another operation's file/record budget.
+    def validate_data_geometry_readonly!(data : Bytes, limits : CompressedStreamLimits) : Nil
+      unless data.size.to_i64 == @data_size && @data_size > 0 &&
+             @data_size <= Int32::MAX && @data_size <= limits.max_file_bytes
+        raise CorruptPartError.new("compressed data file size changed since frame-index admission")
+      end
+      @frames.each do |frame|
+        offset = frame.compressed_offset.to_i
+        if offset < 0 || offset > data.size - CompressedBlock::FRAME_HEADER_SIZE
+          raise CorruptPartError.new("compressed frame header is truncated")
+        end
+        header_offset = offset + CompressedBlock::CHECKSUM_SIZE
+        method = data[header_offset]
+        compressed_size = read_u32(data, header_offset + 1).to_i64
+        decompressed_size = read_u32(data, header_offset + 5).to_i64
+        frame_end = frame.compressed_offset + CompressedBlock::CHECKSUM_SIZE + compressed_size
+        logical_end = frame.logical_start + decompressed_size
+        unless method == frame.method &&
+               compressed_size >= CompressedBlock::HEADER_SIZE &&
+               frame_end == frame.end_offset &&
+               logical_end == frame.logical_end &&
+               frame_end <= @data_size
+          raise CorruptPartError.new("compressed frame geometry changed since frame-index admission")
+        end
       end
       nil
     end

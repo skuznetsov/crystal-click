@@ -10,7 +10,7 @@ complete storage schema also contains `events Array(Tuple(a UInt64, b String))` 
 `id, doc`.
 
 The fixture generator exports `id, toJSONString(doc) ORDER BY id FORMAT
-RowBinary` from ClickHouse with checksumming enabled. Both runners validate
+RowBinary` from ClickHouse with checksumming enabled. All runners validate
 every sample byte for byte against this oracle after measuring the read and
 serialization stages. The driver additionally flips a checksum byte after
 each runner opens a disposable copy and requires the first scan to fail.
@@ -38,30 +38,92 @@ TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
   crystal build --release -Dpreview_mt -Dexecution_context \
     benchmarks/compact_json_scan_probe.cr -o "$bench_work/crystal-probe"
 
+mkdir "$bench_work/baseline-src" "$bench_work/baseline-cache"
+git archive fac9472696bcb4cb84b864c2eeb26de1bbc7fc96 \
+  src benchmarks/compact_json_scan_probe.cr | tar -x -C "$bench_work/baseline-src"
+TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/baseline-cache" \
+  crystal build --release -Dpreview_mt -Dexecution_context \
+    "$bench_work/baseline-src/benchmarks/compact_json_scan_probe.cr" \
+    -o "$bench_work/crystal-baseline"
+
 python3 -B scripts/compact_json_scan_benchmark.py \
   --part "$bench_work/fixture/0_1_1_0" \
   --oracle "$bench_work/fixture/0_1_1_0.rowbinary" \
-  --crystal-bin "$bench_work/crystal-probe" --cpp-bin "$bench_cpp" \
+  --crystal-bin "$bench_work/crystal-probe" --crystal-backend shared \
+  --baseline-crystal-bin "$bench_work/crystal-baseline" --cpp-bin "$bench_cpp" \
   --scratch "$bench_work" --output "$bench_work/summary.json"
 ```
 
-With one worker both runners read `[0,1,2,3]`. With four workers each gets one
-mark. Both retain readers and worker threads within a process. Crystal uses the
-typed candidate-mark API and retains owned `ObjectDocument` instances and copied
-IDs across the callback boundary. The C++ runner calls `IMergeTreeReader::readRows`
-into reusable typed columns with synchronous `pread` and no shared uncompressed,
-mark, or prefix caches. The comparison driver alternates scan order, verifies
-worker assignments, and hashes the part files before and after the run. Worker
-and part startup are recorded separately.
+With one worker every runner reads `[0,1,2,3]`. With four workers each gets one
+mark. All runners retain readers and worker threads within a process. Crystal
+retains owned `ObjectDocument` instances and copied IDs across the batch
+boundary. The baseline uses the typed candidate-mark API, while the shared
+runner prepares a single plan per read and passes it to the retained workers.
+The probe rechecks the source on the coordinator once per completed mark
+batch in the read timer. The public parallel API uses the same plan and
+decoders and checks the source immediately before each ordered callback on
+the calling fiber. The C++ runner calls
+`IMergeTreeReader::readRows` into reusable typed columns with synchronous
+`pread` and no shared uncompressed, mark, or prefix caches. The comparison
+driver rotates through all six runner orders, verifies worker assignments,
+and hashes the part files before and after the run. Worker and part startup
+are recorded separately.
 
 The read timer includes dispatch, decompression, and production of the retained
 output. Serialization follows on the coordinator and has a separate timer.
 ClickHouse reports typed column reset separately. Boehm allocated bytes are a
-process-wide delta spanning both timed Crystal stages. The two materialized
-representations and their lifetimes differ, even when the serialized bytes
-agree.
+process-wide delta spanning both timed Crystal stages. ClickHouse reads into
+reusable `ColumnObject` columns. Crystal allocates owned `ObjectDocument`
+rows and rechecks the current source before delivering each batch.
 
-## Matched results
+## Shared plan results
+
+Warm reads on Apple M2 Max, macOS 26.6.2, Crystal 1.22.3 Release with LLVM
+23.1.5 and Boehm 8.2.12 enabled. Each reader and worker count contributed 48
+measured reads across eight fresh processes, with two warmups per process.
+All 288 measured reads and 96 warmups returned exactly 848,918 oracle bytes
+in mark order. The three post-open checksum corruption controls passed.
+
+| Reader | Workers | Read p50 / p95, ms | Serialize p50 / p95, ms | Combined p50 / p95, ms | Boehm MiB / collections, median |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Crystal baseline `fac9472` | 1 | 28.986 / 31.506 | 9.341 / 10.563 | 38.267 / 41.399 | 73.54 / 3 |
+| Crystal shared plan | 1 | 19.319 / 21.376 | 8.459 / 10.468 | 27.853 / 30.571 | 51.61 / 1 |
+| ClickHouse `readRows` | 1 | 0.418 / 0.559 | 5.971 / 6.096 | 6.388 / 6.585 | — |
+| Crystal baseline `fac9472` | 4 | 60.299 / 67.245 | 9.636 / 12.301 | 68.757 / 76.855 | 90.32 / 3 |
+| Crystal shared plan | 4 | 38.135 / 44.777 | 9.185 / 10.904 | 46.687 / 53.338 | 51.63 / 1 |
+| ClickHouse `readRows` | 4 | 0.197 / 0.277 | 6.008 / 6.236 | 6.225 / 6.439 | — |
+
+The shared plan reduced Crystal read p50 by 33.4% at one worker and 36.8%
+at four. Read p95 fell by 32.2% and 33.4%. Four workers still took 1.97× as
+long as one at Crystal read p50, while ClickHouse read p50 was 2.12× faster.
+Crystal read p50 was 46.2× and 193.7× the corresponding `readRows` latency.
+With serialization included, the p50 ratios were 4.36× and 7.50×.
+
+One plan was built inside each timed Crystal read, with a median of 2.531 ms
+at one worker and 2.578 ms at four. Separate Crystal part/worker startup
+medians were 1.440 and 1.604 ms. ClickHouse ATTACH medians were 13.052 and
+13.091 ms, with reader/worker startup at 0.101 and 0.137 ms. ClickHouse
+column reset medians were 0.015 and 0.016 ms.
+
+A second v3 fixture used the same geometry and added five paths named
+`overflow_0` through `overflow_4` to each source row. Their values were
+`spill-{path_index}-{id % 43:02d}`. Three paths per row went into Advanced
+SharedData. Both readers passed W1 and W4 bytewise checks on all 1,922,070
+RowBinary bytes and rejected the post-open checksum mutation. The small
+overflow run served as a correctness check.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Crystal shared-plan release benchmark | `22206a6da4f7adbdcff6935b4629e661955690da664a27004708e978c9c718a8` |
+| Crystal baseline release benchmark | `9c49d594b0e73a5cf2cd6f08d81529d857112c48dad5f9a9b5b367c517d0ad59` |
+| Native uninstrumented runner | `4a820906c3dbdf9556b8bf1d5c7f3fb96cfe71b71c9e088b786069569746b2d8` |
+| Overflow `data.bin` | `d99ddd6d2144615388982b267b20f14e4f56e4689f26faea922c2ab3fb5c82d5` |
+| Overflow full ordered RowBinary | `3495978197741a4e241a2201bd92030afbb7590588bccb2ab3da107b1059d62b` |
+
+The main fixture matches the `data.bin`, `data.mrk4`, and RowBinary hashes
+below.
+
+## Previous matched results
 
 Warm single-part reads on an Apple M2 Max with macOS 26.6.2, Crystal 1.22.3
 Release and Boehm 8.2.12 enabled. Each worker count used eight fresh pairs of
@@ -97,10 +159,12 @@ output reset after serialization was 0.015/0.016 ms and is recorded separately.
 Use an isolated source copy and apply the diagnostic hooks. The instrumented
 binary accepts one worker. `none`, `first`, and `all` select 0, 1, or 4 marks.
 Preparation time encloses the full-window read, its checksum and decompression,
-and the JSON plan work. The individual stages overlap that preparation timer.
-Count-only physical ranges include empty substreams. A touched frame may be
-read again across source operations. Use the uninstrumented binaries for
-wall-time comparisons.
+and the JSON plan work. The source recheck timer measures current-path
+validation during preparation and after worker output. The checksum and
+decompression counters count frames read for decoding. The recheck counter
+counts the frames hashed by source validation. Count-only physical ranges
+include empty substreams. Use the uninstrumented binaries for wall-time
+comparisons.
 
 ```sh
 mkdir "$bench_work/diagnostic-src"
@@ -113,16 +177,39 @@ TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
     -o "$bench_work/diagnostic-probe"
 
 for selection in none first all; do
-  "$bench_work/diagnostic-probe" typed "$bench_work/fixture/0_1_1_0" \
-    "$bench_work/fixture/0_1_1_0.rowbinary" 1 "$selection" retained 1 3
+  "$bench_work/diagnostic-probe" shared "$bench_work/fixture/0_1_1_0" \
+    "$bench_work/fixture/0_1_1_0.rowbinary" 1 "$selection" retained 1 7
 done
 ```
 
 An empty result in Crystal still runs the whole-grid JSON validation. An empty
-native schedule issues no `readRows` calls. The key comparison for zero marks
-is the cost of preserving the Crystal validation contract. For nonempty
-schedules the same checksum policy authenticates each read frame, with each
-reader choosing which frames and how many times to read them.
+native schedule issues no `readRows` calls. For nonempty schedules, both
+readers authenticate frames they decode. The shared plan also verifies the
+authenticated source before releasing retained rows.
+
+### Shared-plan diagnostics
+
+Every selection prepared one complete plan and read the shared physical
+window once. Each window inflated 471,803 bytes across eight LZ4 frames.
+With all four marks selected, the previous route prepared five times and
+inflated 2,096,871 bytes across 24 decompression calls. The shared route
+issued one source recheck during preparation and one before delivering
+each selected mark batch. A recheck reads fresh source bytes and checks
+their checksums without inflating them.
+
+| Selected marks | Complete preparations | Transport checksum / LZ4 calls | Source rechecks / frames rechecked | Recheck time p50, ms |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 1 | 8 / 8 | 1 / 8 | 0.198 |
+| 1 | 1 | 8 / 8 | 2 / 16 | 0.551 |
+| 4 | 1 | 8 / 8 | 5 / 40 | 1.049 |
+
+The figures use seven instrumented scans per selection after warmup. On
+the full selection, the median read was 21.869 ms and preparation was
+2.689 ms. The same full-selection diagnostics recorded 0.021 ms in transport
+checksums and 0.131 ms in LZ4. These are nested stages and should be read
+with the separate uninstrumented timings.
+
+### Previous repeated-preparation diagnostics
 
 | Marks | Full preparations before → after | Checksum calls and LZ4 calls before → after | Distinct frames after | Inflated bytes before → after | Prepare median after, ms |
 | --- | ---: | ---: | ---: | ---: | ---: |

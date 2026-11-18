@@ -222,8 +222,13 @@ end
 The callback runs on the calling fiber in part and row order. The reader
 assigns distinct physical marks to workers, including within a single part.
 The threaded path supports primitive 8–64-bit integer and 32/64-bit float columns
-with Crystal execution contexts. `workers: 1` scans serially. For repeated
-scans of ordinary Wide numeric parts with `.mrk2` marks, retain the
+with Crystal execution contexts. Workers share one plan per part for a
+selected Compact MRK4 JSON root using Advanced SharedData v2 or v3 with two
+buckets. The selection can include ordinary `UInt64` columns. See the
+[shared part plan](docs/COMPACT_TYPED_READER_FRONTIER.md#shared-advanced-json-part-plan).
+
+`workers: 1` scans serially. For repeated scans of ordinary Wide numeric parts
+with `.mrk2` marks, retain the
 `TypedPartTable` instance and call `scan_typed_parallel(workers: 4)` on it for
 each pass. The reader reuses the admitted metadata and mark indexes and opens
 fresh data mappings for each scan. For direct `UInt64` selections from these

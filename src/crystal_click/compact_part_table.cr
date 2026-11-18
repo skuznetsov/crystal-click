@@ -1,3 +1,5 @@
+require "./compact_shared_plan_workspace_error"
+
 module CrystalClick
   # Single-part typed table backend for Compact physical storage. It preserves
   # WidePartTableBatch carriers while delegating static and Dynamic lifecycle
@@ -394,6 +396,41 @@ module CrystalClick
     end
 
     # :nodoc:
+    # Candidate admission is metadata-only. The root reader must still prove
+    # the complete Advanced schedule before a plan can reach workers.
+    def shared_advanced_json_scan_candidate? : Bool
+      @emit_part_path == @part_path && @json_readers.size == 1 &&
+        @json_readers[0].carrier_kind == :object &&
+        @json_uint32_path_readers.empty? && @direct_uint64_readers.all?
+    end
+
+    # :nodoc:
+    def prepare_shared_advanced_json_scan : CompactStaticJsonAdvancedPartPlan?
+      return nil unless shared_advanced_json_scan_candidate?
+
+      workspace_limit = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
+      @readers.each do |entry|
+        bytes = entry[3].retained_workspace_bytes
+        if bytes > workspace_limit
+          raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+        end
+        workspace_limit -= bytes
+      end
+      observer = ->(bytes : UInt64) do
+        if bytes > workspace_limit
+          raise CompactSharedPlanWorkspaceError.new
+        end
+        nil
+      end
+      @json_readers[0].prepare_advanced_part_plan(observer, @readers.map(&.[0]))
+    rescue CompactSharedPlanWorkspaceError
+      # Whole-part companions need more retained space than the ordinary
+      # per-mark reader. Keep the serial path when a shared plan will not fit.
+      validate_dynamic_schedules!
+      nil
+    end
+
+    # :nodoc:
     # Shared only with worker readers of this exact all-UInt64 physical part.
     def parallel_uint64_scan_context : CompactPartPhysicalContext?
       reusable_uint64_scan? ? @direct_uint64_scan_context : nil
@@ -414,11 +451,12 @@ module CrystalClick
       batch_rows : Int,
       workspace : CompactUInt64ScanWorkspace?,
       object_document_workspace : ObjectDocumentDecodeWorkspace? = nil,
+      advanced_json_plan : CompactStaticJsonAdvancedPartPlan? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_batch_rows(batch_rows)
       scan_workspace = scan_workspace_for_scan(workspace)
-      scan_selected_marks(nil, batch_rows, nil, scan_workspace, nil, object_document_workspace) { |batch| yield batch }
+      scan_selected_marks(nil, batch_rows, nil, scan_workspace, nil, object_document_workspace, advanced_json_plan) { |batch| yield batch }
       nil
     end
 
@@ -460,9 +498,35 @@ module CrystalClick
       nil
     end
 
+    # :nodoc:
+    # Ordered delivery may be owned by a coordinator after worker prefetch.
+    # The coordinator must check this plan again immediately before yielding.
+    def scan_shared_advanced_json_mark_indices(
+      mark_indices : Array(Int32),
+      batch_rows : Int,
+      plan : CompactStaticJsonAdvancedPartPlan,
+      guard_delivery : Bool = true,
+      & : WidePartTableBatch -> Nil
+    ) : Nil
+      validate_batch_rows(batch_rows)
+      validate_shared_advanced_json_scan_plan!(plan)
+      plan.validate_source! if guard_delivery && mark_indices.empty?
+      previous = -1_i32
+      mark_indices.each do |mark|
+        unless mark > previous && mark < @mark_row_counts.size
+          raise BoundsError.new("parallel Compact mark indices are outside the physical grid or unordered")
+        end
+        previous = mark
+      end
+      scan_selected_marks_loop(mark_indices, batch_rows, nil, nil, nil,
+        ObjectDocumentDecodeWorkspace.new, plan, guard_delivery) { |batch| yield batch }
+      nil
+    end
+
     def scan_typed_window(
       start_row : UInt64,
       max_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
+      advanced_json_plan : CompactStaticJsonAdvancedPartPlan? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_batch_rows(max_rows, "window row count")
@@ -470,19 +534,26 @@ module CrystalClick
         raise BoundsError.new("window start is beyond the source row count")
       end
       if start_row == @total_row_count
-        validate_dynamic_schedules!
+        if plan = advanced_json_plan
+          validate_shared_advanced_json_scan_plan!(plan)
+          plan.validate_source!
+        else
+          validate_dynamic_schedules!
+        end
         return nil
       end
 
       available = @total_row_count - start_row
       rows = max_rows.to_u64 < available ? max_rows.to_u64 : available
       scan_workspace = scan_workspace_for_scan(nil)
-      scan_selected_marks(nil, max_rows, {start_row, start_row + rows}, scan_workspace, nil) { |batch| yield batch }
+      scan_selected_marks(nil, max_rows, {start_row, start_row + rows}, scan_workspace, nil,
+        advanced_json_plan: advanced_json_plan) { |batch| yield batch }
       nil
     end
 
     def scan_typed_candidate_marks(
       mark_indices : Array(Array(Int32)),
+      advanced_json_plan : CompactStaticJsonAdvancedPartPlan? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       unless mark_indices.size == 1
@@ -502,7 +573,8 @@ module CrystalClick
       # A candidate callback is one complete physical granule, matching the
       # existing typed Wide candidate-mark contract.
       scan_workspace = scan_workspace_for_scan(nil)
-      scan_selected_marks(selected, WidePartTable::MAX_MARK_ROWS.to_i, nil, scan_workspace, nil) { |batch| yield batch }
+      scan_selected_marks(selected, WidePartTable::MAX_MARK_ROWS.to_i, nil, scan_workspace, nil,
+        advanced_json_plan: advanced_json_plan) { |batch| yield batch }
       nil
     end
 
@@ -513,10 +585,18 @@ module CrystalClick
       scan_workspace : CompactUInt64ScanWorkspace?,
       scan_image : CompactUInt64ScanImage?,
       object_document_workspace : ObjectDocumentDecodeWorkspace? = nil,
+      advanced_json_plan : CompactStaticJsonAdvancedPartPlan? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
-      validate_dynamic_schedules!
-      object_document_workspace ||= if @json_readers.any?(&.advanced_object_document_decode?)
+      if plan = advanced_json_plan
+        validate_shared_advanced_json_scan_plan!(plan)
+        plan.validate_source! if candidate_marks.try(&.empty?)
+      elsif shared_advanced_json_scan_candidate?
+        advanced_json_plan = prepare_shared_advanced_json_scan
+      else
+        validate_dynamic_schedules!
+      end
+      object_document_workspace ||= if advanced_json_plan || @json_readers.any?(&.advanced_object_document_decode?)
                                       ObjectDocumentDecodeWorkspace.new
                                     end
 
@@ -532,9 +612,17 @@ module CrystalClick
           scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, opened_image, object_document_workspace) { |batch| yield batch }
         end
       else
-        scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, nil, object_document_workspace) { |batch| yield batch }
+        scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, nil, object_document_workspace,
+          advanced_json_plan) { |batch| yield batch }
       end
       nil
+    end
+
+    private def validate_shared_advanced_json_scan_plan!(plan : CompactStaticJsonAdvancedPartPlan) : Nil
+      unless shared_advanced_json_scan_candidate?
+        raise CorruptPartError.new("Compact Advanced plan differs from the table selection")
+      end
+      @json_readers[0].validate_advanced_part_plan!(plan, @readers.map(&.[0]))
     end
 
     private def scan_selected_marks_loop(
@@ -544,6 +632,8 @@ module CrystalClick
       scan_workspace : CompactUInt64ScanWorkspace?,
       scan_image : CompactUInt64ScanImage?,
       object_document_workspace : ObjectDocumentDecodeWorkspace? = nil,
+      advanced_json_plan : CompactStaticJsonAdvancedPartPlan? = nil,
+      guard_delivery : Bool = true,
       & : WidePartTableBatch -> Nil
     ) : Nil
       selected_cursor = 0
@@ -579,6 +669,7 @@ module CrystalClick
           scan_workspace,
           scan_image,
           object_document_workspace,
+          advanced_json_plan,
         )
         cursor = row_start
         while cursor < row_end
@@ -592,7 +683,10 @@ module CrystalClick
             values_by_column,
             json_carriers,
             path_values,
-          ) { |batch| yield batch }
+          ) do |batch|
+            advanced_json_plan.try(&.validate_source!) if guard_delivery
+            yield batch
+          end
           cursor += slice_rows
         end
         # The logical charge bounds one selected mark at a time. Values and
@@ -700,6 +794,7 @@ module CrystalClick
       scan_workspace : CompactUInt64ScanWorkspace?,
       scan_image : CompactUInt64ScanImage?,
       object_document_workspace : ObjectDocumentDecodeWorkspace? = nil,
+      advanced_json_plan : CompactStaticJsonAdvancedPartPlan? = nil,
     ) : MaterializedMark
       remaining_bytes = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
       retained_workspace = 0_u64
@@ -708,6 +803,9 @@ module CrystalClick
       end
       @json_readers.each do |reader|
         retained_workspace = checked_add(retained_workspace, reader.retained_workspace_bytes)
+      end
+      if plan = advanced_json_plan
+        retained_workspace = checked_add(retained_workspace, plan.retained_workspace_bytes)
       end
       @json_uint32_path_readers.each do |reader|
         retained_workspace = checked_add(retained_workspace, reader.retained_workspace_bytes)
@@ -764,7 +862,7 @@ module CrystalClick
       json_recursive_shape_bytes = 0_u64
       json_peak_transient_bytes = 0_u64
       @json_readers.each do |reader|
-        preflight = reader.mark_preflight_after_scan_schedule_validation(mark_index, rows)
+        preflight = reader.mark_preflight_after_scan_schedule_validation(mark_index, rows, advanced_json_plan)
         json_preflights << preflight
         json_carrier_bytes = checked_add(json_carrier_bytes, preflight.carrier_bytes)
         json_carrier_nodes = checked_add(json_carrier_nodes, preflight.carrier_nodes)
@@ -840,7 +938,11 @@ module CrystalClick
           remaining_bytes -= direct_bytes
           retained_total = checked_add(retained_total, direct_bytes)
 
-          bytes = reader.read_ordinary_uint64_mark(mark_index, scan_image)
+          bytes = if plan = advanced_json_plan
+                    plan.uint64_mark_bytes(entry[0], mark_index)
+                  else
+                    reader.read_ordinary_uint64_mark(mark_index, scan_image)
+                  end
           unless bytes.size.to_u64 == direct_bytes
             raise CorruptPartError.new("Compact direct UInt64 reader returned an invalid mark width")
           end
@@ -973,7 +1075,8 @@ module CrystalClick
       json_carriers = Array(SelectedCarrier).new(@json_readers.size)
       @json_readers.each_with_index do |reader, reader_index|
         preflight = json_preflights[reader_index]
-        other_retained_workspace = retained_workspace - reader.retained_workspace_bytes
+        plan_workspace = advanced_json_plan.try(&.retained_workspace_bytes) || 0_u64
+        other_retained_workspace = retained_workspace - reader.retained_workspace_bytes - plan_workspace
         peak_workspace = 0_u64
         workspace_observer = ->(current_workspace_bytes : UInt64) do
           begin
@@ -989,7 +1092,7 @@ module CrystalClick
           nil
         end
 
-        values = reader.storage_values_for_mark(mark_index, rows, workspace_observer, object_document_workspace)
+        values = reader.storage_values_for_mark(mark_index, rows, workspace_observer, object_document_workspace, advanced_json_plan)
         carrier = reader.carrier_for(values)
         reader.charge_carrier!(json_budget, values, carrier, preflight, peak_workspace)
         json_carriers << carrier

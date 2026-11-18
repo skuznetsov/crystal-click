@@ -246,6 +246,8 @@ module CrystalClick
       expected_data_size : Int64,
       ranges : Array({Int64, Int64}),
       budget : CompressedStreamBudget,
+      authenticated_frames : Array(CompressedFrameFingerprint)? = nil,
+      expected_frame_index : CompressedFrameIndex? = nil,
     ) : Array(Bytes)
       budget.ensure_direction(false)
       validate_expected_size(expected_data_size, "data")
@@ -284,6 +286,7 @@ module CrystalClick
       MMapDataSource.with_file(data_path, expected_data_size, budget.limits.max_file_bytes) do |data|
         limits = budget.limits
         index = CompressedFrameIndex.new(data, limits, budget)
+        expected_frame_index.try &.validate_data_geometry_readonly!(data, limits)
         ranges.each do |range|
           if range[1] > index.logical_size
             raise ArgumentError.new("logical range is outside the decompressed stream")
@@ -291,7 +294,9 @@ module CrystalClick
         end
 
         decoded_work = 0_i64
+        touched_frame_count = 0_i64
         each_touched_frame(index.frames, spans) do |frame, _active|
+          touched_frame_count = checked_add(touched_frame_count, 1_i64, "touched frame count")
           decoded_work = checked_add(decoded_work, frame.decompressed_size, "decoded work")
           if frame.method == CompressedBlock::METHOD_MULTIPLE
             decoded_work = checked_add(decoded_work, multiple_nested_size(data, frame, limits), "nested decoded work")
@@ -299,6 +304,9 @@ module CrystalClick
         end
         # Reserve the complete touched decode and all output bytes before any
         # result buffers or decoder workspace are grown.
+        if fingerprints = authenticated_frames
+          budget.reserve_records(touched_frame_count)
+        end
         budget.reserve_decoded_bytes(decoded_work)
         budget.reserve_result_bytes(total_result_size)
         output = Array(Bytes).new(ranges.size)
@@ -308,7 +316,7 @@ module CrystalClick
 
         workspace = CompressedBlock::DecodeWorkspace.new
         each_touched_frame(index.frames, spans) do |frame, active|
-          decoded = decode_touched_frame(data, frame, workspace, limits)
+          decoded = decode_touched_frame(data, frame, workspace, limits, authenticated_frames)
           active.each do |span|
             copy_range_intersection(decoded, frame, span, output[span.output_index])
           end
@@ -364,6 +372,56 @@ module CrystalClick
         bounds = index.touched_frame_bounds(start, finish)
         reserve_indexed_decode_work!(data, index, bounds, result_size, budget)
         decode_indexed_range_into(data, index, bounds, start, finish, destination, workspace, budget)
+      end
+      nil
+    end
+
+    # Rechecks a retained set of authenticated frame identities against the
+    # current path. This maps the bounded source and hashes only the frames
+    # captured by the original plan; it does not decompress or allocate output
+    # buffers, and does not charge the transport budget a second time for the
+    # already admitted data file.
+    def self.validate_frame_fingerprints!(
+      data_path : String,
+      expected_data_size : Int64,
+      fingerprints : Array(CompressedFrameFingerprint),
+      limits : CompressedStreamLimits,
+      expected_frame_index : CompressedFrameIndex? = nil,
+    ) : Nil
+      validate_expected_size(expected_data_size, "data")
+      if fingerprints.empty?
+        raise CorruptPartError.new("Compact source plan has no authenticated data frames")
+      end
+      preflight_regular_file(data_path, expected_data_size, "data file")
+      MMapDataSource.with_file(data_path, expected_data_size, limits.max_file_bytes) do |data|
+        expected_frame_index.try &.validate_data_geometry_readonly!(data, limits)
+        fingerprints.each do |fingerprint|
+          offset = fingerprint.compressed_offset
+          if offset < 0 || offset > data.size.to_i64 - CompressedBlock::FRAME_HEADER_SIZE
+            raise CorruptPartError.new("Compact source frame identity is outside the current data file")
+          end
+          header_offset = offset.to_i + CompressedBlock::CHECKSUM_SIZE
+          method = data[header_offset]
+          compressed_size = read_u32(data, header_offset + 1).to_i64
+          decompressed_size = read_u32(data, header_offset + 5).to_i64
+          frame_end = offset + CompressedBlock::CHECKSUM_SIZE + compressed_size
+          expected_decompressed_size = fingerprint.logical_end - fingerprint.logical_start
+          unless method == fingerprint.method &&
+                 frame_end == fingerprint.end_offset &&
+                 decompressed_size == expected_decompressed_size &&
+                 compressed_size >= CompressedBlock::HEADER_SIZE &&
+                 frame_end <= data.size.to_i64
+            raise CorruptPartError.new("Compact source frame geometry changed after plan preparation")
+          end
+          actual = CityHashV1.hash128(data[header_offset, compressed_size.to_i])
+          expected = {read_u64(data, offset.to_i), read_u64(data, offset.to_i + 8)}
+          unless actual == expected
+            raise CorruptPartError.new("Compact source frame checksum mismatch")
+          end
+          unless actual == fingerprint.checksum
+            raise CorruptPartError.new("Compact source frame checksum changed after plan preparation")
+          end
+        end
       end
       nil
     end
@@ -846,8 +904,10 @@ module CrystalClick
       frame : CompressedFrameDescriptor,
       workspace : CompressedBlock::DecodeWorkspace,
       limits : CompressedStreamLimits,
+      authenticated_frames : Array(CompressedFrameFingerprint)? = nil,
     ) : Bytes
-      verify_frame_checksum!(data, frame)
+      checksum = verify_frame_checksum!(data, frame)
+      authenticated_frames.try &.push(CompressedFrameFingerprint.from_authenticated_frame(frame, checksum))
       decode_indexed_frame(data, frame, workspace, limits)
     end
 
@@ -870,7 +930,7 @@ module CrystalClick
       decoded.output
     end
 
-    private def self.verify_frame_checksum!(data : Bytes, frame : CompressedFrameDescriptor) : Nil
+    private def self.verify_frame_checksum!(data : Bytes, frame : CompressedFrameDescriptor) : {UInt64, UInt64}
       offset = frame.compressed_offset.to_i
       actual = CityHashV1.hash128(data[offset + CompressedBlock::CHECKSUM_SIZE, frame.compressed_size.to_i])
       expected_low = read_u64(data, offset)
@@ -878,6 +938,7 @@ module CrystalClick
       unless actual[0] == expected_low && actual[1] == expected_high
         raise CorruptPartError.new("compressed frame checksum mismatch")
       end
+      actual
     end
 
     # Returns the visible nested ZSTD output size after validating every header

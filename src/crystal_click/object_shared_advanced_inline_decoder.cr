@@ -30,9 +30,8 @@ module CrystalClick
 
     # Authenticates and materializes one inline mark's raw shared-data roles,
     # Copy framing, and parser-observed StructurePrefix spans without decoding
-    # any ObjectDocument or BinaryValue. The same operation budget continues
-    # in decode_prepared; preparation is not independently replayable under a
-    # fresh budget.
+    # any ObjectDocument or BinaryValue. Decode can continue in the preparation
+    # budget or a read budget that has paid its exact preparation counters.
     def self.prepare_inline(
       prefix : ObjectDocumentCallbackPrefix,
       physical_plan : ObjectDocumentPhysicalPlan,
@@ -297,8 +296,8 @@ module CrystalClick
     end
 
     # Decodes only the requested mark's Copy value envelopes and per-path
-    # values. The prepared owner's exact physical plan and budget identity are
-    # checked before the first value parser is entered.
+    # values. The prepared owner checks its physical plan and budget provenance
+    # before the first value parser is entered.
     def self.decode_prepared(
       prepared : ObjectSharedAdvancedInlinePrepared,
       budget : BinaryCodecBudget,

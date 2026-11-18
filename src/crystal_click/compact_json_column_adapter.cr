@@ -141,6 +141,27 @@ module CrystalClick
       @reader.validate_complete_schedule(observer)
     end
 
+    # :nodoc:
+    def prepare_advanced_part_plan(
+      observer : Proc(UInt64, Nil),
+      extra_uint64_columns : Array(String),
+    ) : CompactStaticJsonAdvancedPartPlan?
+      plan = @reader.prepare_advanced_part_plan(observer, extra_uint64_columns)
+      if sealed = plan
+        validate_advanced_part_plan!(sealed, extra_uint64_columns)
+      end
+      plan
+    end
+
+    # :nodoc:
+    def validate_advanced_part_plan!(
+      plan : CompactStaticJsonAdvancedPartPlan,
+      extra_uint64_columns : Array(String),
+    ) : Nil
+      @reader.validate_advanced_part_plan!(plan, extra_uint64_columns)
+      nil
+    end
+
     def storage_value_shape_for_mark(mark_index : Int) : StorageValueShape
       @reader.storage_value_shape_for_mark(mark_index)
     end
@@ -164,9 +185,10 @@ module CrystalClick
     def mark_preflight_after_scan_schedule_validation(
       mark_index : Int,
       expected_rows : UInt64,
+      advanced_part_plan : CompactStaticJsonAdvancedPartPlan? = nil,
     ) : CompactJsonMarkPreflight
       validate_mark_rows!(mark_index, expected_rows)
-      shape = @reader.prepared_advanced_root_shape_for_mark(mark_index) ||
+      shape = @reader.prepared_advanced_root_shape_for_mark(mark_index, advanced_part_plan) ||
               storage_value_shape_for_mark(mark_index)
       mark_preflight_for_shape(expected_rows, shape)
     rescue ex : BoundsError
@@ -206,9 +228,10 @@ module CrystalClick
       expected_rows : UInt64,
       observer : Proc(UInt64, Nil)? = nil,
       assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
+      advanced_part_plan : CompactStaticJsonAdvancedPartPlan? = nil,
     ) : Array(StorageColumnValue)
       validate_mark_rows!(mark_index, expected_rows)
-      selected = @reader.read_marks(mark_index, 1, observer, assembly_workspace)
+      selected = @reader.read_marks(mark_index, 1, observer, assembly_workspace, advanced_part_plan)
       unless selected.size == 1 && selected[0].size.to_u64 == expected_rows
         raise CorruptPartError.new("selected Compact JSON mark row count changed")
       end

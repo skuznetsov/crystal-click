@@ -38,5 +38,44 @@ module CrystalClick
       granule = @granules[(mark - @first_mark).to_i]?
       granule.try(&.matches_shards?(shards)) || false
     end
+
+    def shard_count_at(mark : Int) : Int32
+      granule_at(mark).shard_count
+    end
+
+    def shard_bytes_at(mark : Int, slot_index : Int) : Bytes
+      granule_at(mark).shard_bytes_at(slot_index)
+    end
+
+    def retained_workspace_bytes : UInt64
+      bytes = instance_sizeof(CompactPartPhysicalWindow).to_u64
+      bytes = checked_add(bytes, string_owner_bytes(@column))
+      bytes = checked_add(bytes, instance_sizeof(Array(CompactPartPhysicalGranule)).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(@granules.size.to_u64, sizeof(Pointer(CompactPartPhysicalGranule)).to_u64))
+      @granules.each { |granule| bytes = checked_add(bytes, granule.retained_workspace_bytes) }
+      bytes
+    end
+
+    private def granule_at(mark : Int) : CompactPartPhysicalGranule
+      unless mark >= @first_mark && mark - @first_mark < @granules.size
+        raise ArgumentError.new("Compact window mark is outside its captured grid")
+      end
+      @granules[(mark - @first_mark).to_i]
+    end
+
+    private def string_owner_bytes(value : String) : UInt64
+      checked_add(instance_sizeof(String).to_u64, value.bytesize.to_u64 + 1_u64)
+    end
+
+    private def checked_add(left : UInt64, right : UInt64) : UInt64
+      raise CorruptPartError.new("Compact physical window workspace overflows") if right > UInt64::MAX - left
+      left + right
+    end
+
+    private def checked_multiply(left : UInt64, right : UInt64) : UInt64
+      raise CorruptPartError.new("Compact physical window workspace overflows") if left > 0_u64 && right > UInt64::MAX // left
+      left * right
+    end
   end
 end

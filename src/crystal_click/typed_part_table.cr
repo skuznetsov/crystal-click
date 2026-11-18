@@ -299,13 +299,14 @@ module CrystalClick
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_batch_rows(batch_rows)
-      preflight_backends! unless singleton_compact_backend?
+      advanced_json_plans = preflight_backends!(retain_compact_json_plans: true) unless singleton_compact_backend?
 
       source_row_offset = 0_u64
       scan_workspace = nil.as(CompactUInt64ScanWorkspace?)
       object_document_workspace = nil.as(ObjectDocumentDecodeWorkspace?)
       @entries.each_with_index do |entry, part_index|
         if compact_reader = entry.reader.as?(CompactPartTable)
+          advanced_json_plan = advanced_json_plans.try(&.[part_index])
           reusable_uint64 = compact_reader.reusable_uint64_scan?
           reusable_object_documents = compact_reader.reusable_object_document_scan?
           if reusable_uint64 || reusable_object_documents
@@ -319,6 +320,7 @@ module CrystalClick
               batch_rows,
               scan_workspace,
               object_document_workspace,
+              advanced_json_plan,
             ) do |batch|
               yield rebase_batch!(batch, part_index, source_row_offset)
             end
@@ -358,7 +360,7 @@ module CrystalClick
       # A nonempty scan is gated by a singleton Compact backend before its
       # first callback. Keep the explicit facade gate for empty-at-end scans
       # and for all multipart/Wide compositions.
-      preflight_backends! unless start_row < @total_row_count && singleton_compact_backend?
+      advanced_json_plans = preflight_backends!(retain_compact_json_plans: start_row < @total_row_count) unless start_row < @total_row_count && singleton_compact_backend?
       return nil if start_row == @total_row_count
 
       available = @total_row_count - start_row
@@ -373,8 +375,14 @@ module CrystalClick
         if overlap_start < overlap_end
           local_start = overlap_start - part_start
           local_rows = (overlap_end - overlap_start).to_i
-          entry.reader.scan_typed_window(local_start, local_rows) do |batch|
-            yield rebase_batch!(batch, part_index, part_start)
+          if reader = entry.reader.as?(CompactPartTable)
+            reader.scan_typed_window(local_start, local_rows, advanced_json_plans.try(&.[part_index])) do |batch|
+              yield rebase_batch!(batch, part_index, part_start)
+            end
+          else
+            entry.reader.scan_typed_window(local_start, local_rows) do |batch|
+              yield rebase_batch!(batch, part_index, part_start)
+            end
           end
         end
         part_start = part_end
@@ -401,11 +409,17 @@ module CrystalClick
       # A single Compact backend performs this same complete schedule gate
       # before its first selected callback. Keep the facade barrier for
       # multipart scans so every backend fails before any part emits rows.
-      preflight_backends! unless singleton_compact_backend?
+      advanced_json_plans = preflight_backends!(retain_compact_json_plans: true) unless singleton_compact_backend?
       source_row_offset = 0_u64
       @entries.each_with_index do |entry, part_index|
-        entry.reader.scan_typed_candidate_marks([schedule[part_index]]) do |batch|
-          yield rebase_batch!(batch, part_index, source_row_offset)
+        if reader = entry.reader.as?(CompactPartTable)
+          reader.scan_typed_candidate_marks([schedule[part_index]], advanced_json_plans.try(&.[part_index])) do |batch|
+            yield rebase_batch!(batch, part_index, source_row_offset)
+          end
+        else
+          entry.reader.scan_typed_candidate_marks([schedule[part_index]]) do |batch|
+            yield rebase_batch!(batch, part_index, source_row_offset)
+          end
         end
         source_row_offset = checked_add_rows(source_row_offset, entry.row_count)
       end
@@ -417,9 +431,27 @@ module CrystalClick
       @entries.size == 1 && @entries[0].reader.is_a?(CompactPartTable)
     end
 
-    private def preflight_backends! : Nil
+    private def preflight_backends!(retain_compact_json_plans : Bool = false) : Array(CompactStaticJsonAdvancedPartPlan?)?
       empty_schedule = Array(Array(Int32)).new(1) { [] of Int32 }
-      @entries.each do |entry|
+      plans = if retain_compact_json_plans && @entries.any? { |entry| entry.reader.as?(CompactPartTable).try(&.shared_advanced_json_scan_candidate?) }
+                Array(CompactStaticJsonAdvancedPartPlan?).new(@entries.size, nil)
+              end
+      remaining_plan_bytes = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
+      @entries.each_with_index do |entry, part_index|
+        if retained = plans
+          if reader = entry.reader.as?(CompactPartTable)
+            if reader.shared_advanced_json_scan_candidate?
+              if plan = reader.prepare_shared_advanced_json_scan
+                bytes = plan.retained_workspace_bytes
+                if bytes <= remaining_plan_bytes
+                  retained[part_index] = plan
+                  remaining_plan_bytes -= bytes
+                end
+              end
+              next
+            end
+          end
+        end
         # Both table backends run their complete schedule/cursor preflights
         # before the first selected callback. An empty candidate set exercises
         # those guards without materializing a mark.
@@ -429,7 +461,7 @@ module CrystalClick
         end
         raise CorruptPartError.new("empty typed preflight unexpectedly emitted a batch") if emitted
       end
-      nil
+      plans
     end
 
     private def rebase_batch!(batch : WidePartTableBatch, part_index : Int, part_start : UInt64) : WidePartTableBatch

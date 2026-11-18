@@ -31,15 +31,15 @@ module CrystalClick
 
     # Scan round-robin physical marks on isolated worker contexts. Each worker
     # opens one independent reader per touched part except admitted ordinary
-    # Compact UInt64 and Wide primitive numeric tables, whose read-only bindings
-    # and mark grids are shared.
+    # Compact UInt64, Compact Advanced JSON, and Wide primitive numeric
+    # tables, whose admitted per-part bindings are shared.
     # Compact readers share the original part's synchronized cumulative
     # transport budget. For workers: 1, admitted ordinary Wide numeric parts
     # reuse one scan-scoped read-only image per part; other layouts use the
     # ordinary serial API. A request with at most one nonempty mark uses the
     # same serial path when execution contexts exist.
-    # True parallel mode admits only direct, non-projection primitive numeric
-    # selections.
+    # True parallel mode admits direct primitive numeric selections and
+    # Compact Advanced root JSON with optional ordinary UInt64 columns.
     #
     # Callbacks run serially on the caller in selected part and row order. A
     # batch's slices borrow reader-owned storage and are valid only until its
@@ -84,15 +84,21 @@ module CrystalClick
         if @projection_selected
           raise UnsupportedFormatError.new("parallel typed scan does not admit projection selections")
         end
-        unless direct_primitive_numeric_sources?
-          raise UnsupportedFormatError.new("parallel typed scan admits only direct non-null primitive numeric columns")
+        direct_numeric = direct_primitive_numeric_sources?
+        shared_advanced_json = !direct_numeric && @entries.all? do |entry|
+          entry.reader.as?(CompactPartTable).try(&.shared_advanced_json_scan_candidate?)
+        end
+        unless direct_numeric || shared_advanced_json
+          raise UnsupportedFormatError.new("parallel typed scan requires direct primitive numeric columns or Compact Advanced root JSON with ordinary UInt64 columns")
         end
 
         direct_wide_uint64 = parallel_direct_wide_uint64_scan?
-        # Preserve the full pre-callback backend admission. The selected
-        # direct UInt64 lane still avoids per-mark generic materialization and
-        # its composite preflight hashes after this empty-schedule check.
-        preflight_backends!
+        # Complete backend admission before dispatch. Where admitted, workers
+        # share the published plan without repeating the JSON schedule checks.
+        advanced_json_plans = preflight_backends!(retain_compact_json_plans: shared_advanced_json)
+        if shared_advanced_json && !advanced_json_plans.try { |plans| plans.all? { |plan| !plan.nil? } }
+          raise UnsupportedFormatError.new("parallel Compact JSON scan requires an admitted Advanced plan for every part within the shared workspace limit")
+        end
         schedule, worker_marks = parallel_scan_plan(effective_workers, positive_mark_count)
         part_sources = Array(ParallelScanPartSource).new(@entries.size)
         part_starts = Array(UInt64).new(@entries.size)
@@ -101,7 +107,7 @@ module CrystalClick
           compact_reader = entry.reader.as?(CompactPartTable)
           transport_budget = compact_reader.try(&.parallel_scan_transport_budget!)
           scan_context = compact_reader.try(&.parallel_uint64_scan_context)
-          admitted_reader = scan_context ? compact_reader : nil
+          admitted_reader = scan_context || shared_advanced_json ? compact_reader : nil
           admitted_wide_reader = entry.reader.as?(WidePartTable).try(&.parallel_primitive_numeric_scan_context)
           part_sources << {entry.path, !compact_reader.nil?, transport_budget, scan_context, admitted_reader, admitted_wide_reader, direct_wide_uint64}
           part_starts << source_row_offset
@@ -185,6 +191,7 @@ module CrystalClick
               part_sources,
               scan_image_registry,
               wide_scan_image_registry,
+              advanced_json_plans,
               batch_rows,
               outputs[worker_index],
               acknowledgements[worker_index],
@@ -194,6 +201,7 @@ module CrystalClick
           schedule.each do |mark|
             rows_seen = 0_u64
             output = outputs[mark.worker_index]
+            plan = advanced_json_plans.try(&.[mark.part_index])
             while rows_seen < mark.row_count
               batch = output.receive?
               unless batch
@@ -203,6 +211,9 @@ module CrystalClick
 
               emitted_rows = validate_parallel_scan_batch!(batch, mark, rows_seen, batch_rows)
 
+              # Batch production can run ahead of delivery. Authenticate the
+              # current source after the preceding callback has returned.
+              plan.try(&.validate_source!)
               yield rebase_batch!(batch, mark.part_index, part_starts[mark.part_index])
               acknowledgements[mark.worker_index].send(nil)
               rows_seen = checked_add_rows(rows_seen, emitted_rows)
@@ -402,13 +413,15 @@ module CrystalClick
         part_sources : Array(ParallelScanPartSource),
         scan_image_registry : CompactUInt64ScanImageRegistry,
         wide_scan_image_registry : WideScanImageRegistry,
+        advanced_json_plans : Array(CompactStaticJsonAdvancedPartPlan?)?,
         batch_rows : Int,
         output : Channel(WidePartTableBatch),
         acknowledgement : Channel(Nil),
       ) : Fiber::ExecutionContext::Isolated
         name = "crystal-click typed scan worker #{worker_index}"
         Fiber::ExecutionContext::Isolated.new(name) do
-          run_parallel_worker(worker_index, part_marks, part_sources, scan_image_registry, wide_scan_image_registry, batch_rows, output, acknowledgement)
+          run_parallel_worker(worker_index, part_marks, part_sources, scan_image_registry, wide_scan_image_registry,
+            advanced_json_plans, batch_rows, output, acknowledgement)
         end
       end
 
@@ -418,6 +431,7 @@ module CrystalClick
         part_sources : Array(ParallelScanPartSource),
         scan_image_registry : CompactUInt64ScanImageRegistry,
         wide_scan_image_registry : WideScanImageRegistry,
+        advanced_json_plans : Array(CompactStaticJsonAdvancedPartPlan?)?,
         batch_rows : Int,
         output : Channel(WidePartTableBatch),
         acknowledgement : Channel(Nil),
@@ -432,7 +446,11 @@ module CrystalClick
               budget = transport_budget || raise(CorruptPartError.new("parallel Compact part lost its transport budget"))
               CompactPartTable.open_selected_typed_with_transport_budget([path], @columns, budget, scan_context)
             end
-            if reader.reusable_uint64_scan?
+            if plan = advanced_json_plans.try(&.[part_index])
+              reader.scan_shared_advanced_json_mark_indices(marks, batch_rows, plan, guard_delivery: false) do |batch|
+                send_parallel_batch!(batch, output, acknowledgement)
+              end
+            elsif reader.reusable_uint64_scan?
               scan_workspace ||= CompactUInt64ScanWorkspace.new
               if scan_context
                 image = scan_image_registry.acquire(part_index)

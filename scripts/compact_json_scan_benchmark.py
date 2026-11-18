@@ -2,6 +2,7 @@
 """Compare retained Compact JSON readers on identical parts and mark schedules."""
 
 import argparse
+import itertools
 import json
 import math
 import os
@@ -9,7 +10,7 @@ import shutil
 import statistics
 import subprocess
 import tempfile
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from compact_json_scan_fixture import ROWS_PER_MARK, ROWS_PER_PART
@@ -41,7 +42,12 @@ def compare(options: argparse.Namespace) -> dict:
     part = options.part.resolve(strict=True)
     oracle = options.oracle.resolve(strict=True)
     crystal_bin = options.crystal_bin.resolve(strict=True)
+    crystal_readers = {"crystal": (crystal_bin, options.crystal_backend)}
+    if options.baseline_crystal_bin:
+        crystal_readers["crystal_baseline"] = (options.baseline_crystal_bin.resolve(strict=True), "typed")
     cpp_bin = options.cpp_bin.resolve(strict=True)
+    engines = [*crystal_readers, "clickhouse"]
+    orders = list(itertools.permutations(engines))
     expected = oracle.read_bytes()
     oracle_hash = sha256_path(oracle)
     original_hashes = part_hashes(part)
@@ -61,8 +67,9 @@ def compare(options: argparse.Namespace) -> dict:
             raise RuntimeError("native part copy differs from the original")
 
         def reader(engine: str, workers: int, trial: Path, selection: Path):
-            if engine == "crystal":
-                return open_reader(engine, [str(crystal_bin), "typed", str(selection), str(oracle),
+            if engine in crystal_readers:
+                binary, backend = crystal_readers[engine]
+                return open_reader(engine, [str(binary), backend, str(selection), str(oracle),
                                             str(workers), "all", "retained", "0", "1", "--stdin"], trial)
             work = trial / "cpp-work"
             work.mkdir()
@@ -71,7 +78,7 @@ def compare(options: argparse.Namespace) -> dict:
                                         str(ROWS_PER_MARK), "--workers", str(workers), "--oracle", str(oracle),
                                         "--work-dir", str(work)], trial)
 
-        for engine in ("crystal", "clickhouse"):
+        for engine in engines:
             trial = root / f"{engine}-checksum-control"
             trial.mkdir()
             # Use the same store layout for both gates, and restore before
@@ -98,26 +105,35 @@ def compare(options: argparse.Namespace) -> dict:
             for block in range(options.blocks):
                 trial = root / f"w{workers}-block{block}"
                 trial.mkdir()
-                with reader("crystal", workers, trial, part) as crystal, reader(
-                    "clickhouse", workers, trial, native_part,
-                ) as cpp:
+                with ExitStack() as stack:
+                    processes = {
+                        engine: stack.enter_context(reader(
+                            engine, workers, trial, part if engine in crystal_readers else native_part,
+                        ))
+                        for engine in engines
+                    }
                     thread_ids = {}
                     for index in range(options.warmups + options.repeats):
-                        order = (crystal, cpp) if (index + block) % 2 == 0 else (cpp, crystal)
-                        for process in order:
+                        order = orders[(block + index) % len(orders)]
+                        for engine in order:
+                            process = processes[engine]
                             process.process.stdin.write(b"scan\n")
                             response = process.line()
                             process.check(response is not None, "exited before reporting the scan")
                             sample = json.loads(response)
                             process.check(sample["rows"] == ROWS_PER_PART and sample["rowbinary_bytes"] == len(expected),
                                           "wrong RowBinary size or row count")
-                            if process is crystal:
+                            if engine in crystal_readers:
                                 actual_threads = tuple(row["thread_id"] for row in sample["worker_rows"])
                                 process.check(sample["workers_active"] == workers and
                                               [row["marks"] for row in sample["worker_rows"]] == expected_groups,
                                               "different Crystal mark schedule")
                                 process.check(sample["oracle_exact"] is True and sample["rowbinary_sha256"] == oracle_hash,
                                               "Crystal RowBinary differs from the oracle")
+                                if crystal_readers[engine][1] == "shared":
+                                    process.check(sample["shared_part_plan_ns"] > 0 and
+                                                  sample["shared_part_plan_marks"] == ROWS_PER_PART // ROWS_PER_MARK,
+                                                  "a complete shared part plan is required in the timed read")
                             else:
                                 actual_threads = tuple(sample["worker_thread_ids"])
                                 process.check(sample["effective_workers"] == workers and sample["worker_marks"] == expected_groups,
@@ -132,8 +148,8 @@ def compare(options: argparse.Namespace) -> dict:
                             if index >= options.warmups:
                                 samples.append({"engine": process.label, "workers": workers, "block": block,
                                                 "pair": index - options.warmups, **sample})
-                    crystal.quit()
-                    cpp.quit()
+                    for process in processes.values():
+                        process.quit()
         if part_hashes(native_part) != original_hashes or part_hashes(part) != original_hashes:
             raise RuntimeError("part files changed during the comparison")
 
@@ -142,16 +158,18 @@ def compare(options: argparse.Namespace) -> dict:
         return {"p50": statistics.median(ordered), "p95": ordered[math.ceil(len(ordered) * 0.95) - 1]}
 
     summary = []
-    for engine in ("crystal", "clickhouse"):
+    for engine in engines:
         for workers in (1, 4):
             selected = [sample for sample in samples if sample["engine"] == engine and sample["workers"] == workers]
             first_in_block = [sample for sample in selected if sample["pair"] == 0]
-            if engine == "crystal":
+            if engine in crystal_readers:
                 stats = {field: percentiles([sample[field] for sample in selected]) for field in (
                     "read_wall_ns", "coordinator_serialization_ns", "scan_and_serialize_ns",
                     "gc_allocated_bytes_delta", "gc_collections",
                 )}
                 stats["prepare_wall_ns"] = percentiles([sample["prepare_wall_ns"] for sample in first_in_block])
+                if crystal_readers[engine][1] == "shared":
+                    stats["shared_part_plan_ns"] = percentiles([sample["shared_part_plan_ns"] for sample in selected])
             else:
                 stats = {field: percentiles([sample[field] for sample in selected]) for field in (
                     "read_ns", "materialize_ns", "reset_ns",
@@ -160,15 +178,20 @@ def compare(options: argparse.Namespace) -> dict:
                 for field in ("load_part_ns", "prepare_ns"):
                     stats[field] = percentiles([sample[field] for sample in first_in_block])
             summary.append({"engine": engine, "workers": workers, "sample_count": len(selected), **stats})
-    return {"part_hashes": original_hashes, "oracle_sha256": oracle_hash,
-            "crystal_binary_sha256": sha256_path(crystal_bin), "clickhouse_binary_sha256": sha256_path(cpp_bin),
-            "checksum_controls_passed": True, "summary": summary, "samples": samples}
+    report = {"part_hashes": original_hashes, "oracle_sha256": oracle_hash,
+              "crystal_binary_sha256": sha256_path(crystal_bin), "clickhouse_binary_sha256": sha256_path(cpp_bin),
+              "checksum_controls_passed": True, "summary": summary, "samples": samples}
+    if options.baseline_crystal_bin:
+        report["crystal_baseline_binary_sha256"] = sha256_path(crystal_readers["crystal_baseline"][0])
+    return report
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("part", "oracle", "crystal-bin", "cpp-bin", "scratch", "output"):
         parser.add_argument(f"--{name}", type=Path, required=True)
+    parser.add_argument("--baseline-crystal-bin", type=Path)
+    parser.add_argument("--crystal-backend", choices=("typed", "shared"), default="typed")
     parser.add_argument("--blocks", type=int, default=8)
     parser.add_argument("--warmups", type=int, default=2)
     parser.add_argument("--repeats", type=int, default=6)

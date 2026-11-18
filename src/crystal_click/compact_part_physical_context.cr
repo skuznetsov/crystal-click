@@ -731,6 +731,116 @@ module CrystalClick
       )
     end
 
+    # Reads complete mark windows for several selected columns through one
+    # `read_ranges` call and one mmap. Advanced root JSON plans use this to bind
+    # the JSON schedule and ordinary UInt64 companion bytes to the same
+    # authenticated source image.
+    def read_complete_windows_with_fingerprints(
+      column_names : Array(String),
+    ) : Tuple(Hash(String, CompactPartPhysicalWindow), Array(CompressedFrameFingerprint))
+      unless @mode.mrk4?
+        raise UnsupportedFormatError.new("shared Compact source plans require MRK4 marks")
+      end
+      if column_names.empty?
+        raise ArgumentError.new("Compact shared source plan has no selected columns")
+      end
+
+      seen = Set(String).new
+      selected_slots = Hash(String, Array(CompactPhysicalSlot)).new(initial_capacity: column_names.size)
+      shard_count = 0_i64
+      descriptor_count = 0_i64
+      column_names.each do |name|
+        if name.empty? || !seen.add?(name)
+          raise ArgumentError.new("Compact shared source plan columns are empty or duplicated")
+        end
+        slots = @columns_substreams.slots_for(name)
+        if slots.empty?
+          raise CorruptPartError.new("Compact shared source plan column has no physical slots")
+        end
+        selected_slots[String.new(name.to_slice)] = slots
+        column_shards = @mark_index.mark_count.to_i64 * slots.size.to_i64
+        if column_shards > Int32::MAX || shard_count > Int64::MAX - column_shards
+          raise CorruptPartError.new("Compact shared source plan shard count exceeds its bound")
+        end
+        shard_count += column_shards
+        next_descriptors = @mark_index.mark_count.to_i64 + column_shards + slots.size.to_i64
+        if next_descriptors > Int64::MAX - descriptor_count
+          raise CorruptPartError.new("Compact shared source plan descriptor count overflows")
+        end
+        descriptor_count += next_descriptors
+      end
+      if shard_count > Int32::MAX
+        raise CorruptPartError.new("Compact shared source plan exceeds the in-memory shard bound")
+      end
+      @budget.preflight_records(descriptor_count + shard_count)
+      @budget.reserve_records(descriptor_count)
+
+      ranges = Array({Int64, Int64}).new(shard_count.to_i)
+      column_names.each do |name|
+        slots = selected_slots[name]
+        @mark_index.mark_count.times do |mark|
+          slots.each do |slot|
+            start = @mark_index.position_at(mark, slot.index)
+            finish = if slot.index + 1 < @mark_index.slot_count
+                       @mark_index.position_at(mark, slot.index + 1)
+                     else
+                       @mark_index.position_at(mark + 1, 0)
+                     end
+            if finish < start
+              raise CorruptPartError.new("Compact shared source plan slot has descending coordinates")
+            end
+            ranges << {start, finish}
+          end
+        end
+      end
+
+      fingerprints = [] of CompressedFrameFingerprint
+      shard_bytes = CompressedMarkReader.read_ranges(
+        @data_input.data_path,
+        @data_input.data_size,
+        ranges,
+        @budget,
+        fingerprints,
+        @mark_index.frame_index,
+      )
+      unless shard_bytes.size == ranges.size
+        raise CorruptPartError.new("Compact shared source plan returned an incomplete shard set")
+      end
+
+      windows = Hash(String, CompactPartPhysicalWindow).new(initial_capacity: column_names.size)
+      range_index = 0
+      column_names.each do |name|
+        slots = selected_slots[name]
+        granules = Array(CompactPartPhysicalGranule).new(@mark_index.mark_count)
+        row_offset = 0_u64
+        @mark_index.mark_count.times do |mark|
+          rows = @mark_index.row_count_at(mark)
+          shards = Array(CompactPartPhysicalShard).new(slots.size)
+          slots.each do |slot|
+            start, finish = ranges[range_index]
+            shards << CompactPartPhysicalShard.new(slot.index, slot.stream_name, start, finish, shard_bytes[range_index])
+            range_index += 1
+          end
+          granules << CompactPartPhysicalGranule.new(mark.to_i32, row_offset, rows, shards)
+          if rows > UInt64::MAX - row_offset
+            raise CorruptPartError.new("Compact shared source plan row offset overflows")
+          end
+          row_offset += rows
+        end
+        unless row_offset == @row_count
+          raise CorruptPartError.new("Compact shared source plan row grid differs from the part row count")
+        end
+        windows[String.new(name.to_slice)] = CompactPartPhysicalWindow.new(
+          @mode,
+          name,
+          0,
+          0_u64,
+          granules,
+        )
+      end
+      {windows, fingerprints}
+    end
+
     # Reads one admitted ordinary UInt64 mark without constructing detached
     # shard/granule/window copies. The caller supplies the slot index retained
     # during reader admission; this method rebinds it to the retained physical

@@ -290,6 +290,35 @@ module CrystalClick
       nil
     end
 
+    # :nodoc:
+    # Root Object delegates can seal one shared Advanced MRK4 plan. Other
+    # recursive layouts keep their complete existing validation route.
+    def prepare_advanced_part_plan(
+      observer : Proc(UInt64, Nil),
+      extra_uint64_columns : Array(String),
+    ) : CompactStaticJsonAdvancedPartPlan?
+      if reader = @root_reader
+        outer = outer_workspace_without_root_delegate(reader)
+        delegate_observer = ->(workspace : UInt64) do
+          observer.call(checked_add(outer, workspace))
+          nil
+        end
+        return reader.prepare_advanced_part_plan(delegate_observer, extra_uint64_columns)
+      end
+      validate_complete_schedule(observer)
+      nil
+    end
+
+    # :nodoc:
+    def validate_advanced_part_plan!(
+      plan : CompactStaticJsonAdvancedPartPlan,
+      extra_uint64_columns : Array(String),
+    ) : Nil
+      reader = @root_reader || raise(CorruptPartError.new("Compact Advanced plan requires a root Object reader"))
+      reader.validate_advanced_part_plan!(plan, extra_uint64_columns)
+      nil
+    end
+
     def storage_value_shape_for_mark(mark_index : Int) : StorageValueShape
       unless mark_index >= 0 && mark_index < @mark_count
         raise ArgumentError.new("Compact recursive JSON shape mark is outside the physical grid")
@@ -320,10 +349,20 @@ module CrystalClick
     # nil for MAP and recursive layouts so callers keep their existing
     # per-mark shape authentication. Selected Advanced decoding independently
     # reauthenticates the whole source grid before decode.
-    def prepared_advanced_root_shape_for_mark(mark_index : Int) : StorageValueShape?
+    def prepared_advanced_root_shape_for_mark(
+      mark_index : Int,
+      advanced_part_plan : CompactStaticJsonAdvancedPartPlan? = nil,
+    ) : StorageValueShape?
       return nil unless @schema.object?
       return nil unless mark_index >= 0 && mark_index < @mark_count
       reader = @root_reader || return nil
+      if plan = advanced_part_plan
+        plan.validate_reader!(reader)
+        unless plan.mark_count == @mark_count && plan.mark_row_count_at(mark_index) == @mark_row_counts[mark_index]
+          raise CorruptPartError.new("Compact Advanced plan differs from its root mark grid")
+        end
+        return simple_shape(@mark_row_counts[mark_index])
+      end
       prepared = reader.prepared_advanced_context || return nil
       unless prepared.mark_count == @mark_count
         raise CorruptPartError.new("Compact root JSON prepared metadata differs from its mark grid")
@@ -340,13 +379,14 @@ module CrystalClick
       mark_count : Int,
       workspace_observer : Proc(UInt64, Nil)? = nil,
       assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
+      advanced_part_plan : CompactStaticJsonAdvancedPartPlan? = nil,
     ) : Array(Array(StorageColumnValue))
       validate_selection!(first_mark, mark_count)
       observer = workspace_observer || no_workspace_observer
       budget = request_budget
       if reader = @root_reader
         charge_selected_shape!(first_mark, mark_count, budget)
-        read_root_marks(reader, first_mark, mark_count, budget, observer, assembly_workspace)
+        read_root_marks(reader, first_mark, mark_count, budget, observer, assembly_workspace, advanced_part_plan)
       else
         # Authenticate and prepare the complete physical parent grid while the
         # caller's observer is active, before charging or decoding its output.
@@ -476,6 +516,7 @@ module CrystalClick
       budget : BinaryCodecBudget,
       observer : Proc(UInt64, Nil),
       assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
+      advanced_part_plan : CompactStaticJsonAdvancedPartPlan? = nil,
     ) : Array(Array(StorageColumnValue))
       shape = simple_shape(selected_rows(first_mark, mark_count).sum(0_u64))
       reservation = output_grid_shell_bytes(first_mark, mark_count)
@@ -484,7 +525,14 @@ module CrystalClick
         observer.call(checked_add(outer, checked_add(workspace, checked_add(shape.bytes, reservation))))
         nil
       end
-      documents = reader.read_marks_with_budget(first_mark, mark_count, budget, delegate_observer, assembly_workspace)
+      documents = reader.read_marks_with_budget(
+        first_mark,
+        mark_count,
+        budget,
+        delegate_observer,
+        assembly_workspace,
+        advanced_part_plan,
+      )
       unless documents.size == mark_count
         raise CorruptPartError.new("Compact root JSON delegate returned the wrong mark count")
       end

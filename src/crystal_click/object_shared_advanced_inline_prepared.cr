@@ -269,8 +269,8 @@ module CrystalClick
       if budget.writing?
         raise ArgumentError.new("prepared inline Object decode requires a read-direction budget")
       end
-      unless @budget.same?(budget)
-        raise ArgumentError.new("prepared inline Object decode requires the same budget operation")
+      unless @budget.same?(budget) || budget.includes_preparation_from?(@budget)
+        raise ArgumentError.new("prepared inline Object decode requires its preparation receipt")
       end
       @prefix.validate_physical_owner!(@physical_plan)
       unless @prefix.nested_context.same?(@nested_context) &&

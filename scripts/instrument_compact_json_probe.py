@@ -29,11 +29,24 @@ def install(root: Path) -> None:
         "      is_advanced ? advanced_marks : nil\n    end",
         "      is_advanced ? advanced_marks : nil\n"
         "    ensure\n"
-        "      if started = diagnostic_prepare_started\n"
+        "      if (started = diagnostic_prepare_started) && !window_capture\n"
         "        CrystalClick::CompactJSONScanProbeCounters.record_full_window_prepare!(\n"
         "          (Time.instant - started).total_nanoseconds.to_u64,\n"
         "        )\n"
         "      end\n    end",
+    )
+    replace_once(
+        "compact_static_json_bulk_column_reader.cr",
+        "      capture_workspace = shared_capture_workspace_bytes(names)\n",
+        "      diagnostic_shared_prepare_started = Time.instant\n"
+        "      capture_workspace = shared_capture_workspace_bytes(names)\n",
+    )
+    replace_once(
+        "compact_static_json_bulk_column_reader.cr",
+        "      plan\n    end\n\n    # :nodoc:\n    def validate_advanced_part_plan!",
+        "      CrystalClick::CompactJSONScanProbeCounters.record_full_window_prepare!(\n"
+        "        (Time.instant - diagnostic_shared_prepare_started).total_nanoseconds.to_u64,\n"
+        "      )\n      plan\n    end\n\n    # :nodoc:\n    def validate_advanced_part_plan!",
     )
     window_guard = (
         "      if first_mark > Int32::MAX || mark_count > Int32::MAX\n"
@@ -46,6 +59,12 @@ def install(root: Path) -> None:
         window_guard +
         "      CrystalClick::CompactJSONScanProbeCounters.record_read_window!(first_mark, mark_count, @mark_index.mark_count)\n"
         "      slot_count = @columns_substreams.slot_count_for(column_name)\n",
+    )
+    replace_once(
+        "compact_part_physical_context.cr",
+        "      fingerprints = [] of CompressedFrameFingerprint\n",
+        "      CrystalClick::CompactJSONScanProbeCounters.record_read_window!(0, @mark_index.mark_count, @mark_index.mark_count)\n"
+        "      fingerprints = [] of CompressedFrameFingerprint\n",
     )
     replace_once(
         "compressed_mark_reader.cr",
@@ -65,12 +84,24 @@ def install(root: Path) -> None:
     )
     replace_once(
         "compressed_mark_reader.cr",
-        "        raise CorruptPartError.new(\"compressed frame checksum mismatch\")\n      end\n    end\n",
+        "        raise CorruptPartError.new(\"compressed frame checksum mismatch\")\n      end\n      actual\n    end\n",
         "        raise CorruptPartError.new(\"compressed frame checksum mismatch\")\n      end\n"
         "      CrystalClick::CompactJSONScanProbeCounters.record_checked_frame!(\n"
         "        frame.compressed_offset, frame.compressed_size, diagnostic_checksum_ns,\n"
-        "      )\n"
+        "      )\n      actual\n"
         "    end\n",
+    )
+    replace_once(
+        "compact_static_json_advanced_part_plan.cr",
+        "    def validate_source! : Nil\n",
+        "    def validate_source! : Nil\n      diagnostic_recheck_started = Time.instant\n",
+    )
+    replace_once(
+        "compact_static_json_advanced_part_plan.cr",
+        "      nil\n    end\n\n    def retained_workspace_bytes : UInt64",
+        "      CrystalClick::CompactJSONScanProbeCounters.record_source_recheck!(\n"
+        "        @frames.size, (Time.instant - diagnostic_recheck_started).total_nanoseconds.to_u64,\n"
+        "      )\n      nil\n    end\n\n    def retained_workspace_bytes : UInt64",
     )
     buffered_decode = "      output = case method\n               when METHOD_LZ4\n                 if exact_destination = destination\n"
     replace_once(
