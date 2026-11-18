@@ -84,7 +84,7 @@ module CrystalClick
       case type.tag
       when BinaryDataType::TAG_STRING
         size = context.read_var_uint
-        BinaryValue.string(String.new(context.read_slice(size)))
+        BinaryValue.string(type, context.read_slice(size))
       when BinaryDataType::TAG_BOOL
         BinaryValue.bool(BoolValueCodec.decode(context.read_byte))
       else

@@ -98,6 +98,16 @@ module CrystalClick
       new(BinaryDataType.primitive("String"), value.to_slice)
     end
 
+    # :nodoc:
+    # Decoders already have a descriptor and a borrowed span. Retain one
+    # owned copy of the exact bytes, including NUL and non-UTF-8 bytes.
+    def self.string(type : BinaryDataType, bytes : Bytes) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_STRING
+        raise ArgumentError.new("String binary value requires a String descriptor")
+      end
+      new(type, bytes)
+    end
+
     def self.bool(value : Bool) : BinaryValue
       new(BinaryDataType.primitive("Bool"), Bytes[BoolValueCodec.encode(value)])
     end
@@ -541,8 +551,7 @@ module CrystalClick
 
     def as_string : String
       require_tag(BinaryDataType::TAG_STRING, "String")
-      payload = @payload.not_nil!
-      String.new(Bytes.new(payload.size) { |index| payload[index] })
+      String.new(@payload.not_nil!)
     end
 
     def as_bool : Bool

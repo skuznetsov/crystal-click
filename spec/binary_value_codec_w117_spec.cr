@@ -69,6 +69,21 @@ private def w117_u64_le(value : UInt64) : Bytes
 end
 
 describe "W117 binary DataType and scalar value codec" do
+  it "owns the exact String bytes supplied by a decoder" do
+    string_type = w117_type("String")
+    bytes = Bytes[0x61_u8, 0x00_u8, 0xff_u8, 0x7a_u8]
+    value = CrystalClick::BinaryValue.string(string_type, bytes)
+    expected = bytes.dup
+    bytes[0] = 0_u8
+
+    value.type.same?(string_type).should be_true
+    value.as_string.to_slice.should eq(expected)
+    CrystalClick::BinaryValueCodec.encode_value(value).should eq(Bytes[0x04_u8, 0x61_u8, 0x00_u8, 0xff_u8, 0x7a_u8])
+    expect_raises(ArgumentError, /String descriptor/) do
+      CrystalClick::BinaryValue.string(w117_type("UInt8"), bytes)
+    end
+  end
+
   it "encodes the admitted primitive descriptors with exact nominal tags" do
     cases = {
       {"Nothing", Bytes[0x00_u8]},

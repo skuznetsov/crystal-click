@@ -431,7 +431,7 @@ module CrystalClick
       when BinaryDataType::TAG_STRING
         length = context.read_var_uint
         raw = context.read_slice(length)
-        BinaryValue.string(String.new(raw))
+        BinaryValue.string(type, raw)
       when BinaryDataType::TAG_BOOL
         BinaryValue.bool(BoolValueCodec.decode(context.read_byte))
       when BinaryDataType::TAG_QBIT

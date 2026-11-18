@@ -674,13 +674,12 @@ module CrystalClick
         if profile.with_size_stream?
           size = read_u64(context_for(contexts, child_path(path, ".string_sizes", nil, traversal.budget, dynamic_plan)))
           raw = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_slice(size)
-          BinaryValue.string(String.new(raw))
         else
           context = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan))
           size = context.read_var_uint
           raw = context.read_slice(size)
-          BinaryValue.string(String.new(raw))
         end
+        BinaryValue.string(type, raw)
       when BinaryDataType::TAG_BOOL
         BinaryValue.bool(BoolValueCodec.decode(context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_byte))
       when BinaryDataType::TAG_NOTHING
