@@ -5,11 +5,105 @@ PARALLEL_SCAN_WIDE_FIXTURE              = File.expand_path("../test/fixtures/pub
 PARALLEL_SCAN_WIDE_NONPRIMITIVE_FIXTURE = File.expand_path("../test/fixtures/public/wide_variant_w56/compact/part", __DIR__)
 PARALLEL_SCAN_WIDE_UINT64_PAIR_FIXTURE  = File.expand_path("../test/fixtures/public/wide_u64_pk_cidx/part", __DIR__)
 
+module CrystalClick::TypedParallelScanDispatchProbe
+  alias Identity = {UInt64, UInt64, UInt64, UInt64}
+  alias Event = {UInt64, Int32, Identity}
+
+  class_property enabled = false
+  class_property events = [] of Event
+  class_property lock = Thread::Mutex.new
+
+  def self.begin_observing : Nil
+    lock.synchronize do
+      self.events = [] of Event
+      self.enabled = true
+    end
+    nil
+  end
+
+  def self.stop_observing : Nil
+    lock.synchronize { self.enabled = false }
+    nil
+  end
+
+  def self.record(job_id : UInt64, worker_index : Int32, identity : Identity) : Nil
+    lock.synchronize { events << {job_id, worker_index, identity} if enabled }
+    nil
+  end
+
+  def self.snapshot : Array(Event)
+    lock.synchronize { events.dup }
+  end
+end
+
+{% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+  class CrystalClick::TypedParallelScanWorkerPool
+    def dispatch(worker_index : Int, job : Job) : Nil
+      previous_def(worker_index, job)
+      TypedParallelScanDispatchProbe.record(job.id, worker_index.to_i32, worker_identity(worker_index))
+      nil
+    end
+  end
+{% end %}
+
+private def parallel_scan_observe_dispatches(
+  &block : -> T
+) : {T, Array(CrystalClick::TypedParallelScanDispatchProbe::Event)} forall T
+  CrystalClick::TypedParallelScanDispatchProbe.begin_observing
+  begin
+    result = yield
+  ensure
+    CrystalClick::TypedParallelScanDispatchProbe.stop_observing
+  end
+  {result, CrystalClick::TypedParallelScanDispatchProbe.snapshot}
+end
+
 private def parallel_scan_copy_fixture(source : String, root : String, part_name : String) : String
   target = File.join(root, part_name)
   FileUtils.cp_r(source, target)
   target
 end
+
+{% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+  private def parallel_scan_effective_worker_count(table : CrystalClick::TypedPartTable, requested : Int) : Int32
+    positive_marks = table.part_mark_row_counts.sum { |marks| marks.count { |rows| rows > 0_u64 } }
+    {requested, positive_marks}.min.to_i32
+  end
+
+  private def parallel_scan_assert_dispatched_identities(
+    events : Array(CrystalClick::TypedParallelScanDispatchProbe::Event),
+    expected_workers : Int32,
+  ) : Hash(Int32, CrystalClick::TypedParallelScanWorkerPool::WorkerIdentity)
+    events.size.should eq(expected_workers)
+    events.map(&.[0]).uniq.size.should eq(1)
+    events.map(&.[1]).uniq.sort.should eq((0...expected_workers).map(&.to_i32))
+
+    identities = Hash(Int32, CrystalClick::TypedParallelScanWorkerPool::WorkerIdentity).new
+    events.each do |_job_id, worker_index, identity|
+      if previous = identities[worker_index]?
+        previous.should eq(identity)
+      else
+        identities[worker_index] = identity
+      end
+    end
+
+    all_ids = [] of UInt64
+    identities.each_value { |identity| all_ids.concat([identity[0], identity[1], identity[2], identity[3]]) }
+    all_ids.to_set.size.should eq(expected_workers * 4)
+    identities
+  end
+
+  private def parallel_scan_assert_same_dispatched_identities(
+    earlier : Hash(Int32, CrystalClick::TypedParallelScanWorkerPool::WorkerIdentity),
+    later : Hash(Int32, CrystalClick::TypedParallelScanWorkerPool::WorkerIdentity),
+    worker_count : Int32,
+  ) : Nil
+    worker_count.times do |worker_index|
+      later[worker_index.to_i32].should eq(earlier[worker_index.to_i32])
+    end
+    nil
+  end
+{% end %}
 
 private def parallel_scan_wide_mark_compressed_offset(part_path : String, column : String, mark_index : Int) : Int
   reader = CrystalClick::WidePart.open_typed(part_path, column)
@@ -61,12 +155,14 @@ private def parallel_scan_assert_wide_uint64_batch_coordinates(batch : CrystalCl
   nil
 end
 
-private def parallel_scan_wide_uint64_nested_values(table : CrystalClick::TypedPartTable, workers : Int) : Array(UInt64)
+private def parallel_scan_wide_uint64_nested_rows(table : CrystalClick::TypedPartTable, workers : Int) : {Array(UInt64), Array(UInt64)}
+  keys = [] of UInt64
   values = [] of UInt64
   table.scan_typed_parallel(workers: workers, batch_rows: 5) do |batch|
+    keys.concat(batch.values_for("pk", UInt64).to_a)
     values.concat(batch.values_for("value", UInt64).to_a)
   end
-  values
+  {keys, values}
 end
 
 private def parallel_scan_assert_wide_uint64_mutable_batch(
@@ -102,32 +198,77 @@ private def parallel_scan_assert_wide_uint64_order_and_lifetime(
   workers : Int,
   expected_keys : Array(UInt64),
   expected_values : Array(UInt64),
+  different_table : CrystalClick::TypedPartTable? = nil,
+  different_expected_keys : Array(UInt64)? = nil,
+  different_expected_values : Array(UInt64)? = nil,
 ) : Nil
   observed_keys = [] of UInt64
   observed_values = [] of UInt64
   callback_count = 0
   reentered = false
   first_batch = nil.as(CrystalClick::WidePartTableBatch?)
-  table.scan_typed_parallel(workers: workers, batch_rows: 3) do |batch|
-    first_batch ||= batch
-    keys = batch.values_for("pk", UInt64)
-    values = batch.values_for("value", UInt64)
-    parallel_scan_assert_wide_uint64_batch_coordinates(batch)
-    batch.row_count.should eq(keys.size.to_u64)
-    values.size.should eq(keys.size)
-    observed_keys.concat(keys.to_a)
-    observed_values.concat(values.to_a)
+  dispatch_count_before_nested = nil.as(Int32?)
+  _, dispatch_events = parallel_scan_observe_dispatches do
+    table.scan_typed_parallel(workers: workers, batch_rows: 3) do |batch|
+      first_batch ||= batch
+      keys = batch.values_for("pk", UInt64)
+      values = batch.values_for("value", UInt64)
+      parallel_scan_assert_wide_uint64_batch_coordinates(batch)
+      batch.row_count.should eq(keys.size.to_u64)
+      values.size.should eq(keys.size)
+      observed_keys.concat(keys.to_a)
+      observed_values.concat(values.to_a)
 
-    unless reentered
-      parallel_scan_assert_wide_uint64_accessors(batch, keys)
-      parallel_scan_wide_uint64_nested_values(table, workers).should eq(expected_values)
-      GC.collect
-      reentered = true
+      unless reentered
+        parallel_scan_assert_wide_uint64_accessors(batch, keys)
+        outer_keys = keys.to_a
+        outer_values = values.to_a
+        GC.collect
+        {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+          expected_dispatches = parallel_scan_effective_worker_count(table, workers)
+          if expected_dispatches > 1
+            dispatched = CrystalClick::TypedParallelScanDispatchProbe.snapshot
+            parallel_scan_assert_dispatched_identities(dispatched, expected_dispatches)
+            dispatch_count_before_nested = dispatched.size.to_i32
+          end
+        {% end %}
+        parallel_scan_wide_uint64_nested_rows(table, workers).should eq({expected_keys, expected_values})
+        {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+          if dispatched_count = dispatch_count_before_nested
+            CrystalClick::TypedParallelScanDispatchProbe.snapshot.size.should eq(dispatched_count)
+          end
+        {% end %}
+        if other_table = different_table
+          expected_other_keys = different_expected_keys || raise("nested table keys were not supplied")
+          expected_other_values = different_expected_values || raise("nested table values were not supplied")
+          parallel_scan_wide_uint64_nested_rows(other_table, workers).should eq({expected_other_keys, expected_other_values})
+          {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+            if dispatched_count = dispatch_count_before_nested
+              CrystalClick::TypedParallelScanDispatchProbe.snapshot.size.should eq(dispatched_count)
+            end
+          {% end %}
+        end
+        keys.to_a.should eq(outer_keys)
+        values.to_a.should eq(outer_values)
+        GC.collect
+        reentered = true
+      end
+
+      parallel_scan_assert_wide_uint64_mutable_batch(keys, values, expected_keys[0], expected_values[0]) if callback_count == 0
+      callback_count += 1
     end
-
-    parallel_scan_assert_wide_uint64_mutable_batch(keys, values, expected_keys[0], expected_values[0]) if callback_count == 0
-    callback_count += 1
   end
+  {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+    effective_workers = parallel_scan_effective_worker_count(table, workers)
+    if effective_workers > 1
+      parallel_scan_assert_dispatched_identities(
+        dispatch_events,
+        effective_workers,
+      )
+    else
+      dispatch_events.should be_empty
+    end
+  {% end %}
   observed_keys.should eq(expected_keys)
   observed_values.should eq(expected_values)
   callback_count.should be > 0
@@ -175,6 +316,32 @@ private def parallel_scan_assert_wide_uint64_retry(
   nil
 end
 
+private def parallel_scan_wide_uint64_coordinate_batches(
+  table : CrystalClick::TypedPartTable,
+  workers : Int32? = nil,
+) : Array({Int32, Int32, UInt64, UInt64, UInt64, UInt64, Array(UInt64), Array(UInt64)})
+  observed = [] of {Int32, Int32, UInt64, UInt64, UInt64, UInt64, Array(UInt64), Array(UInt64)}
+  scan_batch = ->(batch : CrystalClick::WidePartTableBatch) do
+    observed << {
+      batch.part_index,
+      batch.mark_index,
+      batch.part_row_offset,
+      batch.mark_row_offset,
+      batch.source_row_offset,
+      batch.row_count || raise(CrystalClick::CorruptPartError.new("coordinate scan batch omitted row count")),
+      batch.values_for("pk", UInt64).to_a,
+      batch.values_for("value", UInt64).to_a,
+    }
+    nil
+  end
+  if worker_count = workers
+    table.scan_typed_parallel(workers: worker_count, batch_rows: 3) { |batch| scan_batch.call(batch) }
+  else
+    table.scan_typed(batch_rows: 3) { |batch| scan_batch.call(batch) }
+  end
+  observed
+end
+
 private def parallel_scan_assert_wide_uint64_bad_boundary_frame(
   table : CrystalClick::TypedPartTable,
   wide_path : String,
@@ -182,23 +349,36 @@ private def parallel_scan_assert_wide_uint64_bad_boundary_frame(
   workers : Int,
   mark_index : Int,
   expected_callbacks : Int,
-) : Nil
+) : Hash(Int32, {UInt64, UInt64, UInt64, UInt64})?
   original = parallel_scan_corrupt_wide_frame_header(
     data_path,
     parallel_scan_wide_mark_compressed_offset(wide_path, "value", mark_index),
   )
   begin
     callbacks = 0
-    expect_raises(CrystalClick::CorruptPartError) do
-      table.scan_typed_parallel(workers: workers, batch_rows: 1) do |_batch|
-        callbacks += 1
+    _, dispatch_events = parallel_scan_observe_dispatches do
+      expect_raises(CrystalClick::CorruptPartError) do
+        table.scan_typed_parallel(workers: workers, batch_rows: 1) do |_batch|
+          callbacks += 1
+        end
       end
+      callbacks.should eq(expected_callbacks)
     end
-    callbacks.should eq(expected_callbacks)
   ensure
     File.write(data_path, original)
   end
-  nil
+  {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+    if workers > 1
+      parallel_scan_assert_dispatched_identities(
+        dispatch_events,
+        parallel_scan_effective_worker_count(table, workers),
+      )
+    else
+      nil
+    end
+  {% else %}
+    nil
+  {% end %}
 end
 
 describe CrystalClick::WidePartTableBatch do
@@ -359,57 +539,95 @@ describe "TypedPartTable parallel typed scan" do
           table.scan_typed_parallel(workers: 2, batch_rows: 1) { |_batch| }
         end
       {% else %}
-        table.scan_typed_parallel(workers: 4, batch_rows: 1) do |batch|
-          Thread.current.object_id.should eq(caller_thread_id)
-          if callback_count == 0
-            worker_names = [] of String
-            Fiber::ExecutionContext.each do |context|
-              if isolated = context.as?(Fiber::ExecutionContext::Isolated)
-                if isolated.running? && isolated.name.starts_with?("crystal-click typed scan worker ")
-                  worker_names << isolated.name
+        _, first_scan_events = parallel_scan_observe_dispatches do
+          table.scan_typed_parallel(workers: 4, batch_rows: 1) do |batch|
+            Thread.current.object_id.should eq(caller_thread_id)
+            if callback_count == 0
+              parallel_scan_assert_dispatched_identities(CrystalClick::TypedParallelScanDispatchProbe.snapshot, 4)
+              worker_names = [] of String
+              Fiber::ExecutionContext.each do |context|
+                if isolated = context.as?(Fiber::ExecutionContext::Isolated)
+                  if isolated.running? && isolated.name.starts_with?("crystal-click retained typed scan worker ")
+                    worker_names << isolated.name
+                  end
                 end
               end
+              worker_names.size.should eq(4)
             end
-            worker_names.size.should eq(4)
+            batch.part_index.should eq(0)
+            observed_marks << batch.mark_index if observed_marks.last? != batch.mark_index
+            batch.values_for("pk", UInt64).each_with_index do |value, row_index|
+              observed << value
+              offsets << batch.source_row_offset + row_index.to_u64
+            end
+            callback_count += 1
           end
-          batch.part_index.should eq(0)
-          observed_marks << batch.mark_index if observed_marks.last? != batch.mark_index
-          batch.values_for("pk", UInt64).each_with_index do |value, row_index|
-            observed << value
-            offsets << batch.source_row_offset + row_index.to_u64
-          end
-          callback_count += 1
         end
+        retained_identities = parallel_scan_assert_dispatched_identities(
+          first_scan_events,
+          4,
+        )
         observed.should eq(expected)
         offsets.should eq((0_u64...expected.size.to_u64).to_a)
         observed_marks.should eq([0_i32, 1_i32, 2_i32, 3_i32])
 
         callback_error = IO::Error.new("parallel callback failure")
-        raised_callback_error = expect_raises(IO::Error) do
-          table.scan_typed_parallel(workers: 4, batch_rows: 1) do |_batch|
-            raise callback_error
+        raised_callback_error, callback_failure_events = parallel_scan_observe_dispatches do
+          error = expect_raises(IO::Error) do
+            table.scan_typed_parallel(workers: 4, batch_rows: 1) do |_batch|
+              parallel_scan_assert_dispatched_identities(CrystalClick::TypedParallelScanDispatchProbe.snapshot, 4)
+              raise callback_error
+            end
           end
+          error
         end
         raised_callback_error.object_id.should eq(callback_error.object_id)
+        callback_failure_identities = parallel_scan_assert_dispatched_identities(
+          callback_failure_events,
+          4,
+        )
+        parallel_scan_assert_same_dispatched_identities(retained_identities, callback_failure_identities, 4)
 
         reused = [] of UInt64
-        table.scan_typed_parallel(workers: 4, batch_rows: 1) do |batch|
-          reused.concat(batch.values_for("pk", UInt64).to_a)
+        _, retry_events = parallel_scan_observe_dispatches do
+          table.scan_typed_parallel(workers: 4, batch_rows: 1) do |batch|
+            reused.concat(batch.values_for("pk", UInt64).to_a)
+          end
         end
         reused.should eq(expected)
+        retry_identities = parallel_scan_assert_dispatched_identities(
+          retry_events,
+          4,
+        )
+        parallel_scan_assert_same_dispatched_identities(retained_identities, retry_identities, 4)
 
         stopped_callbacks = 0
-        table.scan_typed_parallel(workers: 4, batch_rows: 1) do |_batch|
-          stopped_callbacks += 1
-          break
+        _, break_events = parallel_scan_observe_dispatches do
+          table.scan_typed_parallel(workers: 4, batch_rows: 1) do |_batch|
+            parallel_scan_assert_dispatched_identities(CrystalClick::TypedParallelScanDispatchProbe.snapshot, 4)
+            stopped_callbacks += 1
+            break
+          end
         end
         stopped_callbacks.should eq(1)
+        break_identities = parallel_scan_assert_dispatched_identities(
+          break_events,
+          4,
+        )
+        parallel_scan_assert_same_dispatched_identities(retained_identities, break_identities, 4)
 
         after_break = [] of UInt64
-        table.scan_typed_parallel(workers: 4, batch_rows: 1) do |batch|
-          after_break.concat(batch.values_for("pk", UInt64).to_a)
+        _, after_break_events = parallel_scan_observe_dispatches do
+          table.scan_typed_parallel(workers: 4, batch_rows: 1) do |batch|
+            after_break.concat(batch.values_for("pk", UInt64).to_a)
+          end
         end
         after_break.should eq(expected)
+        after_break_identities = parallel_scan_assert_dispatched_identities(
+          after_break_events,
+          4,
+        )
+        parallel_scan_assert_same_dispatched_identities(retained_identities, after_break_identities, 4)
       {% end %}
     ensure
       FileUtils.rm_rf(root)
@@ -589,8 +807,28 @@ describe "TypedPartTable parallel typed scan" do
       wide_path = parallel_scan_copy_fixture(PARALLEL_SCAN_WIDE_UINT64_PAIR_FIXTURE, root, "all_1_1_0")
       table = CrystalClick::TypedPartTable.open_selected_typed([wide_path], ["pk", "value"])
       expected_keys, expected_values = parallel_scan_wide_uint64_pair_expected(table)
+      different_keys = (101_u64..108_u64).to_a
+      different_values = different_keys.map { |key| key * 17_u64 }
+      different_path = CrystalClick::WidePartWriter.write_uint64_pair(
+        File.join(root, "all_2_2_0"),
+        "pk",
+        different_keys.to_unsafe.to_slice(different_keys.size),
+        "value",
+        different_values.to_unsafe.to_slice(different_values.size),
+        rows_per_mark: 2,
+      )
+      different_table = CrystalClick::TypedPartTable.open_selected_typed([different_path], ["pk", "value"])
+      different_expected_keys, different_expected_values = parallel_scan_wide_uint64_pair_expected(different_table)
       parallel_scan_wide_uint64_worker_counts.each do |workers|
-        parallel_scan_assert_wide_uint64_order_and_lifetime(table, workers, expected_keys, expected_values)
+        parallel_scan_assert_wide_uint64_order_and_lifetime(
+          table,
+          workers,
+          expected_keys,
+          expected_values,
+          different_table,
+          different_expected_keys,
+          different_expected_values,
+        )
         parallel_scan_assert_wide_uint64_callback_failure(table, workers)
         parallel_scan_assert_wide_uint64_retry(table, workers, expected_keys, expected_values)
       end
@@ -598,6 +836,72 @@ describe "TypedPartTable parallel typed scan" do
       FileUtils.rm_rf(root)
     end
   end
+
+  {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+    it "reuses the dispatched Wide worker and channel identities across selected parts and effective widths" do
+      root = File.tempname("crystal-click-parallel-retained-wide-identities")
+      Dir.mkdir(root)
+      begin
+        first_path = parallel_scan_copy_fixture(PARALLEL_SCAN_WIDE_UINT64_PAIR_FIXTURE, root, "all_1_1_0")
+        second_keys = (201_u64..240_u64).to_a
+        second_values = second_keys.map { |key| key + 10_000_u64 }
+        second_path = CrystalClick::WidePartWriter.write_uint64_pair(
+          File.join(root, "all_2_2_0"),
+          "pk",
+          second_keys.to_unsafe.to_slice(second_keys.size),
+          "value",
+          second_values.to_unsafe.to_slice(second_values.size),
+          rows_per_mark: 8,
+        )
+
+        first_table = CrystalClick::TypedPartTable.open_selected_typed([first_path], ["pk", "value"])
+        both_table = CrystalClick::TypedPartTable.open_selected_typed([second_path, first_path], ["pk", "value"])
+        second_table = CrystalClick::TypedPartTable.open_selected_typed([second_path], ["pk", "value"])
+        first_expected = parallel_scan_wide_uint64_coordinate_batches(first_table)
+        both_expected = parallel_scan_wide_uint64_coordinate_batches(both_table)
+        second_expected = parallel_scan_wide_uint64_coordinate_batches(second_table)
+
+        first_actual, first_events = parallel_scan_observe_dispatches do
+          parallel_scan_wide_uint64_coordinate_batches(first_table, 2_i32)
+        end
+        first_actual.should eq(first_expected)
+        first_workers = parallel_scan_effective_worker_count(first_table, 2)
+        first_workers.should eq(2)
+        first_identities = parallel_scan_assert_dispatched_identities(
+          first_events,
+          first_workers,
+        )
+
+        GC.collect
+        both_actual, both_events = parallel_scan_observe_dispatches do
+          parallel_scan_wide_uint64_coordinate_batches(both_table, 4_i32)
+        end
+        both_actual.should eq(both_expected)
+        both_actual.first[0].should eq(0_i32)
+        both_actual.first[6].should eq(second_keys.first(3))
+        both_workers = parallel_scan_effective_worker_count(both_table, 4)
+        both_workers.should eq(4)
+        both_identities = parallel_scan_assert_dispatched_identities(
+          both_events,
+          both_workers,
+        )
+        parallel_scan_assert_same_dispatched_identities(first_identities, both_identities, first_workers)
+
+        GC.collect
+        second_actual, second_events = parallel_scan_observe_dispatches do
+          parallel_scan_wide_uint64_coordinate_batches(second_table, 4_i32)
+        end
+        second_actual.should eq(second_expected)
+        second_identities = parallel_scan_assert_dispatched_identities(
+          second_events,
+          both_workers,
+        )
+        parallel_scan_assert_same_dispatched_identities(both_identities, second_identities, both_workers)
+      ensure
+        FileUtils.rm_rf(root)
+      end
+    end
+  {% end %}
 
   it "rejects malformed adjacent and final Wide UInt64 frames before exposing their boundary mark" do
     root = File.tempname("crystal-click-parallel-typed-wide-u64-boundary")
@@ -617,9 +921,36 @@ describe "TypedPartTable parallel typed scan" do
 
       data_path = CrystalClick::WidePart.open_typed(wide_path, "value").data_path
       parallel_scan_wide_uint64_worker_counts.each do |workers|
-        parallel_scan_assert_wide_uint64_bad_boundary_frame(table, wide_path, data_path, workers, 1, 0)
-        parallel_scan_assert_wide_uint64_bad_boundary_frame(table, wide_path, data_path, workers, 3, 4)
-        parallel_scan_assert_wide_uint64_retry(table, workers, keys, values)
+        [{1, 0}, {3, 4}].each do |mark_index, expected_callbacks|
+          failed_identities = parallel_scan_assert_wide_uint64_bad_boundary_frame(
+            table,
+            wide_path,
+            data_path,
+            workers,
+            mark_index,
+            expected_callbacks,
+          )
+          {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
+            if failed_identities
+              _, retry_events = parallel_scan_observe_dispatches do
+                parallel_scan_assert_wide_uint64_retry(table, workers, keys, values)
+              end
+              retry_identities = parallel_scan_assert_dispatched_identities(
+                retry_events,
+                parallel_scan_effective_worker_count(table, workers),
+              )
+              parallel_scan_assert_same_dispatched_identities(
+                failed_identities,
+                retry_identities,
+                parallel_scan_effective_worker_count(table, workers),
+              )
+            else
+              parallel_scan_assert_wide_uint64_retry(table, workers, keys, values)
+            end
+          {% else %}
+            parallel_scan_assert_wide_uint64_retry(table, workers, keys, values)
+          {% end %}
+        end
       end
     ensure
       FileUtils.rm_rf(root)

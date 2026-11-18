@@ -44,7 +44,8 @@ module CrystalClick
     # Callbacks run serially on the caller in selected part and row order. A
     # batch's slices borrow reader-owned storage and are valid only until its
     # callback returns. Worker count is limited to 32; each worker has at most
-    # one queued batch, and all contexts are joined before return or re-raise.
+    # one queued batch, and every dispatched job reaches a terminal before
+    # return or re-raise. The admitted Wide UInt64 cohort may remain idle.
     def scan_typed_parallel(
       workers : Int,
       batch_rows : Int = WidePartTable::DEFAULT_BATCH_ROWS,
@@ -124,6 +125,49 @@ module CrystalClick
           expected_scan_image_users,
         )
 
+        if direct_wide_uint64 && workers <= TypedParallelScanWorkerPool::MAX_WORKERS
+          retained_workers = TypedParallelScanWorkerPool.global
+          if retained_workers.try_acquire(effective_workers)
+            primary_error = nil.as(Exception?)
+            begin
+              run_retained_parallel_workers(
+                retained_workers,
+                effective_workers,
+                schedule,
+                worker_marks,
+                part_sources.map { |source| source[5] },
+                wide_scan_image_registry,
+                part_starts,
+                batch_rows,
+              ) { |batch| yield batch }
+            rescue ex : Exception
+              primary_error = ex
+            ensure
+              cleanup_error = nil.as(Error?)
+              begin
+                scan_image_registry.close_all
+              rescue ex : Error
+                cleanup_error ||= ex
+              end
+              begin
+                wide_scan_image_registry.close_all
+              rescue ex : Error
+                cleanup_error ||= ex
+              end
+              retained_workers.release
+              if cleanup = cleanup_error
+                if error = primary_error
+                  primary_error = MMapCleanupError.new(error, cleanup)
+                else
+                  raise cleanup
+                end
+              end
+            end
+            raise primary_error.not_nil! if primary_error
+            return nil
+          end
+        end
+
         outputs = Array(Channel(WidePartTableBatch)).new(effective_workers) do
           Channel(WidePartTableBatch).new(1)
         end
@@ -157,13 +201,7 @@ module CrystalClick
                 raise CorruptPartError.new("parallel worker closed before completing a selected mark")
               end
 
-              emitted_rows = batch.row_count || raise(CorruptPartError.new("parallel worker emitted a batch without a row count"))
-              expected_rows = batch_rows.to_u64 < mark.row_count - rows_seen ? batch_rows.to_u64 : mark.row_count - rows_seen
-              unless batch.part_index == 0 && batch.mark_index == mark.mark_index &&
-                     batch.part_row_offset == mark.part_row_offset + rows_seen &&
-                     batch.mark_row_offset == rows_seen && emitted_rows == expected_rows
-                raise CorruptPartError.new("parallel worker emitted rows outside its assigned mark")
-              end
+              emitted_rows = validate_parallel_scan_batch!(batch, mark, rows_seen, batch_rows)
 
               yield rebase_batch!(batch, mark.part_index, part_starts[mark.part_index])
               acknowledgements[mark.worker_index].send(nil)
@@ -217,6 +255,22 @@ module CrystalClick
         end
         nil
       {% end %}
+    end
+
+    private def validate_parallel_scan_batch!(
+      batch : WidePartTableBatch,
+      mark : ParallelScanMark,
+      rows_seen : UInt64,
+      batch_rows : Int,
+    ) : UInt64
+      emitted_rows = batch.row_count || raise(CorruptPartError.new("parallel worker emitted a batch without a row count"))
+      expected_rows = batch_rows.to_u64 < mark.row_count - rows_seen ? batch_rows.to_u64 : mark.row_count - rows_seen
+      unless batch.part_index == 0 && batch.mark_index == mark.mark_index &&
+             batch.part_row_offset == mark.part_row_offset + rows_seen &&
+             batch.mark_row_offset == rows_seen && emitted_rows == expected_rows
+        raise CorruptPartError.new("parallel worker emitted rows outside its assigned mark")
+      end
+      emitted_rows
     end
 
     private def direct_primitive_numeric_sources? : Bool

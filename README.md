@@ -226,8 +226,11 @@ with Crystal execution contexts. `workers: 1` scans serially. For repeated
 scans of ordinary Wide numeric parts with `.mrk2` marks, retain the
 `TypedPartTable` instance and call `scan_typed_parallel(workers: 4)` on it for
 each pass. The reader reuses the admitted metadata and mark indexes and opens
-fresh data mappings for each scan. Keep the parts immutable for the reader's
-lifetime and use a separate reader for each concurrent scan. See the
+fresh data mappings for each scan. For direct `UInt64` selections from these
+parts, scans requesting two to four workers can also reuse idle worker
+contexts and channels. Nested scans use their own workers while the outer
+scan holds the pool. Keep the parts immutable for the reader's lifetime and
+use a separate reader for each concurrent scan. See the
 [parallel scan profile and comparison](docs/PARALLEL_TYPED_SCAN_FRONTIER.md).
 
 ## Materialized views and projections

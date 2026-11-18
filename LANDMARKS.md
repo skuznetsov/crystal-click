@@ -29,6 +29,13 @@
   [public allocation comparison](docs/PARALLEL_TYPED_SCAN_FRONTIER.md#allocations-in-repeated-public-wide-uint64-scans)
   after changing batch storage, the callback handshake, worker or mapping
   lifetime, the retention bound, or the Crystal runtime.
+- Ordinary direct Wide UInt64 scans requesting two to four workers can
+  lease a process-wide group of contexts and channels. The group is returned
+  after all dispatched jobs release scan resources. A nested or concurrent
+  scan uses its own workers while the group is busy. Refresh the
+  [public worker reuse comparison](docs/PARALLEL_TYPED_SCAN_FRONTIER.md#worker-reuse-in-repeated-public-wide-uint64-scans)
+  after changing the worker lifecycle, channel handshake, scan preparation,
+  or the Crystal runtime.
 
 ## Compressed Compact aggregate projection indexes — W301
 

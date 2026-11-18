@@ -24,7 +24,7 @@ outstanding batch and may reuse its buffers when the callback returns.
 Workers on one Compact part share its cumulative transport budget across
 reader admission and decoding. Its file, record, decoded-byte, and result-byte
 allowances apply across the complete worker group.
-Operation exit waits for the workers after normal completion, early exit,
+Operation exit waits for all scan work after normal completion, early exit,
 and decoder or callback failures. Keep selected part files stable for the
 lifetime of the reader and use a separate reader for each concurrent scan.
 
@@ -109,13 +109,31 @@ per-batch slice arrays or the generic typed-carrier maps.
 Repeated scans can borrow typed value and decode buffers from four
 process-wide workspace slots. Each idle slot retains at most 512 KiB of
 buffer payload. Busy slots and additional workers use scan-local buffers.
-Oversized workspaces are dropped when released. Mappings and worker
-execution contexts still belong to each scan.
+Oversized workspaces are dropped when released. Mappings belong to each
+scan.
 
 This path inherits the ordinary Wide data-frame verification policy.
 The checked range reader validates frame sizes and boundaries and the exact
 logical width of each mark. With `SizeChecked` admission the reader also
 checks persisted file sizes.
+
+### Retaining parallel workers
+
+Repeated direct Wide UInt64 scans can lease one bounded group of isolated
+workers and their channels for requests of two to four workers with two
+or more nonempty marks. One-worker scans run on the caller. A busy group,
+a larger request, or a selection outside the direct Wide UInt64 path uses
+the existing scan-owned workers.
+The lease covers the entire batch and acknowledgement exchange. Every
+dispatched job releases its resources before the caller closes the residual
+scan mappings and returns the group. The group holds no part images or user
+callbacks between scans.
+
+Admission requires a matched before-and-after scan on the pinned Wide
+part, plus reuse across different readers and worker counts, reentrancy
+while a callback has writable slices, and successful reuse after callback
+failure, early exit, and decoder corruption. Reverting this slice restores
+the scan-owned execution contexts and channels from `9b08b1e`.
 
 ## Comparison contract
 
@@ -1486,8 +1504,8 @@ positive control in each process.
 Median allocated bytes fell 99.0% with one worker and 98.1% with four.
 The first scan in each diagnostic process paid for the workspace buffers.
 Its allocations went from 268,192 to 138,096 bytes with one worker and
-from 695,824 to 559,888 bytes with four. Each call still prepares the
-scan. The parallel call creates its worker contexts and channels.
+from 695,824 to 559,888 bytes with four. In that comparison, each parallel
+call still created its worker contexts and channels.
 Isolated probes measured approximately 11 KiB of Boehm allocation for
 four context and channel pairs together.
 
@@ -1513,6 +1531,69 @@ with a malformed adjacent or final frame.
 | Plain run, four workers, second series | `dfa25bd312cded64c8b2011b960186c58d66c494f7151437cde97f7476664075` |
 | Allocation run, one worker | `b7d6ed121f56f63de05d2b4f5b62187183e5b734b2e84be2568c3f31378e1325` |
 | Allocation run, four workers | `62ad9774076238de26e399ed9a86adaca4478222ff7100ea56b28140a06f763c` |
+
+### Worker reuse in repeated public Wide UInt64 scans
+
+The baseline is `9b08b1e`. Both Release builds scan the same Wide
+`.mrk2` part as above, with two `UInt64` columns, 131,072 rows, 16
+marks, and 512 LZ4 frames. ClickHouse 26.10.1.1201 returned `1` from
+`CHECK TABLE`. Both builds admitted the part as `SizeChecked` and
+rejected the same size-preserving frame-header corruption after 14
+successful batches at both worker counts.
+
+The timer covers `scan_typed_parallel`, including per-scan admission,
+mapping, worker setup or dispatch, and copying all 32 ordered
+4,096-row batches into preallocated arrays. The runner opens the table
+outside the timer and compares both columns against the complete
+ClickHouse RowBinary oracle after every scan. The oracle comparison
+rejects an intentionally changed value.
+
+The Apple M2 Max host ran macOS 26.6.2, Crystal 1.22.3, LLVM 23.1.5,
+and Boehm 8.2.12 with `GC_DONT_GC` unset. Each series has 24 interleaved
+warmups and four 120-scan blocks per arm. Block order alternates. At
+four workers, each metric pools both series with opposite starting
+orders for 960 scans per arm. The one-worker control has 480 scans
+per arm per metric. Latencies are nearest-rank percentiles from plain
+Release builds. Separate Release builds measure `GC.stats.total_bytes`
+deltas and verify the counter with a 1 MiB positive control in each
+process.
+
+| Workers | Baseline p50 / p95 (ms) | Updated p50 / p95 (ms) | Baseline allocation p50 / p95 (bytes) | Updated allocation p50 / p95 (bytes) |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 1.565 / 1.696 | 1.571 / 1.693 | 2,160 / 9,776 | 2,080 / 9,793 |
+| 4 | 0.797 / 1.277 | 0.758 / 1.131 | 13,136 / 21,712 | 5,808 / 13,440 |
+
+Four-worker median allocation fell 55.8% and p95 allocation fell 38.1%.
+The pooled median latency fell 5.0% and p95 fell 11.4%. The two W4
+latency series saw p95 move from 1.185 to 1.211 ms and from 1.287 to
+1.059 ms, respectively, with an unrelated VM active on the host.
+First-call latency rose from 0.909 to 1.148 ms in one series and from
+1.151 to 1.298 ms in the other. Those first calls include lazy pool
+startup and are separate from the warm samples.
+
+`crystal spec spec/typed_part_table_parallel_scan_spec.cr spec/wide_parallel_scan_mapping_spec.cr spec/compact_parallel_scan_mapping_spec.cr spec/wide_parallel_metadata_admission_spec.cr`
+passed 28 examples. The same suite with `-Dwithout_mt` passed 24.
+The checks witness actual worker and channel identities across calls,
+ordered batch coordinates, nested and concurrent scans, and recovery
+after callback exit and decoder failure. An independent stress probe
+completed 150 stop-and-retry cycles with worker counts one through five
+and forced GC in 15 nested and concurrent cases. Injecting a stale job
+tag during the final drain retired that slot and left the other
+workers available for the next successful scan.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Wide part file manifest | `2e55e9cbe502047752b136e25b707f68d72f183e365f0d7052a6278ce0bafc45` |
+| Full-mark column-major oracle | `24c35659e776fe4a17d8686e55e5365348b0987f172fd657990216cef48b8b89` |
+| Candidate source tree manifest | `b475266922ec6795007933d9275c463a382f09b800de1601a5ac24b3692e61de` |
+| Shared public scan driver source | `620517a6bbff293e98e43aa8db06f257a874f72664d51b6d01932f53a5e8db57` |
+| Paired runner source | `1fe46525e38951f2f39418789ae8c0f3fb036cb0c0e2f2d7db616e303df446a7` |
+| Latency, one worker | `8a46b698919f319e19fc96f979acffb41d8d0e4058ea0cc174fea98ef51577c7` |
+| Latency, four workers, first series | `230cc4ecc5eba5239feb94b089629429a9a47e1168619ce30852d4c5a3a1eb5c` |
+| Latency, four workers, second series | `d77cc4475abec0d7239a1b5514acbff80e914cae69664f5ae3bcb83692af471d` |
+| Allocation, one worker | `b0375677cb817e7c7dee3b82c291dab66ab8327016b29d97e1e8d7fa0933b91a` |
+| Allocation, four workers, first series | `769c3890d052de26e90aecdcf81d803bf1b138eae9d90338c123e4bc7893961c` |
+| Allocation, four workers, second series | `907c9571c23c54a4187553858dd6f8bbe3cf572e29c0e9f8a6f0c1a5a3ea9055` |
 
 ### Compact pilot budget cutoff
 
