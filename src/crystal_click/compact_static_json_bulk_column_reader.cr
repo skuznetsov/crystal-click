@@ -317,15 +317,19 @@ module CrystalClick
       workspace_observer : Proc(UInt64, Nil),
     ) : Array(CompactStaticJsonAdvancedPreparedMark)?
       base_workspace = retained_workspace_bytes
-      physical_workspace = physical_window_workspace_bytes
+      physical_workspace = checked_add(
+        physical_window_workspace_bytes,
+        instance_sizeof(CompactPartPhysicalWindowCapture).to_u64,
+      )
       workspace_observer.call(checked_add(base_workspace, @logical_read_bytes))
       workspace_observer.call(checked_add(base_workspace, physical_workspace))
 
-      # read_window authenticates every selected slot before parsing starts;
-      # keeping the whole detached window alive lets late corruption fail
-      # before any ObjectDocument value is decoded or returned.
-      window = @context.read_window(@column_name, 0, @mark_count)
-      granules = window.granules
+      # One fresh full-grid read authenticates every selected slot before
+      # parsing starts. The sealed capture lets each mark framer bind to that
+      # exact snapshot without rereading the same compressed source ranges.
+      # A later preparation creates a new capture and reopens the current path.
+      window_capture = CompactPartPhysicalWindowCapture.read_complete(@context, @column_name)
+      granules = window_capture.granules
       unless granules.size == @mark_count
         raise CorruptPartError.new("Compact static JSON physical window has the wrong mark count")
       end
@@ -347,7 +351,15 @@ module CrystalClick
           raise CorruptPartError.new("Compact static JSON physical window differs from its validated mark grid")
         end
         site_identity = "#{@manifest.physical_prefix}:mark=#{mark_index}"
-        framer = CompactJsonObjectSiteFramer.new(@context.mode, granule.shards, budget, @context, site_identity)
+        framer = CompactJsonObjectSiteFramer.new(
+          @context.mode,
+          granule.shards,
+          budget,
+          @context,
+          site_identity,
+          window_capture,
+          mark_index,
+        )
         nested_context = ObjectSharedNestedSerializationContext.for_read(0_u64, @ordinary_profile)
         prefix = ObjectDocumentCallbackPrefixReader.read_static_json_prefix(
           framer,

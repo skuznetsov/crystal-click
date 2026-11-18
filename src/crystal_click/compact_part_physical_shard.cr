@@ -45,6 +45,17 @@ module CrystalClick
       true
     end
 
+    # Compares two detached shard owners without exposing either mutable
+    # payload buffer. A physical window uses this to admit only the exact
+    # bytes and coordinates captured by its authenticated read.
+    def same_detached_value?(other : CompactPartPhysicalShard) : Bool
+      @slot_index == other.@slot_index &&
+        @stream_name == other.@stream_name &&
+        @logical_start == other.@logical_start &&
+        @logical_end == other.@logical_end &&
+        @bytes == other.@bytes
+    end
+
     # Compares an in-bounds window without exposing a mutable view of the
     # authenticated detached bytes. UInt8 Slice equality uses memcmp.
     def matches_bytes_at?(offset : Int, other : Bytes) : Bool

@@ -13,6 +13,8 @@ module CrystalClick
       @physical : CompactPartPhysicalContext,
       site_identity : String,
       shards : Array(CompactPartPhysicalShard),
+      window_capture : CompactPartPhysicalWindowCapture? = nil,
+      mark_index : Int? = nil,
     )
       if site_identity.empty?
         raise ArgumentError.new("Compact inline coordinate context requires an explicit site identity")
@@ -22,10 +24,29 @@ module CrystalClick
       end
       @site_identity = String.new(site_identity.to_slice)
 
-      # Authenticate exact slot intervals and detached payload bytes against
-      # this part before retaining callback provenance. A caller-constructed
-      # shard cannot gain authority from coordinates alone.
-      @physical.validate_shard_provenance!(shards)
+      if capture = window_capture
+        mark = mark_index ||
+               raise(ArgumentError.new("Compact source capture requires its selected mark index"))
+        record_count = shards.size.to_i64
+        if record_count > Int64::MAX // 2_i64
+          raise CorruptPartError.new("Compact captured shard descriptor count overflows")
+        end
+        # The captured route still retains the coordinate context's shard
+        # references and path starts. The full-window read already charged its
+        # own descriptors; reserve exactly these two retained records per
+        # shard before allocating their arrays.
+        @physical.transport_budget.preflight_records(record_count * 2_i64)
+        @physical.transport_budget.reserve_records(record_count * 2_i64)
+        capture.validate_site_shards!(@physical, @site_identity, mark, shards)
+      else
+        if mark_index
+          raise ArgumentError.new("Compact source capture mark was supplied without its capture")
+        end
+        # Authenticate exact slot intervals and detached payload bytes against
+        # this part before retaining callback provenance. A caller-constructed
+        # shard cannot gain authority from coordinates alone.
+        @physical.validate_shard_provenance!(shards)
+      end
 
       @shards = shards.dup
       @path_starts = Array(UInt64).new(shards.size)

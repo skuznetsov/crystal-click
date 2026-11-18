@@ -21,6 +21,16 @@ module CrystalClick
       @shards.map(&.detached_copy)
     end
 
+    # Exact roster-and-payload comparison that does not return a shard alias
+    # from the authenticated window.
+    def matches_shards?(shards : Array(CompactPartPhysicalShard)) : Bool
+      return false unless shards.size == @shards.size
+      @shards.each_with_index do |shard, index|
+        return false unless shard.same_detached_value?(shards[index])
+      end
+      true
+    end
+
     def detached_copy : CompactPartPhysicalGranule
       CompactPartPhysicalGranule.new(@mark, @row_offset, @row_count, @shards)
     end

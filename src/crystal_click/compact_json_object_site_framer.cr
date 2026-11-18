@@ -21,9 +21,17 @@ module CrystalClick
       @budget : BinaryCodecBudget,
       physical_context : CompactPartPhysicalContext? = nil,
       site_identity : String? = nil,
+      window_capture : CompactPartPhysicalWindowCapture? = nil,
+      mark_index : Int? = nil,
     )
       if physical_context.nil? != site_identity.nil?
         raise ArgumentError.new("Compact inline coordinate context requires both physical owner and site identity")
+      end
+      if window_capture.nil? != mark_index.nil?
+        raise ArgumentError.new("Compact source capture requires both capture owner and mark index")
+      end
+      if window_capture && (physical_context.nil? || site_identity.nil?)
+        raise ArgumentError.new("Compact source capture requires its physical owner and site identity")
       end
       if physical = physical_context
         unless physical.mode == mode
@@ -35,6 +43,8 @@ module CrystalClick
                                 physical,
                                 site_identity || raise(ArgumentError.new("Compact inline site identity is missing")),
                                 shards,
+                                window_capture,
+                                mark_index,
                               )
                             else
                               nil

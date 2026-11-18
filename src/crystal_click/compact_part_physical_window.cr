@@ -30,5 +30,13 @@ module CrystalClick
     def mark_count : Int32
       @granules.size
     end
+
+    # Checks a caller's detached shards against the private captured granule
+    # without returning the trusted shard owners.
+    def matches_shards_at?(mark : Int, shards : Array(CompactPartPhysicalShard)) : Bool
+      return false if mark < @first_mark || mark - @first_mark >= @granules.size
+      granule = @granules[(mark - @first_mark).to_i]?
+      granule.try(&.matches_shards?(shards)) || false
+    end
   end
 end
