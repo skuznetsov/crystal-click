@@ -161,6 +161,7 @@ module CompactJSONScanProbe
     getter thread_id : UInt64
     getter worker_scan_ns : Int64
     getter serialization_ns : Int64
+    getter columnar_mark_batches : Array(CrystalClick::CompactJsonColumnarBatch)?
 
     def initialize(
       @run_id : Int32,
@@ -174,6 +175,7 @@ module CompactJSONScanProbe
       @thread_id : UInt64,
       @worker_scan_ns : Int64,
       @serialization_ns : Int64,
+      @columnar_mark_batches : Array(CrystalClick::CompactJsonColumnarBatch)? = nil,
     )
     end
   end
@@ -347,6 +349,41 @@ module CompactJSONScanProbe
     {io.to_slice, rows}
   end
 
+  def self.serialize_columnar(completed : Array(WorkerResult)) : Tuple(Bytes, Int32)
+    output = IO::Memory.new
+    json = IO::Memory.new
+    rows = 0
+    completed.each do |result|
+      batches = result.columnar_mark_batches || raise CrystalClick::CorruptPartError.new("columnar worker omitted its batches")
+      batches.each do |batch|
+        ids = batch.uint64_column("id")
+        unless ids.size == batch.row_count
+          raise CrystalClick::CorruptPartError.new("columnar id/doc row counts differ")
+        end
+        batch.row_count.times do |row|
+          json.clear
+          json << '{'
+          emitted = false
+          batch.column_count.times do |index|
+            column = batch.column_at(index)
+            next unless value = column.value_at(row)
+            json << ',' if emitted
+            column.path.to_json(json)
+            json << ':'
+            write_json_value(json, value)
+            emitted = true
+          end
+          json << '}'
+          output.write_bytes(ids[row], IO::ByteFormat::LittleEndian)
+          write_varuint(output, json.size.to_u64)
+          output.write(json.to_slice)
+          rows += 1
+        end
+      end
+    end
+    {output.to_slice, rows}
+  end
+
   def self.varuint(bytes : Bytes, pos : Int32) : Tuple(UInt64, Int32)
     value = 0_u64
     shift = 0
@@ -405,8 +442,9 @@ module CompactJSONScanProbe
     unless workers == 1 || workers == 4
       error("worker count must be 1 or 4")
     end
-    error("backend must be compact, typed, or shared") unless backend.in?("compact", "typed", "shared")
+    error("backend must be compact, typed, shared, or columnar") unless backend.in?("compact", "typed", "shared", "columnar")
     error("track must be callback or retained") unless track == "callback" || track == "retained"
+    error("columnar backend requires the retained track") if backend == "columnar" && track != "retained"
     error("warmups and repeats must be nonnegative and repeats positive") if warmups < 0 || repeats <= 0
     error("use 0 warmups when the caller sends scan commands") if interactive && warmups != 0
     {% if flag?(:compact_json_scan_diagnostic) %}
@@ -426,7 +464,7 @@ module CompactJSONScanProbe
     contexts = Array(Fiber::ExecutionContext::Isolated).new(workers)
     begin
       prepare_started = Time.instant
-      shared_table = if backend == "shared"
+      shared_table = if backend.in?("shared", "columnar")
                        owner = CrystalClick::CompactPartTable.open_selected_typed([part_path], ["id", "doc"])
                        owner.parallel_scan_transport_budget! if workers > 1
                        owner
@@ -439,6 +477,7 @@ module CompactJSONScanProbe
             table = shared_table || open_table(backend, part_path)
             open_ns = (Time.instant - open_started).total_nanoseconds.to_i64
             ready.send({worker: worker_index, open_ns: open_ns, thread_id: Thread.current.object_id.to_u64})
+            retained_columnar = nil.as(Array(CrystalClick::CompactJsonColumnarBatch)?)
             loop do
               job = jobs[worker_index].receive?
               break unless job
@@ -456,6 +495,40 @@ module CompactJSONScanProbe
                   Thread.current.object_id.to_u64,
                   outcome[:worker_scan_ns],
                   outcome[:serialization_ns],
+                ))
+              elsif backend == "columnar"
+                worker_started = Time.instant
+                plan = job.shared_plan || raise CrystalClick::CorruptPartError.new("columnar worker requires a part plan")
+                budget = plan.new_decode_budget
+                plan.prepare_decode_budget!(budget)
+                # One retained output per assigned mark. The coordinator
+                # serializes them before dispatching the next job.
+                batches = retained_columnar ||= job.marks.map { plan.new_columnar_output }
+                rows = 0
+                first_id = nil.as(UInt64?)
+                last_id = nil.as(UInt64?)
+                owner = table.as(CrystalClick::CompactPartTable)
+                job.marks.each_with_index do |mark, index|
+                  batch = batches[index]
+                  owner.scan_compact_json_columnar_mark_into(mark, plan, budget, batch)
+                  ids = batch.uint64_column("id")
+                  first_id ||= ids.first?
+                  last_id = ids.last? || last_id
+                  rows += batch.row_count
+                end
+                results.send(WorkerResult.new(
+                  job.run_id,
+                  worker_index,
+                  job.marks,
+                  rows,
+                  first_id,
+                  last_id,
+                  nil,
+                  nil,
+                  Thread.current.object_id.to_u64,
+                  (Time.instant - worker_started).total_nanoseconds.to_i64,
+                  0_i64,
+                  batches,
                 ))
               else
                 outcome = scan_retained(table, job)
@@ -514,8 +587,10 @@ module CompactJSONScanProbe
         gc_collections_before = GC.prof_stats.gc_no
         started = Time.instant
         shared_plan = shared_table.try do |owner|
-          owner.prepare_shared_advanced_json_scan ||
-            raise(CrystalClick::UnsupportedFormatError.new("probe requires an admitted Advanced JSON part plan"))
+          plan = owner.prepare_shared_advanced_json_scan ||
+                 raise(CrystalClick::UnsupportedFormatError.new("probe requires an admitted Advanced JSON part plan"))
+          plan.prepare_columnar_output! if backend == "columnar"
+          plan
         end
         shared_plan_ns = (Time.instant - started).total_nanoseconds.to_i64 if shared_plan
         active_count = 0
@@ -540,11 +615,14 @@ module CompactJSONScanProbe
           marks.each { plan.validate_source! }
         end
         read_wall_ns = (Time.instant - started).total_nanoseconds.to_i64
+        gc_total_bytes_after_read = GC.stats.total_bytes
+        gc_collections_after_read = GC.prof_stats.gc_no
         completed.sort_by! do |result|
           result.marks.first? || Int32::MAX
         end
         total_rows = 0
         coordinator_serialization_ns = 0_i64
+        retained = nil.as(Array(DetachedMarkBatch)?)
         actual = if track == "callback"
                    merged = IO::Memory.new
                    completed.each do |result|
@@ -552,6 +630,11 @@ module CompactJSONScanProbe
                      total_rows += result.rows
                    end
                    merged.to_slice
+                 elsif backend == "columnar"
+                   serialization_started = Time.instant
+                   payload, total_rows = serialize_columnar(completed)
+                   coordinator_serialization_ns = (Time.instant - serialization_started).total_nanoseconds.to_i64
+                   payload
                  else
                    retained = [] of DetachedMarkBatch
                    completed.each do |result|
@@ -566,6 +649,16 @@ module CompactJSONScanProbe
         elapsed_ns = (Time.instant - started).total_nanoseconds.to_i64
         gc_collections_after = GC.prof_stats.gc_no
         gc_total_bytes_after = GC.stats.total_bytes
+        output_reset_ns = nil.as(Int64?)
+        if track == "retained"
+          reset_started = Time.instant
+          retained.try(&.clear)
+          completed.each do |result|
+            result.retained_mark_batches.try(&.clear)
+            result.columnar_mark_batches.try { |batches| batches.each(&.reset!) }
+          end
+          output_reset_ns = (Time.instant - reset_started).total_nanoseconds.to_i64
+        end
         unless actual == expected
           raise CrystalClick::CorruptPartError.new("RowBinary output differs from ClickHouse oracle (got #{actual.size}, expected #{expected.size})")
         end
@@ -591,33 +684,36 @@ module CompactJSONScanProbe
         worker_scan_ns_sum = completed.sum(&.worker_scan_ns)
         worker_serialization_ns_sum = completed.sum(&.serialization_ns)
         puts({
-          mode:                         mode,
-          track:                        track,
-          run:                          run_id - warmups,
-          part:                         part_path,
-          workers_requested:            workers,
-          backend:                      backend,
-          workers_active:               active_count,
-          worker_opens:                 ready_records,
-          prepare_wall_ns:              prepare_wall_ns,
-          shared_part_plan_ns:          shared_plan_ns,
-          shared_part_plan_marks:       shared_plan.try(&.prepared_mark_count),
-          selected_marks:               marks,
-          worker_rows:                  worker_rows,
-          rows:                         total_rows,
-          read_wall_ns:                 track == "retained" ? read_wall_ns : nil,
-          coordinator_serialization_ns: coordinator_serialization_ns,
-          scan_and_serialize_ns:        elapsed_ns,
-          gc_total_bytes_before:        gc_total_bytes_before,
-          gc_total_bytes_after:         gc_total_bytes_after,
-          gc_allocated_bytes_delta:     gc_total_bytes_after - gc_total_bytes_before,
-          gc_collections:               gc_collections_after - gc_collections_before,
-          worker_scan_ns_sum:           worker_scan_ns_sum,
-          worker_serialization_ns_sum:  worker_serialization_ns_sum,
-          rowbinary_bytes:              actual.size,
-          rowbinary_sha256:             Digest::SHA256.hexdigest(actual),
-          oracle_exact:                 true,
-          diagnostics:                  {% if flag?(:compact_json_scan_diagnostic) %}CrystalClick::CompactJSONScanProbeCounters.snapshot{% else %}nil{% end %},
+          mode:                          mode,
+          track:                         track,
+          run:                           run_id - warmups,
+          part:                          part_path,
+          workers_requested:             workers,
+          backend:                       backend,
+          workers_active:                active_count,
+          worker_opens:                  ready_records,
+          prepare_wall_ns:               prepare_wall_ns,
+          shared_part_plan_ns:           shared_plan_ns,
+          shared_part_plan_marks:        shared_plan.try(&.prepared_mark_count),
+          selected_marks:                marks,
+          worker_rows:                   worker_rows,
+          rows:                          total_rows,
+          read_wall_ns:                  track == "retained" ? read_wall_ns : nil,
+          coordinator_serialization_ns:  coordinator_serialization_ns,
+          scan_and_serialize_ns:         elapsed_ns,
+          output_reset_ns:               output_reset_ns,
+          gc_total_bytes_before:         gc_total_bytes_before,
+          gc_total_bytes_after:          gc_total_bytes_after,
+          gc_read_allocated_bytes_delta: gc_total_bytes_after_read - gc_total_bytes_before,
+          gc_read_collections:           gc_collections_after_read - gc_collections_before,
+          gc_allocated_bytes_delta:      gc_total_bytes_after - gc_total_bytes_before,
+          gc_collections:                gc_collections_after - gc_collections_before,
+          worker_scan_ns_sum:            worker_scan_ns_sum,
+          worker_serialization_ns_sum:   worker_serialization_ns_sum,
+          rowbinary_bytes:               actual.size,
+          rowbinary_sha256:              Digest::SHA256.hexdigest(actual),
+          oracle_exact:                  true,
+          diagnostics:                   {% if flag?(:compact_json_scan_diagnostic) %}CrystalClick::CompactJSONScanProbeCounters.snapshot{% else %}nil{% end %},
         }.to_json)
         STDOUT.flush if interactive
       end
@@ -631,7 +727,7 @@ end
 interactive = ARGV.last? == "--stdin"
 ARGV.pop if interactive
 unless ARGV.size == 8
-  STDERR.puts "usage: compact_json_scan_probe <backend:compact|typed|shared> <part-dir> <full-part-rowbinary-oracle> <workers:1|4> <mode:none|first|all> <track:callback|retained> <warmups> <repeats> [--stdin]"
+  STDERR.puts "usage: compact_json_scan_probe <backend:compact|typed|shared|columnar> <part-dir> <full-part-rowbinary-oracle> <workers:1|4> <mode:none|first|all> <track:callback|retained> <warmups> <repeats> [--stdin]"
   exit(2)
 end
 

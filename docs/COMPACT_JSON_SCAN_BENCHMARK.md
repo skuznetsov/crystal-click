@@ -7,7 +7,8 @@ and `Nullable(UInt32)` paths and two dynamic paths. The fixture stays within
 its dynamic path limit, so the shared buckets carry no overflow paths. The
 complete storage schema also contains `events Array(Tuple(a UInt64, b String))` and
 `attrs Map(String, Array(Nullable(UInt64)))`. The direct comparison selects
-`id, doc`.
+`id, doc`. Use `--shared-overflow` to generate the second fixture, in which
+five extra paths cause three paths per row to use Advanced SharedData.
 
 The fixture generator exports `id, toJSONString(doc) ORDER BY id FORMAT
 RowBinary` from ClickHouse with checksumming enabled. All runners validate
@@ -19,7 +20,7 @@ each runner opens a disposable copy and requires the first scan to fail.
 
 Run from the repository root. Use a disposable directory on the external SSD
 and six free loopback ports. `bench_ch` is the ClickHouse 26.10.1.1201 binary.
-`bench_cpp` is the uninstrumented C++ `readRows` runner built at ClickHouse
+`bench_cpp` is the C++ `readRows` runner built at ClickHouse
 `d9bcb5ab007f0f6299f7f973f2642245bab3d028` using the
 [direct reader build instructions](PARALLEL_TYPED_SCAN_FRONTIER.md#direct-reader-comparison-contract).
 
@@ -38,32 +39,42 @@ TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
   crystal build --release -Dpreview_mt -Dexecution_context \
     benchmarks/compact_json_scan_probe.cr -o "$bench_work/crystal-probe"
 
-mkdir "$bench_work/baseline-src" "$bench_work/baseline-cache"
-git archive fac9472696bcb4cb84b864c2eeb26de1bbc7fc96 \
-  src benchmarks/compact_json_scan_probe.cr | tar -x -C "$bench_work/baseline-src"
-TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/baseline-cache" \
-  crystal build --release -Dpreview_mt -Dexecution_context \
-    "$bench_work/baseline-src/benchmarks/compact_json_scan_probe.cr" \
-    -o "$bench_work/crystal-baseline"
-
 python3 -B scripts/compact_json_scan_benchmark.py \
   --part "$bench_work/fixture/0_1_1_0" \
   --oracle "$bench_work/fixture/0_1_1_0.rowbinary" \
-  --crystal-bin "$bench_work/crystal-probe" --crystal-backend shared \
-  --baseline-crystal-bin "$bench_work/crystal-baseline" --cpp-bin "$bench_cpp" \
+  --crystal-bin "$bench_work/crystal-probe" --crystal-backend columnar \
+  --baseline-crystal-bin "$bench_work/crystal-probe" --baseline-crystal-backend shared \
+  --cpp-bin "$bench_cpp" \
   --scratch "$bench_work" --output "$bench_work/summary.json"
+```
+
+Repeat fixture generation against a fresh benchmark server with
+`--shared-overflow` and `--output "$bench_work/overflow-fixture"` to
+measure SharedData overflow. Use that directory's part and RowBinary in
+the comparison. Run the comparison a second time with
+`--native-read-allocations` and a separate report path for native allocation
+counts on macOS with `ENABLE_LIBRARIES=OFF`.
+
+The public callback and source-binding checks use both fixture directories.
+
+```sh
+CRYSTAL_CLICK_COLUMNAR_JSON_FIXTURE_ROOT="$bench_work" \
+  TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
+  crystal spec --release -Dpreview_mt -Dexecution_context \
+    spec/compact_shared_advanced_json_columnar_spec.cr \
+    spec/compact_shared_advanced_json_part_plan_spec.cr
 ```
 
 With one worker every runner reads `[0,1,2,3]`. With four workers each gets one
 mark. All runners retain readers and worker threads within a process. Crystal
-retains owned `ObjectDocument` instances and copied IDs across the batch
-boundary. The baseline uses the typed candidate-mark API, while the shared
-runner prepares a single plan per read and passes it to the retained workers.
-The probe rechecks the source on the coordinator once per completed mark
-batch in the read timer. The public parallel API uses the same plan and
-decoders and checks the source immediately before each ordered callback on
-the calling fiber. The C++ runner calls
-`IMergeTreeReader::readRows` into reusable typed columns with synchronous
+prepares one authenticated plan per read and shares it between workers.
+The `shared` route retains owned `ObjectDocument` instances and copied IDs.
+The `columnar` route retains one reusable path-column buffer and companion
+column buffers per assigned mark. The probe warms these buffers before the
+measured reads. It rechecks the source on the coordinator once per completed
+mark batch in the read timer. The public columnar API uses the same decoder
+and validates the source immediately before each ordered callback. The C++
+runner calls `IMergeTreeReader::readRows` into reusable typed columns with synchronous
 `pread` and no shared uncompressed, mark, or prefix caches. The comparison
 driver rotates through all six runner orders, verifies worker assignments,
 and hashes the part files before and after the run. Worker and part startup
@@ -71,12 +82,81 @@ are recorded separately.
 
 The read timer includes dispatch, decompression, and production of the retained
 output. Serialization follows on the coordinator and has a separate timer.
-ClickHouse reports typed column reset separately. Boehm allocated bytes are a
-process-wide delta spanning both timed Crystal stages. ClickHouse reads into
-reusable `ColumnObject` columns. Crystal allocates owned `ObjectDocument`
-rows and rechecks the current source before delivering each batch.
+Both runners clear the output before the next scan and time this reset
+separately. The driver records
+process-wide Boehm allocated-byte and collection deltas during the read, plus
+separate deltas spanning both timed Crystal stages.
+The optional native diagnostic counts successful system allocator requests
+and their requested bytes in the read interval across the process. It
+includes `realloc` requests and captures allocator traffic from all workers.
+Boehm bytes and system requested bytes use their respective allocator
+accounting. The timing run leaves the native observer disabled.
 
-## Shared plan results
+## Columnar results
+
+Apple M2 Max, macOS 26.6.2, Crystal 1.22.3 Release with LLVM 23.1.5 and
+Boehm 8.2.12 enabled. ClickHouse `readRows` used Clang 23.1.5 Release and
+the macOS system allocator. Each fixture, reader, and worker count used
+eight fresh processes with two warmups and six measured scans each. Each
+pass checked all 576 measured reads and 192 warmups against the ordered
+RowBinary export and rejected the six post-open checksum mutations.
+
+The `shared` and `columnar` modes used the same Crystal executable. The
+combined column takes percentiles of read plus serialization per sample.
+The times below come from the pass with the native allocation observer off.
+
+| Compact part | Reader | Workers | Read p50 / p95, ms | Serialize p50 / p95, ms | Combined p50 / p95, ms |
+| --- | --- | ---: | ---: | ---: | ---: |
+| No overflow | Crystal shared | 1 | 17.508 / 23.624 | 10.481 / 15.607 | 27.867 / 36.542 |
+| No overflow | Crystal columnar | 1 | 11.708 / 14.044 | 7.597 / 10.695 | 19.007 / 26.191 |
+| No overflow | ClickHouse `readRows` | 1 | 0.426 / 0.508 | 6.042 / 8.804 | 6.474 / 9.631 |
+| No overflow | Crystal shared | 4 | 36.569 / 41.564 | 10.566 / 14.964 | 47.857 / 63.108 |
+| No overflow | Crystal columnar | 4 | 25.949 / 33.305 | 6.915 / 8.893 | 32.556 / 41.448 |
+| No overflow | ClickHouse `readRows` | 4 | 0.250 / 0.655 | 6.035 / 6.481 | 6.283 / 7.065 |
+| SharedData overflow | Crystal shared | 1 | 65.526 / 79.997 | 27.612 / 38.405 | 92.117 / 118.403 |
+| SharedData overflow | Crystal columnar | 1 | 53.121 / 68.312 | 21.585 / 27.160 | 74.907 / 93.970 |
+| SharedData overflow | ClickHouse `readRows` | 1 | 0.873 / 1.378 | 61.314 / 64.823 | 62.177 / 65.769 |
+| SharedData overflow | Crystal shared | 4 | 131.891 / 146.965 | 28.485 / 32.760 | 161.129 / 174.984 |
+| SharedData overflow | Crystal columnar | 4 | 109.682 / 125.752 | 20.474 / 22.702 | 130.074 / 148.391 |
+| SharedData overflow | ClickHouse `readRows` | 4 | 0.343 / 0.606 | 61.312 / 62.501 | 61.678 / 62.965 |
+
+The separate allocation pass measured the read interval with both runtimes
+using their configured allocators. MiB and request counts are p50 / p95.
+
+| Compact part | Workers | Boehm shared, MiB | Boehm columnar, MiB | ClickHouse requested, MiB | ClickHouse requests |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| No overflow | 1 | 33.48 / 33.50 | 25.50 / 25.51 | 0.71 / 0.71 | 1066 / 1066 |
+| No overflow | 4 | 33.48 / 33.53 | 25.51 / 25.53 | 0.71 / 0.71 | 1014 / 1033 |
+| SharedData overflow | 1 | 123.73 / 123.75 | 109.37 / 109.40 | 1.77 / 1.77 | 1648 / 1648 |
+| SharedData overflow | 4 | 124.25 / 124.27 | 109.39 / 109.42 | 1.77 / 1.77 | 1568 / 1614 |
+
+Columnar read p50 fell by 17–33% and p95 by 14–41%. The median Boehm byte
+count fell by 24% without overflow and by 12% with overflow. Median read
+collections stayed at one without overflow and rose from two to three with
+overflow. Columnar read p50 with four workers was 2.22× the one-worker
+value without overflow and 2.06× with overflow. ClickHouse read p50 improved
+by 1.71× and 2.55×, respectively. With serialization included, columnar
+Crystal p50 was 2.94× and 5.18× the ClickHouse times without overflow, and
+1.20× and 2.11× with overflow.
+
+Median plan time inside the Crystal columnar read was 2.61–2.68 ms without
+overflow and 6.07–6.09 ms with overflow. This path removes root-row document
+assembly. It still uses `BinaryValue` leaves and temporary per-row SharedData
+entries during decoding. The plans and rechecks are part of the timed Crystal
+read. The figures apply to these warm, retained one-part scans.
+
+The two fixtures matched the historical `data.bin` and RowBinary hashes below.
+The no-overflow `data.mrk4` matched as well. Both fixture-backed public API
+checks and the synthetic admission, source binding, and lifecycle checks passed
+in the two Release spec files above (18 examples).
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Crystal shared and columnar Release runner | `a80aff198b7e81cd661d937ced861199e85e48f082f0a7acaec13074369a6437` |
+| Pinned native `readRows` runner | `373dde216e82b75d5ffe183e2dfbe16094ef4d24b20f92aa34d71e63336e4c17` |
+| Overflow `data.mrk4` | `b5c2c2f6072c7c8c727cc1e73f191a55c16e5cdf0b2a6e4acaf4f1edf07ca27b` |
+
+## Previous shared plan results
 
 Warm reads on Apple M2 Max, macOS 26.6.2, Crystal 1.22.3 Release with LLVM
 23.1.5 and Boehm 8.2.12 enabled. Each reader and worker count contributed 48

@@ -90,6 +90,43 @@ empty/nested scans. The benchmark measures the whole read including plan
 construction and compares exact RowBinary with ClickHouse `readRows` on the
 same mark assignments. See the [Compact JSON benchmark](COMPACT_JSON_SCAN_BENCHMARK.md).
 
+## Borrowed columnar JSON batches
+
+`TypedPartTable#scan_compact_json_columnar` reads the same Advanced MRK4
+selection into sparse columns keyed by raw JSON path. Each mark is decoded
+into a reusable buffer. Typed, Dynamic, and shared-data paths keep their
+existing value semantics without assembling an `ObjectDocument` for each
+root row. Ordinary selected `UInt64` columns are available in the same
+batch as aligned slices.
+
+```crystal
+table = CrystalClick::TypedPartTable.open_selected_typed(parts, ["id", "doc"])
+table.scan_compact_json_columnar(workers: 4, batch_rows: 2048) do |batch|
+  ids = batch.uint64_column("id")
+  if path = batch.column_for("tenant_id")
+    ids.each_with_index do |id, row|
+      if value = path.value_at(row)
+        puts "#{id}\t#{value.type.name}"
+      end
+    end
+  end
+end
+```
+
+An absent path or cell is represented by `nil`. A present value can carry
+its own nullable state. The callback runs on the calling fiber in source
+order and can receive a bounded window of one mark. The batch, its columns,
+and read-only companion slices borrow the worker's storage until the
+callback returns. Call `batch.snapshot` inside the callback to retain the
+current window. The entire selected schedule is admitted before output,
+and the source binding is checked again before every callback.
+
+The scan apportions its logical workspace limit between the admitted plans
+and the worker buffers. Each buffer accounts for its high-water cell slots
+as it moves between marks. The limit measures logical storage. Allocator
+capacity and resident memory have separate accounting. See the
+[benchmark methodology](COMPACT_JSON_SCAN_BENCHMARK.md).
+
 ## Target contract and composition laws
 
 1. Keep `WidePartTable.open_selected_typed` genuinely Wide. Introduce

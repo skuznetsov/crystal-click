@@ -431,6 +431,53 @@ module CrystalClick
     end
 
     # :nodoc:
+    # Caller-owned retained one-mark output seam for the Compact Advanced
+    # columnar lane. `source_row_offset` is the selected-part's base in the
+    # parent table; `batch` remains borrowed until the caller resets it.
+    def scan_compact_json_columnar_mark_into(
+      mark_index : Int,
+      plan : CompactStaticJsonAdvancedPartPlan,
+      budget : BinaryCodecBudget,
+      output : CompactJsonColumnarBatch,
+      part_index : Int = 0,
+      source_row_offset : UInt64 = 0_u64,
+      part_row_offset : UInt64? = nil,
+    ) : Nil
+      validate_shared_advanced_json_scan_plan!(plan)
+      unless mark_index >= 0 && mark_index < @mark_row_counts.size &&
+             plan.mark_count == @mark_row_counts.size &&
+             plan.mark_row_count_at(mark_index) == @mark_row_counts[mark_index]
+        raise CorruptPartError.new("Compact Advanced columnar plan differs from its physical mark grid")
+      end
+      plan.decode_mark_into(mark_index, budget, output)
+
+      mark_start = part_row_offset || begin
+        offset = 0_u64
+        mark_index.times do |prior|
+          rows = @mark_row_counts[prior]
+          if rows > UInt64::MAX - offset
+            raise CorruptPartError.new("Compact Advanced columnar part row offset overflows")
+          end
+          offset += rows
+        end
+        offset
+      end
+      if mark_start > UInt64::MAX - source_row_offset
+        raise CorruptPartError.new("Compact Advanced columnar source row offset overflows")
+      end
+      output.set_location!(
+        part_index,
+        @emit_part_name,
+        @emit_part_path,
+        mark_index,
+        0_u64,
+        mark_start,
+        source_row_offset + mark_start,
+      )
+      nil
+    end
+
+    # :nodoc:
     # Shared only with worker readers of this exact all-UInt64 physical part.
     def parallel_uint64_scan_context : CompactPartPhysicalContext?
       reusable_uint64_scan? ? @direct_uint64_scan_context : nil

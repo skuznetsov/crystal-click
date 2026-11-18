@@ -18,6 +18,9 @@ from parallel_scan_benchmark import sha256_path
 from read_rows_benchmark import Runner
 
 
+NATIVE_ALLOCATION_FIELDS = ("native_read_allocation_requests", "native_read_requested_bytes")
+
+
 @contextmanager
 def open_reader(label: str, command: list[str], root: Path):
     log_path = root / f"{label}.log"
@@ -44,7 +47,9 @@ def compare(options: argparse.Namespace) -> dict:
     crystal_bin = options.crystal_bin.resolve(strict=True)
     crystal_readers = {"crystal": (crystal_bin, options.crystal_backend)}
     if options.baseline_crystal_bin:
-        crystal_readers["crystal_baseline"] = (options.baseline_crystal_bin.resolve(strict=True), "typed")
+        crystal_readers["crystal_baseline"] = (
+            options.baseline_crystal_bin.resolve(strict=True), options.baseline_crystal_backend,
+        )
     cpp_bin = options.cpp_bin.resolve(strict=True)
     engines = [*crystal_readers, "clickhouse"]
     orders = list(itertools.permutations(engines))
@@ -73,10 +78,13 @@ def compare(options: argparse.Namespace) -> dict:
                                             str(workers), "all", "retained", "0", "1", "--stdin"], trial)
             work = trial / "cpp-work"
             work.mkdir()
-            return open_reader(engine, [str(cpp_bin), "--schema", "json", "--part", str(selection),
-                                        "--layout", "compact", "--marks", "0,1,2,3", "--mark-rows",
-                                        str(ROWS_PER_MARK), "--workers", str(workers), "--oracle", str(oracle),
-                                        "--work-dir", str(work)], trial)
+            command = [str(cpp_bin), "--schema", "json", "--part", str(selection),
+                       "--layout", "compact", "--marks", "0,1,2,3", "--mark-rows",
+                       str(ROWS_PER_MARK), "--workers", str(workers), "--oracle", str(oracle),
+                       "--work-dir", str(work)]
+            if options.native_read_allocations:
+                command.extend(("--native-read-allocations", "1"))
+            return open_reader(engine, command, trial)
 
         for engine in engines:
             trial = root / f"{engine}-checksum-control"
@@ -130,7 +138,7 @@ def compare(options: argparse.Namespace) -> dict:
                                               "different Crystal mark schedule")
                                 process.check(sample["oracle_exact"] is True and sample["rowbinary_sha256"] == oracle_hash,
                                               "Crystal RowBinary differs from the oracle")
-                                if crystal_readers[engine][1] == "shared":
+                                if crystal_readers[engine][1] in ("shared", "columnar"):
                                     process.check(sample["shared_part_plan_ns"] > 0 and
                                                   sample["shared_part_plan_marks"] == ROWS_PER_PART // ROWS_PER_MARK,
                                                   "a complete shared part plan is required in the timed read")
@@ -139,6 +147,10 @@ def compare(options: argparse.Namespace) -> dict:
                                 process.check(sample["effective_workers"] == workers and sample["worker_marks"] == expected_groups,
                                               "different ClickHouse mark schedule")
                                 process.check(sample["checksum_on_read_policy"] == "enabled", "checksumming is required")
+                                if options.native_read_allocations:
+                                    process.check(all(type(sample.get(field)) is int and sample[field] >= 0
+                                                      for field in NATIVE_ALLOCATION_FIELDS),
+                                                  "native read allocation counters are unavailable")
                                 if index == 0:
                                     process.check((trial / "cpp-work" / "rowbinary.bin").read_bytes() == expected,
                                                   "ClickHouse RowBinary differs from the oracle")
@@ -168,7 +180,10 @@ def compare(options: argparse.Namespace) -> dict:
                     "gc_allocated_bytes_delta", "gc_collections",
                 )}
                 stats["prepare_wall_ns"] = percentiles([sample["prepare_wall_ns"] for sample in first_in_block])
-                if crystal_readers[engine][1] == "shared":
+                for field in ("gc_read_allocated_bytes_delta", "gc_read_collections", "output_reset_ns"):
+                    if all(field in sample for sample in selected):
+                        stats[field] = percentiles([sample[field] for sample in selected])
+                if crystal_readers[engine][1] in ("shared", "columnar"):
                     stats["shared_part_plan_ns"] = percentiles([sample["shared_part_plan_ns"] for sample in selected])
             else:
                 stats = {field: percentiles([sample[field] for sample in selected]) for field in (
@@ -177,9 +192,15 @@ def compare(options: argparse.Namespace) -> dict:
                 stats["read_and_materialize_ns"] = percentiles([sample["read_ns"] + sample["materialize_ns"] for sample in selected])
                 for field in ("load_part_ns", "prepare_ns"):
                     stats[field] = percentiles([sample[field] for sample in first_in_block])
+                if options.native_read_allocations:
+                    for field in NATIVE_ALLOCATION_FIELDS:
+                        stats[field] = percentiles([sample[field] for sample in selected])
             summary.append({"engine": engine, "workers": workers, "sample_count": len(selected), **stats})
     report = {"part_hashes": original_hashes, "oracle_sha256": oracle_hash,
               "crystal_binary_sha256": sha256_path(crystal_bin), "clickhouse_binary_sha256": sha256_path(cpp_bin),
+              "crystal_backends": {engine: backend for engine, (_, backend) in crystal_readers.items()},
+              "blocks": options.blocks, "warmups_per_block": options.warmups, "repeats_per_block": options.repeats,
+              "native_read_allocations": options.native_read_allocations,
               "checksum_controls_passed": True, "summary": summary, "samples": samples}
     if options.baseline_crystal_bin:
         report["crystal_baseline_binary_sha256"] = sha256_path(crystal_readers["crystal_baseline"][0])
@@ -191,7 +212,10 @@ if __name__ == "__main__":
     for name in ("part", "oracle", "crystal-bin", "cpp-bin", "scratch", "output"):
         parser.add_argument(f"--{name}", type=Path, required=True)
     parser.add_argument("--baseline-crystal-bin", type=Path)
-    parser.add_argument("--crystal-backend", choices=("typed", "shared"), default="typed")
+    parser.add_argument("--crystal-backend", choices=("typed", "shared", "columnar"), default="typed")
+    parser.add_argument("--baseline-crystal-backend", choices=("typed", "shared"), default="typed")
+    parser.add_argument("--native-read-allocations", action="store_true",
+                        help="sample macOS system allocator requests in a separate diagnostic run")
     parser.add_argument("--blocks", type=int, default=8)
     parser.add_argument("--warmups", type=int, default=2)
     parser.add_argument("--repeats", type=int, default=6)

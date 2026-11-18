@@ -590,6 +590,45 @@ module CrystalClick
       )
     end
 
+    # :nodoc:
+    # Compact Advanced root JSON scan output uses the same exact decoders and
+    # validation path as ObjectDocument, but writes cells into a sealed
+    # reusable columnar arena instead of creating one Hash and ObjectDocument
+    # per row.
+    def self.decode_child_site_columnar_with_budget(
+      typed_schema : Hash(String, BinaryDataType),
+      streams : ObjectDocumentStreams,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      output : CompactJsonColumnarBatch,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+      typed_descriptor_root_depth : Int32 = 2,
+      inferred_actual_root_depth : Int32 = 1_i32,
+      typed_dynamic_json_read_context : ObjectDocumentTypedDynamicJsonReadContext? = nil,
+    ) : Nil
+      decode_core_with_budget(
+        typed_schema,
+        streams,
+        budget,
+        0,
+        1,
+        profile,
+        shared_profile,
+        Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+        typed_descriptor_root_depth,
+        RootDynamicJsonLeafPlans.new,
+        inferred_actual_root_depth,
+        nil,
+        grid,
+        nil,
+        typed_dynamic_json_read_context,
+        nil,
+        output,
+      )
+      nil
+    end
+
     # Decodes an inline JSON child Object using the exact statistics-free
     # prefix metadata already consumed from its parent Data callback tape.
     # The caller supplies the occurrence grid after the enclosing Dynamic
@@ -680,6 +719,7 @@ module CrystalClick
       inline_prefix : ObjectDocumentInlinePrefix?,
       typed_dynamic_json_read_context : ObjectDocumentTypedDynamicJsonReadContext?,
       assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
+      columnar_output : CompactJsonColumnarBatch? = nil,
     ) : Array(Array(ObjectDocument))
       if budget.writing?
         raise ArgumentError.new("Object document decode requires a reading budget")
@@ -1099,6 +1139,44 @@ module CrystalClick
       budget.ensure_future_nodes(selected_rows)
       budget.ensure_future_elements(assembly_fields)
 
+      if output = columnar_output
+        unless selected_count == 1 && output.row_count.to_u64 == selected_rows
+          raise CorruptPartError.new("Compact JSON columnar destination differs from the selected mark grid")
+        end
+        typed_columns = [] of Tuple(CompactJsonColumnarColumn, Array(BinaryValue))
+        typed_rows.each do |path, marks|
+          column = output.column_for(path) ||
+                   raise CorruptPartError.new("typed Compact JSON path is outside the sealed columnar roster")
+          typed_columns << {column, marks[0]}
+        end
+        dynamic_columns = [] of Tuple(CompactJsonColumnarColumn, Array(BinaryValue))
+        dynamic_rows.each do |path, marks|
+          column = output.column_for(path) ||
+                   raise CorruptPartError.new("Dynamic Compact JSON path is outside the sealed columnar roster")
+          dynamic_columns << {column, marks[0]}
+        end
+        row_count = rows_per_mark[selected_first].to_i
+        row_count.times do |row_index|
+          unique_fields = 0_u64
+          typed_columns.each do |column, values|
+            unique_fields += 1_u64 if output.append_column_value!(column, row_index, values[row_index])
+          end
+          dynamic_columns.each do |column, values|
+            value = values[row_index]
+            unless value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
+              unique_fields += 1_u64 if output.append_column_value!(column, row_index, value)
+            end
+          end
+          shared_rows[0][row_index].each do |entry|
+            unique_fields += 1_u64 if output.append_value!(entry[0], row_index, entry[1])
+          end
+          budget.charge_node
+          budget.charge_elements(unique_fields) if unique_fields > 0_u64
+        end
+        output.validate_workspace!(columnar_intermediate_shell_workspace_bytes(typed_rows, dynamic_rows, shared_rows))
+        return [] of Array(ObjectDocument)
+      end
+
       result = Array(Array(ObjectDocument)).new(selected_count)
       selected_count.times do |window_offset|
         selected_index = window_offset
@@ -1124,6 +1202,43 @@ module CrystalClick
         result << documents
       end
       result
+    end
+
+    private def self.columnar_intermediate_shell_workspace_bytes(
+      typed_rows : Hash(String, Array(Array(BinaryValue))),
+      dynamic_rows : Hash(String, Array(Array(BinaryValue))),
+      shared_rows : Array(Array(Array(ObjectDocumentSharedCodec::Entry))),
+    ) : UInt64
+      bytes = instance_sizeof(Hash(String, Array(Array(BinaryValue)))).to_u64 * 2_u64
+      {typed_rows, dynamic_rows}.each do |lanes|
+        lanes.each do |_path, marks|
+          bytes = checked_add(bytes, instance_sizeof(Array(Array(BinaryValue))).to_u64, false)
+          bytes = checked_add(bytes,
+            checked_multiply(marks.size.to_u64, sizeof(Pointer(Array(BinaryValue))).to_u64, false), false)
+          marks.each do |values|
+            bytes = checked_add(bytes, instance_sizeof(Array(BinaryValue)).to_u64, false)
+            bytes = checked_add(bytes,
+              checked_multiply(values.size.to_u64, sizeof(Pointer(BinaryValue)).to_u64, false), false)
+          end
+        end
+      end
+      bytes = checked_add(bytes, instance_sizeof(Array(Array(Array(ObjectDocumentSharedCodec::Entry)))).to_u64, false)
+      bytes = checked_add(bytes,
+        checked_multiply(shared_rows.size.to_u64, sizeof(Pointer(Array(Array(ObjectDocumentSharedCodec::Entry)))).to_u64, false), false)
+      shared_rows.each do |marks|
+        bytes = checked_add(bytes, instance_sizeof(Array(Array(ObjectDocumentSharedCodec::Entry))).to_u64, false)
+        bytes = checked_add(bytes,
+          checked_multiply(marks.size.to_u64, sizeof(Pointer(Array(ObjectDocumentSharedCodec::Entry))).to_u64, false), false)
+        marks.each do |entries|
+          bytes = checked_add(bytes, instance_sizeof(Array(ObjectDocumentSharedCodec::Entry)).to_u64, false)
+          bytes = checked_add(bytes,
+            checked_multiply(entries.size.to_u64, sizeof(ObjectDocumentSharedCodec::Entry).to_u64, false), false)
+          entries.each do |entry|
+            bytes = checked_add(bytes, sizeof(String).to_u64 + entry[0].bytesize.to_u64 + 1_u64, false)
+          end
+        end
+      end
+      bytes
     end
 
     private def self.assemble_row_document(

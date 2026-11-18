@@ -27,6 +27,9 @@ module CrystalClick
     @mark_rows : Array(UInt64)
     @uint64_mark_bytes : Hash(String, Array(Bytes))
     @companion_columns : Array(String)
+    @columnar_paths : Array(String)?
+    @columnar_fallback_types : Hash(String, BinaryDataType)?
+    @columnar_workspace_bytes : UInt64
     @retained_workspace_bytes : UInt64
     @preparation_budget : BinaryCodecBudget
 
@@ -52,6 +55,9 @@ module CrystalClick
       @advanced_marks = advanced_marks.dup
       @mark_rows = mark_rows.dup
       @companion_columns = companion_columns.map { |name| String.new(name.to_slice) }
+      @columnar_paths = nil
+      @columnar_fallback_types = nil
+      @columnar_workspace_bytes = 0_u64
       @uint64_mark_bytes = Hash(String, Array(Bytes)).new(initial_capacity: uint64_mark_bytes.size)
       uint64_mark_bytes.each do |name, marks|
         @uint64_mark_bytes[String.new(name.to_slice)] = marks.map(&.dup)
@@ -83,6 +89,118 @@ module CrystalClick
 
     def mark_row_count_at(mark_index : Int) : UInt64
       @mark_rows[mark_index]
+    end
+
+    # :nodoc:
+    def new_decode_budget : BinaryCodecBudget
+      BinaryCodecBudget.new(@reader.codec_limits)
+    end
+
+    # :nodoc:
+    def prepare_decode_budget!(budget : BinaryCodecBudget) : Nil
+      replay_preparation_budget!(budget)
+    end
+
+    # :nodoc:
+    def prepare_columnar_output! : Nil
+      return nil if @columnar_paths && @columnar_fallback_types
+
+      paths = [] of String
+      fallback_types = Hash(String, BinaryDataType).new
+      seen_paths = Set(String).new
+      shape_build_bytes = checked_add(
+        instance_sizeof(Array(String)).to_u64,
+        checked_add(instance_sizeof(Hash(String, BinaryDataType)).to_u64,
+          sizeof(Set(String)).to_u64),
+      )
+      @advanced_marks.each do |mark|
+        mark.each_columnar_path do |path|
+          if seen_paths.add?(path)
+            if paths.size.to_i64 >= @reader.codec_limits.max_nodes
+              raise CorruptPartError.new("Compact JSON columnar path union exceeds the codec node bound")
+            end
+            path_cost = checked_add(string_owner_bytes(path),
+              checked_add(sizeof(Pointer(String)).to_u64, (64 + sizeof(Pointer(String))).to_u64))
+            shape_build_bytes = checked_add(shape_build_bytes, path_cost)
+            enforce_columnar_shape_workspace!(shape_build_bytes)
+            paths << String.new(path.to_slice)
+          end
+        end
+        mark.each_columnar_fallback_type do |path, type|
+          unless fallback_types.has_key?(path)
+            type_path_cost = checked_add(string_owner_bytes(path), (64 + sizeof(Pointer(String))).to_u64)
+            shape_build_bytes = checked_add(shape_build_bytes, type_path_cost)
+            enforce_columnar_shape_workspace!(shape_build_bytes)
+            fallback_types[String.new(path.to_slice)] = type
+          end
+        end
+      end
+      paths.sort! { |left, right| ObjectSharedChunkStructure.compare_paths(left, right) }
+      if paths.size.to_i64 > @reader.codec_limits.max_nodes
+        raise CorruptPartError.new("Compact JSON columnar path union exceeds the codec node bound")
+      end
+      @columnar_workspace_bytes = columnar_shape_workspace_bytes(paths, fallback_types)
+      if checked_add(@retained_workspace_bytes, @columnar_workspace_bytes) > WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
+        raise CorruptPartError.new("Compact JSON columnar plan and path shape exceed the aggregate materialization limit")
+      end
+      @columnar_paths = paths
+      @columnar_fallback_types = fallback_types
+      nil
+    end
+
+    # :nodoc:
+    def new_columnar_output(
+      total_workspace_limit : UInt64 = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64,
+    ) : CompactJsonColumnarBatch
+      prepare_columnar_output!
+      paths = @columnar_paths || raise(CorruptPartError.new("Compact JSON columnar shape was not prepared"))
+      fallback_types = @columnar_fallback_types || raise(CorruptPartError.new("Compact JSON columnar types were not prepared"))
+      retained_bytes = retained_workspace_bytes
+      if retained_bytes >= total_workspace_limit
+        raise CorruptPartError.new("Compact JSON columnar plan leaves no room for an output arena")
+      end
+      max_rows = @mark_rows.max?.try(&.to_i) || 0
+      max_paths = Math.min(@reader.codec_limits.max_nodes, Int32::MAX.to_i64).to_i
+      output = CompactJsonColumnarBatch.from_layout(
+        paths,
+        @companion_columns,
+        fallback_types,
+        max_rows,
+        @reader.codec_limits.max_elements.to_u64,
+        total_workspace_limit - retained_bytes,
+        max_paths,
+      )
+      output.validate_layout!(paths, @companion_columns)
+      output
+    end
+
+    # :nodoc:
+    # Decode exactly one retained source mark into the caller-owned reusable
+    # arena. The returned batch carries mark-relative coordinates until a
+    # table facade supplies its part/source coordinates.
+    def decode_mark_into(
+      mark_index : Int,
+      budget : BinaryCodecBudget,
+      output : CompactJsonColumnarBatch,
+    ) : Nil
+      unless mark_index >= 0 && mark_index < @advanced_marks.size
+        raise ArgumentError.new("Compact Advanced plan mark index is outside its sealed grid")
+      end
+      unless budget.same?(@preparation_budget) || budget.includes_preparation_from?(@preparation_budget)
+        raise ArgumentError.new("Compact Advanced columnar decode requires its preparation receipt")
+      end
+      unless @columnar_paths && @columnar_fallback_types
+        raise CorruptPartError.new("Compact JSON columnar shape must be prepared before decoding")
+      end
+      rows = @mark_rows[mark_index]
+      output.begin_mark!(0, File.basename(@part_path), @part_path, mark_index, 0_u64, 0_u64, 0_u64, rows)
+      @advanced_marks[mark_index].decode_columnar_with_budget(budget, output)
+      @companion_columns.each do |name|
+        bytes = @uint64_mark_bytes[name][mark_index]
+        output.fill_uint64_column!(name, bytes, rows)
+      end
+      output.validate_workspace!
+      nil
     end
 
     def binds_reader?(reader : CompactStaticJsonBulkColumnReader) : Bool
@@ -166,7 +284,25 @@ module CrystalClick
     end
 
     def retained_workspace_bytes : UInt64
-      @retained_workspace_bytes
+      checked_add(@retained_workspace_bytes, @columnar_workspace_bytes)
+    end
+
+    private def enforce_columnar_shape_workspace!(shape_build_bytes : UInt64) : Nil
+      if checked_add(@retained_workspace_bytes, shape_build_bytes) > WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
+        raise CorruptPartError.new("Compact JSON columnar path union exceeds the aggregate materialization limit")
+      end
+      nil
+    end
+
+    private def columnar_shape_workspace_bytes(paths : Array(String), fallback_types : Hash(String, BinaryDataType)) : UInt64
+      bytes = instance_sizeof(Array(String)).to_u64
+      bytes = checked_add(bytes, checked_multiply(paths.size.to_u64, sizeof(Pointer(String)).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Hash(String, BinaryDataType)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(paths.size.to_u64, (64 + sizeof(Pointer(String))).to_u64))
+      paths.each { |path| bytes = checked_add(bytes, string_owner_bytes(path)) }
+      bytes = checked_add(bytes, checked_multiply(fallback_types.size.to_u64, (64 + sizeof(Pointer(String))).to_u64))
+      fallback_types.each_key { |path| bytes = checked_add(bytes, string_owner_bytes(path)) }
+      bytes
     end
 
     private def calculate_retained_workspace_bytes : UInt64

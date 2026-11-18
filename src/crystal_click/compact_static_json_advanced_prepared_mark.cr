@@ -132,6 +132,43 @@ module CrystalClick
       @logical_row_count
     end
 
+    # :nodoc:
+    # Exact output path roster admitted by this prepared mark. Typed fields are
+    # always present in the established ObjectDocument assembly; Dynamic and
+    # Advanced shared paths may be absent on individual rows.
+    def each_columnar_path(&block : String -> Nil) : Nil
+      seen = Set(String).new
+      @typed_schema.each_key do |path|
+        yield path if seen.add?(path)
+      end
+      @ordinary_streams.typed_dynamic_path_count.times do |index|
+        path = @ordinary_streams.typed_dynamic_path_at(index)
+        yield path if seen.add?(path)
+      end
+      @ordinary_streams.dynamic_path_count.times do |index|
+        path = @ordinary_streams.dynamic_path_at(index)
+        yield path if seen.add?(path)
+      end
+      @shared_prepared.bucket_count.times do |bucket_index|
+        @shared_prepared.chunk_structure_spans_at(bucket_index).each do |span|
+          record = span.record
+          record.path_count.times do |path_index|
+            path = record.path_at(path_index)
+            yield path if seen.add?(path)
+          end
+        end
+      end
+      nil
+    end
+
+    # :nodoc:
+    # Typed declarations provide fallback types; Dynamic and SharedData paths
+    # have no fallback when absent.
+    def each_columnar_fallback_type(&block : String, BinaryDataType -> Nil) : Nil
+      @typed_schema.each { |path, type| yield path, type }
+      nil
+    end
+
     # Decode using the original operation's budget or a read budget with its
     # exact preparation receipt. Workspace notifications measure logical
     # ownership after materialization.
@@ -208,6 +245,41 @@ module CrystalClick
       active = checked_add(active, stream_shell_workspace_bytes(streams))
       observe_workspace(workspace_observer, checked_add(active, documents_workspace_bytes(documents)))
       documents
+    end
+
+    # Decode exact selected values directly into the reusable columnar owner.
+    # No ObjectDocument or per-row output Hash is built on this lane.
+    # :nodoc:
+    def decode_columnar_with_budget(
+      budget : BinaryCodecBudget,
+      output : CompactJsonColumnarBatch,
+    ) : Nil
+      if budget.writing?
+        raise ArgumentError.new("prepared Compact Advanced columnar decode requires a read-direction budget")
+      end
+      unless @budget.same?(budget) || budget.includes_preparation_from?(@budget)
+        raise ArgumentError.new("prepared Compact Advanced columnar decode requires its preparation receipt")
+      end
+      @shared_prepared.validate_decode_operation!(budget)
+
+      advanced_rows = ObjectSharedAdvancedInlineDecoder.decode_prepared(@shared_prepared, budget)
+      unless advanced_rows.size == 1 && advanced_rows[0].size.to_u64 == @logical_row_count
+        raise CorruptPartError.new("prepared Compact Advanced columnar decode returned the wrong mark grid")
+      end
+      streams = streams_with_advanced_rows(advanced_rows)
+      ObjectDocumentCodec.decode_child_site_columnar_with_budget(
+        @typed_schema,
+        streams,
+        @grid,
+        budget,
+        output,
+        profile: @ordinary_profile,
+        shared_profile: BinaryBulkProfile.single_stream,
+        typed_descriptor_root_depth: @typed_descriptor_root_depth,
+        inferred_actual_root_depth: @inferred_actual_root_depth,
+        typed_dynamic_json_read_context: @typed_json_context,
+      )
+      nil
     end
 
     # Logical retained-owner estimate for this mark. It covers this owner's

@@ -25,6 +25,8 @@
 #include <utility>
 #include <vector>
 
+#include "NativeReadAllocations.h"
+
 #ifdef CLICKHOUSE_READ_ROWS_PROFILE
 #include <ReadRowsProfile.h>
 #endif
@@ -87,6 +89,7 @@ struct Options
     size_t workers = 0;
     fs::path oracle;
     fs::path work_dir;
+    bool native_read_allocations = false;
 };
 
 [[noreturn]] void fail(const std::string & message)
@@ -131,8 +134,8 @@ std::vector<size_t> parseMarks(std::string_view value)
 
 Options parseOptions(int argc, char ** argv)
 {
-    if (argc != 15 && argc != 17)
-        fail("usage: clickhouse-read-rows --part PATH --layout wide|compact --marks 0,1,... --mark-rows N --workers 1|4 --oracle PATH --work-dir PATH [--schema uint64|json]");
+    if (argc != 15 && argc != 17 && argc != 19)
+        fail("usage: clickhouse-read-rows --part PATH --layout wide|compact --marks 0,1,... --mark-rows N --workers 1|4 --oracle PATH --work-dir PATH [--schema uint64|json] [--native-read-allocations 1]");
 
     Options options;
     for (int i = 1; i < argc; i += 2)
@@ -155,6 +158,8 @@ Options parseOptions(int argc, char ** argv)
             options.oracle = value;
         else if (key == "--work-dir")
             options.work_dir = value;
+        else if (key == "--native-read-allocations" && value == "1")
+            options.native_read_allocations = true;
         else
             fail("unknown argument: " + std::string(key));
     }
@@ -165,6 +170,8 @@ Options parseOptions(int argc, char ** argv)
         fail("--schema must be uint64 or json");
     if (options.schema == "json" && options.layout != "compact")
         fail("--schema json requires --layout compact");
+    if (options.native_read_allocations && options.schema != "json")
+        fail("--native-read-allocations requires --schema json");
     if (options.workers != 1 && options.workers != 4)
         fail("--workers must be 1 or 4");
     if (!options.mark_rows)
@@ -881,11 +888,14 @@ void scanJsonOnce(
     JsonWorkerPool & worker_pool,
     const JsonMaterializer & materializer,
     const std::vector<UInt8> & expected_oracle,
+    const NativeReadAllocations & allocations,
     UInt64 load_part_ns,
     UInt64 prepare_ns,
     bool & rowbinary_exported)
 {
+    const auto before = allocations.snapshot();
     const UInt64 read_ns = worker_pool.read();
+    const auto after = allocations.snapshot();
     const auto materialize_started = Clock::now();
     const std::string rowbinary = materializeJsonRowBinary(
         options, worker_pool.getMaterialized(), materializer);
@@ -944,6 +954,9 @@ void scanJsonOnce(
         std::cout << std::hash<std::thread::id>{}(worker.native_thread_id);
     }
     std::cout << ']';
+    if (options.native_read_allocations)
+        std::cout << ",\"native_read_allocation_requests\":" << after.requests - before.requests
+                  << ",\"native_read_requested_bytes\":" << after.bytes - before.bytes;
 #ifdef CLICKHOUSE_READ_ROWS_PROFILE
     std::cout << ",\"profile\":{\"version\":1,\"checksum_semantics\":\"actual_CityHash128_calls\",\"workers\":[";
     bool first_profile_worker = true;
@@ -1149,6 +1162,7 @@ void scanOnce(
 
 int runJson(const Options & options, const std::vector<UInt8> & oracle)
 {
+    const NativeReadAllocations allocations(options.native_read_allocations);
     const auto load_started = Clock::now();
     NativeTable native_table = loadNativePart(options);
     const UInt64 load_part_ns = static_cast<UInt64>(
@@ -1176,7 +1190,7 @@ int runJson(const Options & options, const std::vector<UInt8> & oracle)
                 break;
             if (command != "scan")
                 fail("stdin command must be scan or quit");
-            scanJsonOnce(options, worker_pool, materializer, expected_oracle, load_part_ns, prepare_ns, rowbinary_exported);
+            scanJsonOnce(options, worker_pool, materializer, expected_oracle, allocations, load_part_ns, prepare_ns, rowbinary_exported);
         }
     }
     native_table.storage->flushAndShutdown();

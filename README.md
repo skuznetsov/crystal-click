@@ -227,6 +227,12 @@ selected Compact MRK4 JSON root using Advanced SharedData v2 or v3 with two
 buckets. The selection can include ordinary `UInt64` columns. See the
 [shared part plan](docs/COMPACT_TYPED_READER_FRONTIER.md#shared-advanced-json-part-plan).
 
+For path-oriented access to that Compact JSON profile, call
+`TypedPartTable#scan_compact_json_columnar` with the JSON root and any
+ordinary `UInt64` companions selected. The callback receives reusable JSON
+path columns aligned with the companion columns. See the
+[columnar JSON example](docs/COMPACT_TYPED_READER_FRONTIER.md#borrowed-columnar-json-batches).
+
 `workers: 1` scans serially. For repeated scans of ordinary Wide numeric parts
 with `.mrk2` marks, retain the
 `TypedPartTable` instance and call `scan_typed_parallel(workers: 4)` on it for

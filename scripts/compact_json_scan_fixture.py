@@ -36,7 +36,7 @@ SETTINGS index_granularity={ROWS_PER_MARK}, index_granularity_bytes=10485760,
 """
 
 
-def fixture_row(row_id: int) -> str:
+def fixture_row(row_id: int, shared_overflow: bool = False) -> str:
     doc = {
         "tenant_id": row_id % 1000,
         "title": f"title-{row_id:06d}",
@@ -44,6 +44,9 @@ def fixture_row(row_id: int) -> str:
         "dynamic_value": f"dv-{row_id % 19:02d}" if row_id % 2 == 0 else row_id % 4096,
         "dynamic_flag": row_id % 2 == 0,
     }
+    if shared_overflow:
+        for path_index in range(5):
+            doc[f"overflow_{path_index}"] = f"spill-{path_index}-{row_id % 43:02d}"
     events = [
         {"a": row_id % 50000, "b": f"event-{row_id % 13:02d}-a"},
         {"a": row_id % 20000, "b": f"event-{row_id % 17:02d}-b"},
@@ -55,7 +58,7 @@ def fixture_row(row_id: int) -> str:
                       sort_keys=True, separators=(",", ":"))
 
 
-def build(port: int, output: Path, part_count: int) -> None:
+def build(port: int, output: Path, part_count: int, shared_overflow: bool = False) -> None:
     version = query(port, "SELECT version()").decode().strip()
     if version != "26.10.1.1201":
         raise RuntimeError(f"expected ClickHouse 26.10.1.1201, got {version}")
@@ -64,7 +67,7 @@ def build(port: int, output: Path, part_count: int) -> None:
     query(port, f"SYSTEM STOP MERGES {TABLE}")
     for part_index in range(part_count):
         first = part_index * ROWS_PER_PART
-        payload = "\n".join(fixture_row(row_id) for row_id in range(first, first + ROWS_PER_PART))
+        payload = "\n".join(fixture_row(row_id, shared_overflow) for row_id in range(first, first + ROWS_PER_PART))
         query(port, f"INSERT INTO {TABLE} FORMAT JSONEachRow\n{payload}\n")
 
     parts = [json.loads(line) for line in query(port, """
@@ -106,5 +109,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, required=True, help="HTTP port of a disposable loopback ClickHouse server")
     parser.add_argument("--output", type=Path, required=True, help="new directory for parts and oracles")
     parser.add_argument("--parts", type=int, choices=(1, 8), default=1)
+    parser.add_argument("--shared-overflow", action="store_true",
+                        help="add five JSON paths to exercise Advanced SharedData overflow")
     arguments = parser.parse_args()
-    build(arguments.port, arguments.output, arguments.parts)
+    build(arguments.port, arguments.output, arguments.parts, arguments.shared_overflow)
