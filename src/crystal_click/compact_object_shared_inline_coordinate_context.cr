@@ -73,13 +73,26 @@ module CrystalClick
 
       byte_count = bytes.size.to_u64
       budget.ensure_wire_bytes(byte_count)
-      budget.charge_wire_bytes(byte_count) if byte_count > 0_u64
-      bytes.each_with_index do |byte, index|
-        path_offset = relative_start + index.to_u64
-        shard_index, shard_offset = locate_path_byte(path_offset)
-        unless @shards[shard_index].byte_at(shard_offset) == byte
-          raise CorruptPartError.new("inline bytes differ from their authenticated Compact shard intervals")
+      return if bytes.empty?
+
+      budget.charge_wire_bytes(byte_count)
+      shard_index, shard_offset = locate_path_byte(relative_start)
+      byte_index = 0
+      while byte_index < bytes.size
+        shard = @shards[shard_index]? ||
+                raise CorruptPartError.new("Compact inline byte offset has no authenticated shard owner")
+        width = (shard.logical_end - shard.logical_start).to_i - shard_offset
+        if width > 0
+          remaining_input = bytes.size - byte_index
+          window_size = remaining_input < width ? remaining_input : width
+          unless shard.matches_bytes_at?(shard_offset, bytes[byte_index, window_size])
+            raise CorruptPartError.new("inline bytes differ from their authenticated Compact shard intervals")
+          end
+          byte_index += window_size
         end
+
+        shard_index += 1
+        shard_offset = 0
       end
       nil
     end

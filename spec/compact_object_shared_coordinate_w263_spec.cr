@@ -182,6 +182,52 @@ describe "Compact Object inline coordinate provenance (W263)" do
     end
   end
 
+  it "compares bounded slices across empty shards and preserves wire-budget charging" do
+    w263_with_compact_physical_context do |physical|
+      window = physical.read_window("alpha", 0, 4)
+      shards = window.granules.map { |granule| granule.shards[0] }
+      path = CrystalClick::CompactObjectSharedInlineCoordinateContext.new(
+        physical,
+        "alpha:JSON/root.shared:cross-shard-validation",
+        shards,
+      )
+
+      # Relative byte 1 is the last byte of shard 0. The next two path bytes
+      # live in shard 2 because shard 1 is empty.
+      cross_shard = Bytes[0x30_u8, 0x61_u8, 0x32_u8]
+      budget = CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default)
+      path.validate_path_bytes!(1_u64, cross_shard, budget)
+      budget.wire_byte_count.should eq(3_i64)
+
+      # A mismatch on the last byte still fails after the full callback window
+      # has been charged, matching the existing preflight/charge order.
+      mismatch_budget = CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default)
+      expect_raises(
+        CrystalClick::CorruptPartError,
+        "inline bytes differ from their authenticated Compact shard intervals",
+      ) do
+        path.validate_path_bytes!(1_u64, Bytes[0x30_u8, 0x61_u8, 0x33_u8], mismatch_budget)
+      end
+      mismatch_budget.wire_byte_count.should eq(3_i64)
+
+      one_below_limits = CrystalClick::BinaryCodecLimits.new(
+        max_depth: 64,
+        max_nodes: 4_096,
+        max_elements: 1_000_000,
+        max_bytes: 2,
+      )
+      one_below_budget = CrystalClick::BinaryCodecBudget.new(one_below_limits)
+      expect_raises(CrystalClick::CorruptPartError, "binary codec byte limit exceeded") do
+        path.validate_path_bytes!(1_u64, cross_shard, one_below_budget)
+      end
+      one_below_budget.wire_byte_count.should eq(0_i64)
+
+      empty_terminal_budget = CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default)
+      path.validate_path_bytes!(path.path_data_size.to_u64, Bytes.empty, empty_terminal_budget)
+      empty_terminal_budget.wire_byte_count.should eq(0_i64)
+    end
+  end
+
   it "authenticates ordered path shards from multiple physical callback slots" do
     w263_with_compact_physical_context do |physical|
       window = physical.read_window("alpha", 0, 2)

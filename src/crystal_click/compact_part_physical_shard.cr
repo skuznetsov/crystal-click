@@ -45,6 +45,15 @@ module CrystalClick
       true
     end
 
+    # Compares an in-bounds window without exposing a mutable view of the
+    # authenticated detached bytes. UInt8 Slice equality uses memcmp.
+    def matches_bytes_at?(offset : Int, other : Bytes) : Bool
+      return false if offset < 0 || offset > @bytes.size
+      return false if other.size > @bytes.size - offset
+
+      @bytes[offset, other.size] == other
+    end
+
     # Logical retained-owner census for this detached shard. It counts the
     # shard object and its copied byte/name storage by logical size, not
     # allocator capacity or RSS; callers must not obtain copies through the
