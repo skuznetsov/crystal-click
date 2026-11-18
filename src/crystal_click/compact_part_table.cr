@@ -345,6 +345,13 @@ module CrystalClick
     end
 
     # :nodoc:
+    # Root JSON Object rows can reuse one scan-owned assembly hash after the
+    # reader has authenticated its prepared layout.
+    def reusable_object_document_scan? : Bool
+      @json_readers.any?(&.reusable_object_document_scan?)
+    end
+
+    # :nodoc:
     # Shared only with worker readers of this exact all-UInt64 physical part.
     def parallel_uint64_scan_context : CompactPartPhysicalContext?
       reusable_uint64_scan? ? @direct_uint64_scan_context : nil
@@ -364,11 +371,12 @@ module CrystalClick
     def scan_typed_with_workspace(
       batch_rows : Int,
       workspace : CompactUInt64ScanWorkspace?,
+      object_document_workspace : ObjectDocumentDecodeWorkspace? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_batch_rows(batch_rows)
       scan_workspace = scan_workspace_for_scan(workspace)
-      scan_selected_marks(nil, batch_rows, nil, scan_workspace, nil) { |batch| yield batch }
+      scan_selected_marks(nil, batch_rows, nil, scan_workspace, nil, object_document_workspace) { |batch| yield batch }
       nil
     end
 
@@ -462,23 +470,27 @@ module CrystalClick
       window_rows : {UInt64, UInt64}?,
       scan_workspace : CompactUInt64ScanWorkspace?,
       scan_image : CompactUInt64ScanImage?,
+      object_document_workspace : ObjectDocumentDecodeWorkspace? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_dynamic_schedules!
+      object_document_workspace ||= if @json_readers.any?(&.advanced_object_document_decode?)
+                                      ObjectDocumentDecodeWorkspace.new
+                                    end
 
       if image = scan_image
         if reusable_uint64_scan?
           context = @direct_uint64_scan_context || raise(CorruptPartError.new("Compact direct UInt64 scan lost its admitted context"))
           image.validate_context!(context)
         end
-        scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, image) { |batch| yield batch }
+        scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, image, object_document_workspace) { |batch| yield batch }
       elsif reusable_uint64_scan? && candidate_marks.try(&.empty?) != true
         context = @direct_uint64_scan_context || raise(CorruptPartError.new("Compact direct UInt64 scan lost its admitted context"))
         CompactUInt64ScanImage.with_context(context, @transport_budget) do |opened_image|
-          scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, opened_image) { |batch| yield batch }
+          scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, opened_image, object_document_workspace) { |batch| yield batch }
         end
       else
-        scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, nil) { |batch| yield batch }
+        scan_selected_marks_loop(candidate_marks, batch_rows, window_rows, scan_workspace, nil, object_document_workspace) { |batch| yield batch }
       end
       nil
     end
@@ -489,6 +501,7 @@ module CrystalClick
       window_rows : {UInt64, UInt64}?,
       scan_workspace : CompactUInt64ScanWorkspace?,
       scan_image : CompactUInt64ScanImage?,
+      object_document_workspace : ObjectDocumentDecodeWorkspace? = nil,
       & : WidePartTableBatch -> Nil
     ) : Nil
       selected_cursor = 0
@@ -518,7 +531,13 @@ module CrystalClick
         end
         next unless row_start < row_end
 
-        values_by_column, json_carriers, retained_charge = materialize_mark(mark_index, mark_rows, scan_workspace, scan_image)
+        values_by_column, json_carriers, retained_charge = materialize_mark(
+          mark_index,
+          mark_rows,
+          scan_workspace,
+          scan_image,
+          object_document_workspace,
+        )
         cursor = row_start
         while cursor < row_end
           remaining = row_end - cursor
@@ -631,6 +650,7 @@ module CrystalClick
       rows : UInt64,
       scan_workspace : CompactUInt64ScanWorkspace?,
       scan_image : CompactUInt64ScanImage?,
+      object_document_workspace : ObjectDocumentDecodeWorkspace? = nil,
     ) : MaterializedMark
       remaining_bytes = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64
       retained_workspace = 0_u64
@@ -892,7 +912,7 @@ module CrystalClick
           nil
         end
 
-        values = reader.storage_values_for_mark(mark_index, rows, workspace_observer)
+        values = reader.storage_values_for_mark(mark_index, rows, workspace_observer, object_document_workspace)
         carrier = reader.carrier_for(values)
         reader.charge_carrier!(json_budget, values, carrier, preflight, peak_workspace)
         json_carriers << carrier

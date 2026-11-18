@@ -553,6 +553,43 @@ module CrystalClick
       )
     end
 
+    # :nodoc:
+    # Compact Advanced root Object assembly can reuse a scan-owned staging
+    # hash after its immutable output document has detached the row fields.
+    def self.decode_child_site_with_assembly_workspace(
+      typed_schema : Hash(String, BinaryDataType),
+      streams : ObjectDocumentStreams,
+      grid : StorageOccurrenceGrid,
+      budget : BinaryCodecBudget,
+      first_mark : Int,
+      mark_count : Int?,
+      profile : BinaryBulkProfile,
+      shared_profile : BinaryBulkProfile,
+      typed_descriptor_root_depth : Int32,
+      inferred_actual_root_depth : Int32,
+      typed_dynamic_json_read_context : ObjectDocumentTypedDynamicJsonReadContext?,
+      assembly_workspace : ObjectDocumentDecodeWorkspace,
+    ) : Array(Array(ObjectDocument))
+      decode_core_with_budget(
+        typed_schema,
+        streams,
+        budget,
+        first_mark,
+        mark_count,
+        profile,
+        shared_profile,
+        Hash(String, Array(Tuple(BinaryDynamicJsonLeafKey, ObjectDocumentPlan))).new,
+        typed_descriptor_root_depth,
+        RootDynamicJsonLeafPlans.new,
+        inferred_actual_root_depth,
+        nil,
+        grid,
+        nil,
+        typed_dynamic_json_read_context,
+        assembly_workspace,
+      )
+    end
+
     # Decodes an inline JSON child Object using the exact statistics-free
     # prefix metadata already consumed from its parent Data callback tape.
     # The caller supplies the occurrence grid after the enclosing Dynamic
@@ -642,6 +679,7 @@ module CrystalClick
       occurrence_grid : StorageOccurrenceGrid?,
       inline_prefix : ObjectDocumentInlinePrefix?,
       typed_dynamic_json_read_context : ObjectDocumentTypedDynamicJsonReadContext?,
+      assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
     ) : Array(Array(ObjectDocument))
       if budget.writing?
         raise ArgumentError.new("Object document decode requires a reading budget")
@@ -1067,31 +1105,60 @@ module CrystalClick
         row_count = rows_per_mark[selected_first + window_offset].to_i
         documents = Array(ObjectDocument).new(row_count)
         row_count.times do |row_index|
-          fields = Hash(String, BinaryValue).new
-          typed_schema.each_key do |path|
-            fields[path] = typed_rows[path][selected_index][row_index]
-          end
-          object.dynamic_path_count.times do |dynamic_index|
-            path = object.dynamic_path_at(dynamic_index)
-            value = dynamic_rows[path][selected_index][row_index]
-            unless value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
-              fields[path] = value
-            end
-          end
-          shared_rows[selected_index][row_index].each do |entry|
-            fields[entry[0]] = entry[1]
-          end
-          budget.charge_node
-          budget.charge_elements(fields.size.to_u64) if fields.size > 0
-          begin
-            documents << ObjectDocument.new(fields)
-          rescue ex : ArgumentError
-            raise CorruptPartError.new("invalid assembled Object document: #{ex.message}")
-          end
+          shared_entries = shared_rows[selected_index][row_index]
+          document = if workspace = assembly_workspace
+                       required_field_bound = typed_schema.size.to_u64 + object.dynamic_path_count.to_u64 + shared_entries.size.to_u64
+                       workspace.with_fields(required_field_bound) do |fields|
+                         assemble_row_document(
+                           fields, typed_schema, typed_rows, selected_index, row_index,
+                           object, dynamic_rows, shared_entries, budget,
+                         )
+                       end
+                     else
+                       fields = Hash(String, BinaryValue).new
+                       assemble_row_document(
+                         fields, typed_schema, typed_rows, selected_index, row_index,
+                         object, dynamic_rows, shared_entries, budget,
+                       )
+                     end
+          documents << document
         end
         result << documents
       end
       result
+    end
+
+    private def self.assemble_row_document(
+      fields : Hash(String, BinaryValue),
+      typed_schema : Hash(String, BinaryDataType),
+      typed_rows : Hash(String, Array(Array(BinaryValue))),
+      selected_index : Int32,
+      row_index : Int32,
+      object : ObjectStructure,
+      dynamic_rows : Hash(String, Array(Array(BinaryValue))),
+      shared_entries : Array(ObjectDocumentSharedCodec::Entry),
+      budget : BinaryCodecBudget,
+    ) : ObjectDocument
+      typed_schema.each_key do |path|
+        fields[path] = typed_rows[path][selected_index][row_index]
+      end
+      object.dynamic_path_count.times do |dynamic_index|
+        path = object.dynamic_path_at(dynamic_index)
+        value = dynamic_rows[path][selected_index][row_index]
+        unless value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
+          fields[path] = value
+        end
+      end
+      shared_entries.each do |entry|
+        fields[entry[0]] = entry[1]
+      end
+      budget.charge_node
+      budget.charge_elements(fields.size.to_u64) if fields.size > 0
+      begin
+        ObjectDocument.new(fields)
+      rescue ex : ArgumentError
+        raise CorruptPartError.new("invalid assembled Object document: #{ex.message}")
+      end
     end
 
     private def self.decode_advanced_shared_rows_with_budget(

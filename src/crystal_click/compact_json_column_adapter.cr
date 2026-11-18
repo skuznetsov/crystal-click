@@ -205,15 +205,31 @@ module CrystalClick
       mark_index : Int,
       expected_rows : UInt64,
       observer : Proc(UInt64, Nil)? = nil,
+      assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
     ) : Array(StorageColumnValue)
       validate_mark_rows!(mark_index, expected_rows)
-      selected = @reader.read_marks(mark_index, 1, observer)
+      selected = @reader.read_marks(mark_index, 1, observer, assembly_workspace)
       unless selected.size == 1 && selected[0].size.to_u64 == expected_rows
         raise CorruptPartError.new("selected Compact JSON mark row count changed")
       end
       rows = selected[0]
       rows.each { |value| validate_value!(@schema, value) }
       rows
+    end
+
+    # :nodoc:
+    # Root Object readers can share staging storage for the duration of a
+    # worker scan. The decode path still decides whether its prepared layout
+    # is Advanced before charging or using the retained buffer.
+    def reusable_object_document_scan? : Bool
+      @carrier_kind == :object
+    end
+
+    # :nodoc:
+    # Called after the scan-wide schedule gate has authenticated the complete
+    # root grid and published the Advanced layout, before per-mark budgeting.
+    def advanced_object_document_decode? : Bool
+      @carrier_kind == :object && @reader.prepared_advanced_root_shape_for_mark(0) != nil
     end
 
     def carrier_for(values : Array(StorageColumnValue)) : CompactJsonColumnMark

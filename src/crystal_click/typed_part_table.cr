@@ -303,11 +303,23 @@ module CrystalClick
 
       source_row_offset = 0_u64
       scan_workspace = nil.as(CompactUInt64ScanWorkspace?)
+      object_document_workspace = nil.as(ObjectDocumentDecodeWorkspace?)
       @entries.each_with_index do |entry, part_index|
         if compact_reader = entry.reader.as?(CompactPartTable)
-          if compact_reader.reusable_uint64_scan?
-            scan_workspace ||= CompactUInt64ScanWorkspace.new
-            compact_reader.scan_typed_with_workspace(batch_rows, scan_workspace) do |batch|
+          reusable_uint64 = compact_reader.reusable_uint64_scan?
+          reusable_object_documents = compact_reader.reusable_object_document_scan?
+          if reusable_uint64 || reusable_object_documents
+            if reusable_uint64
+              scan_workspace ||= CompactUInt64ScanWorkspace.new
+            end
+            if reusable_object_documents
+              object_document_workspace ||= ObjectDocumentDecodeWorkspace.new
+            end
+            compact_reader.scan_typed_with_workspace(
+              batch_rows,
+              scan_workspace,
+              object_document_workspace,
+            ) do |batch|
               yield rebase_batch!(batch, part_index, source_row_offset)
             end
           else

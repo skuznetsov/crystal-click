@@ -339,13 +339,14 @@ module CrystalClick
       first_mark : Int,
       mark_count : Int,
       workspace_observer : Proc(UInt64, Nil)? = nil,
+      assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
     ) : Array(Array(StorageColumnValue))
       validate_selection!(first_mark, mark_count)
       observer = workspace_observer || no_workspace_observer
       budget = request_budget
       if reader = @root_reader
         charge_selected_shape!(first_mark, mark_count, budget)
-        read_root_marks(reader, first_mark, mark_count, budget, observer)
+        read_root_marks(reader, first_mark, mark_count, budget, observer, assembly_workspace)
       else
         # Authenticate and prepare the complete physical parent grid while the
         # caller's observer is active, before charging or decoding its output.
@@ -474,6 +475,7 @@ module CrystalClick
       mark_count : Int,
       budget : BinaryCodecBudget,
       observer : Proc(UInt64, Nil),
+      assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
     ) : Array(Array(StorageColumnValue))
       shape = simple_shape(selected_rows(first_mark, mark_count).sum(0_u64))
       reservation = output_grid_shell_bytes(first_mark, mark_count)
@@ -482,7 +484,7 @@ module CrystalClick
         observer.call(checked_add(outer, checked_add(workspace, checked_add(shape.bytes, reservation))))
         nil
       end
-      documents = reader.read_marks_with_budget(first_mark, mark_count, budget, delegate_observer)
+      documents = reader.read_marks_with_budget(first_mark, mark_count, budget, delegate_observer, assembly_workspace)
       unless documents.size == mark_count
         raise CorruptPartError.new("Compact root JSON delegate returned the wrong mark count")
       end

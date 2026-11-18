@@ -2189,6 +2189,45 @@ results apply to warm reads of this part and this reduction.
 | Codec-only Crystal HTTP worker | `e33a1925fdde3f019c3b55f987cf1dc5cc74ff6f14769cf8d6afc920dcc60afc` |
 | Combined Crystal HTTP worker | `918b23ab82bee8b41a98c84b6eec2dc7ce1533e65a121d18ad6a9701ae95367e` |
 
+### Compact JSON row assembly reuse
+
+The Compact Advanced root Object decoder reuses a staging hash across marks
+and parts in a scan. The first eligible row allocates its 16 GC-traced entry
+slots. The hash clears its references after each row, including on failure.
+Larger rows use the existing allocation path. Each returned document owns
+its paths and lookup table, so it can outlive the staging storage.
+
+The test compared `e65c721` with row assembly reuse on an M2 Max using Crystal
+1.22.3 Release and Boehm 8.2.12. Four isolated workers each opened and scanned
+two of eight native MRK4 parts with 65,536 rows total, 2,048 rows per mark,
+LZ4, and Advanced shared JSON. The workload selected `id`, `doc`, `events`
+and `attrs`. The timer includes open, scan and ordered RowBinary assembly.
+Every timed and diagnostic run then matched a native ClickHouse 26.10.1.1201
+export byte for byte. The 11,577,181-byte export has SHA-256
+`e53ffef4dc31068aa61384c1980ccfae15cd1de0ce8bb708b76a14aef5db905b`.
+
+| Measure | Baseline | Reuse |
+| --- | ---: | ---: |
+| Scan p50, ms | 1,970.1 | 1,935.1 |
+| Scan p95, ms | 2,203.2 | 2,146.7 |
+| Boehm allocated MiB per scan, median | 1,749.60 | 1,725.62 |
+| Allocator mutex acquisition calls across workers, median | 843,502 | 757,441 |
+| Allocator mutex acquisition seconds across workers, median | 5.34 | 4.96 |
+| Mark mutex acquisition seconds across workers, median | 0.721 | 0.705 |
+
+The scan timing used 24 balanced pairs in fresh processes with a warm file
+cache. Reuse was faster in 14 pairs, with a paired median difference of
+−31.9 ms on a shared host. The allocation counters and mutex hook ran in
+separate eight-pair tracks. Allocated bytes and allocator mutex calls fell
+in all eight pairs in their respective tracks. Mutex time sums elapsed
+acquisition time from the four worker threads, including scheduler delay.
+
+Sampled allocator refill stacks frequently included `BinaryValue`, value
+arrays, and String construction. Staging hash growth was a smaller source
+of contention. The timings apply to this mixed-column workload with
+part-sharded `scan_typed` calls. Refresh the comparison after changing row
+ownership, the allocation runtime, the fixture, or the timer boundary.
+
 ## Reproduce the comparison
 
 Run from the repository root with Python 3, Crystal, and the pinned

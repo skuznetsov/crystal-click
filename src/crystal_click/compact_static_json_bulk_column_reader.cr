@@ -244,6 +244,7 @@ module CrystalClick
       mark_count : Int,
       request_budget : BinaryCodecBudget,
       workspace_observer : Proc(UInt64, Nil),
+      assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
     ) : Array(Array(ObjectDocument))
       if request_budget.writing?
         raise ArgumentError.new("Compact static JSON read requires a read-direction codec budget")
@@ -300,7 +301,7 @@ module CrystalClick
                         workspace_observer.call(checked_add(active, owner_bytes))
                         nil
                       end
-                      owner.decode_with_budget(request_budget, owner_observer)
+                      owner.decode_with_budget(request_budget, owner_observer, assembly_workspace)
                     else
                       prepared.decode_mark_with_budget(mark_index, request_budget, @ordinary_profile)
                     end

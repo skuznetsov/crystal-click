@@ -138,6 +138,7 @@ module CrystalClick
     def decode_with_budget(
       budget : BinaryCodecBudget,
       workspace_observer : Proc(UInt64, Nil)? = nil,
+      assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
     ) : Array(ObjectDocument)
       if budget.writing?
         raise ArgumentError.new("prepared Compact Advanced decode requires a read-direction budget")
@@ -165,19 +166,36 @@ module CrystalClick
         ),
       )
 
-      decoded_marks = ObjectDocumentCodec.decode_child_site_with_budget(
-        @typed_schema,
-        streams,
-        @grid,
-        budget,
-        first_mark: 0,
-        mark_count: 1,
-        profile: @ordinary_profile,
-        shared_profile: BinaryBulkProfile.single_stream,
-        typed_descriptor_root_depth: @typed_descriptor_root_depth,
-        inferred_actual_root_depth: @inferred_actual_root_depth,
-        typed_dynamic_json_read_context: @typed_json_context,
-      )
+      decoded_marks = if workspace = assembly_workspace
+                        ObjectDocumentCodec.decode_child_site_with_assembly_workspace(
+                          @typed_schema,
+                          streams,
+                          @grid,
+                          budget,
+                          0,
+                          1,
+                          @ordinary_profile,
+                          BinaryBulkProfile.single_stream,
+                          @typed_descriptor_root_depth,
+                          @inferred_actual_root_depth,
+                          @typed_json_context,
+                          workspace,
+                        )
+                      else
+                        ObjectDocumentCodec.decode_child_site_with_budget(
+                          @typed_schema,
+                          streams,
+                          @grid,
+                          budget,
+                          first_mark: 0,
+                          mark_count: 1,
+                          profile: @ordinary_profile,
+                          shared_profile: BinaryBulkProfile.single_stream,
+                          typed_descriptor_root_depth: @typed_descriptor_root_depth,
+                          inferred_actual_root_depth: @inferred_actual_root_depth,
+                          typed_dynamic_json_read_context: @typed_json_context,
+                        )
+                      end
       unless decoded_marks.size == 1 && decoded_marks[0].size.to_u64 == @logical_row_count
         raise CorruptPartError.new("prepared Compact Advanced decoder returned the wrong mark grid")
       end
