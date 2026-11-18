@@ -677,9 +677,10 @@ module CrystalClick
       end
       remaining_bytes -= retained_workspace
 
-      # The recursive reader authenticates child occurrences before decoding.
-      # Use that metadata to preflight every selected JSON carrier before any
-      # JSON payload is materialized or a callback can observe this mark.
+      # The scan-wide schedule gate above authenticates every selected JSON
+      # grid before mark callbacks. Root Object wrappers reserve from that
+      # published grid metadata; other recursive shapes keep their occurrence
+      # preflight before any JSON payload is materialized.
       json_preflights = Array(CompactJsonMarkPreflight).new(@json_readers.size)
       json_carrier_bytes = 0_u64
       json_carrier_nodes = 0_u64
@@ -690,7 +691,7 @@ module CrystalClick
       json_recursive_shape_bytes = 0_u64
       json_peak_transient_bytes = 0_u64
       @json_readers.each do |reader|
-        preflight = reader.mark_preflight(mark_index, rows)
+        preflight = reader.mark_preflight_after_scan_schedule_validation(mark_index, rows)
         json_preflights << preflight
         json_carrier_bytes = checked_add(json_carrier_bytes, preflight.carrier_bytes)
         json_carrier_nodes = checked_add(json_carrier_nodes, preflight.carrier_nodes)

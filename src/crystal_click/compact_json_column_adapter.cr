@@ -151,14 +151,24 @@ module CrystalClick
     def mark_preflight(mark_index : Int, expected_rows : UInt64) : CompactJsonMarkPreflight
       validate_mark_rows!(mark_index, expected_rows)
       shape = storage_value_shape_for_mark(mark_index)
-      carrier_bytes, carrier_nodes, carrier_elements = carrier_descriptor(shape, expected_rows)
-      CompactJsonMarkPreflight.new(
-        shape,
-        mark_grid_shell_bytes(expected_rows),
-        carrier_bytes,
-        carrier_nodes,
-        carrier_elements,
-      )
+      mark_preflight_for_shape(expected_rows, shape)
+    rescue ex : BoundsError
+      raise CorruptPartError.new("selected Compact JSON mark exceeds aggregate materialization limit")
+    end
+
+    # :nodoc:
+    # CompactPartTable calls this after its scan-wide schedule check. A
+    # prepared Advanced root supplies the exact mark cardinality, which is the
+    # complete shape of an Object wrapper. MAP and recursive JSON retain their
+    # existing per-mark shape authentication.
+    def mark_preflight_after_scan_schedule_validation(
+      mark_index : Int,
+      expected_rows : UInt64,
+    ) : CompactJsonMarkPreflight
+      validate_mark_rows!(mark_index, expected_rows)
+      shape = @reader.prepared_advanced_root_shape_for_mark(mark_index) ||
+              storage_value_shape_for_mark(mark_index)
+      mark_preflight_for_shape(expected_rows, shape)
     rescue ex : BoundsError
       raise CorruptPartError.new("selected Compact JSON mark exceeds aggregate materialization limit")
     end
@@ -362,6 +372,20 @@ module CrystalClick
         raise CorruptPartError.new("selected Compact JSON mark row count differs from its part grid")
       end
       nil
+    end
+
+    private def mark_preflight_for_shape(
+      expected_rows : UInt64,
+      shape : StorageValueShape,
+    ) : CompactJsonMarkPreflight
+      carrier_bytes, carrier_nodes, carrier_elements = carrier_descriptor(shape, expected_rows)
+      CompactJsonMarkPreflight.new(
+        shape,
+        mark_grid_shell_bytes(expected_rows),
+        carrier_bytes,
+        carrier_nodes,
+        carrier_elements,
+      )
     end
 
     private def checked_add(left : UInt64, right : UInt64) : UInt64

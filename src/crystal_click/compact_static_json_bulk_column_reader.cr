@@ -175,6 +175,14 @@ module CrystalClick
       @prepared_context || raise(ArgumentError.new("Compact static JSON reader has not completed EOF-first preparation"))
     end
 
+    # :nodoc:
+    # Internal scan reservation seam. Only Advanced is eligible because its
+    # selected-mark read reauthenticates the whole source grid before decode.
+    def prepared_advanced_context : CompactStaticJsonPreparedContext?
+      return nil unless @advanced_layout == true
+      @prepared_context
+    end
+
     def retained_grid_workspace_bytes : UInt64
       @context.retained_grid_workspace_bytes
     end

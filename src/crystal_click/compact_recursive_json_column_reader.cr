@@ -314,6 +314,27 @@ module CrystalClick
       shape_for_domain(@schema, "root", mark_index, @mark_row_counts[mark_index], prepared)
     end
 
+    # :nodoc:
+    # After the scan-wide gate has published an Advanced root context, its
+    # mark cardinality is the complete shape of a root Object wrapper. Return
+    # nil for MAP and recursive layouts so callers keep their existing
+    # per-mark shape authentication. Selected Advanced decoding independently
+    # reauthenticates the whole source grid before decode.
+    def prepared_advanced_root_shape_for_mark(mark_index : Int) : StorageValueShape?
+      return nil unless @schema.object?
+      return nil unless mark_index >= 0 && mark_index < @mark_count
+      reader = @root_reader || return nil
+      prepared = reader.prepared_advanced_context || return nil
+      unless prepared.mark_count == @mark_count
+        raise CorruptPartError.new("Compact root JSON prepared metadata differs from its mark grid")
+      end
+      rows = @mark_row_counts[mark_index]
+      unless prepared.mark_row_count_at(mark_index) == rows
+        raise CorruptPartError.new("Compact root JSON prepared metadata differs from its mark rows")
+      end
+      simple_shape(rows)
+    end
+
     def read_marks(
       first_mark : Int,
       mark_count : Int,
