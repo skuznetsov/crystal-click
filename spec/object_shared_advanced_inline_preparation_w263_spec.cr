@@ -470,12 +470,23 @@ describe "Object shared advanced inline preparation (W263)" do
         fixture[:read_budget],
       )
       fresh_budget = CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryCodecLimits.default)
-      decoded = false
-      expect_raises(ArgumentError, /same.*budget|budget.*operation/i) do
+      message = "prepared inline Object decode requires its preparation receipt"
+      expect_raises(ArgumentError, message) do
         CrystalClick::ObjectSharedAdvancedInlineDecoder.decode_prepared(prepared, fresh_budget)
-        decoded = true
       end
-      decoded.should be_false
+      output = CrystalClick::CompactJsonColumnarBatch.from_layout(
+        [fixture[:first_path], fixture[:second_path]],
+        [] of String,
+        {} of String => CrystalClick::BinaryDataType,
+        3,
+        3_u64,
+      )
+      output.begin_mark!(0, "part", "/part", 0, 0_u64, 0_u64, 0_u64, 3_u64)
+      expect_raises(ArgumentError, message) do
+        CrystalClick::ObjectSharedAdvancedInlineDecoder.decode_prepared_into_columns(prepared, fresh_budget, output) do |_path|
+          raise "fresh budget must fail before binding output columns"
+        end
+      end
     end
   end
 

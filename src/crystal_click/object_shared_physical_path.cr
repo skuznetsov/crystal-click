@@ -1,6 +1,6 @@
 module CrystalClick
   # One byte-opaque Object path and its detached decompressed Data/getter tape.
-  class ObjectSharedPhysicalPath
+  struct ObjectSharedPhysicalPath
     @name : String
     getter streams : ObjectSharedPathStreams
 

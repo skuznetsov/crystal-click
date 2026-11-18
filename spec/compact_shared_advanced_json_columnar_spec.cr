@@ -42,11 +42,11 @@ private module CompactJsonColumnarGuardFixture
       raise CrystalClick::UnsupportedFormatError.new("columnar guard JSON schema was not admitted")
   end
 
-  def context : CrystalClick::CompactJsonWriteContext
+  def context(shared_version : UInt64) : CrystalClick::CompactJsonWriteContext
     object = CrystalClick::ObjectStructure.new(
       [DYNAMIC_PATH] of String,
       version: 4_u64,
-      shared_data_version: 2_u64,
+      shared_data_version: shared_version,
       bucket_count: 2_u64,
       statistics: CrystalClick::StructureStatistics.new([2_u64] of UInt64, [] of CrystalClick::StructureStatistic),
     )
@@ -95,12 +95,17 @@ private module CompactJsonColumnarGuardFixture
     end
   end
 
-  def write_part(path : String, base : UInt64 = 1_u64, replacement : Bool = false) : String
+  def write_part(
+    path : String,
+    base : UInt64 = 1_u64,
+    replacement : Bool = false,
+    shared_version : UInt64 = 2_u64,
+  ) : String
     rows = documents(base, replacement).map do |document|
       CrystalClick::StorageColumnValue.object_document(document)
     end.to_a
     granules = rows.each_slice(ROWS_PER_MARK).map(&.to_a).to_a
-    json_column = CrystalClick::CompactPartColumn.json(COLUMN, schema, granules, context)
+    json_column = CrystalClick::CompactPartColumn.json(COLUMN, schema, granules, context(shared_version))
     keys = Slice(UInt64).new(ROW_COUNT) { |index| base + index.to_u64 }
     CrystalClick::CompactPartWriter.write_uint64_columns(
       path,
@@ -326,46 +331,49 @@ private def cjcv_scan_rows(
 end
 
 describe "Compact shared Advanced root JSON columnar batches" do
-  it "emits sparse typed and Dynamic path columns with exact RowBinary and split-relative locations" do
-    parent = File.tempname("compact-json-columnar-value-grid-")
-    part = File.join(parent, "all_1_1_0")
-    begin
-      Dir.mkdir(parent)
-      CompactJsonColumnarGuardFixture.write_part(part)
-      table = CrystalClick::TypedPartTable.open_selected_typed(
-        [part],
-        [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
-      )
-      expected_documents = CompactJsonColumnarGuardFixture.documents
-      expected_keys = (1_u64..CompactJsonColumnarGuardFixture::ROW_COUNT.to_u64).to_a
-      expected_locations = (0...CompactJsonColumnarGuardFixture::ROW_COUNT).map do |row|
-        {(row // CompactJsonColumnarGuardFixture::ROWS_PER_MARK).to_i32,
-         (row % CompactJsonColumnarGuardFixture::ROWS_PER_MARK).to_u64,
-         row.to_u64}
+  # The writer emits one chunk per row for SharedData v3; v2 uses one chunk per mark.
+  [2_u64, 3_u64].each do |shared_version|
+    it "emits exact RowBinary and split-relative locations with SharedData v#{shared_version}" do
+      parent = File.tempname("compact-json-columnar-value-grid-")
+      part = File.join(parent, "all_1_1_0")
+      begin
+        Dir.mkdir(parent)
+        CompactJsonColumnarGuardFixture.write_part(part, shared_version: shared_version)
+        table = CrystalClick::TypedPartTable.open_selected_typed(
+          [part],
+          [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+        )
+        expected_documents = CompactJsonColumnarGuardFixture.documents
+        expected_keys = (1_u64..CompactJsonColumnarGuardFixture::ROW_COUNT.to_u64).to_a
+        expected_locations = (0...CompactJsonColumnarGuardFixture::ROW_COUNT).map do |row|
+          {(row // CompactJsonColumnarGuardFixture::ROWS_PER_MARK).to_i32,
+           (row % CompactJsonColumnarGuardFixture::ROWS_PER_MARK).to_u64,
+           row.to_u64}
+        end
+
+        serial_keys, serial_json, serial_locations = cjcv_scan_rows(table, 1, 1, expected_documents)
+        serial_keys.should eq(expected_keys)
+        serial_json.should eq(expected_documents.map { |document| CompactJsonColumnarGuardFixture.expected_rowbinary(document) })
+        serial_locations.should eq(expected_locations)
+
+        parallel_keys, parallel_json, parallel_locations = cjcv_scan_rows(table, 4, 1, expected_documents)
+        parallel_keys.should eq(serial_keys)
+        parallel_json.should eq(serial_json)
+        parallel_locations.should eq(serial_locations)
+
+        # Two rows per mark, so batch_rows larger than one proves one callback
+        # window can contain the complete mark and preserve its row order.
+        whole_mark_keys, whole_mark_json, whole_mark_locations = cjcv_scan_rows(table, 4, 2, expected_documents)
+        whole_mark_keys.should eq(serial_keys)
+        whole_mark_json.should eq(serial_json)
+        whole_mark_locations.should eq((0...CompactJsonColumnarGuardFixture::ROW_COUNT).map do |row|
+          {(row // CompactJsonColumnarGuardFixture::ROWS_PER_MARK).to_i32,
+           0_u64,
+           (row // CompactJsonColumnarGuardFixture::ROWS_PER_MARK).to_u64 * CompactJsonColumnarGuardFixture::ROWS_PER_MARK.to_u64}
+        end)
+      ensure
+        FileUtils.rm_rf(parent)
       end
-
-      serial_keys, serial_json, serial_locations = cjcv_scan_rows(table, 1, 1, expected_documents)
-      serial_keys.should eq(expected_keys)
-      serial_json.should eq(expected_documents.map { |document| CompactJsonColumnarGuardFixture.expected_rowbinary(document) })
-      serial_locations.should eq(expected_locations)
-
-      parallel_keys, parallel_json, parallel_locations = cjcv_scan_rows(table, 4, 1, expected_documents)
-      parallel_keys.should eq(serial_keys)
-      parallel_json.should eq(serial_json)
-      parallel_locations.should eq(serial_locations)
-
-      # Two rows per mark, so batch_rows larger than one proves one callback
-      # window can contain the complete mark and preserve its row order.
-      whole_mark_keys, whole_mark_json, whole_mark_locations = cjcv_scan_rows(table, 4, 2, expected_documents)
-      whole_mark_keys.should eq(serial_keys)
-      whole_mark_json.should eq(serial_json)
-      whole_mark_locations.should eq((0...CompactJsonColumnarGuardFixture::ROW_COUNT).map do |row|
-        {(row // CompactJsonColumnarGuardFixture::ROWS_PER_MARK).to_i32,
-         0_u64,
-         (row // CompactJsonColumnarGuardFixture::ROWS_PER_MARK).to_u64 * CompactJsonColumnarGuardFixture::ROWS_PER_MARK.to_u64}
-      end)
-    ensure
-      FileUtils.rm_rf(parent)
     end
   end
 

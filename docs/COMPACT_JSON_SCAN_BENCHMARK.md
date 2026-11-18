@@ -13,8 +13,8 @@ five extra paths cause three paths per row to use Advanced SharedData.
 The fixture generator exports `id, toJSONString(doc) ORDER BY id FORMAT
 RowBinary` from ClickHouse with checksumming enabled. All runners validate
 every sample byte for byte against this oracle after measuring the read and
-serialization stages. The driver additionally flips a checksum byte after
-each runner opens a disposable copy and requires the first scan to fail.
+serialization stages. At each worker count, the driver flips a checksum byte
+after each runner opens a disposable copy and requires the first scan to fail.
 
 ## Reproduction
 
@@ -39,11 +39,19 @@ TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
   crystal build --release -Dpreview_mt -Dexecution_context \
     benchmarks/compact_json_scan_probe.cr -o "$bench_work/crystal-probe"
 
+mkdir -p "$bench_work/baseline-src" "$bench_work/baseline-cache"
+git archive 9b5e65a src benchmarks/compact_json_scan_probe.cr | \
+  tar -x -C "$bench_work/baseline-src"
+TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/baseline-cache" \
+  crystal build --release -Dpreview_mt -Dexecution_context \
+    "$bench_work/baseline-src/benchmarks/compact_json_scan_probe.cr" \
+    -o "$bench_work/crystal-baseline"
+
 python3 -B scripts/compact_json_scan_benchmark.py \
   --part "$bench_work/fixture/0_1_1_0" \
   --oracle "$bench_work/fixture/0_1_1_0.rowbinary" \
   --crystal-bin "$bench_work/crystal-probe" --crystal-backend columnar \
-  --baseline-crystal-bin "$bench_work/crystal-probe" --baseline-crystal-backend shared \
+  --baseline-crystal-bin "$bench_work/crystal-baseline" --baseline-crystal-backend columnar \
   --cpp-bin "$bench_cpp" \
   --scratch "$bench_work" --output "$bench_work/summary.json"
 ```
@@ -62,7 +70,8 @@ CRYSTAL_CLICK_COLUMNAR_JSON_FIXTURE_ROOT="$bench_work" \
   TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
   crystal spec --release -Dpreview_mt -Dexecution_context \
     spec/compact_shared_advanced_json_columnar_spec.cr \
-    spec/compact_shared_advanced_json_part_plan_spec.cr
+    spec/compact_shared_advanced_json_part_plan_spec.cr \
+    spec/object_shared_advanced_direct_columns_w263_spec.cr
 ```
 
 With one worker every runner reads `[0,1,2,3]`. With four workers each gets one
@@ -92,7 +101,85 @@ includes `realloc` requests and captures allocator traffic from all workers.
 Boehm bytes and system requested bytes use their respective allocator
 accounting. The timing run leaves the native observer disabled.
 
-## Columnar results
+## Direct SharedData columnar results
+
+Both Crystal binaries use the `columnar` backend. The baseline is `9b5e65a`.
+The direct decoder appends SharedData Copy values into sparse columns bound
+by the chunk dictionary and verifies them against the independently decoded
+per-path Data. It compares sparse presence and exact values before delivery.
+Path records, substream events, and per-path decode results use value types.
+
+Both readers verify the compressed frames they read. For this full-column
+MRK4 read, ClickHouse uses the mark-seek callback to skip the per-path Data
+and populates SharedData from Copy. The Crystal read timer includes the
+per-path Data comparison, part plan construction, and the source rechecks at
+mark boundaries. RowBinary equality is checked after the read timers.
+[ClickHouse Compact reader](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/Storages/MergeTree/MergeTreeReaderCompact.cpp#L258-L277),
+[SharedData serializer](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationObjectSharedData.cpp#L1548-L1770).
+
+The runs used an Apple M2 Max, macOS 26.6.2, Crystal 1.22.3 Release with
+LLVM 23.1.5 and Boehm 8.2.12 enabled, and the pinned `readRows` built with
+Clang 23.1.5 Release and the macOS system allocator. Each pass had 48 timed
+scans per reader, part, and worker count, interleaved in eight blocks of
+six scans on a workstation with background activity. Across both parts,
+all 576 measurements and 192 warmups per pass matched the RowBinary bytes
+in mark order. The twelve post-open checksum mutations per pass were
+rejected. The `data.bin`, `.mrk4`, and RowBinary hashes matched the previous
+fixtures. Combined latency takes percentiles of the sum of read and
+serialization times for each sample.
+
+| Compact part | Reader | Workers | Read p50 / p95, ms | Serialize p50 / p95, ms | Combined p50 / p95, ms |
+| --- | --- | ---: | ---: | ---: | ---: |
+| No overflow | Crystal baseline | 1 | 11.364 / 12.973 | 6.908 / 8.749 | 18.138 / 20.988 |
+| No overflow | Crystal direct | 1 | 11.124 / 12.444 | 6.810 / 8.490 | 18.001 / 19.559 |
+| No overflow | ClickHouse `readRows` | 1 | 0.412 / 0.462 | 5.987 / 6.195 | 6.400 / 6.591 |
+| No overflow | Crystal baseline | 4 | 25.725 / 37.350 | 6.499 / 7.642 | 32.451 / 44.136 |
+| No overflow | Crystal direct | 4 | 24.161 / 33.197 | 7.786 / 9.636 | 31.689 / 41.847 |
+| No overflow | ClickHouse `readRows` | 4 | 0.198 / 0.379 | 6.010 / 6.187 | 6.222 / 6.576 |
+| SharedData overflow | Crystal baseline | 1 | 50.644 / 60.342 | 19.804 / 24.002 | 70.477 / 84.345 |
+| SharedData overflow | Crystal direct | 1 | 41.082 / 45.492 | 17.248 / 20.080 | 58.544 / 62.993 |
+| SharedData overflow | ClickHouse `readRows` | 1 | 0.857 / 0.917 | 61.228 / 62.576 | 62.093 / 63.861 |
+| SharedData overflow | Crystal baseline | 4 | 105.793 / 112.103 | 20.232 / 26.879 | 126.013 / 133.548 |
+| SharedData overflow | Crystal direct | 4 | 88.828 / 102.159 | 16.757 / 20.668 | 106.001 / 118.844 |
+| SharedData overflow | ClickHouse `readRows` | 4 | 0.333 / 0.686 | 61.223 / 63.899 | 61.632 / 64.458 |
+
+| Compact part | Workers | Boehm baseline, MiB | Boehm direct, MiB | ClickHouse requested, MiB | ClickHouse requests |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| No overflow | 1 | 25.50 / 25.51 | 23.98 / 24.00 | 0.71 / 0.71 | 1066 / 1066 |
+| No overflow | 4 | 25.51 / 25.53 | 23.99 / 24.02 | 0.71 / 0.71 | 1017 / 1035 |
+| SharedData overflow | 1 | 109.37 / 109.39 | 98.84 / 98.87 | 1.77 / 1.77 | 1648 / 1648 |
+| SharedData overflow | 4 | 109.39 / 109.40 | 98.86 / 98.89 | 1.77 / 1.77 | 1584 / 1610 |
+
+The allocation table reports p50 / p95 for the read interval in the
+separate diagnostic pass. On the overflow part, read p50 fell by 18.9% and
+16.0%, and p95 fell by 24.6% and 8.9%, at one and four workers respectively.
+Median Boehm bytes fell by 9.6%, and median read collections dropped from
+three to two at both worker counts. Without overflow, median Boehm bytes
+fell by 5.9% and both worker counts still had one median collection. These
+changes measure the direct decoder and value-type records together.
+
+At four workers, direct Crystal read p50 took about 2.17× its one-worker
+time on both parts, while `readRows` sped up by 2.08× without overflow and
+2.57× with overflow. Median Crystal plan construction took 2.58–2.59 ms
+without overflow and 6.01–6.20 ms with overflow. On overflow at one worker,
+the combined Crystal median was 58.544 ms versus 62.093 ms for `readRows`
+with serialization. ClickHouse's RowBinary materialization took 61.228 ms
+of that time at the median. For the read interval alone, the Crystal
+median was 47.95× the `readRows` median on that part and worker count.
+
+The targeted Release run passed 85 examples, including exact RowBinary on
+both fixture parts, v2 and multi-chunk v3 with split callback windows, and
+independent Copy and Data streams that disagree in value or presence. The
+shared-data suite passed all 255 examples in Debug, including rejection of
+a fresh decode budget before binding columns from a prepared source.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Crystal columnar baseline Release runner | `c13b95480a2cedcd0faa61bdc0896816cc0fcdd8161c9c63b4e670f627509096` |
+| Crystal direct SharedData Release runner | `99182c5f43fcee70f242caa064968697828944e7be096162921d8400b5678d87` |
+| Pinned ClickHouse `readRows` Release runner | `ac6fe44953b7ce40f9c0cdf81f3fb821d4936cccfb333e504b311f2f9e41e3c1` |
+
+## Previous columnar results
 
 Apple M2 Max, macOS 26.6.2, Crystal 1.22.3 Release with LLVM 23.1.5 and
 Boehm 8.2.12 enabled. ClickHouse `readRows` used Clang 23.1.5 Release and
@@ -140,15 +227,15 @@ Crystal p50 was 2.94× and 5.18× the ClickHouse times without overflow, and
 1.20× and 2.11× with overflow.
 
 Median plan time inside the Crystal columnar read was 2.61–2.68 ms without
-overflow and 6.07–6.09 ms with overflow. This path removes root-row document
-assembly. It still uses `BinaryValue` leaves and temporary per-row SharedData
-entries during decoding. The plans and rechecks are part of the timed Crystal
+overflow and 6.07–6.09 ms with overflow. The `9b5e65a` baseline creates
+`BinaryValue` leaves and temporary per-row SharedData entries during decoding.
+The plans and rechecks are part of the timed Crystal
 read. The figures apply to these warm, retained one-part scans.
 
 The two fixtures matched the historical `data.bin` and RowBinary hashes below.
 The no-overflow `data.mrk4` matched as well. Both fixture-backed public API
 checks and the synthetic admission, source binding, and lifecycle checks passed
-in the two Release spec files above (18 examples).
+in the columnar and part-plan Release specs (18 examples).
 
 | Evidence | SHA-256 |
 | --- | --- |

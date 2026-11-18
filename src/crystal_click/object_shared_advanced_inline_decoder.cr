@@ -332,6 +332,51 @@ module CrystalClick
       [output_rows] of Array(ObjectSharedMapRow)
     end
 
+    # :nodoc:
+    # Decode into a batch whose active window still covers the entire mark.
+    def self.decode_prepared_into_columns(
+      prepared : ObjectSharedAdvancedInlinePrepared,
+      budget : BinaryCodecBudget,
+      output : CompactJsonColumnarBatch,
+      &validate_path : String -> Nil
+    ) : Nil
+      prepared.validate_decode_operation!(budget)
+      logical_rows = prepared.logical_row_count
+      nested_context = prepared.nested_context_for_decode
+      bucket_count = prepared.bucket_count
+      bucket_chunks = Array(ObjectSharedPhysicalChunk).new(bucket_count)
+      observed_rows = 0_u64
+      prepared.chunk_count.times do |chunk_index|
+        bucket_chunks.clear
+        bucket_count.times do |bucket_index|
+          bucket_chunks << prepared.parent_for_decode(bucket_index).chunk_at(chunk_index)
+        end
+        expected_rows = bucket_chunks[0].row_count
+        if expected_rows > logical_rows - observed_rows
+          raise CorruptPartError.new("inline advanced chunk rows exceed the parent occurrence grid")
+        end
+        rows = ObjectSharedAdvancedChunkCodec.decode_into_columns(
+          bucket_chunks,
+          prepared.copy_for_decode(chunk_index),
+          budget,
+          output,
+          observed_rows.to_i32,
+          nested_context.profile,
+          nested_context,
+        ) do |path|
+          yield path
+        end
+        unless rows == expected_rows
+          raise CorruptPartError.new("inline advanced chunk decoder returned the wrong row count")
+        end
+        observed_rows += rows
+      end
+      unless observed_rows == logical_rows
+        raise CorruptPartError.new("inline advanced chunks disagree with the parent occurrence grid")
+      end
+      nil
+    end
+
     private def self.append_role_part!(
       parts : RoleParts,
       canonical_name : String,

@@ -86,12 +86,12 @@ def compare(options: argparse.Namespace) -> dict:
                 command.extend(("--native-read-allocations", "1"))
             return open_reader(engine, command, trial)
 
-        for engine in engines:
-            trial = root / f"{engine}-checksum-control"
+        for engine, workers in itertools.product(engines, (1, 4)):
+            trial = root / f"{engine}-w{workers}-checksum-control"
             trial.mkdir()
             # Use the same store layout for both gates, and restore before
             # any subsequent reader opens the file.
-            with reader(engine, 1, trial, native_part) as process:
+            with reader(engine, workers, trial, native_part) as process:
                 with (native_part / "data.bin").open("r+b", buffering=0) as data:
                     original = data.read(1)
                     if len(original) != 1:
@@ -213,7 +213,7 @@ if __name__ == "__main__":
         parser.add_argument(f"--{name}", type=Path, required=True)
     parser.add_argument("--baseline-crystal-bin", type=Path)
     parser.add_argument("--crystal-backend", choices=("typed", "shared", "columnar"), default="typed")
-    parser.add_argument("--baseline-crystal-backend", choices=("typed", "shared"), default="typed")
+    parser.add_argument("--baseline-crystal-backend", choices=("typed", "shared", "columnar"), default="typed")
     parser.add_argument("--native-read-allocations", action="store_true",
                         help="sample macOS system allocator requests in a separate diagnostic run")
     parser.add_argument("--blocks", type=int, default=8)

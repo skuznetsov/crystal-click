@@ -243,9 +243,14 @@ module CrystalClick
     end
 
     # :nodoc:
-    # Hot typed/dynamic decoder path: the path lookup was sealed once before
-    # walking rows, so appends go directly to the corresponding column.
-    def append_column_value!(column : CompactJsonColumnarColumn, row : Int, value : BinaryValue) : Bool
+    # The decoder resolves each path before walking its cells. A caller can
+    # include the scratch space it holds while filling the column.
+    def append_column_value!(
+      column : CompactJsonColumnarColumn,
+      row : Int,
+      value : BinaryValue,
+      additional_workspace_bytes : UInt64 = 0_u64,
+    ) : Bool
       if row < 0 || row >= @mark_row_count
         raise CorruptPartError.new("Compact JSON columnar value row is outside its mark")
       end
@@ -265,7 +270,7 @@ module CrystalClick
       if @cell_count > @max_cells
         raise CorruptPartError.new("Compact JSON columnar output exceeds the codec element bound")
       end
-      check_workspace!(retained_workspace_bytes)
+      validate_workspace!(additional_workspace_bytes)
       inserted
     end
 

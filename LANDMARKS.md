@@ -37,10 +37,11 @@
   after changing the worker lifecycle, channel handshake, scan preparation,
   or the Crystal runtime.
 - Compact Advanced root JSON scans can borrow sparse path columns and
-  dense UInt64 companion slices after complete part admission. The scan
-  authenticates the source before each callback and reuses the worker's
-  output when the callback returns. Refresh the
-  [retained readRows comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#columnar-results)
+  dense UInt64 companion slices after complete part admission. SharedData
+  appends Copy values by bound column ordinal and verifies every populated
+  cell and gap against per-path Data. The scan authenticates the source before
+  each callback and reuses the worker's output when the callback returns.
+  Refresh the [retained readRows comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#direct-shareddata-columnar-results)
   after changing the output lifetime, source checks, JSON or SharedData
   decode, worker schedule, allocator, or native pin.
 

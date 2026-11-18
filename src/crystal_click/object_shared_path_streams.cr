@@ -22,7 +22,7 @@ module CrystalClick
       end
       @data = Bytes.new(data.size) { |index| data[index] }
       @callback_relocations = callback_relocations.dup
-      # Event objects are immutable and own their names; duplicating the array
+      # Events are immutable and own their names; duplicating the array
       # is sufficient to detach the mutable collection boundary.
       @events = events.dup
     end

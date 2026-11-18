@@ -43,6 +43,27 @@ module CrystalClick
     end
 
     # :nodoc:
+    # Visit present cells in one mark-relative row range in sorted order. This
+    # lets sparse cross-representation checks handle absent gaps with a single
+    # monotone pass instead of binary-searching once per row.
+    def each_cell_in_range(start : Int32, count : Int32, &block : Int32, BinaryValue -> Nil) : Nil
+      window_finish = @window_start + @window_count
+      if count < 0 || start < @window_start || start > Int32::MAX - count
+        raise IndexError.new("Compact JSON column row range is outside the active batch window")
+      end
+      finish = start + count
+      if finish > window_finish
+        raise IndexError.new("Compact JSON column row range is outside the active batch window")
+      end
+      index = lower_bound(start)
+      while index < @row_indexes.size && @row_indexes[index] < finish
+        yield @row_indexes[index], @values[index]
+        index += 1
+      end
+      nil
+    end
+
+    # :nodoc:
     # Appends are row-monotonic, so duplicate ownership (when the established
     # Object assembly precedence permits it) can only touch the final cell.
     def last_value_at(row : Int32) : BinaryValue?
@@ -104,13 +125,7 @@ module CrystalClick
 
     # :nodoc:
     def each_active_cell(&block : Int32, BinaryValue -> Nil) : Nil
-      finish = @window_start + @window_count
-      index = lower_bound(@window_start)
-      while index < @row_indexes.size && @row_indexes[index] < finish
-        yield @row_indexes[index], @values[index]
-        index += 1
-      end
-      nil
+      each_cell_in_range(@window_start, @window_count) { |row, value| yield row, value }
     end
 
     # :nodoc:

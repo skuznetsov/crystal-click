@@ -189,20 +189,18 @@ module CrystalClick
             bytes = checked_add(bytes, instance_sizeof(ObjectSharedPhysicalChunk).to_u64)
             bytes = checked_add(bytes, instance_sizeof(Array(ObjectSharedPhysicalPath)).to_u64)
             bytes = checked_add(bytes, checked_multiply(chunk.path_count.to_u64,
-              sizeof(Pointer(ObjectSharedPhysicalPath)).to_u64))
+              sizeof(ObjectSharedPhysicalPath).to_u64))
             chunk.path_count.times do |path_index|
               path = chunk.path_at(path_index)
               streams = path.streams
-              bytes = checked_add(bytes, instance_sizeof(ObjectSharedPhysicalPath).to_u64)
               bytes = checked_add(bytes, string_owner_bytes(path.name_byte_size))
               bytes = checked_add(bytes, instance_sizeof(ObjectSharedPathStreams).to_u64)
               bytes = checked_add(bytes, checked_add(sizeof(Bytes).to_u64, streams.data_size.to_u64))
               bytes = checked_add(bytes, instance_sizeof(Array(ObjectSharedPathSubstreamEvent)).to_u64)
               bytes = checked_add(bytes, checked_multiply(streams.event_count.to_u64,
-                sizeof(Pointer(ObjectSharedPathSubstreamEvent)).to_u64))
+                sizeof(ObjectSharedPathSubstreamEvent).to_u64))
               streams.event_count.times do |event_index|
                 event = streams.event_at(event_index)
-                bytes = checked_add(bytes, instance_sizeof(ObjectSharedPathSubstreamEvent).to_u64)
                 bytes = checked_add(bytes, string_owner_bytes(event.name_byte_size))
               end
               bytes = checked_add(bytes, instance_sizeof(Array(ObjectSharedInlineCallbackRelocation)).to_u64)

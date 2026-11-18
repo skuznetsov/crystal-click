@@ -37,5 +37,27 @@ module CrystalClick
     def values_size : Int32
       @values.size
     end
+
+    # :nodoc:
+    # Keep the owned, defensive lane snapshots inside this trusted reader
+    # boundary. Public lane getters remain detached for legacy callers.
+    def decode_into_columns_with_budget(
+      bucket_structures : Array(ObjectSharedChunkStructure),
+      columns_by_index : Array(CompactJsonColumnarColumn),
+      output : CompactJsonColumnarBatch,
+      row_offset : Int32,
+      budget : BinaryCodecBudget,
+    ) : UInt64
+      ObjectSharedCopyCodec.decode_into_columns_with_budget(
+        @sizes,
+        @indexes,
+        @values,
+        bucket_structures,
+        columns_by_index,
+        output,
+        row_offset,
+        budget,
+      )
+    end
   end
 end

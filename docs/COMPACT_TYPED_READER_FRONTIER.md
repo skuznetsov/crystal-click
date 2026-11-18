@@ -99,6 +99,12 @@ existing value semantics without assembling an `ObjectDocument` for each
 root row. Ordinary selected `UInt64` columns are available in the same
 batch as aligned slices.
 
+Each SharedData chunk binds its Copy dictionary ordinals to the batch's
+sparse columns. The Copy decoder appends values to those columns. The
+reader verifies each path's presence and value against its independently
+decoded Data stream. Chunk-relative rows are translated to their mark row
+offsets before callback windows are applied.
+
 ```crystal
 table = CrystalClick::TypedPartTable.open_selected_typed(parts, ["id", "doc"])
 table.scan_compact_json_columnar(workers: 4, batch_rows: 2048) do |batch|

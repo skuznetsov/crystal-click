@@ -141,6 +141,121 @@ module CrystalClick
       bucket_structures : Array(ObjectSharedChunkStructure),
       budget : BinaryCodecBudget,
     ) : Array(ObjectSharedMapRow)
+      dictionary, row_count, total_entries, width = preflight_decode_layout(
+        sizes, indexes, values, bucket_structures, budget,
+      )
+      rows_u64 = row_count.to_u64
+      preflight_rows_and_entries(budget, rows_u64, total_entries)
+      prepare_dictionary_for_decode!(sizes, indexes, dictionary, width, budget)
+
+      rows = Array(ObjectSharedMapRow).new(row_count)
+      values_context = BinaryCodecContext.new(budget.limits, values, false, budget, false)
+      index_offset = 0
+      row_index = 0
+      while row_index < row_count
+        entry_count = read_u64_le(sizes, row_index * 8).to_i
+        entries = Array(ObjectSharedMapEntry).new(entry_count)
+        previous_index : Int32? = nil
+        entry_index = 0
+        while entry_index < entry_count
+          dictionary_index = read_index(indexes, index_offset, width).to_i
+          if previous = previous_index
+            if dictionary.compare_source_paths(previous, dictionary_index) >= 0
+              raise CorruptPartError.new("Object shared Copy row indexes are not in byte-path order")
+            end
+          end
+          index_offset += width
+
+          _type, value = read_dynamic_value(values_context, budget)
+          entries << dictionary.map_entry(dictionary_index, value)
+          previous_index = dictionary_index
+          entry_index += 1
+        end
+        begin
+          rows << ObjectSharedMapRow.new(entries)
+        rescue ex : ArgumentError
+          raise CorruptPartError.new("invalid Object shared Copy row: #{ex.message}")
+        end
+        row_index += 1
+      end
+      values_context.ensure_consumed
+      rows
+    end
+
+    # SharedData's Compact Advanced lane owns no ObjectSharedMapRow arrays.
+    # Each Copy index already names one sparse destination column, so retain
+    # only the current decoded scalar and append it directly to that column.
+    # The legacy decode APIs above intentionally keep their row ownership and
+    # NULL semantics for callers outside this lane.
+    def self.decode_into_columns_with_budget(
+      sizes : Bytes,
+      indexes : Bytes,
+      values : Bytes,
+      bucket_structures : Array(ObjectSharedChunkStructure),
+      columns_by_index : Array(CompactJsonColumnarColumn),
+      output : CompactJsonColumnarBatch,
+      row_offset : Int32,
+      budget : BinaryCodecBudget,
+    ) : UInt64
+      dictionary, row_count, total_entries, width = preflight_decode_layout(
+        sizes, indexes, values, bucket_structures, budget,
+      )
+      unless columns_by_index.size == dictionary.path_count
+        raise CorruptPartError.new("Object shared Copy column bindings disagree with its chunk dictionary")
+      end
+      if row_offset < 0 || row_offset > output.row_count || row_count > output.row_count - row_offset
+        raise CorruptPartError.new("Object shared Copy chunk rows exceed the Compact JSON output window")
+      end
+      binding_workspace_bytes = checked_add(
+        instance_sizeof(Array(CompactJsonColumnarColumn)).to_u64,
+        checked_multiply(
+          dictionary.path_count.to_u64,
+          sizeof(Pointer(CompactJsonColumnarColumn)).to_u64,
+          false,
+          "column binding workspace",
+        ),
+        false,
+        "column binding workspace",
+      )
+      output.validate_workspace!(binding_workspace_bytes)
+
+      # The integration owner accounts logical rows. This lane accounts each
+      # retained Copy cell exactly once and charges the per-cell decode visit.
+      budget.preflight_children(total_entries)
+      total_entries.times { budget.charge_node }
+      prepare_dictionary_for_decode!(sizes, indexes, dictionary, width, budget)
+
+      values_context = BinaryCodecContext.new(budget.limits, values, false, budget, false)
+      index_offset = 0
+      row_index = 0
+      while row_index < row_count
+        entry_count = read_u64_le(sizes, row_index * 8).to_i
+        entry_index = 0
+        while entry_index < entry_count
+          dictionary_index = read_index(indexes, index_offset, width).to_i
+          index_offset += width
+
+          type, value = read_dynamic_value(values_context, budget)
+          if type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_NULLABLE || value.is_null?
+            raise CorruptPartError.new("Object shared Copy contains a top-level Nothing or NULL value")
+          end
+          column = columns_by_index[dictionary_index]
+          output.append_column_value!(column, row_offset + row_index, value, binding_workspace_bytes)
+          entry_index += 1
+        end
+        row_index += 1
+      end
+      values_context.ensure_consumed
+      row_count.to_u64
+    end
+
+    private def self.preflight_decode_layout(
+      sizes : Bytes,
+      indexes : Bytes,
+      values : Bytes,
+      bucket_structures : Array(ObjectSharedChunkStructure),
+      budget : BinaryCodecBudget,
+    ) : Tuple(ObjectSharedCopyDictionary, Int32, UInt64, Int32)
       if budget.writing?
         raise ArgumentError.new("Object shared Copy decode requires a reading budget")
       end
@@ -184,9 +299,16 @@ module CrystalClick
       if minimum_values > values.size.to_u64
         raise CorruptPartError.new("Object shared Copy values lane is too short for declared entries")
       end
+      {dictionary, row_count.to_i32, total_entries, width}
+    end
 
-      rows_u64 = row_count.to_u64
-      preflight_rows_and_entries(budget, rows_u64, total_entries)
+    private def self.prepare_dictionary_for_decode!(
+      sizes : Bytes,
+      indexes : Bytes,
+      dictionary : ObjectSharedCopyDictionary,
+      width : Int32,
+      budget : BinaryCodecBudget,
+    ) : Nil
       budget.charge_elements(dictionary.path_count.to_u64) # used-path bitmap
       used = Array(Bool).new(dictionary.path_count, false)
 
@@ -198,49 +320,24 @@ module CrystalClick
         raise CorruptPartError.new("Object shared Copy dictionary contains an unreferenced path")
       end
       dictionary.materialize!(budget, referenced_path_bytes)
+      nil
+    end
 
-      rows = Array(ObjectSharedMapRow).new(row_count)
-      values_context = BinaryCodecContext.new(budget.limits, values, false, budget, false)
-      index_offset = 0
-      row_index = 0
-      while row_index < row_count
-        entry_count = read_u64_le(sizes, row_index * 8).to_i
-        entries = Array(ObjectSharedMapEntry).new(entry_count)
-        previous_index : Int32? = nil
-        entry_index = 0
-        while entry_index < entry_count
-          dictionary_index = read_index(indexes, index_offset, width).to_i
-          if previous = previous_index
-            if dictionary.compare_source_paths(previous, dictionary_index) >= 0
-              raise CorruptPartError.new("Object shared Copy row indexes are not in byte-path order")
-            end
-          end
-          index_offset += width
-
-          envelope_size = values_context.read_var_uint
-          envelope = values_context.read_slice(envelope_size)
-          type, decoded_value = BinaryValueCodec.decode_dynamic_bulk_child(
-            envelope,
-            budget,
-            1,
-            allow_json: true,
-            allow_recursive_qbit: true,
-            allow_qbit_variants: false,
-          )
-          value = decoded_value || BinaryValue.null(type)
-          entries << dictionary.map_entry(dictionary_index, value)
-          previous_index = dictionary_index
-          entry_index += 1
-        end
-        begin
-          rows << ObjectSharedMapRow.new(entries)
-        rescue ex : ArgumentError
-          raise CorruptPartError.new("invalid Object shared Copy row: #{ex.message}")
-        end
-        row_index += 1
-      end
-      values_context.ensure_consumed
-      rows
+    private def self.read_dynamic_value(
+      values_context : BinaryCodecContext,
+      budget : BinaryCodecBudget,
+    ) : Tuple(BinaryDataType, BinaryValue)
+      envelope_size = values_context.read_var_uint
+      envelope = values_context.read_slice(envelope_size)
+      type, decoded_value = BinaryValueCodec.decode_dynamic_bulk_child(
+        envelope,
+        budget,
+        1,
+        allow_json: true,
+        allow_recursive_qbit: true,
+        allow_qbit_variants: false,
+      )
+      {type, decoded_value || BinaryValue.null(type)}
     end
 
     private def self.scan_indexes(

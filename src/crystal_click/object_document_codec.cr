@@ -591,16 +591,15 @@ module CrystalClick
     end
 
     # :nodoc:
-    # Compact Advanced root JSON scan output uses the same exact decoders and
-    # validation path as ObjectDocument, but writes cells into a sealed
-    # reusable columnar arena instead of creating one Hash and ObjectDocument
-    # per row.
+    # Decode one prepared Compact Advanced root mark into a sealed columnar
+    # arena. Ordinary streams and the SharedData body have the same source.
     def self.decode_child_site_columnar_with_budget(
       typed_schema : Hash(String, BinaryDataType),
       streams : ObjectDocumentStreams,
       grid : StorageOccurrenceGrid,
       budget : BinaryCodecBudget,
       output : CompactJsonColumnarBatch,
+      shared : ObjectSharedAdvancedInlinePrepared,
       profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       shared_profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
       typed_descriptor_root_depth : Int32 = 2,
@@ -624,7 +623,7 @@ module CrystalClick
         nil,
         typed_dynamic_json_read_context,
         nil,
-        output,
+        {output: output, shared: shared},
       )
       nil
     end
@@ -719,7 +718,7 @@ module CrystalClick
       inline_prefix : ObjectDocumentInlinePrefix?,
       typed_dynamic_json_read_context : ObjectDocumentTypedDynamicJsonReadContext?,
       assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
-      columnar_output : CompactJsonColumnarBatch? = nil,
+      columnar : NamedTuple(output: CompactJsonColumnarBatch, shared: ObjectSharedAdvancedInlinePrepared)? = nil,
     ) : Array(Array(ObjectDocument))
       if budget.writing?
         raise ArgumentError.new("Object document decode requires a reading budget")
@@ -816,6 +815,9 @@ module CrystalClick
           unless streams.has_typed_dynamic_path?(path)
             corrupt!("typed Dynamic Object lane is missing schema path #{path.inspect}")
           end
+          if columnar && streams.typed_dynamic_for(path).json_object_count > 0
+            raise UnsupportedFormatError.new("prepared Compact Advanced typed Dynamic JSON children are outside this root checkpoint")
+          end
         elsif !streams.has_typed_path?(path)
           corrupt!("typed Object lane is missing schema path #{path.inspect}")
         end
@@ -829,7 +831,17 @@ module CrystalClick
           corrupt!("Dynamic Object lane is missing metadata path #{path.inspect}")
         end
       end
-      if object.shared_data_version <= 1_u64
+      if target = columnar
+        shared = target[:shared]
+        context = shared.nested_context_for_decode
+        unless real_marks == 1 && selected_first == 0 && selected_count == 1 &&
+               streams.shared_bucket_count == 0 && streams.advanced_shared_mark_count == 0 &&
+               (object.shared_data_version == 2_u64 || object.shared_data_version == 3_u64) &&
+               context.shared_data_version == object.shared_data_version && context.profile == profile &&
+               shared.bucket_count.to_u64 == object.bucket_count
+          corrupt!("prepared Compact JSON columnar SharedData differs from the Object layout")
+        end
+      elsif object.shared_data_version <= 1_u64
         expected_shared_buckets = ObjectSharedBucketLayout.bucket_count(object)
         unless streams.shared_bucket_count == expected_shared_buckets && streams.advanced_shared_mark_count == 0
           corrupt!("shared Object lane roster does not match its metadata")
@@ -868,7 +880,11 @@ module CrystalClick
       # when the caller selects zero marks. Child bodies remain selected-only.
       object.dynamic_path_count.times do |dynamic_index|
         path = object.dynamic_path_at(dynamic_index)
-        discriminator = streams.dynamic_for(path).discriminators
+        dynamic = streams.dynamic_for(path)
+        if columnar && dynamic.json_object_leaf_count > 0
+          raise UnsupportedFormatError.new("prepared Compact Advanced Dynamic JSON children are outside this root checkpoint")
+        end
+        discriminator = dynamic.discriminators
         unless discriminator.mark_count == real_marks + 1
           corrupt!("Dynamic discriminator mark grid does not match the Object row grid")
         end
@@ -884,6 +900,21 @@ module CrystalClick
             else
               corrupt!("Dynamic discriminator rows disagree with the Object outer row grid")
             end
+          end
+        end
+      end
+
+      if target = columnar
+        shared = target[:shared]
+        output = target[:output]
+        unless output.row_count.to_u64 == total_rows && shared.logical_row_count == total_rows
+          corrupt!("Compact JSON columnar destination differs from the selected mark grid")
+        end
+        budget.ensure_future_nodes(total_rows)
+        total_rows.times { budget.charge_node }
+        ObjectSharedAdvancedInlineDecoder.decode_prepared_into_columns(shared, budget, output) do |path|
+          if typed_schema.has_key?(path) || object.has_dynamic_path?(path)
+            corrupt!("shared Object path overlaps a typed or Dynamic path")
           end
         end
       end
@@ -1082,6 +1113,11 @@ module CrystalClick
         end
       end
 
+      if target = columnar
+        append_ordinary_columns(target[:output], typed_rows, dynamic_rows, budget)
+        return [] of Array(ObjectDocument)
+      end
+
       shared_rows = if object.shared_data_version == 0_u64
                       ObjectDocumentSharedCodec.decode_with_budget(
                         streams.shared,
@@ -1139,44 +1175,6 @@ module CrystalClick
       budget.ensure_future_nodes(selected_rows)
       budget.ensure_future_elements(assembly_fields)
 
-      if output = columnar_output
-        unless selected_count == 1 && output.row_count.to_u64 == selected_rows
-          raise CorruptPartError.new("Compact JSON columnar destination differs from the selected mark grid")
-        end
-        typed_columns = [] of Tuple(CompactJsonColumnarColumn, Array(BinaryValue))
-        typed_rows.each do |path, marks|
-          column = output.column_for(path) ||
-                   raise CorruptPartError.new("typed Compact JSON path is outside the sealed columnar roster")
-          typed_columns << {column, marks[0]}
-        end
-        dynamic_columns = [] of Tuple(CompactJsonColumnarColumn, Array(BinaryValue))
-        dynamic_rows.each do |path, marks|
-          column = output.column_for(path) ||
-                   raise CorruptPartError.new("Dynamic Compact JSON path is outside the sealed columnar roster")
-          dynamic_columns << {column, marks[0]}
-        end
-        row_count = rows_per_mark[selected_first].to_i
-        row_count.times do |row_index|
-          unique_fields = 0_u64
-          typed_columns.each do |column, values|
-            unique_fields += 1_u64 if output.append_column_value!(column, row_index, values[row_index])
-          end
-          dynamic_columns.each do |column, values|
-            value = values[row_index]
-            unless value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
-              unique_fields += 1_u64 if output.append_column_value!(column, row_index, value)
-            end
-          end
-          shared_rows[0][row_index].each do |entry|
-            unique_fields += 1_u64 if output.append_value!(entry[0], row_index, entry[1])
-          end
-          budget.charge_node
-          budget.charge_elements(unique_fields) if unique_fields > 0_u64
-        end
-        output.validate_workspace!(columnar_intermediate_shell_workspace_bytes(typed_rows, dynamic_rows, shared_rows))
-        return [] of Array(ObjectDocument)
-      end
-
       result = Array(Array(ObjectDocument)).new(selected_count)
       selected_count.times do |window_offset|
         selected_index = window_offset
@@ -1204,10 +1202,35 @@ module CrystalClick
       result
     end
 
-    private def self.columnar_intermediate_shell_workspace_bytes(
+    private def self.append_ordinary_columns(
+      output : CompactJsonColumnarBatch,
       typed_rows : Hash(String, Array(Array(BinaryValue))),
       dynamic_rows : Hash(String, Array(Array(BinaryValue))),
-      shared_rows : Array(Array(Array(ObjectDocumentSharedCodec::Entry))),
+      budget : BinaryCodecBudget,
+    ) : Nil
+      typed_rows.each do |path, marks|
+        column = output.column_for(path) ||
+                 raise CorruptPartError.new("typed Compact JSON path is outside the sealed columnar roster")
+        budget.charge_elements(marks[0].size.to_u64)
+        marks[0].each_with_index do |value, row|
+          output.append_column_value!(column, row, value)
+        end
+      end
+      dynamic_rows.each do |path, marks|
+        column = output.column_for(path) ||
+                 raise CorruptPartError.new("Dynamic Compact JSON path is outside the sealed columnar roster")
+        marks[0].each_with_index do |value, row|
+          next if value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
+          budget.charge_elements(1_u64)
+          output.append_column_value!(column, row, value)
+        end
+      end
+      output.validate_workspace!(ordinary_columnar_shell_workspace_bytes(typed_rows, dynamic_rows))
+    end
+
+    private def self.ordinary_columnar_shell_workspace_bytes(
+      typed_rows : Hash(String, Array(Array(BinaryValue))),
+      dynamic_rows : Hash(String, Array(Array(BinaryValue))),
     ) : UInt64
       bytes = instance_sizeof(Hash(String, Array(Array(BinaryValue)))).to_u64 * 2_u64
       {typed_rows, dynamic_rows}.each do |lanes|
@@ -1219,22 +1242,6 @@ module CrystalClick
             bytes = checked_add(bytes, instance_sizeof(Array(BinaryValue)).to_u64, false)
             bytes = checked_add(bytes,
               checked_multiply(values.size.to_u64, sizeof(Pointer(BinaryValue)).to_u64, false), false)
-          end
-        end
-      end
-      bytes = checked_add(bytes, instance_sizeof(Array(Array(Array(ObjectDocumentSharedCodec::Entry)))).to_u64, false)
-      bytes = checked_add(bytes,
-        checked_multiply(shared_rows.size.to_u64, sizeof(Pointer(Array(Array(ObjectDocumentSharedCodec::Entry)))).to_u64, false), false)
-      shared_rows.each do |marks|
-        bytes = checked_add(bytes, instance_sizeof(Array(Array(ObjectDocumentSharedCodec::Entry))).to_u64, false)
-        bytes = checked_add(bytes,
-          checked_multiply(marks.size.to_u64, sizeof(Pointer(Array(ObjectDocumentSharedCodec::Entry))).to_u64, false), false)
-        marks.each do |entries|
-          bytes = checked_add(bytes, instance_sizeof(Array(ObjectDocumentSharedCodec::Entry)).to_u64, false)
-          bytes = checked_add(bytes,
-            checked_multiply(entries.size.to_u64, sizeof(ObjectDocumentSharedCodec::Entry).to_u64, false), false)
-          entries.each do |entry|
-            bytes = checked_add(bytes, sizeof(String).to_u64 + entry[0].bytesize.to_u64 + 1_u64, false)
           end
         end
       end

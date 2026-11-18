@@ -100,6 +100,61 @@ module CrystalClick
       rows
     end
 
+    # Direct SharedData decode for Compact Advanced JSON. Copy values are
+    # appended to their pre-bound sparse columns while parsing; no per-row
+    # ObjectSharedMapRow or entry arrays are created for this lane.
+    def self.decode_into_columns(
+      bucket_chunks : Array(ObjectSharedPhysicalChunk),
+      copy : ObjectSharedCopyStreams,
+      budget : BinaryCodecBudget,
+      output : CompactJsonColumnarBatch,
+      row_offset : Int32,
+      profile : BinaryBulkProfile = ObjectSharedPathCodec::COMPACT_PROFILE,
+      nested_context : ObjectSharedNestedSerializationContext? = nil,
+      &validate_path : String -> Nil
+    ) : UInt64
+      if budget.writing?
+        raise ArgumentError.new("Object shared advanced chunk decode requires a read-direction budget")
+      end
+      unless 1 <= bucket_chunks.size <= ObjectSharedBucketLayout::MAX_BUCKET_COUNT
+        raise CorruptPartError.new("Object shared advanced chunk has an invalid bucket count")
+      end
+      preflight_stream_snapshots!(bucket_chunks, copy, budget)
+
+      row_count = bucket_chunks[0].row_count
+      if row_count > Int32::MAX.to_u64
+        raise CorruptPartError.new("Object shared advanced chunk row count exceeds Int32")
+      end
+      path_count, path_bytes = preflight_bucket_chunks(bucket_chunks, row_count, budget)
+      structures = structures_from_chunks(bucket_chunks, row_count, path_count, path_bytes, budget)
+      columns_by_index = bind_columns_by_dictionary_index(bucket_chunks, path_count, budget, output) do |name|
+        yield name
+      end
+
+      decoded_rows = copy.decode_into_columns_with_budget(
+        structures,
+        columns_by_index,
+        output,
+        row_offset,
+        budget,
+      )
+      unless decoded_rows == row_count
+        raise CorruptPartError.new("Object shared Copy row count disagrees with its per-path chunks")
+      end
+
+      verify_path_values_in_columns(
+        bucket_chunks,
+        columns_by_index,
+        output,
+        row_offset,
+        row_count.to_i,
+        budget,
+        profile,
+        nested_context,
+      )
+      row_count
+    end
+
     private def self.preflight_input_rows(
       rows : Array(ObjectSharedMapRow),
       budget : BinaryCodecBudget,
@@ -510,32 +565,7 @@ module CrystalClick
       cursors = Array(Int32).new(rows.size, 0)
       rows.each { budget.charge_node }
       paths.each do |path|
-        budget.ensure_wire_bytes(path.streams.data_size.to_u64)
-        budget.ensure_future_elements(path.streams.event_count.to_u64)
-        decoded = if context = nested_context
-                    ObjectSharedPathCodec.decode_with_json_children_with_budget(
-                      path.streams.data,
-                      path.streams.events,
-                      rows.size,
-                      BinaryDataType.dynamic(max_types: JSON_DYNAMIC_MAX_TYPES),
-                      budget,
-                      context,
-                      profile,
-                      path.streams.coordinate_context,
-                    ).rows
-                  else
-                    ObjectSharedPathCodec.decode_with_budget(
-                      path.streams.data,
-                      path.streams.events,
-                      rows.size,
-                      DYNAMIC_TYPE,
-                      budget,
-                      profile: profile,
-                    )
-                  end
-        unless decoded.size == rows.size
-          raise CorruptPartError.new("Object shared path Dynamic row count disagrees with Copy")
-        end
+        decoded = decode_path_for_copy_verification(path, rows.size, budget, profile, nested_context)
         rows.each_with_index do |row, row_index|
           current = cursors[row_index]
           if current < row.entry_count
@@ -547,17 +577,17 @@ module CrystalClick
               if entry.value.is_null?
                 raise CorruptPartError.new("Object shared Copy contains a NULL value omitted by native extraction")
               end
-              value = decoded[row_index]
+              value = decoded.row_at(row_index)
               unless !value.is_null? && value.child_count == 1 &&
                      values_equal?(entry.value, value.child_at(0), budget, 1)
                 raise CorruptPartError.new("Object shared Copy value disagrees with its per-path Dynamic row")
               end
               cursors[row_index] = current + 1
             else
-              ensure_absent_path_value!(decoded[row_index])
+              ensure_absent_path_value!(decoded.row_at(row_index))
             end
           else
-            ensure_absent_path_value!(decoded[row_index])
+            ensure_absent_path_value!(decoded.row_at(row_index))
           end
         end
       end
@@ -567,6 +597,162 @@ module CrystalClick
         end
       end
       nil
+    end
+
+    private def self.bind_columns_by_dictionary_index(
+      bucket_chunks : Array(ObjectSharedPhysicalChunk),
+      path_count : UInt64,
+      budget : BinaryCodecBudget,
+      output : CompactJsonColumnarBatch,
+      &validate_path : String -> Nil
+    ) : Array(CompactJsonColumnarColumn)
+      # Dictionary ordinals follow the physical bucket/path traversal order.
+      # Resolve one sparse output column per ordinal here so Copy cells never
+      # allocate a path key or perform a per-cell hash lookup.
+      budget.preflight_children(path_count)
+      output.validate_workspace!(column_bindings_workspace_bytes(path_count))
+      columns = Array(CompactJsonColumnarColumn).new(path_count.to_i)
+      bucket_chunks.each do |bucket|
+        bucket.path_count.times do |path_index|
+          name = bucket.path_at(path_index).name
+          yield name
+          column = output.column_for(name) ||
+                   raise(CorruptPartError.new("Object shared Copy path is outside the sealed Compact JSON output roster"))
+          columns << column
+        end
+      end
+      unless columns.size.to_u64 == path_count
+        raise CorruptPartError.new("Object shared Copy column bindings changed during materialization")
+      end
+      columns
+    end
+
+    private def self.verify_path_values_in_columns(
+      bucket_chunks : Array(ObjectSharedPhysicalChunk),
+      columns_by_index : Array(CompactJsonColumnarColumn),
+      output : CompactJsonColumnarBatch,
+      row_offset : Int32,
+      row_count : Int32,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      nested_context : ObjectSharedNestedSerializationContext? = nil,
+    ) : Nil
+      path_count = columns_by_index.size.to_u64
+      slots = checked_multiply(row_count.to_u64, path_count, false, "path value checks")
+      budget.preflight_children(slots)
+      # Charge the cross-representation cell walk before decoding any path
+      # arrays. Each path decoder then charges its own recursive Data parse.
+      slots.times { budget.charge_node }
+      binding_bytes = column_bindings_workspace_bytes(path_count)
+      decoded_rows_bytes = checked_workspace_add(
+        instance_sizeof(Array(BinaryValue)).to_u64,
+        checked_multiply(
+          row_count.to_u64,
+          sizeof(Pointer(BinaryValue)).to_u64,
+          false,
+          "path compare row slots",
+        ),
+        "path compare workspace",
+      )
+      compare_workspace_bytes = checked_workspace_add(
+        binding_bytes,
+        decoded_rows_bytes,
+        "path compare workspace",
+      )
+
+      dictionary_index = 0
+      bucket_chunks.each do |bucket|
+        bucket.path_count.times do |path_index|
+          path = bucket.path_at(path_index)
+          column = columns_by_index[dictionary_index]
+          output.validate_workspace!(compare_workspace_bytes)
+          decoded = decode_path_for_copy_verification(path, row_count, budget, profile, nested_context)
+
+          row_index = 0
+          column.each_cell_in_range(row_offset, row_count) do |copy_row, copy_value|
+            while row_index < row_count && row_offset + row_index < copy_row
+              ensure_absent_path_value!(decoded.row_at(row_index))
+              row_index += 1
+            end
+            unless row_index < row_count && row_offset + row_index == copy_row
+              raise CorruptPartError.new("Object shared Copy column contains duplicate or out-of-range rows")
+            end
+            dynamic_value = decoded.row_at(row_index)
+            unless !dynamic_value.is_null? && dynamic_value.child_count == 1 &&
+                   values_equal?(copy_value, dynamic_value.child_at(0), budget, 1)
+              raise CorruptPartError.new("Object shared Copy value disagrees with its per-path Dynamic row")
+            end
+            row_index += 1
+          end
+          while row_index < row_count
+            ensure_absent_path_value!(decoded.row_at(row_index))
+            row_index += 1
+          end
+          dictionary_index += 1
+        end
+      end
+      unless dictionary_index == columns_by_index.size
+        raise CorruptPartError.new("Object shared path count disagrees with its Copy column bindings")
+      end
+      nil
+    end
+
+    private def self.decode_path_for_copy_verification(
+      path : ObjectSharedPhysicalPath,
+      row_count : Int32,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      nested_context : ObjectSharedNestedSerializationContext?,
+    ) : ObjectSharedPathDecodeResult
+      streams = path.streams
+      budget.ensure_wire_bytes(streams.data_size.to_u64)
+      budget.ensure_future_elements(streams.event_count.to_u64)
+      decoded = if context = nested_context
+                  ObjectSharedPathCodec.decode_with_json_children_with_budget(
+                    streams.data,
+                    streams.events,
+                    row_count,
+                    BinaryDataType.dynamic(max_types: JSON_DYNAMIC_MAX_TYPES),
+                    budget,
+                    context,
+                    profile,
+                    streams.coordinate_context,
+                  )
+                else
+                  ObjectSharedPathCodec.decode_with_structures_with_budget(
+                    streams.data,
+                    streams.events,
+                    row_count,
+                    DYNAMIC_TYPE,
+                    budget,
+                    profile: profile,
+                  )
+                end
+      unless decoded.row_count == row_count
+        raise CorruptPartError.new("Object shared path Dynamic row count disagrees with Copy")
+      end
+      decoded
+    end
+
+    private def self.column_bindings_workspace_bytes(path_count : UInt64) : UInt64
+      references = checked_multiply(
+        path_count,
+        sizeof(Pointer(CompactJsonColumnarColumn)).to_u64,
+        false,
+        "column binding workspace",
+      )
+      checked_workspace_add(
+        instance_sizeof(Array(CompactJsonColumnarColumn)).to_u64,
+        references,
+        "column binding workspace",
+      )
+    end
+
+    private def self.checked_workspace_add(left : UInt64, right : UInt64, description : String) : UInt64
+      if right > UInt64::MAX - left
+        raise CorruptPartError.new("Object shared #{description} overflows UInt64")
+      end
+      left + right
     end
 
     private def self.ensure_absent_path_value!(value : BinaryValue) : Nil

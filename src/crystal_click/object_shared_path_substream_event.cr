@@ -1,7 +1,7 @@
 module CrystalClick
   # One ordered substream-getter callback in a decompressed Object path slice.
   # Offsets are relative to the complete Data slice, not compressed marks.
-  class ObjectSharedPathSubstreamEvent
+  struct ObjectSharedPathSubstreamEvent
     @name : String
     getter relative_offset : UInt64
 

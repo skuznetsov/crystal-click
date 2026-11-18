@@ -1,6 +1,6 @@
 module CrystalClick
   # Parsed path values plus the explicitly decoded Dynamic site rosters.
-  class ObjectSharedPathDecodeResult
+  struct ObjectSharedPathDecodeResult
     @rows : Array(BinaryValue)
     @structures : Hash(String, DynamicStructure)
 
@@ -14,6 +14,17 @@ module CrystalClick
 
     def rows : Array(BinaryValue)
       @rows.dup
+    end
+
+    # Read-only per-row access avoids copying the full result array when a
+    # verifier consumes the result in a bounded loop. BinaryValue exposes no
+    # mutable collection owner, so the backing array remains private.
+    def row_count : Int32
+      @rows.size
+    end
+
+    def row_at(index : Int) : BinaryValue
+      @rows[index]
     end
 
     def structures : Hash(String, DynamicStructure)

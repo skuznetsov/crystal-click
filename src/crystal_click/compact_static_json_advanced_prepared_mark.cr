@@ -248,7 +248,6 @@ module CrystalClick
     end
 
     # Decode exact selected values directly into the reusable columnar owner.
-    # No ObjectDocument or per-row output Hash is built on this lane.
     # :nodoc:
     def decode_columnar_with_budget(
       budget : BinaryCodecBudget,
@@ -260,19 +259,13 @@ module CrystalClick
       unless @budget.same?(budget) || budget.includes_preparation_from?(@budget)
         raise ArgumentError.new("prepared Compact Advanced columnar decode requires its preparation receipt")
       end
-      @shared_prepared.validate_decode_operation!(budget)
-
-      advanced_rows = ObjectSharedAdvancedInlineDecoder.decode_prepared(@shared_prepared, budget)
-      unless advanced_rows.size == 1 && advanced_rows[0].size.to_u64 == @logical_row_count
-        raise CorruptPartError.new("prepared Compact Advanced columnar decode returned the wrong mark grid")
-      end
-      streams = streams_with_advanced_rows(advanced_rows)
       ObjectDocumentCodec.decode_child_site_columnar_with_budget(
         @typed_schema,
-        streams,
+        @ordinary_streams,
         @grid,
         budget,
         output,
+        @shared_prepared,
         profile: @ordinary_profile,
         shared_profile: BinaryBulkProfile.single_stream,
         typed_descriptor_root_depth: @typed_descriptor_root_depth,
