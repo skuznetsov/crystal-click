@@ -299,7 +299,7 @@ module CrystalClick
       & : WidePartTableBatch -> Nil
     ) : Nil
       validate_batch_rows(batch_rows)
-      preflight_backends!
+      preflight_backends! unless singleton_compact_backend?
 
       source_row_offset = 0_u64
       scan_workspace = nil.as(CompactUInt64ScanWorkspace?)
@@ -355,7 +355,10 @@ module CrystalClick
     ) : Nil
       validate_batch_rows(max_rows, "window row count")
       raise BoundsError.new("window start is beyond the source row count") if start_row > @total_row_count
-      preflight_backends!
+      # A nonempty scan is gated by a singleton Compact backend before its
+      # first callback. Keep the explicit facade gate for empty-at-end scans
+      # and for all multipart/Wide compositions.
+      preflight_backends! unless start_row < @total_row_count && singleton_compact_backend?
       return nil if start_row == @total_row_count
 
       available = @total_row_count - start_row
@@ -395,7 +398,10 @@ module CrystalClick
         schedule << detached
       end
 
-      preflight_backends!
+      # A single Compact backend performs this same complete schedule gate
+      # before its first selected callback. Keep the facade barrier for
+      # multipart scans so every backend fails before any part emits rows.
+      preflight_backends! unless singleton_compact_backend?
       source_row_offset = 0_u64
       @entries.each_with_index do |entry, part_index|
         entry.reader.scan_typed_candidate_marks([schedule[part_index]]) do |batch|
@@ -405,6 +411,10 @@ module CrystalClick
       end
       raise CorruptPartError.new("source row count mismatch") unless source_row_offset == @total_row_count
       nil
+    end
+
+    private def singleton_compact_backend? : Bool
+      @entries.size == 1 && @entries[0].reader.is_a?(CompactPartTable)
     end
 
     private def preflight_backends! : Nil
