@@ -3,14 +3,18 @@
 #include <bit>
 #include <charconv>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <sstream>
@@ -30,12 +34,24 @@
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
 #include <Core/NamesAndTypes.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeObject.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Databases/LoadingStrictnessLevel.h>
 #include <IO/SharedThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/StorageID.h>
+#include <Formats/FormatFactory.h>
+#include <Functions/registerFunctions.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Poco/Util/MapConfiguration.h>
 #include <Storages/KeyDescription.h>
 #include <Storages/MergeTree/AlterConversions.h>
@@ -65,6 +81,7 @@ struct Options
 {
     fs::path part;
     std::string layout;
+    std::string schema = "uint64";
     std::vector<size_t> marks;
     size_t mark_rows = 0;
     size_t workers = 0;
@@ -89,6 +106,8 @@ size_t parseSize(std::string_view value, std::string_view field)
 std::vector<size_t> parseMarks(std::string_view value)
 {
     std::vector<size_t> result;
+    if (value.empty())
+        return result;
     size_t begin = 0;
     while (begin <= value.size())
     {
@@ -112,8 +131,8 @@ std::vector<size_t> parseMarks(std::string_view value)
 
 Options parseOptions(int argc, char ** argv)
 {
-    if (argc != 15)
-        fail("usage: clickhouse-read-rows --part PATH --layout wide|compact --marks 0,1,... --mark-rows N --workers 1|4 --oracle PATH --work-dir PATH");
+    if (argc != 15 && argc != 17)
+        fail("usage: clickhouse-read-rows --part PATH --layout wide|compact --marks 0,1,... --mark-rows N --workers 1|4 --oracle PATH --work-dir PATH [--schema uint64|json]");
 
     Options options;
     for (int i = 1; i < argc; i += 2)
@@ -124,6 +143,8 @@ Options parseOptions(int argc, char ** argv)
             options.part = value;
         else if (key == "--layout")
             options.layout = value;
+        else if (key == "--schema")
+            options.schema = value;
         else if (key == "--marks")
             options.marks = parseMarks(value);
         else if (key == "--mark-rows")
@@ -140,11 +161,17 @@ Options parseOptions(int argc, char ** argv)
 
     if (options.layout != "wide" && options.layout != "compact")
         fail("--layout must be wide or compact");
+    if (options.schema != "uint64" && options.schema != "json")
+        fail("--schema must be uint64 or json");
+    if (options.schema == "json" && options.layout != "compact")
+        fail("--schema json requires --layout compact");
     if (options.workers != 1 && options.workers != 4)
         fail("--workers must be 1 or 4");
     if (!options.mark_rows)
         fail("--mark-rows must be positive");
-    if (options.marks.size() < options.workers)
+    if (options.schema == "uint64" && options.marks.empty())
+        fail("--marks must contain at least one mark for --schema uint64");
+    if (!options.marks.empty() && options.marks.size() < options.workers)
         fail("--marks must provide at least one mark per worker");
     if (options.part.empty() || options.oracle.empty() || options.work_dir.empty())
         fail("--part, --oracle, and --work-dir must be non-empty paths");
@@ -165,14 +192,22 @@ Options parseOptions(int argc, char ** argv)
 
 std::vector<UInt8> readOracle(const Options & options)
 {
-    if (options.marks.size() > std::numeric_limits<size_t>::max() / options.mark_rows)
-        fail("requested row count overflows size_t");
-    const size_t rows = options.marks.size() * options.mark_rows;
-    if (rows > std::numeric_limits<size_t>::max() / (2 * sizeof(UInt64)))
-        fail("oracle size overflows size_t");
-    const size_t bytes = rows * 2 * sizeof(UInt64);
-    if (fs::file_size(options.oracle) != bytes)
-        fail("oracle byte length does not match requested rows");
+    const uintmax_t file_bytes = fs::file_size(options.oracle);
+    if (file_bytes > static_cast<uintmax_t>(std::numeric_limits<std::streamsize>::max()))
+        fail("oracle is too large to read");
+    const size_t bytes = static_cast<size_t>(file_bytes);
+    if (static_cast<uintmax_t>(bytes) != file_bytes)
+        fail("oracle is too large for this platform");
+    if (options.schema == "uint64")
+    {
+        if (options.marks.size() > std::numeric_limits<size_t>::max() / options.mark_rows)
+            fail("requested row count overflows size_t");
+        const size_t rows = options.marks.size() * options.mark_rows;
+        if (rows > std::numeric_limits<size_t>::max() / (2 * sizeof(UInt64)))
+            fail("oracle size overflows size_t");
+        if (bytes != rows * 2 * sizeof(UInt64))
+            fail("oracle byte length does not match requested rows");
+    }
 
     std::vector<UInt8> data(bytes);
     std::ifstream input(options.oracle, std::ios::binary);
@@ -195,6 +230,49 @@ void initializeMergeTreePools()
     DB::getOutdatedPartsLoadingThreadPool().initializeWithDefaultSettingsIfNotInitialized();
     DB::getUnexpectedPartsLoadingThreadPool().initializeWithDefaultSettingsIfNotInitialized();
     DB::getPartsCleaningThreadPool().initializeWithDefaultSettingsIfNotInitialized();
+}
+
+DB::DataTypePtr makeFixtureJsonDocType()
+{
+    std::unordered_map<DB::String, DB::DataTypePtr> typed_paths;
+    typed_paths.emplace("rank", std::make_shared<DB::DataTypeNullable>(std::make_shared<DB::DataTypeUInt32>()));
+    typed_paths.emplace("tenant_id", std::make_shared<DB::DataTypeUInt32>());
+    typed_paths.emplace("title", std::make_shared<DB::DataTypeString>());
+    return std::make_shared<DB::DataTypeObject>(
+        DB::DataTypeObject::SchemaFormat::JSON,
+        std::move(typed_paths),
+        std::unordered_set<DB::String>{},
+        std::vector<DB::String>{},
+        /*max_dynamic_paths=*/4,
+        /*max_dynamic_types=*/2);
+}
+
+DB::DataTypePtr makeFixtureEventsType()
+{
+    auto tuple = std::make_shared<DB::DataTypeTuple>(
+        DB::DataTypes{std::make_shared<DB::DataTypeUInt64>(), std::make_shared<DB::DataTypeString>()},
+        DB::Strings{"a", "b"});
+    return std::make_shared<DB::DataTypeArray>(tuple);
+}
+
+DB::DataTypePtr makeFixtureAttrsType()
+{
+    auto nullable_u64 = std::make_shared<DB::DataTypeNullable>(std::make_shared<DB::DataTypeUInt64>());
+    return std::make_shared<DB::DataTypeMap>(
+        std::make_shared<DB::DataTypeString>(),
+        std::make_shared<DB::DataTypeArray>(nullable_u64));
+}
+
+DB::DataTypePtr getStoredDocType(const DB::MergeTreeData::DataPartPtr & part)
+{
+    const auto stored_columns = part->getColumns();
+    auto it = stored_columns.begin();
+    if (it == stored_columns.end())
+        fail("native JSON part has no id column");
+    ++it;
+    if (it == stored_columns.end())
+        fail("native JSON part has no doc column");
+    return it->type;
 }
 
 struct NativeTable
@@ -233,14 +311,40 @@ NativeTable loadNativePart(const Options & options)
 
     DB::StorageInMemoryMetadata in_memory_metadata;
     DB::ColumnsDescription columns;
-    columns.add(DB::ColumnDescription("pk", std::make_shared<DB::DataTypeUInt64>()));
-    columns.add(DB::ColumnDescription("value", std::make_shared<DB::DataTypeUInt64>()));
+    const std::string key_column = options.schema == "json" ? "id" : "pk";
+    columns.add(DB::ColumnDescription(key_column, std::make_shared<DB::DataTypeUInt64>()));
+    if (options.schema == "json")
+    {
+        columns.add(DB::ColumnDescription("doc", makeFixtureJsonDocType()));
+        columns.add(DB::ColumnDescription("events", makeFixtureEventsType()));
+        columns.add(DB::ColumnDescription("attrs", makeFixtureAttrsType()));
+    }
+    else
+        columns.add(DB::ColumnDescription("value", std::make_shared<DB::DataTypeUInt64>()));
     in_memory_metadata.setColumns(columns);
 
-    DB::ASTPtr key_ast(new DB::ASTIdentifier("pk"));
+    DB::ASTPtr key_ast(new DB::ASTIdentifier(key_column));
     in_memory_metadata.sorting_key = DB::KeyDescription::getKeyFromAST(key_ast, in_memory_metadata.columns, {}, context);
     in_memory_metadata.primary_key = DB::KeyDescription::getKeyFromAST(key_ast->clone(), in_memory_metadata.columns, {}, context);
-    in_memory_metadata.partition_key = DB::KeyDescription::getKeyFromAST(nullptr, in_memory_metadata.columns, {}, context);
+    if (options.schema == "json")
+    {
+        /// Reproduce the Compact fixture's PARTITION BY expression so ATTACH
+        /// validates the on-disk partition ID against its actual metadata.
+        DB::registerFunctions();
+        auto partition_ast = DB::makeASTFunction(
+            "intDiv",
+            DB::make_intrusive<DB::ASTIdentifier>("id"),
+            DB::make_intrusive<DB::ASTLiteral>(UInt64(8192)));
+        in_memory_metadata.partition_key = DB::KeyDescription::getKeyFromAST(
+            partition_ast,
+            in_memory_metadata.columns,
+            DB::MergeTreeData::createVirtuals(nullptr),
+            context);
+    }
+    else
+        in_memory_metadata.partition_key = DB::KeyDescription::getKeyFromAST(nullptr, in_memory_metadata.columns, {}, context);
+    in_memory_metadata.virtuals = DB::MergeTreeData::createVirtuals(
+        in_memory_metadata.partition_key.sample_block.columns() ? &in_memory_metadata.partition_key : nullptr);
 
     const std::string table_uuid_text = table_path.filename().string();
     DB::UUID table_uuid = DB::parseUUID(std::span<const UInt8>(
@@ -258,29 +362,76 @@ NativeTable loadNativePart(const Options & options)
         std::move(storage_settings));
 
     const auto loaded_parts = storage->getDataPartsForInternalUsage();
-    if (loaded_parts.size() != 1)
+    if (options.schema == "uint64" && loaded_parts.size() != 1)
         fail("expected exactly one active native part in the requested table directory");
-    const auto & part = *loaded_parts.begin();
-    if (part->name != options.part.filename().string())
-        fail("loaded part name does not match --part");
-    const fs::path loaded_path = fs::canonical(part->getDataPartStorage().getFullPath());
-    if (loaded_path != options.part)
-        fail("loaded native part path does not match --part");
+
+    DB::MergeTreeData::DataPartPtr selected_part;
+    size_t selected_part_count = 0;
+    for (const auto & candidate : loaded_parts)
+    {
+        if (candidate->name != options.part.filename().string())
+            continue;
+        const fs::path candidate_path = fs::canonical(candidate->getDataPartStorage().getFullPath());
+        if (candidate_path == options.part)
+        {
+            selected_part = candidate;
+            ++selected_part_count;
+        }
+    }
+    if (selected_part_count != 1)
+    {
+        std::ostringstream message;
+        message << "expected exactly one active native part matching --part path and name (loaded="
+                << loaded_parts.size() << ", matching=" << selected_part_count << ')';
+        for (const auto & candidate : loaded_parts)
+            message << "\nloaded " << candidate->name << " at " << candidate->getDataPartStorage().getFullPath();
+        fail(message.str());
+    }
+    const auto & part = selected_part;
 
     const bool part_is_wide = DB::isWidePart(part);
     const bool part_is_compact = DB::isCompactPart(part);
     if ((options.layout == "wide") != part_is_wide || (options.layout == "compact") != part_is_compact)
         fail("--layout does not match the native part type");
+    if (options.schema == "json" && part->getMarksFileExtension() != ".mrk4" && part->getMarksFileExtension() != ".cmrk4")
+        fail("--schema json requires Advanced Compact MRK4 marks");
 
     const auto & stored_columns = part->getColumns();
-    if (stored_columns.size() != 2)
-        fail("native part schema must be exactly pk UInt64, value UInt64 in that order");
+    const size_t expected_physical_columns = options.schema == "json" ? 4 : 2;
+    if (stored_columns.size() != expected_physical_columns)
+        fail(options.schema == "json"
+            ? "native JSON fixture must contain its four stored columns: id, doc, events, attrs"
+            : "native part schema must contain exactly two columns");
     auto column_it = stored_columns.begin();
-    if (column_it->name != "pk" || column_it->type->getName() != "UInt64")
-        fail("native part schema must be exactly pk UInt64, value UInt64 in that order");
-    ++column_it;
-    if (column_it->name != "value" || column_it->type->getName() != "UInt64")
-        fail("native part schema must be exactly pk UInt64, value UInt64 in that order");
+    if (options.schema == "json")
+    {
+        if (column_it->name != "id" || !column_it->type->equals(DB::DataTypeUInt64()))
+            fail("native JSON part must start with id UInt64, doc JSON, events, attrs");
+        ++column_it;
+        const DB::DataTypePtr expected_doc_type = makeFixtureJsonDocType();
+        if (column_it->name != "doc" || !column_it->type->equals(*expected_doc_type)
+            || column_it->type->getName() != expected_doc_type->getName())
+            fail("native doc column type does not match the fixture's JSON schema and typed paths");
+        ++column_it;
+        const DB::DataTypePtr expected_events_type = makeFixtureEventsType();
+        if (column_it->name != "events" || !column_it->type->equals(*expected_events_type))
+            fail("native events column type does not match the fixture metadata");
+        ++column_it;
+        const DB::DataTypePtr expected_attrs_type = makeFixtureAttrsType();
+        if (column_it->name != "attrs" || !column_it->type->equals(*expected_attrs_type))
+            fail("native attrs column type does not match the fixture metadata");
+        ++column_it;
+        if (column_it != stored_columns.end())
+            fail("native JSON fixture contains unexpected physical columns");
+    }
+    else
+    {
+        if (column_it->name != "pk" || column_it->type->getName() != "UInt64")
+            fail("native part schema must be exactly pk UInt64, value UInt64 in that order");
+        ++column_it;
+        if (column_it->name != "value" || column_it->type->getName() != "UInt64")
+            fail("native part schema must be exactly pk UInt64, value UInt64 in that order");
+    }
 
     for (size_t mark : options.marks)
     {
@@ -300,10 +451,75 @@ NativeTable loadNativePart(const Options & options)
         std::move(snapshot), part, settings};
 }
 
+std::vector<UInt8> selectJsonOracleRows(
+    const Options & options,
+    const std::vector<UInt8> & oracle,
+    const DB::MergeTreeData::DataPartPtr & part)
+{
+    std::vector<std::pair<size_t, size_t>> row_ranges;
+    size_t offset = 0;
+    while (offset < oracle.size())
+    {
+        const size_t row_begin = offset;
+        if (oracle.size() - offset < sizeof(UInt64))
+            fail("RowBinary JSON oracle ends inside a UInt64 id");
+        offset += sizeof(UInt64);
+
+        UInt64 string_size = 0;
+        unsigned shift = 0;
+        bool decoded = false;
+        for (size_t byte_index = 0; byte_index < 10; ++byte_index)
+        {
+            if (offset == oracle.size())
+                fail("RowBinary JSON oracle ends inside a String length");
+            const UInt8 byte = oracle[offset++];
+            const UInt8 payload = byte & 0x7f;
+            if (shift == 63 && payload > 1)
+                fail("RowBinary JSON oracle contains an overflowing String length");
+            string_size |= static_cast<UInt64>(payload) << shift;
+            if ((byte & 0x80) == 0)
+            {
+                decoded = true;
+                break;
+            }
+            shift += 7;
+        }
+        if (!decoded)
+            fail("RowBinary JSON oracle contains an unterminated String length");
+        if (string_size > oracle.size() - offset)
+            fail("RowBinary JSON oracle ends inside a String value");
+        offset += static_cast<size_t>(string_size);
+        row_ranges.emplace_back(row_begin, offset);
+    }
+
+    if (options.marks.size() > std::numeric_limits<size_t>::max() / options.mark_rows)
+        fail("requested JSON row count overflows size_t");
+    const size_t selected_rows = options.marks.size() * options.mark_rows;
+    if (row_ranges.size() == selected_rows)
+        return oracle;
+    if (row_ranges.size() != part->rows_count)
+        fail("RowBinary JSON oracle row count matches neither the selected rows nor the native part");
+
+    std::vector<UInt8> selected;
+    for (size_t mark : options.marks)
+    {
+        const size_t first_row = part->index_granularity->getMarkStartingRow(mark);
+        if (first_row > row_ranges.size() || options.mark_rows > row_ranges.size() - first_row)
+            fail("selected mark rows are outside the RowBinary JSON oracle");
+        const size_t first_byte = row_ranges[first_row].first;
+        const size_t last_byte = row_ranges[first_row + options.mark_rows - 1].second;
+        if (last_byte - first_byte > std::numeric_limits<size_t>::max() - selected.size())
+            fail("selected RowBinary JSON oracle size overflows size_t");
+        selected.insert(selected.end(), oracle.begin() + first_byte, oracle.begin() + last_byte);
+    }
+    return selected;
+}
+
 struct WorkerState
 {
     size_t begin = 0;
     size_t end = 0;
+    std::thread::id native_thread_id;
     DB::MergeTreeReaderPtr reader;
     std::vector<size_t> processed_marks;
     std::exception_ptr exception;
@@ -327,7 +543,10 @@ void prepareWorkers(
     const Options & options,
     const NativeTable & native_table)
 {
-    const DB::NamesAndTypesList columns = native_table.part->getColumns();
+    const DB::NamesAndTypesList stored_columns = native_table.part->getColumns();
+    DB::NamesAndTypesList columns = stored_columns;
+    if (options.schema == "json")
+        columns = DB::NamesAndTypesList(stored_columns.begin(), std::next(stored_columns.begin(), 2));
     for (size_t worker_index = 0; worker_index < options.workers; ++worker_index)
     {
         auto & worker = workers[worker_index];
@@ -372,6 +591,381 @@ void prepareWorkers(
             DB::ValueSizeMap{},
             DB::ReadBufferFromFileBase::ProfileCallback{});
     }
+}
+
+class JsonWorkerPool
+{
+public:
+    JsonWorkerPool(const Options & options_, const NativeTable & native_table_, std::vector<WorkerState> & workers_)
+        : options(options_), native_table(native_table_), workers(workers_), materialized(options_.marks.size())
+    {
+        if (!options.marks.empty())
+        {
+            const auto stored_columns = native_table.part->getColumns();
+            requested_columns = DB::NamesAndTypesList(stored_columns.begin(), std::next(stored_columns.begin(), 2));
+            for (auto & mark_columns : materialized)
+            {
+                mark_columns.reserve(requested_columns.size());
+                for (const auto & stored_column : requested_columns)
+                {
+                    mark_columns.emplace_back(stored_column.type->createColumn());
+                    mark_columns.back()->reserve(options.mark_rows);
+                }
+            }
+        }
+
+        threads.reserve(workers.size());
+        try
+        {
+            for (size_t worker_index = 0; worker_index < workers.size(); ++worker_index)
+                threads.emplace_back([this, worker_index] { workerLoop(worker_index); });
+            if (!workers.empty())
+            {
+                std::unique_lock lock(mutex);
+                workers_started.wait(lock, [this] { return started_workers == workers.size(); });
+            }
+            native_thread_ids.reserve(workers.size());
+            for (const auto & worker : workers)
+                native_thread_ids.push_back(worker.native_thread_id);
+        }
+        catch (...)
+        {
+            stop();
+            throw;
+        }
+    }
+
+    JsonWorkerPool(const JsonWorkerPool &) = delete;
+    JsonWorkerPool & operator=(const JsonWorkerPool &) = delete;
+
+    ~JsonWorkerPool()
+    {
+        stop();
+    }
+
+    UInt64 read()
+    {
+        if (workers.empty())
+            return 0;
+
+        for (auto & worker : workers)
+        {
+            worker.processed_marks.clear();
+            worker.exception = nullptr;
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+            worker.profile = {};
+#endif
+        }
+
+        const auto started = Clock::now();
+        {
+            std::lock_guard lock(mutex);
+            completed_workers = 0;
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+            current_scan_started = started;
+#endif
+            ++work_generation;
+        }
+        work_available.notify_all();
+
+        {
+            std::unique_lock lock(mutex);
+            work_complete.wait(lock, [this] { return completed_workers == workers.size(); });
+        }
+        const UInt64 elapsed_ns = static_cast<UInt64>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started).count());
+        for (const auto & worker : workers)
+        {
+            if (worker.exception)
+                std::rethrow_exception(worker.exception);
+            if (worker.processed_marks.size() != worker.end - worker.begin)
+                fail("JSON reader processed an unexpected number of marks");
+            for (size_t offset = 0; offset < worker.processed_marks.size(); ++offset)
+                if (worker.processed_marks[offset] != options.marks[worker.begin + offset])
+                    fail("JSON reader processed a mark outside its assigned schedule");
+        }
+        for (size_t worker_index = 0; worker_index < workers.size(); ++worker_index)
+            if (workers[worker_index].native_thread_id != native_thread_ids[worker_index])
+                fail("JSON reader worker thread identity changed between scans");
+        return elapsed_ns ? elapsed_ns : 1;
+    }
+
+    const std::vector<DB::MutableColumns> & getMaterialized() const
+    {
+        return materialized;
+    }
+
+    const std::vector<WorkerState> & getWorkers() const
+    {
+        return workers;
+    }
+
+    size_t effectiveWorkerCount() const
+    {
+        size_t count = 0;
+        for (const auto & worker : workers)
+            count += worker.begin < worker.end;
+        return count;
+    }
+
+    void clearMaterialized()
+    {
+        for (auto & columns : materialized)
+            for (auto & column : columns)
+                if (column && column->size())
+                    column->popBack(column->size());
+    }
+
+private:
+    void workerLoop(size_t worker_index)
+    {
+        DB::ThreadStatus thread_status;
+        {
+            std::lock_guard lock(mutex);
+            workers[worker_index].native_thread_id = std::this_thread::get_id();
+            ++started_workers;
+        }
+        workers_started.notify_one();
+        size_t observed_generation = 0;
+        while (true)
+        {
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+            Clock::time_point scan_started;
+#endif
+            {
+                std::unique_lock lock(mutex);
+                work_available.wait(lock, [this, observed_generation]
+                {
+                    return stopping || work_generation != observed_generation;
+                });
+                if (stopping)
+                    return;
+                observed_generation = work_generation;
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+                scan_started = current_scan_started;
+#endif
+            }
+
+            {
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+                auto & worker = workers[worker_index];
+                DB::ReadRowsProfile::WorkerScope profile_scope(worker.profile, scan_started);
+#else
+                auto & worker = workers[worker_index];
+#endif
+                try
+                {
+                    for (size_t selected_index = worker.begin; selected_index < worker.end; ++selected_index)
+                    {
+                        const size_t mark = options.marks[selected_index];
+                        const bool continue_reading = selected_index > worker.begin
+                            && options.marks[selected_index - 1] + 1 == mark;
+                        auto & columns = materialized[selected_index];
+                        const size_t rows_read = worker.reader->readRows(mark, continue_reading, options.mark_rows, columns);
+                        if (rows_read != options.mark_rows)
+                            fail("readRows returned a partial JSON mark");
+                        if (columns.size() != 2 || !columns[0] || !columns[1])
+                            fail("readRows invalidated a requested JSON column");
+                        if (columns[0]->size() != options.mark_rows || columns[1]->size() != options.mark_rows)
+                            fail("readRows materialized an unexpected number of JSON rows");
+
+                        worker.processed_marks.push_back(mark);
+                    }
+                }
+                catch (...)
+                {
+                    worker.exception = std::current_exception();
+                }
+            }
+
+            {
+                std::lock_guard lock(mutex);
+                ++completed_workers;
+            }
+            work_complete.notify_one();
+        }
+    }
+
+    void stop()
+    {
+        {
+            std::lock_guard lock(mutex);
+            stopping = true;
+        }
+        work_available.notify_all();
+        for (auto & thread : threads)
+            if (thread.joinable())
+                thread.join();
+        threads.clear();
+    }
+
+    const Options & options;
+    const NativeTable & native_table;
+    std::vector<WorkerState> & workers;
+    DB::NamesAndTypesList requested_columns;
+    std::vector<DB::MutableColumns> materialized;
+    std::vector<std::thread> threads;
+    std::vector<std::thread::id> native_thread_ids;
+    std::mutex mutex;
+    std::condition_variable work_available;
+    std::condition_variable work_complete;
+    std::condition_variable workers_started;
+    size_t work_generation = 0;
+    size_t completed_workers = 0;
+    size_t started_workers = 0;
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+    Clock::time_point current_scan_started{};
+#endif
+    bool stopping = false;
+};
+
+UInt64 elapsedNanoseconds(Clock::time_point started)
+{
+    const UInt64 elapsed = static_cast<UInt64>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started).count());
+    return elapsed ? elapsed : 1;
+}
+
+struct JsonMaterializer
+{
+    DB::SerializationPtr doc_serializer;
+    DB::FormatSettings format_settings;
+
+    explicit JsonMaterializer(const NativeTable & native_table)
+        : doc_serializer(getStoredDocType(native_table.part)->getDefaultSerialization())
+        , format_settings(DB::getFormatSettings(native_table.context))
+    {
+    }
+};
+
+std::string materializeJsonRowBinary(
+    const Options & options,
+    const std::vector<DB::MutableColumns> & columns_by_mark,
+    const JsonMaterializer & materializer)
+{
+    std::string rowbinary;
+    DB::WriteBufferFromString output(rowbinary);
+    for (size_t selected_index = 0; selected_index < options.marks.size(); ++selected_index)
+    {
+        const auto & columns = columns_by_mark[selected_index];
+        if (columns.size() != 2 || !columns[0] || !columns[1])
+            fail("JSON mark output is missing a column");
+        const auto & ids = assert_cast<const DB::ColumnUInt64 &>(*columns[0]);
+        if (ids.size() != options.mark_rows || columns[1]->size() != options.mark_rows)
+            fail("JSON mark output has an unexpected row count");
+
+        for (size_t row = 0; row < options.mark_rows; ++row)
+        {
+            DB::writeBinary(ids.getData()[row], output);
+            DB::WriteBufferFromOwnString json;
+            materializer.doc_serializer->serializeTextJSON(*columns[1], row, json, materializer.format_settings);
+            DB::writeStringBinary(json.stringView(), output);
+        }
+    }
+    output.finalize();
+    return rowbinary;
+}
+
+void exportRowBinary(const fs::path & path, std::string_view bytes)
+{
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output || !output.write(bytes.data(), static_cast<std::streamsize>(bytes.size())))
+        fail("failed to export materialized RowBinary bytes");
+    output.close();
+    if (!output)
+        fail("failed to close exported RowBinary bytes");
+}
+
+void scanJsonOnce(
+    const Options & options,
+    JsonWorkerPool & worker_pool,
+    const JsonMaterializer & materializer,
+    const std::vector<UInt8> & expected_oracle,
+    UInt64 load_part_ns,
+    UInt64 prepare_ns,
+    bool & rowbinary_exported)
+{
+    const UInt64 read_ns = worker_pool.read();
+    const auto materialize_started = Clock::now();
+    const std::string rowbinary = materializeJsonRowBinary(
+        options, worker_pool.getMaterialized(), materializer);
+    const UInt64 materialize_ns = elapsedNanoseconds(materialize_started);
+    const auto reset_started = Clock::now();
+    worker_pool.clearMaterialized();
+    const UInt64 reset_ns = elapsedNanoseconds(reset_started);
+
+    if (rowbinary.size() != expected_oracle.size()
+        || (!rowbinary.empty() && std::memcmp(rowbinary.data(), expected_oracle.data(), rowbinary.size()) != 0))
+        fail("materialized RowBinary id,toJSONString(doc) differs bytewise from the native oracle");
+
+    if (!rowbinary_exported)
+    {
+        exportRowBinary(options.work_dir / "rowbinary.bin", rowbinary);
+        rowbinary_exported = true;
+    }
+    const size_t rows = options.marks.size() * options.mark_rows;
+    std::cout << "{\"load_part_ns\":" << load_part_ns
+              << ",\"prepare_ns\":" << prepare_ns
+              << ",\"read_ns\":" << read_ns
+              << ",\"materialize_ns\":" << materialize_ns
+              << ",\"reset_ns\":" << reset_ns
+              << ",\"rows\":" << rows
+              << ",\"effective_workers\":" << worker_pool.effectiveWorkerCount()
+              << ",\"worker_marks\":[";
+    bool first_worker = true;
+    for (const auto & worker : worker_pool.getWorkers())
+    {
+        if (worker.begin == worker.end)
+            continue;
+        if (!first_worker)
+            std::cout << ',';
+        first_worker = false;
+        std::cout << '[';
+        for (size_t mark_index = 0; mark_index < worker.processed_marks.size(); ++mark_index)
+        {
+            if (mark_index)
+                std::cout << ',';
+            std::cout << worker.processed_marks[mark_index];
+        }
+        std::cout << ']';
+    }
+    std::cout << "],\"checksum_on_read_policy\":"
+              << (options.marks.empty() ? "\"not_applicable_empty_schedule\"" : "\"enabled\"")
+              << ",\"rowbinary_bytes\":" << rowbinary.size()
+              << ",\"worker_thread_ids\":[";
+    bool first_thread_id = true;
+    for (const auto & worker : worker_pool.getWorkers())
+    {
+        if (worker.begin == worker.end)
+            continue;
+        if (!first_thread_id)
+            std::cout << ',';
+        first_thread_id = false;
+        std::cout << std::hash<std::thread::id>{}(worker.native_thread_id);
+    }
+    std::cout << ']';
+#ifdef CLICKHOUSE_READ_ROWS_PROFILE
+    std::cout << ",\"profile\":{\"version\":1,\"checksum_semantics\":\"actual_CityHash128_calls\",\"workers\":[";
+    bool first_profile_worker = true;
+    for (size_t worker_index = 0; worker_index < worker_pool.getWorkers().size(); ++worker_index)
+    {
+        const auto & worker = worker_pool.getWorkers()[worker_index];
+        if (worker.begin == worker.end)
+            continue;
+        if (!first_profile_worker)
+            std::cout << ',';
+        first_profile_worker = false;
+        std::cout << "{\"index\":" << worker_index
+                  << ",\"checksum_ns\":" << worker.profile.checksum_ns
+                  << ",\"checksum_calls\":" << worker.profile.checksum_calls
+                  << ",\"lz4_ns\":" << worker.profile.lz4_ns
+                  << ",\"lz4_calls\":" << worker.profile.lz4_calls
+                  << ",\"transport_calls\":" << worker.profile.transport_calls
+                  << ",\"transport_bytes\":" << worker.profile.transport_bytes << '}';
+    }
+    std::cout << "]}";
+#endif
+    std::cout << ",\"rowbinary_file\":\"rowbinary.bin\"}\n" << std::flush;
 }
 
 void runWorker(
@@ -553,10 +1147,54 @@ void scanOnce(
     std::cout << "}\n" << std::flush;
 }
 
+int runJson(const Options & options, const std::vector<UInt8> & oracle)
+{
+    const auto load_started = Clock::now();
+    NativeTable native_table = loadNativePart(options);
+    const UInt64 load_part_ns = static_cast<UInt64>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - load_started).count());
+    const std::vector<UInt8> expected_oracle = selectJsonOracleRows(options, oracle, native_table.part);
+    {
+        const auto prepare_started = Clock::now();
+        JsonMaterializer materializer(native_table);
+        std::vector<WorkerState> workers;
+        if (!options.marks.empty())
+        {
+            workers.resize(options.workers);
+            prepareWorkers(workers, options, native_table);
+        }
+        JsonWorkerPool worker_pool(options, native_table, workers);
+        const UInt64 prepare_ns = static_cast<UInt64>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - prepare_started).count());
+
+        std::cout << "READY\n" << std::flush;
+        std::string command;
+        bool rowbinary_exported = false;
+        while (std::getline(std::cin, command))
+        {
+            if (command == "quit")
+                break;
+            if (command != "scan")
+                fail("stdin command must be scan or quit");
+            scanJsonOnce(options, worker_pool, materializer, expected_oracle, load_part_ns, prepare_ns, rowbinary_exported);
+        }
+    }
+    native_table.storage->flushAndShutdown();
+
+    std::error_code remove_error;
+    fs::remove_all(options.work_dir / "tmp", remove_error);
+    if (remove_error)
+        std::cerr << "temporary directory cleanup failed: " << remove_error.message() << '\n';
+    return 0;
+}
+
 int run(const Options & options)
 {
     static_assert(std::endian::native == std::endian::little, "the oracle protocol uses little-endian UInt64 arrays");
     const std::vector<UInt8> oracle = readOracle(options);
+    if (options.schema == "json")
+        return runJson(options, oracle);
+
     const size_t rows = options.marks.size() * options.mark_rows;
     std::vector<UInt64> ordered_pk(rows);
     std::vector<UInt64> ordered_values(rows);

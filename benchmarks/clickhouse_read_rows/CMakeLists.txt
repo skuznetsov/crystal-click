@@ -6,6 +6,11 @@ option(CLICKHOUSE_READ_ROWS_PROFILE "Instrument ClickHouse readRows operation sc
 
 if (NOT TARGET clickhouse-read-rows)
     add_executable(clickhouse-read-rows "${CMAKE_CURRENT_LIST_DIR}/read_rows.cpp")
+    target_sources(clickhouse-read-rows PRIVATE
+        "${CMAKE_SOURCE_DIR}/src/Functions/registerFunctions.cpp"
+        "${CMAKE_SOURCE_DIR}/src/Functions/intDiv.cpp"
+        "${CMAKE_SOURCE_DIR}/src/Functions/divideImpl.cpp"
+        "${CMAKE_SOURCE_DIR}/src/Functions/plus.cpp")
     target_link_libraries(clickhouse-read-rows PRIVATE dbms)
 endif()
 

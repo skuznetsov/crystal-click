@@ -1,0 +1,173 @@
+# Compact JSON scan benchmark
+
+The fixture contains 8,192 rows per Compact part, with four positive marks of
+2,048 rows and a terminal mark. It uses plain `.mrk4`, LZ4, root JSON v3, and
+Advanced shared data with two buckets. `doc` has declared `UInt32`, `String`,
+and `Nullable(UInt32)` paths and two dynamic paths. The fixture stays within
+its dynamic path limit, so the shared buckets carry no overflow paths. The
+complete storage schema also contains `events Array(Tuple(a UInt64, b String))` and
+`attrs Map(String, Array(Nullable(UInt64)))`. The direct comparison selects
+`id, doc`.
+
+The fixture generator exports `id, toJSONString(doc) ORDER BY id FORMAT
+RowBinary` from ClickHouse with checksumming enabled. Both runners validate
+every sample byte for byte against this oracle after measuring the read and
+serialization stages. The driver additionally flips a checksum byte after
+each runner opens a disposable copy and requires the first scan to fail.
+
+## Reproduction
+
+Run from the repository root. Use a disposable directory on the external SSD
+and six free loopback ports. `bench_ch` is the ClickHouse 26.10.1.1201 binary.
+`bench_cpp` is the uninstrumented C++ `readRows` runner built at ClickHouse
+`d9bcb5ab007f0f6299f7f973f2642245bab3d028` using the
+[direct reader build instructions](PARALLEL_TYPED_SCAN_FRONTIER.md#direct-reader-comparison-contract).
+
+```sh
+bench_work=$(mktemp -d /opt/mldata_ssd/tmp/crystal-click-json.XXXXXXXX)
+mkdir -p "$bench_work/tmp" "$bench_work/cache"
+
+python3 -B scripts/parallel_scan_benchmark.py native-start \
+  --root "$bench_work/server" --clickhouse-bin "$bench_ch" \
+  --compact-port 37840 --wide-port 37843
+python3 -B scripts/compact_json_scan_fixture.py \
+  --port 37840 --output "$bench_work/fixture"
+python3 -B scripts/parallel_scan_benchmark.py native-stop --root "$bench_work/server"
+
+TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
+  crystal build --release -Dpreview_mt -Dexecution_context \
+    benchmarks/compact_json_scan_probe.cr -o "$bench_work/crystal-probe"
+
+python3 -B scripts/compact_json_scan_benchmark.py \
+  --part "$bench_work/fixture/0_1_1_0" \
+  --oracle "$bench_work/fixture/0_1_1_0.rowbinary" \
+  --crystal-bin "$bench_work/crystal-probe" --cpp-bin "$bench_cpp" \
+  --scratch "$bench_work" --output "$bench_work/summary.json"
+```
+
+With one worker both runners read `[0,1,2,3]`. With four workers each gets one
+mark. Both retain readers and worker threads within a process. Crystal uses the
+typed candidate-mark API and retains owned `ObjectDocument` instances and copied
+IDs across the callback boundary. The C++ runner calls `IMergeTreeReader::readRows`
+into reusable typed columns with synchronous `pread` and no shared uncompressed,
+mark, or prefix caches. The comparison driver alternates scan order, verifies
+worker assignments, and hashes the part files before and after the run. Worker
+and part startup are recorded separately.
+
+The read timer includes dispatch, decompression, and production of the retained
+output. Serialization follows on the coordinator and has a separate timer.
+ClickHouse reports typed column reset separately. Boehm allocated bytes are a
+process-wide delta spanning both timed Crystal stages. The two materialized
+representations and their lifetimes differ, even when the serialized bytes
+agree.
+
+## Matched results
+
+Warm single-part reads on an Apple M2 Max with macOS 26.6.2, Crystal 1.22.3
+Release and Boehm 8.2.12 enabled. Each worker count used eight fresh pairs of
+processes, two warmup scans and six measured scans per pair. All 192 timed
+outputs, plus warmups, matched the 8,192-row ClickHouse RowBinary export.
+The post-open corruption controls passed for both readers.
+
+| Reader | Workers | Read p50 / p95, ms | Serialize p50 / p95, ms | Combined p50 / p95, ms | Boehm MiB / collections, median |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Crystal | 1 | 28.375 / 32.204 | 9.155 / 10.472 | 37.593 / 41.057 | 73.54 / 3 |
+| Crystal | 4 | 55.733 / 68.221 | 9.616 / 11.604 | 66.410 / 77.732 | 90.32 / 3 |
+| ClickHouse `readRows` | 1 | 0.415 / 0.500 | 6.014 / 6.176 | 6.403 / 6.621 | — |
+| ClickHouse `readRows` | 4 | 0.193 / 0.369 | 6.033 / 6.220 | 6.225 / 6.570 | — |
+
+The four-worker read median was 1.96× the one-worker median in Crystal and
+0.47× in ClickHouse. Crystal's combined medians were 5.87× and 10.67× the
+corresponding ClickHouse medians. The median Crystal worker/part preparation
+was 1.425 ms at one worker and 4.054 ms at four. The native median ATTACH was
+12.973/13.017 ms and reader/worker preparation was 0.091/0.151 ms. Native
+output reset after serialization was 0.015/0.016 ms and is recorded separately.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `data.bin` | `b1ec3b935fca8e6a3ae5c7878d5b66aadf7e108d32cf17650f638282d86d27c9` |
+| `data.mrk4` | `1679893d60280a7708e6567298d244839a560922c2874d7829e40ace84785b6b` |
+| Full ordered RowBinary | `23445f53dadbd87868504708018238132053838a0e0277a27254dac4c71a76b0` |
+| Crystal release benchmark | `edf3e3c077305ef3adbf59b1bb780d581a4c1ce34142be11edd5e8904421ce11` |
+| Native uninstrumented runner | `62d74642f949f49c811623a8fe59216cba3e42881c85b6746839189e7e0404e3` |
+| Official ClickHouse fixture generator | `5bb43958f4c0806cc363b84b9858e7206e56ac80263a24acc704271322e531ae` |
+
+## Crystal diagnostics
+
+Use an isolated source copy and apply the diagnostic hooks. The instrumented
+binary accepts one worker. `none`, `first`, and `all` select 0, 1, or 4 marks.
+Preparation time encloses the full-window read, its checksum and decompression,
+and the JSON plan work. The individual stages overlap that preparation timer.
+Count-only physical ranges include empty substreams. A touched frame may be
+read again across source operations. Use the uninstrumented binaries for
+wall-time comparisons.
+
+```sh
+mkdir "$bench_work/diagnostic-src"
+git archive HEAD src benchmarks/compact_json_scan_probe.cr | tar -x -C "$bench_work/diagnostic-src"
+python3 -B scripts/instrument_compact_json_probe.py "$bench_work/diagnostic-src"
+TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
+  crystal build --release -Dpreview_mt -Dexecution_context \
+    -Dcompact_json_scan_diagnostic \
+    "$bench_work/diagnostic-src/benchmarks/compact_json_scan_probe.cr" \
+    -o "$bench_work/diagnostic-probe"
+
+for selection in none first all; do
+  "$bench_work/diagnostic-probe" typed "$bench_work/fixture/0_1_1_0" \
+    "$bench_work/fixture/0_1_1_0.rowbinary" 1 "$selection" retained 1 3
+done
+```
+
+An empty result in Crystal still runs the whole-grid JSON validation. An empty
+native schedule issues no `readRows` calls. The key comparison for zero marks
+is the cost of preserving the Crystal validation contract. For nonempty
+schedules the same checksum policy authenticates each read frame, with each
+reader choosing which frames and how many times to read them.
+
+| Marks | Full preparations before → after | Checksum calls and LZ4 calls before → after | Distinct frames after | Inflated bytes before → after | Prepare median after, ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0 | 2 → 1 | 16 → 4 | 4 | 1,625,068 → 406,267 | 2.374 |
+| 1 | 3 → 2 | 25 → 9 | 5 | 2,453,986 → 828,918 | 4.936 |
+| 4 | 6 → 5 | 52 → 24 | 8 | 4,940,740 → 2,096,871 | 11.604 |
+
+The baseline is `bbab15a`. The changes reuse authenticated source bytes
+within one preparation and skip a duplicate facade preflight when one Compact
+backend already gates the scan. A later malformed selected part still fails
+before any multipart callback. In-place payload corruption and a corrupted
+same-path replacement between callbacks were detected before the second
+callback. Nested scans, empty candidate lists, and end windows keep their
+validation and callback contracts.
+
+Across seven diagnostic scans after warmup, the all-mark median read was
+29.005 ms. CityHash took 0.081 ms and LZ4 took 0.520 ms within that read.
+Preparation took 11.604 ms, including its share of checksum and decompression.
+The profiled native reader ran eight checksum and eight LZ4 calls on all
+marks (two per worker at four workers), two calls each on mark 0, and zero
+calls on an empty schedule. The Crystal read still constructs and owns each
+JSON row, and each Crystal worker independently executes the complete-grid
+gate before its selected marks. Allocation deltas and collection counts
+describe the runtime work in this test. Attributing wall time to GC pauses
+requires a separate profile.
+
+## Physical JSON path selection
+
+Pass `--parts 8` to the fixture generator, then check the public reader with
+its per-part `id, doc.tenant_id` SQL exports.
+
+```sh
+TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
+  crystal run benchmarks/compact_json_pushdown_probe.cr -- "$bench_work/fixture"
+```
+
+The typed slice scan matched all 65,536 rows (786,432 RowBinary bytes,
+SHA-256 `2411071a48c3076b4b6e49325b4ecc8590fa397b07eeb96dca7513fcad796986`).
+The [reader contract](COMPACT_TYPED_READER_FRONTIER.md#selected-uint32-json-paths)
+covers the declared UInt32 path and frame validation.
+
+In a separate physical range check that coalesced selected spans per part,
+both `id, doc` and `id, doc.tenant_id` touched 64 LZ4 frames across eight
+parts. Both hashed 1,038,746 compressed bytes and inflated 3,774,424 bytes.
+Copying only the two selected streams reduced delivered physical bytes from
+3,774,424 to 786,432. These copy and frame counts describe the coalesced
+transport experiment. The advantage on this packing comes from narrower
+output and bypassing JSON row assembly.

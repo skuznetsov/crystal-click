@@ -2228,6 +2228,11 @@ of contention. The timings apply to this mixed-column workload with
 part-sharded `scan_typed` calls. Refresh the comparison after changing row
 ownership, the allocation runtime, the fixture, or the timer boundary.
 
+The [Compact JSON scan benchmark](COMPACT_JSON_SCAN_BENCHMARK.md) compares
+the `id, doc` subset directly with native `readRows`. It reports separate
+read and RowBinary serialization times, whole-grid validation counts, and
+physical substream selection results.
+
 ## Reproduce the comparison
 
 Run from the repository root with Python 3, Crystal, and the pinned
