@@ -1086,8 +1086,8 @@ module CrystalClick
         rows = rows_per_mark[selected_first + window_offset].to_i
         rows.times do |row_index|
           fields = typed_schema.size.to_u64
-          object.dynamic_path_count.times do |dynamic_index|
-            value = dynamic_rows[object.dynamic_path_at(dynamic_index)][selected_index][row_index]
+          dynamic_rows.each_value do |marks|
+            value = marks[selected_index][row_index]
             fields = checked_add(fields, 1_u64, false) unless value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
           end
           shared_rows[selected_index][row_index].each do |_entry|
@@ -1110,15 +1110,13 @@ module CrystalClick
                        required_field_bound = typed_schema.size.to_u64 + object.dynamic_path_count.to_u64 + shared_entries.size.to_u64
                        workspace.with_fields(required_field_bound) do |fields|
                          assemble_row_document(
-                           fields, typed_schema, typed_rows, selected_index, row_index,
-                           object, dynamic_rows, shared_entries, budget,
+                           fields, typed_rows, selected_index, row_index, dynamic_rows, shared_entries, budget,
                          )
                        end
                      else
                        fields = Hash(String, BinaryValue).new
                        assemble_row_document(
-                         fields, typed_schema, typed_rows, selected_index, row_index,
-                         object, dynamic_rows, shared_entries, budget,
+                         fields, typed_rows, selected_index, row_index, dynamic_rows, shared_entries, budget,
                        )
                      end
           documents << document
@@ -1130,21 +1128,18 @@ module CrystalClick
 
     private def self.assemble_row_document(
       fields : Hash(String, BinaryValue),
-      typed_schema : Hash(String, BinaryDataType),
       typed_rows : Hash(String, Array(Array(BinaryValue))),
       selected_index : Int32,
       row_index : Int32,
-      object : ObjectStructure,
       dynamic_rows : Hash(String, Array(Array(BinaryValue))),
       shared_entries : Array(ObjectDocumentSharedCodec::Entry),
       budget : BinaryCodecBudget,
     ) : ObjectDocument
-      typed_schema.each_key do |path|
-        fields[path] = typed_rows[path][selected_index][row_index]
+      typed_rows.each do |path, marks|
+        fields[path] = marks[selected_index][row_index]
       end
-      object.dynamic_path_count.times do |dynamic_index|
-        path = object.dynamic_path_at(dynamic_index)
-        value = dynamic_rows[path][selected_index][row_index]
+      dynamic_rows.each do |path, marks|
+        value = marks[selected_index][row_index]
         unless value.type.tag == BinaryDataType::TAG_NOTHING && value.is_null?
           fields[path] = value
         end

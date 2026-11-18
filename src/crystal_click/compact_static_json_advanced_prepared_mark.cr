@@ -427,9 +427,8 @@ module CrystalClick
         bytes = checked_add(bytes, checked_multiply(document.path_count.to_u64,
           sizeof(Pointer(String)).to_u64 + sizeof(Pointer(BinaryValue)).to_u64))
         document.path_count.times do |index|
-          path = document.path_at(index)
-          bytes = checked_add(bytes, string_owner_bytes(path.bytesize))
-          bytes = checked_add(bytes, binary_value_workspace_bytes(document.value_for(path)))
+          bytes = checked_add(bytes, string_owner_bytes(document.path_byte_size_at(index)))
+          bytes = checked_add(bytes, binary_value_workspace_bytes(document.value_at(index)))
         end
       end
       bytes

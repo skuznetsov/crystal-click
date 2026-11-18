@@ -796,7 +796,7 @@ module CrystalClick
             sizeof(Pointer(String)).to_u64 + sizeof(Pointer(BinaryValue)).to_u64))
           document.path_count.times do |path_index|
             bytes = checked_add(bytes, document.path_byte_size_at(path_index).to_u64 + 1_u64)
-            value = document.value_for(document.path_at(path_index))
+            value = document.value_at(path_index)
             bytes = checked_add(bytes, binary_value_workspace_bytes(value))
           end
         end

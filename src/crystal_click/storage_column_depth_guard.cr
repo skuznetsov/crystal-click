@@ -31,8 +31,7 @@ module CrystalClick
       when StorageColumnValue::OBJECT
         document = value.object_document
         document.path_count.times do |index|
-          path = document.path_at(index)
-          validate_binary_value(document.value_for(path), depth, limits, writing)
+          validate_binary_value(document.value_at(index), depth, limits, writing)
         end
       when StorageColumnValue::BULK
         validate_binary_value(value.bulk_value, depth, limits, writing)

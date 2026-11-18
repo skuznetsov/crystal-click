@@ -43,6 +43,11 @@ module CrystalClick
       @values.has_key?(path)
     end
 
+    # Look up a value in raw path order without taking a path snapshot.
+    def value_at(index : Int) : BinaryValue
+      @values[@paths[index]]
+    end
+
     def value_for(path : String) : BinaryValue
       @values[path]? || raise(KeyError.new("Object document path not found: #{path.inspect}"))
     end

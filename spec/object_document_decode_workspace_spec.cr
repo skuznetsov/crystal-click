@@ -33,6 +33,10 @@ describe CrystalClick::ObjectDocumentDecodeWorkspace do
     fallback.path_count.should eq(17)
     first.value_for("id").as_uint64.should eq(17_u64)
     first.value_for("title").as_string.should eq("before")
+    first.path_at(0).to_unsafe[0] = 0_u8
+    first.value_at(0).as_uint64.should eq(17_u64)
+    first.value_at(1).as_string.should eq("before")
+    expect_raises(IndexError) { first.value_at(2) }
     second.value_for("id").as_uint64.should eq(29_u64)
     second.value_for("title").as_string.should eq("after")
   end

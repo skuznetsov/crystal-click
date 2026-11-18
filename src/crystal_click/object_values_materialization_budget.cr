@@ -235,8 +235,7 @@ module CrystalClick
       document.path_count.times do |index|
         path_bytes = document.path_byte_size_at(index).to_u64
         usage = usage.add(bytes: checked_add(instance_sizeof(String).to_u64, checked_add(path_bytes, 1_u64)))
-        path = document.path_at(index)
-        usage = measure_value(document.value_for(path), value_depth, usage)
+        usage = measure_value(document.value_at(index), value_depth, usage)
       end
       usage
     end
