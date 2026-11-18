@@ -11,7 +11,8 @@ module CrystalClick
     private alias SelectedReader = {String, String, BinaryDataType, CompactColumnReader}
     private alias SelectedCarrier = CompactJsonColumnMark
     private alias CompactBinaryMarkCarrier = Array(BinaryValue) | Slice(UInt64)
-    private alias MaterializedMark = {Array(CompactBinaryMarkCarrier), Array(SelectedCarrier), UInt64}
+    private alias MaterializedMark = {Array(CompactBinaryMarkCarrier), Array(SelectedCarrier), Array(Slice(UInt32)), UInt64}
+    private EMPTY_JSON_UINT32_PATH_VALUES = [] of Slice(UInt32)
 
     @columns : Array(String)
     @column_types : Array({String, String})
@@ -19,6 +20,7 @@ module CrystalClick
     @readers : Array(SelectedReader)
     @direct_uint64_readers : Array(Bool)
     @json_readers : Array(CompactJsonColumnAdapter)
+    @json_uint32_path_readers : Array(CompactJsonUInt32PathReader)
     @column_reader_slots : Array(Tuple(Symbol, Int32))
     @part_path : String
     @emit_part_name : String
@@ -127,6 +129,7 @@ module CrystalClick
       @readers = Array(SelectedReader).new(@columns.size)
       @direct_uint64_readers = Array(Bool).new(@columns.size)
       @json_readers = Array(CompactJsonColumnAdapter).new(@columns.size)
+      @json_uint32_path_readers = Array(CompactJsonUInt32PathReader).new(@columns.size)
       @column_reader_slots = Array(Tuple(Symbol, Int32)).new(@columns.size)
       @column_types = Array({String, String}).new(@columns.size)
       @column_sources = Array({String, String, String}).new(@columns.size)
@@ -136,7 +139,46 @@ module CrystalClick
       @columns.each do |column|
         source_type = physical_types[column]?
         unless source_type
-          raise CorruptPartError.new("selected column is absent from Compact columns.txt")
+          path = compact_json_uint32_path_parts(column)
+          unless path
+            raise CorruptPartError.new("selected column is absent from Compact columns.txt")
+          end
+          if projection_name
+            raise UnsupportedFormatError.new("Compact JSON typed paths are not admitted for projection children")
+          end
+          parent_column, field_name = path
+          parent_type = physical_types[parent_column]? ||
+                        raise(CorruptPartError.new("selected column is absent from Compact columns.txt"))
+          path_reader = CompactJsonUInt32PathReader.open(
+            @part_path,
+            physical_columns,
+            column,
+            parent_column,
+            parent_type,
+            field_name,
+            budget,
+          )
+          if existing_rows = row_count
+            unless path_reader.row_count == existing_rows
+              raise CorruptPartError.new("selected Compact columns have different parent row counts")
+            end
+            unless path_reader.mark_row_counts == @mark_row_counts
+              raise CorruptPartError.new("selected Compact columns have different parent mark grids")
+            end
+          else
+            row_count = path_reader.row_count
+            @mark_row_counts = path_reader.mark_row_counts
+          end
+
+          @column_reader_slots << {:json_uint32, @json_uint32_path_readers.size}
+          @json_uint32_path_readers << path_reader
+          @column_types << {String.new(column.to_slice), String.new(path_reader.schema_declaration.to_slice)}
+          @column_sources << {
+            String.new(column.to_slice),
+            String.new(parent_column.to_slice),
+            String.new(parent_type.to_slice),
+          }
+          next
         end
         dynamic_type = compact_dynamic_type(source_type)
         json_schema = dynamic_type ? nil : CompactJsonColumnAdapter.schema_for_json_declaration(source_type)
@@ -531,7 +573,7 @@ module CrystalClick
         end
         next unless row_start < row_end
 
-        values_by_column, json_carriers, retained_charge = materialize_mark(
+        values_by_column, json_carriers, path_values, retained_charge = materialize_mark(
           mark_index,
           mark_rows,
           scan_workspace,
@@ -549,6 +591,7 @@ module CrystalClick
             slice_rows,
             values_by_column,
             json_carriers,
+            path_values,
           ) { |batch| yield batch }
           cursor += slice_rows
         end
@@ -572,7 +615,7 @@ module CrystalClick
 
     private def reusable_direct_uint64_column_count : Int32
       {% if IO::ByteFormat::SystemEndian == IO::ByteFormat::LittleEndian %}
-        return 0_i32 if @readers.empty? || !@json_readers.empty? ||
+        return 0_i32 if @readers.empty? || !@json_readers.empty? || !@json_uint32_path_readers.empty? ||
                         @direct_uint64_readers.size != @readers.size ||
                         !@direct_uint64_readers.all? { |direct| direct }
         @readers.size.to_i32
@@ -600,6 +643,9 @@ module CrystalClick
         @json_readers.each do |other_reader|
           other_retained_workspace = checked_add(other_retained_workspace, other_reader.retained_workspace_bytes)
         end
+        @json_uint32_path_readers.each do |other_reader|
+          other_retained_workspace = checked_add(other_retained_workspace, other_reader.retained_workspace_bytes)
+        end
         if other_retained_workspace > limit
           raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
         end
@@ -624,6 +670,9 @@ module CrystalClick
         end
         @json_readers.each_with_index do |other_reader, other_index|
           next if other_index == reader_index
+          other_retained_workspace = checked_add(other_retained_workspace, other_reader.retained_workspace_bytes)
+        end
+        @json_uint32_path_readers.each do |other_reader|
           other_retained_workspace = checked_add(other_retained_workspace, other_reader.retained_workspace_bytes)
         end
         if other_retained_workspace > limit
@@ -660,6 +709,10 @@ module CrystalClick
       @json_readers.each do |reader|
         retained_workspace = checked_add(retained_workspace, reader.retained_workspace_bytes)
       end
+      @json_uint32_path_readers.each do |reader|
+        retained_workspace = checked_add(retained_workspace, reader.retained_workspace_bytes)
+      end
+      retained_workspace = checked_add(retained_workspace, compact_json_uint32_path_mark_workspace_bytes(mark_index))
       retained_workspace = checked_add(retained_workspace, direct_mark_workspace_bytes)
 
       reusable_direct_count = reusable_direct_uint64_column_count
@@ -737,6 +790,30 @@ module CrystalClick
       # aggregate retained owner before allocating results or decoding values.
       values_by_column = Array(CompactBinaryMarkCarrier).new(@readers.size)
       retained_total = retained_workspace
+      path_values = if @json_uint32_path_readers.empty?
+                      EMPTY_JSON_UINT32_PATH_VALUES
+                    else
+                      Array(Slice(UInt32)).new(@json_uint32_path_readers.size)
+                    end
+      if @json_uint32_path_readers.any?
+        path_workspace = CompressedBlock::DecodeWorkspace.new
+        @json_uint32_path_readers.each do |reader|
+          if rows > UInt64::MAX // sizeof(UInt32).to_u64
+            raise CorruptPartError.new("Compact JSON UInt32 path mark materialization charge overflows")
+          end
+          result_bytes = rows * sizeof(UInt32).to_u64
+          if result_bytes > remaining_bytes
+            raise CorruptPartError.new("Compact selected mark exceeds aggregate materialization limit")
+          end
+          remaining_bytes -= result_bytes
+          retained_total = checked_add(retained_total, result_bytes)
+
+          values = Slice(UInt32).new(rows.to_i)
+          destination = Bytes.new(values.to_unsafe.as(UInt8*), values.size * sizeof(UInt32))
+          reader.read_mark_into(mark_index, destination, path_workspace)
+          path_values << values
+        end
+      end
       reusable_slot = 0
 
       @readers.each_with_index do |entry, reader_index|
@@ -867,7 +944,7 @@ module CrystalClick
       # the OfflineColumnValue reservation below exists solely to own the new
       # JSON carrier sidecar and must not add an empty owner to old selections.
       if @json_readers.empty?
-        return {values_by_column, [] of SelectedCarrier, checked_add(retained_total, carrier_bytes)}
+        return {values_by_column, [] of SelectedCarrier, path_values, checked_add(retained_total, carrier_bytes)}
       end
       json_limit = WidePartTable::MAX_MARK_MATERIALIZED_BYTES.to_u64 - binary_owner_bytes
       json_budget = ObjectValuesMaterializationBudget.new(logical_limit: json_limit)
@@ -921,6 +998,7 @@ module CrystalClick
       {
         values_by_column,
         json_carriers,
+        path_values,
         checked_add(checked_add(retained_total, carrier_bytes), json_budget.retained_logical_bytes),
       }
     end
@@ -932,6 +1010,7 @@ module CrystalClick
       rows : UInt64,
       values_by_column : Array(CompactBinaryMarkCarrier),
       json_carriers : Array(SelectedCarrier),
+      path_values : Array(Slice(UInt32)),
       & : WidePartTableBatch -> Nil
     ) : Nil
       row_end = row_offset + rows
@@ -975,6 +1054,10 @@ module CrystalClick
               )
             end
           end
+        elsif kind == :json_uint32
+          reader = @json_uint32_path_readers[reader_index]
+          values = path_values[reader_index]
+          batch.install_compact_uint32_values(reader.column_name, values[row_offset.to_i, rows.to_i], rows.to_i32)
         else
           reader = @json_readers[reader_index]
           carrier = json_carriers[reader_index]
@@ -995,6 +1078,33 @@ module CrystalClick
       end
       yield batch
       nil
+    end
+
+    private def compact_json_uint32_path_mark_workspace_bytes(mark_index : Int32) : UInt64
+      return 0_u64 if @json_uint32_path_readers.empty?
+
+      bytes = checked_add(
+        instance_sizeof(Array(Slice(UInt32))).to_u64,
+        @json_uint32_path_readers.size.to_u64 * sizeof(Slice(UInt32)).to_u64,
+      )
+      bytes = checked_add(bytes, instance_sizeof(CompressedBlock::DecodeWorkspace).to_u64)
+      max_decode_workspace = 0_u64
+      @json_uint32_path_readers.each do |reader|
+        path_workspace = reader.workspace_bytes_for_mark(mark_index)
+        max_decode_workspace = path_workspace if path_workspace > max_decode_workspace
+      end
+      checked_add(bytes, max_decode_workspace)
+    end
+
+    private def compact_json_uint32_path_parts(column : String) : {String, String}?
+      separator = column.byte_index('.') || return nil
+      return nil if separator == 0 || separator == column.bytesize - 1
+      return nil if column.byte_slice(separator + 1).includes?('.')
+
+      parent = column.byte_slice(0, separator)
+      field = column.byte_slice(separator + 1)
+      return nil if parent.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES || field.bytesize > WidePartTable::MAX_COLUMN_NAME_BYTES
+      {String.new(parent.to_slice), String.new(field.to_slice)}
     end
 
     private def projection_aggregate_state?(column_name : String, type_name : String) : Bool

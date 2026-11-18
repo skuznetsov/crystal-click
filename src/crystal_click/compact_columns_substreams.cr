@@ -48,6 +48,12 @@ module CrystalClick
       @columns.map { |name, type| {String.new(name.to_slice), String.new(type.to_slice)} }
     end
 
+    # :nodoc:
+    # Exact physical declaration check without exposing retained metadata.
+    def column_type_matches?(column_name : String, type_name : String) : Bool
+      @columns.any? { |name, type| name == column_name && type == type_name }
+    end
+
     def roster : Array(CompactPhysicalSlot)
       @slots.map(&.detached_copy)
     end
@@ -99,6 +105,19 @@ module CrystalClick
     def slot_count_for(column_name : String) : Int32
       slots = @slots_by_column[column_name]? || raise(ArgumentError.new("unknown Compact column"))
       slots.size.to_i32
+    end
+
+    # :nodoc:
+    # Resolve one exact MRK4 stream without cloning the retained slot roster.
+    def unique_slot_index_for(column_name : String, stream_name : String) : Int32
+      slots = @slots_by_column[column_name]? || raise(ArgumentError.new("unknown Compact column"))
+      match = nil.as(Int32?)
+      slots.each do |slot|
+        next unless slot.stream_name == stream_name
+        raise CorruptPartError.new("Compact physical stream identity is ambiguous") if match
+        match = slot.index
+      end
+      match || raise(CorruptPartError.new("Compact physical stream is absent from its column roster"))
     end
 
     # Logical retained-owner census from the stored metadata, without creating

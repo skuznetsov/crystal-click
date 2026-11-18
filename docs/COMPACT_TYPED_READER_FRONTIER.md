@@ -40,6 +40,27 @@ executable SHA-256
 `bb321871f53f215d1e9d1b72cc4c92473816a10d3d49b715b1e0db1c832a79e2`.
 No assertion of latest upstream or source/runtime equivalence is made.
 
+## Selected UInt32 JSON paths
+
+On top-level Compact MRK4 parts, `TypedPartTable` can select a declared
+top-level `UInt32` JSON field by its exact physical substream name. The
+result is a borrowed `Slice(UInt32)` in the existing typed batch API.
+
+```crystal
+table = CrystalClick::TypedPartTable.open_selected_typed(parts, ["id", "doc.tenant_id"])
+table.scan_typed do |batch|
+  tenants = batch.values_for("doc.tenant_id", UInt32)
+  tenants.each { |value| puts value }
+end
+```
+
+Admission checks the declared path type, slot identity, and exact width
+on every mark. Each selected mark checks the current frame geometry and
+authenticates its touched payload frames before yielding values. The scope
+is top-level Compact MRK4 data with an explicit `UInt32` path and supported
+serialization metadata. An ordinary column present in `columns.txt` takes
+precedence over the path interpretation.
+
 ## Target contract and composition laws
 
 1. Keep `WidePartTable.open_selected_typed` genuinely Wide. Introduce

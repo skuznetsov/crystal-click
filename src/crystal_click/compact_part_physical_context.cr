@@ -70,6 +70,13 @@ module CrystalClick
       @columns_substreams.columns
     end
 
+    # :nodoc:
+    # Rebind selected path metadata to the declaration retained by this
+    # independently opened physical context.
+    def physical_column_type_matches?(column_name : String, type_name : String) : Bool
+      @columns_substreams.column_type_matches?(column_name, type_name)
+    end
+
     # The selected checksum identity is detached from the retained input.
     def marks_name : String
       String.new(@data_input.marks_name.to_slice)
@@ -467,6 +474,120 @@ module CrystalClick
       nil
     end
 
+    # :nodoc:
+    # Validate one exact MRK4 stream even when its parent JSON column has
+    # other callback streams. Every mark is checked before a caller can emit.
+    def validate_fixed_width_stream_spans!(
+      column_name : String,
+      expected_stream_name : String,
+      width : UInt64,
+      lane_label : String,
+    ) : Int32
+      unless @mode.mrk4?
+        raise UnsupportedFormatError.new("Compact #{lane_label} stream selection requires MRK4")
+      end
+      if width == 0_u64
+        raise ArgumentError.new("Compact fixed-width stream width must be positive")
+      end
+
+      slot_count = @columns_substreams.slot_count_for(column_name)
+      @budget.preflight_records(slot_count.to_i64)
+      @budget.reserve_records(slot_count.to_i64)
+      slot_index = @columns_substreams.unique_slot_index_for(column_name, expected_stream_name)
+      validate_fixed_width_stream_mark_spans!(column_name, slot_index, expected_stream_name, width, lane_label)
+      slot_index
+    end
+
+    # :nodoc:
+    # Exact transient decoder-buffer upper bound for the frames a selected
+    # mark may need. Whole ordinary frames decode into the result directly;
+    # partial frames use their decoded size, and Multiple needs its 11-byte
+    # nested-envelope overhead as well.
+    def fixed_width_stream_workspace_bytes(
+      column_name : String,
+      slot_index : Int32,
+      mark_index : Int,
+      expected_stream_name : String,
+      width : UInt64,
+      lane_label : String,
+    ) : UInt64
+      start, finish, _ = validated_fixed_width_stream_mark_range(
+        column_name,
+        slot_index,
+        mark_index,
+        expected_stream_name,
+        width,
+        lane_label,
+      )
+      first, last = @mark_index.frame_index.touched_frame_bounds(start, finish)
+      workspace_bytes = 0_u64
+      frame_index = first
+      while frame_index < last
+        frame = @mark_index.frame_index.frames[frame_index]
+        partial = frame.logical_start < start || frame.logical_end > finish
+        if partial || frame.method == CompressedBlock::METHOD_MULTIPLE
+          frame_bytes = frame.decompressed_size.to_u64
+          if frame.method == CompressedBlock::METHOD_MULTIPLE
+            frame_bytes = checked_add(frame_bytes, 11_u64)
+          end
+          workspace_bytes = frame_bytes if frame_bytes > workspace_bytes
+        end
+        frame_index += 1
+      end
+      workspace_bytes
+    end
+
+    # :nodoc:
+    # Authenticate one exact fixed-width MRK4 stream mark into caller-owned
+    # storage, preserving the ordinary frame checksum and transport path.
+    def read_fixed_width_stream_mark_into(
+      column_name : String,
+      slot_index : Int32,
+      mark_index : Int,
+      expected_stream_name : String,
+      width : UInt64,
+      lane_label : String,
+      destination : Bytes,
+      workspace : CompressedBlock::DecodeWorkspace,
+    ) : Nil
+      start, finish, expected_bytes = validated_fixed_width_stream_mark_range(
+        column_name,
+        slot_index,
+        mark_index,
+        expected_stream_name,
+        width,
+        lane_label,
+      )
+      unless destination.size.to_u64 == expected_bytes
+        raise CorruptPartError.new("Compact #{lane_label} destination width differs from its exact row width")
+      end
+
+      # The physical caller range and the transport range descriptor are
+      # accounted separately, matching the existing direct UInt64 reader.
+      @budget.preflight_records(2_i64)
+      @budget.reserve_records(1_i64)
+      @budget.preflight_file_bytes(@data_input.data_size)
+      MMapDataSource.with_file(
+        @data_input.data_path,
+        @data_input.data_size,
+        @budget.limits.max_file_bytes,
+      ) do |data|
+        @budget.reserve_file_bytes(@data_input.data_size)
+        index = @mark_index.frame_index
+        index.validate_data_geometry!(data, @budget.limits, @budget)
+        CompressedMarkReader.read_range_into_indexed(
+          data,
+          index,
+          start,
+          finish,
+          destination,
+          workspace,
+          @budget,
+        )
+      end
+      nil
+    end
+
     private def validate_fixed_width_single_callback_span_slot!(
       column_name : String,
       expected_stream_name : String,
@@ -707,6 +828,70 @@ module CrystalClick
         @budget,
       )
       nil
+    end
+
+    private def validate_fixed_width_stream_mark_spans!(
+      column_name : String,
+      slot_index : Int32,
+      expected_stream_name : String,
+      width : UInt64,
+      lane_label : String,
+    ) : Nil
+      @mark_index.mark_count.times do |mark_index|
+        validated_fixed_width_stream_mark_range(
+          column_name,
+          slot_index,
+          mark_index,
+          expected_stream_name,
+          width,
+          lane_label,
+        )
+      end
+      nil
+    end
+
+    private def validated_fixed_width_stream_mark_range(
+      column_name : String,
+      slot_index : Int32,
+      mark_index : Int,
+      expected_stream_name : String,
+      width : UInt64,
+      lane_label : String,
+    ) : {Int64, Int64, UInt64}
+      unless @mode.mrk4?
+        raise UnsupportedFormatError.new("Compact #{lane_label} stream selection requires MRK4")
+      end
+      if width == 0_u64
+        raise ArgumentError.new("Compact fixed-width stream width must be positive")
+      end
+      unless mark_index >= 0 && mark_index < @mark_index.mark_count
+        raise ArgumentError.new("Compact #{lane_label} mark selection is outside the grid")
+      end
+      unless @columns_substreams.slot_matches?(slot_index, column_name, expected_stream_name)
+        raise CorruptPartError.new("Compact #{lane_label} slot identity differs from its admitted roster")
+      end
+
+      rows = @mark_index.row_count_at(mark_index)
+      if rows > UInt64::MAX // width
+        raise CorruptPartError.new("Compact #{lane_label} mark width overflows")
+      end
+      expected_bytes = rows * width
+      if expected_bytes > Int32::MAX.to_u64
+        raise CorruptPartError.new("Compact #{lane_label} mark exceeds its in-memory bound")
+      end
+      start = @mark_index.position_at(mark_index, slot_index)
+      finish = if slot_index + 1 < @mark_index.slot_count
+                 @mark_index.position_at(mark_index, slot_index + 1)
+               else
+                 @mark_index.position_at(mark_index + 1, 0)
+               end
+      if finish < start
+        raise CorruptPartError.new("Compact #{lane_label} mark has descending coordinates")
+      end
+      unless (finish - start).to_u64 == expected_bytes
+        raise CorruptPartError.new("Compact #{lane_label} mark span differs from its exact row width")
+      end
+      {start, finish, expected_bytes}
     end
 
     private def validated_uint64_mark_range(

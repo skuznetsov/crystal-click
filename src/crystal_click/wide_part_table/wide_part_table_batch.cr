@@ -322,6 +322,16 @@ module CrystalClick
       nil
     end
 
+    # Internal exact-carrier installer for a selected root JSON UInt32 path.
+    # The caller owns the aligned values for the callback lifetime.
+    def install_compact_uint32_values(column : String, values : Slice(UInt32), expected_rows : Int32) : Nil
+      index = column_index(column)
+      raise CorruptPartError.new("Compact UInt32 carrier received a different declaration") unless @column_types[index] == "UInt32"
+      raise CorruptPartError.new("Compact UInt32 carrier row count mismatch") unless values.size == expected_rows
+      batch_sidecar.typed_numeric_values[column] = values.as(WidePartNumericSlice)
+      nil
+    end
+
     def install_compact_string_values(column : String, type_name : String, values : Slice(String), expected_rows : Int32) : Nil
       index = column_index(column)
       unless (type_name == "String" || type_name == "LowCardinality(String)") && @column_types[index] == type_name

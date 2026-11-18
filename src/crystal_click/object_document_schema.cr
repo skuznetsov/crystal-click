@@ -269,6 +269,12 @@ module CrystalClick
       detached
     end
 
+    # :nodoc:
+    # Read one already-admitted typed path without allocating a detached roster.
+    def typed_type_for(path : String) : BinaryDataType?
+      @typed_types[path]?
+    end
+
     # Every call returns detached raw-name strings. The full copy set is
     # budgeted before the owner materializes the snapshot.
     def skip_paths : Array(String)
