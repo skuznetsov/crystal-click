@@ -540,24 +540,7 @@ module CrystalClick
       replay_complete = @type.contains_low_cardinality?
       read_first = replay_complete ? 0 : first_mark
       read_count = replay_complete ? @mark_count : mark_count
-      # Keep the full selected-column logical byte total as a deliberately
-      # conservative raw-window bound. The following estimate includes the
-      # detached Compact shard/granule copies that coexist during normalization.
-      workspace_observer.call(@logical_read_bytes)
-      physical_workspace = physical_window_workspace_bytes(read_count)
-      workspace_observer.call(physical_workspace)
-      window = @context.read_window(@column_name, read_first, read_count)
-      normalized, rows = @normalizer.normalize(
-        window,
-        codec_budget,
-        workspace_observer,
-        physical_workspace,
-      )
-
-      expected_rows = selected_rows(read_first, read_count)
-      unless rows == expected_rows
-        raise CorruptPartError.new("Compact normalized parent grid differs from the validated mark grid")
-      end
+      normalized, rows, _ = read_normalized_window(read_first, read_count, codec_budget, workspace_observer)
 
       decoded = BinaryBulkDecoder.decode(
         @type,
@@ -585,6 +568,57 @@ module CrystalClick
         end
       end
       decoded
+    end
+
+    # Read one exact Array(Tuple(a UInt64, b String)) mark into owned flat
+    # offset, value, and payload buffers. The observer sees the physical
+    # window, normalized lanes, and flat result before output allocation.
+    def read_array_tuple_uint64_string_mark(
+      mark_index : Int,
+      workspace_observer : Proc(UInt64, Nil),
+    ) : CompactArrayTupleUInt64StringMark
+      unless @projection_aggregate_descriptor.nil? &&
+             @schema_declaration == WideTypePlan::TYPE_ARRAY_TUPLE_UINT64_STRING
+        raise UnsupportedFormatError.new("Compact flat reader requires exact Array(Tuple(a UInt64, b String))")
+      end
+      validate_selection!(mark_index, 1)
+
+      codec_budget = @codec_budget || BinaryCodecBudget.new(@limits)
+      normalized, rows, physical_workspace = read_normalized_window(mark_index, 1, codec_budget, workspace_observer)
+      CompactArrayTupleUInt64StringMark.decode(
+        @type,
+        normalized,
+        rows,
+        @ordinary_profile,
+        codec_budget,
+        workspace_observer,
+        physical_workspace,
+      )
+    end
+
+    # Convenience overload for callers that do not impose an aggregate
+    # workspace observer.
+    def read_array_tuple_uint64_string_mark(mark_index : Int) : CompactArrayTupleUInt64StringMark
+      no_workspace_observer = ->(_workspace_bytes : UInt64) { nil }
+      read_array_tuple_uint64_string_mark(mark_index, no_workspace_observer)
+    end
+
+    private def read_normalized_window(
+      first_mark : Int,
+      mark_count : Int,
+      codec_budget : BinaryCodecBudget,
+      workspace_observer : Proc(UInt64, Nil),
+    ) : {BinaryBulkStreams, Array(UInt64), UInt64}
+      # Bound the raw window and detached shards that coexist during normalization.
+      workspace_observer.call(@logical_read_bytes)
+      physical_workspace = physical_window_workspace_bytes(mark_count.to_i32)
+      workspace_observer.call(physical_workspace)
+      window = @context.read_window(@column_name, first_mark, mark_count)
+      normalized, rows = @normalizer.normalize(window, codec_budget, workspace_observer, physical_workspace)
+      unless rows == selected_rows(first_mark, mark_count)
+        raise CorruptPartError.new("Compact normalized parent grid differs from the validated mark grid")
+      end
+      {normalized, rows, physical_workspace}
     end
 
     private def physical_window_workspace_bytes(mark_count : Int32) : UInt64

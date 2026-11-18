@@ -171,3 +171,42 @@ Copying only the two selected streams reduced delivered physical bytes from
 3,774,424 to 786,432. These copy and frame counts describe the coalesced
 transport experiment. The advantage on this packing comes from narrower
 output and bypassing JSON row assembly.
+
+## Columnar read of the events array
+
+`CompactBinaryBulkColumnReader#read_array_tuple_uint64_string_mark` reads the
+exact declaration `Array(Tuple(a UInt64, b String))` one mark at a time. It
+uses the authenticated Compact window and existing recursive normalizer. The
+result owns row offsets, UInt64 values, String offsets, and concatenated
+payload bytes. Keep the result alive while consuming its read-only slices.
+Both String layouts preserve arbitrary payload bytes. The decoder bounds the
+flat output at 64 MiB and checks the lane grids, counts, and codec budget.
+
+```sh
+TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
+  crystal build --release benchmarks/compact_array_tuple_scan_probe.cr \
+    -o "$bench_work/array-probe"
+"$bench_work/array-probe" "$bench_work/fixture/0_1_1_0" \
+  "$bench_work/fixture/0_1_1_0.events.rowbinary"
+```
+
+Both routes read and retain the same four marks of `events` with one worker.
+The legacy route reads `BinaryValue` objects and runs the typed batch
+adapter. The flat route skips that intermediate representation. Both
+serialize their retained results with a separate timer and compare every
+output to the ordered ClickHouse RowBinary export. Each process alternates
+routes through two warmup pairs and sixteen timed pairs. Boehm stays enabled
+and a collection before each sample is outside the timed read.
+
+| Route | Read p50 / p95, ms | Serialize p50 / p95, ms | Read allocated bytes, median |
+| --- | ---: | ---: | ---: |
+| Legacy typed adapter | 24.056 / 28.795 | 0.203 / 0.252 | 47,300,312 |
+| Flat result | 2.777 / 3.053 | 0.184 / 0.200 | 8,521,528 |
+
+All 96 timed outputs and 12 warmups across three processes matched the
+8,192-row export. The read median improved 8.66× and read allocations
+dropped 82.0%. The measurement selects only `events` and uses the v1 String
+layout on the same host and compiler as the JSON comparison. The export
+SHA-256 is `d1046c03718ac04c0b2f5ea8bbdc1489041079aeb7c65068d37699fda41baca1`.
+The release probe SHA-256 is
+`5f985ea9fbfcdd2d0766935a1c5e6db455368cf48d8de3f7caeaaf31bf957f3f`.
