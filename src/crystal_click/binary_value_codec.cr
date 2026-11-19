@@ -191,6 +191,58 @@ module CrystalClick
       allow_recursive_qbit : Bool = false,
       allow_qbit_variants : Bool = true,
     ) : Tuple(BinaryDataType, BinaryValue?)
+      type, value, _string_slice = decode_dynamic_bulk_child_internal(
+        bytes,
+        budget,
+        depth,
+        charge_parent_value_edge,
+        allow_json,
+        allow_aggregate_function,
+        allow_recursive_qbit,
+        allow_qbit_variants,
+        false,
+      )
+      {type, value}
+    end
+
+    # Internal verifier counterpart. It uses the same descriptor and value
+    # grammar as `decode_dynamic_bulk_child`, but an exact top-level String is
+    # returned as a read-only span before a BinaryValue can be constructed.
+    # Non-String descriptors take the unchanged recursive materializer.
+    def self.decode_dynamic_bulk_child_with_string_slice(
+      bytes : Bytes,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+      charge_parent_value_edge : Bool = false,
+      allow_json : Bool = false,
+      allow_aggregate_function : Bool = false,
+      allow_recursive_qbit : Bool = false,
+      allow_qbit_variants : Bool = true,
+    ) : Tuple(BinaryDataType, BinaryValue?, Bytes?)
+      decode_dynamic_bulk_child_internal(
+        bytes,
+        budget,
+        depth,
+        charge_parent_value_edge,
+        allow_json,
+        allow_aggregate_function,
+        allow_recursive_qbit,
+        allow_qbit_variants,
+        true,
+      )
+    end
+
+    private def self.decode_dynamic_bulk_child_internal(
+      bytes : Bytes,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+      charge_parent_value_edge : Bool,
+      allow_json : Bool,
+      allow_aggregate_function : Bool,
+      allow_recursive_qbit : Bool,
+      allow_qbit_variants : Bool,
+      borrow_string_payload : Bool,
+    ) : Tuple(BinaryDataType, BinaryValue?, Bytes?)
       context = BinaryCodecContext.new(
         budget.limits,
         bytes,
@@ -219,15 +271,21 @@ module CrystalClick
       if type.contains_json? && !allow_json
         context.unsupported!("JSON is not admitted as a Dynamic actual type")
       end
-      value : BinaryValue? = if type.tag == BinaryDataType::TAG_NOTHING
+      value : BinaryValue? = nil
+      string_slice : Bytes? = nil
+      if type.tag == BinaryDataType::TAG_NOTHING
         context.visit_node(depth)
-        nil
       else
         context.preflight_children(1_u64) if charge_parent_value_edge
-        read_value(type, context, depth)
+        if borrow_string_payload && type.tag == BinaryDataType::TAG_STRING
+          context.visit_node(depth)
+          string_slice = read_string_payload(context)
+        else
+          value = read_value(type, context, depth)
+        end
       end
       context.ensure_consumed
-      {type, value}
+      {type, value, string_slice}
     end
 
     private def self.decode_in_context(
@@ -429,9 +487,7 @@ module CrystalClick
           context.corrupt!("invalid Custom Geo storage value: #{ex.message}")
         end
       when BinaryDataType::TAG_STRING
-        length = context.read_var_uint
-        raw = context.read_slice(length)
-        BinaryValue.string(type, raw)
+        BinaryValue.string(type, read_string_payload(context))
       when BinaryDataType::TAG_BOOL
         BinaryValue.bool(BoolValueCodec.decode(context.read_byte))
       when BinaryDataType::TAG_QBIT
@@ -537,6 +593,12 @@ module CrystalClick
         raw = context.read_slice(width.to_u64)
         BinaryValue.fixed(type, raw)
       end
+    end
+
+    private def self.read_string_payload(context : BinaryCodecContext) : Bytes
+      length = context.read_var_uint
+      raw = context.read_slice(length)
+      Bytes.new(raw.to_unsafe, raw.size, read_only: true)
     end
 
     private def self.reject_dynamic_type!(type : BinaryDataType, context : BinaryCodecContext) : Nil

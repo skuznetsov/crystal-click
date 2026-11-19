@@ -184,6 +184,32 @@ module CrystalClick
       budget : BinaryCodecBudget,
       profile : BinaryBulkProfile = COMPACT_PROFILE,
     ) : ObjectSharedPathDecodeResult
+      decode_structures_internal_with_budget(data, events, row_count, type, budget, profile).as(ObjectSharedPathDecodeResult)
+    end
+
+    # Internal column-verification route. The path tape is fully consumed
+    # before return, and the result retains the normalized lanes that own any
+    # borrowed String spans until Copy comparison completes.
+    def self.decode_for_copy_verification_with_structures_with_budget(
+      data : Bytes,
+      events : Array(ObjectSharedPathSubstreamEvent),
+      row_count : Int,
+      type : BinaryDataType,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile = COMPACT_PROFILE,
+    ) : ObjectSharedPathComparisonResult
+      decode_structures_internal_with_budget(data, events, row_count, type, budget, profile, true).as(ObjectSharedPathComparisonResult)
+    end
+
+    private def self.decode_structures_internal_with_budget(
+      data : Bytes,
+      events : Array(ObjectSharedPathSubstreamEvent),
+      row_count : Int,
+      type : BinaryDataType,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      borrow_strings : Bool = false,
+    ) : ObjectSharedPathDecodeResult | ObjectSharedPathComparisonResult
       if budget.writing?
         raise ArgumentError.new("Object shared path decode requires a read-direction budget")
       end
@@ -216,8 +242,16 @@ module CrystalClick
       )
       lanes = reader.bulk_streams
       rows_per_mark = [count] of UInt64
-      decoded = BinaryBulkDecoder.decode(type, lanes, rows_per_mark, budget, 0, 1, profile, plan)
-      unless decoded.size == 1 && decoded[0].size == row_count
+      decoded_rows : Array(BinaryValue) | Array(ObjectSharedPathComparisonValue) = if borrow_strings
+        BinaryBulkDecoder.decode_for_path_copy_verification(type, lanes, rows_per_mark, budget, 0, 1, profile, plan)
+      else
+        decoded = BinaryBulkDecoder.decode(type, lanes, rows_per_mark, budget, 0, 1, profile, plan)
+        unless decoded.size == 1 && decoded[0].size == row_count
+          raise CorruptPartError.new("Object shared path root row count disagrees with the decoded value domain")
+        end
+        decoded[0]
+      end
+      unless decoded_rows.size == row_count
         raise CorruptPartError.new("Object shared path root row count disagrees with the decoded value domain")
       end
 
@@ -232,7 +266,11 @@ module CrystalClick
       budget.ensure_future_elements(retained_result_work)
       budget.charge_node
       budget.charge_elements(retained_result_work)
-      ObjectSharedPathDecodeResult.new(decoded[0], structures)
+      if borrow_strings
+        ObjectSharedPathComparisonResult.new(decoded_rows.as(Array(ObjectSharedPathComparisonValue)), lanes)
+      else
+        ObjectSharedPathDecodeResult.new(decoded_rows.as(Array(BinaryValue)), structures)
+      end
     end
 
     # Named counterpart for the ordinary JSON-bearing actual arm. Child Object
@@ -248,6 +286,40 @@ module CrystalClick
       profile : BinaryBulkProfile = COMPACT_PROFILE,
       coordinate_context : ObjectSharedInlineCoordinateContext? = nil,
     ) : ObjectSharedPathDecodeResult
+      decode_json_children_internal_with_budget(
+        data, events, row_count, type, budget, nested_context, profile, coordinate_context, false,
+      ).as(ObjectSharedPathDecodeResult)
+    end
+
+    # Verifier counterpart for the JSON-bearing path. It shares the same tape,
+    # binding, and nested-child preparation and borrows only exact String
+    # actuals from the normalized Data lanes.
+    def self.decode_for_copy_verification_with_json_children_with_budget(
+      data : Bytes,
+      events : Array(ObjectSharedPathSubstreamEvent),
+      row_count : Int,
+      type : BinaryDataType,
+      budget : BinaryCodecBudget,
+      nested_context : ObjectSharedNestedSerializationContext,
+      profile : BinaryBulkProfile = COMPACT_PROFILE,
+      coordinate_context : ObjectSharedInlineCoordinateContext? = nil,
+    ) : ObjectSharedPathComparisonResult
+      decode_json_children_internal_with_budget(
+        data, events, row_count, type, budget, nested_context, profile, coordinate_context, true,
+      ).as(ObjectSharedPathComparisonResult)
+    end
+
+    private def self.decode_json_children_internal_with_budget(
+      data : Bytes,
+      events : Array(ObjectSharedPathSubstreamEvent),
+      row_count : Int,
+      type : BinaryDataType,
+      budget : BinaryCodecBudget,
+      nested_context : ObjectSharedNestedSerializationContext,
+      profile : BinaryBulkProfile,
+      coordinate_context : ObjectSharedInlineCoordinateContext?,
+      borrow_strings : Bool,
+    ) : ObjectSharedPathDecodeResult | ObjectSharedPathComparisonResult
       unless !budget.writing? && !nested_context.writing?
         raise ArgumentError.new("Object shared JSON path decode requires read-direction contexts")
       end
@@ -314,18 +386,28 @@ module CrystalClick
         physical_child_loader: child_loader,
         child_shared_profile: BinaryBulkProfile.single_stream,
       )
-      decoded = BinaryBulkDecoder.decode(
-        type,
-        lanes,
-        rows_per_mark,
-        budget,
-        0,
-        1,
-        profile,
-        plan,
-        json_reader,
-      )
-      unless decoded.size == 1 && decoded[0].size == row_count
+      decoded_rows : Array(BinaryValue) | Array(ObjectSharedPathComparisonValue) = if borrow_strings
+        BinaryBulkDecoder.decode_for_path_copy_verification(
+          type, lanes, rows_per_mark, budget, 0, 1, profile, plan, json_reader,
+        )
+      else
+        decoded = BinaryBulkDecoder.decode(
+          type,
+          lanes,
+          rows_per_mark,
+          budget,
+          0,
+          1,
+          profile,
+          plan,
+          json_reader,
+        )
+        unless decoded.size == 1 && decoded[0].size == row_count
+          raise CorruptPartError.new("Object shared JSON path row count disagrees with the decoded value domain")
+        end
+        decoded[0]
+      end
+      unless decoded_rows.size == row_count
         raise CorruptPartError.new("Object shared JSON path row count disagrees with the decoded value domain")
       end
 
@@ -340,7 +422,11 @@ module CrystalClick
       budget.ensure_future_elements(retained_result_work)
       budget.charge_node
       budget.charge_elements(retained_result_work)
-      ObjectSharedPathDecodeResult.new(decoded[0], structures)
+      if borrow_strings
+        ObjectSharedPathComparisonResult.new(decoded_rows.as(Array(ObjectSharedPathComparisonValue)), lanes)
+      else
+        ObjectSharedPathDecodeResult.new(decoded_rows.as(Array(BinaryValue)), structures)
+      end
     end
 
     # Internal inline-Object prefix entry point. It shares the exact recursive

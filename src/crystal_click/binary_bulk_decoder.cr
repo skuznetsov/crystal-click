@@ -14,6 +14,76 @@ module CrystalClick
       shared_value_depth_origin : Int = 1,
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
     ) : Array(Array(BinaryValue))
+      decode_internal(
+        type,
+        streams,
+        rows_per_mark,
+        budget,
+        first_mark,
+        mark_count,
+        profile,
+        dynamic_plan,
+        json_object_reader,
+        shared_value_depth_origin,
+        json_leaf_key,
+        BinaryValue,
+      )
+    end
+
+    # Internal single-path comparison decoder. Exact Dynamic String actuals
+    # are returned as read-only Data spans; every other actual keeps the
+    # ordinary BinaryValue walk. The path codec admits one selected mark and
+    # retains the owning Data snapshot while consuming these spans.
+    def self.decode_for_path_copy_verification(
+      type : BinaryDataType,
+      streams : BinaryBulkStreams,
+      rows_per_mark : Array(UInt64),
+      budget : BinaryCodecBudget,
+      first_mark : Int,
+      mark_count : Int?,
+      profile : BinaryBulkProfile,
+      dynamic_plan : BinaryDynamicBulkPlan? = nil,
+      json_object_reader : BinaryDynamicBulkJsonObjectReader? = nil,
+      shared_value_depth_origin : Int = 1,
+      json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
+    ) : Array(BinaryValue | Bytes)
+      unless type.tag == BinaryDataType::TAG_DYNAMIC
+        raise ArgumentError.new("path Copy comparison requires a Dynamic root")
+      end
+      unless streams.mark_count == 1 && rows_per_mark.size == 1 && first_mark == 0 && mark_count == 1
+        raise ArgumentError.new("path Copy comparison requires exactly one complete mark")
+      end
+
+      decode_internal(
+        type,
+        streams,
+        rows_per_mark,
+        budget,
+        first_mark,
+        mark_count,
+        profile,
+        dynamic_plan,
+        json_object_reader,
+        shared_value_depth_origin,
+        json_leaf_key,
+        BinaryValue | Bytes,
+      )[0]
+    end
+
+    private def self.decode_internal(
+      type : BinaryDataType,
+      streams : BinaryBulkStreams,
+      rows_per_mark : Array(UInt64),
+      budget : BinaryCodecBudget,
+      first_mark : Int,
+      mark_count : Int?,
+      profile : BinaryBulkProfile,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+      json_object_reader : BinaryDynamicBulkJsonObjectReader?,
+      shared_value_depth_origin : Int,
+      json_leaf_key : BinaryDynamicJsonLeafKey?,
+      row_type : T.class,
+    ) : Array(Array(T)) forall T
       if type.geometry_storage_variant?
         raise UnsupportedFormatError.new("Geometry's fixed-order storage Variant cannot be decoded independently")
       end
@@ -150,14 +220,18 @@ module CrystalClick
       )
 
       if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
-        return low_cardinality_values["root"]? || corrupt!("binary bulk root LowCardinality site is missing")
+        {% if T == BinaryValue %}
+          return low_cardinality_values["root"]? || corrupt!("binary bulk root LowCardinality site is missing")
+        {% else %}
+          corrupt!("path Copy comparison cannot borrow a LowCardinality root")
+        {% end %}
       end
 
       selected_wire_bytes = selected_byte_size(streams, ordinary_roles, shape_roles, selected_first, selected_count)
       budget.ensure_wire_bytes(selected_wire_bytes)
       budget.charge_wire_bytes(selected_wire_bytes)
 
-      result = Array(Array(BinaryValue)).new(selected_count)
+      result = Array(Array(T)).new(selected_count)
       selected_count.times do |window_offset|
         mark = selected_first + window_offset
         root_count = rows_per_mark[mark].to_i32
@@ -179,8 +253,50 @@ module CrystalClick
         end
         lc_cursors = Hash(String, Int32).new(0)
         json_object_reader.try(&.begin_mark(mark))
-        values = Array(BinaryValue).new(root_count) do
-          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key, shared_value_depth_origin, dynamic_read_bindings)
+        values = Array(T).new(root_count) do
+          {% if T == BinaryValue %}
+            decode_value(
+              type,
+              "root",
+              1,
+              contexts,
+              traversal,
+              profile,
+              lc_values_for_mark,
+              lc_cursors,
+              dynamic_plan,
+              qbit_roles,
+              qbit_role_offset,
+              qbit_site_roles,
+              json_object_reader,
+              json_leaf_key,
+              shared_value_depth_origin,
+              dynamic_read_bindings,
+            ).as(T)
+          {% else %}
+            unless type.tag == BinaryDataType::TAG_DYNAMIC
+              corrupt!("path Copy comparison borrowed Strings outside a Dynamic root")
+            end
+            traversal.visit_node(1)
+            decode_dynamic_value(
+              type,
+              "root",
+              1,
+              contexts,
+              traversal,
+              profile,
+              lc_values_for_mark,
+              lc_cursors,
+              dynamic_plan,
+              qbit_roles,
+              qbit_role_offset,
+              qbit_site_roles,
+              json_object_reader,
+              shared_value_depth_origin,
+              dynamic_read_bindings,
+              true,
+            ).as(T)
+          {% end %}
         end
         contexts.each_value do |context|
           context.ensure_consumed
@@ -682,89 +798,24 @@ module CrystalClick
           BinaryValue.variant(type, discriminator.to_i, child)
         end
       when BinaryDataType::TAG_DYNAMIC
-        plan = dynamic_plan || corrupt!("binary Dynamic value has no structure plan")
-        site_binding = dynamic_read_bindings.try(&.site(path))
-        discriminator_context = if binding = site_binding
-                                  context_for_bound_role(binding.discriminator_context, binding.discriminator_path_work, traversal.budget, dynamic_plan)
-                                else
-                                  context_for_path_role(contexts, path, ".discriminators", nil, traversal.budget, dynamic_plan)
-                                end
-        discriminator = discriminator_context.read_byte
-        if discriminator == 0xff_u8
-          BinaryValue.dynamic(type)
-        else
-          index = discriminator.to_i
-          arm_count = site_binding.try(&.arm_count) || plan.arm_count(path)
-          if index >= arm_count
-            corrupt!("Dynamic bulk discriminator is outside its actual arm roster")
-          end
-          arm_binding = site_binding.try(&.arm(index))
-          selected_path = if binding = arm_binding
-                            charge_cached_path_work(binding.path_work, traversal.budget) if dynamic_plan
-                            binding.path
-                          else
-                            child_path(path, ".arm.", index, traversal.budget, dynamic_plan)
-                          end
-          shared_index = site_binding.try(&.shared_index) || plan.shared_index(path)
-          if index == shared_index
-            # Preflight the Dynamic-to-envelope descriptor edge before even
-            # reading the selected String envelope. The helper owns the
-            # descriptor/value visits and, for non-Nothing, the descriptor's
-            # child edge.
-            traversal.preflight_children(1_u64)
-            data_context = if binding = arm_binding
-                             work = binding.data_path_work || corrupt!("Dynamic shared String arm has no bound data work")
-                             context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
-                           else
-                             context_for_path_role(contexts, selected_path, ".data", nil, traversal.budget, dynamic_plan)
-                           end
-            envelope_size = if profile.with_size_stream?
-                              size_context = if binding = arm_binding
-                                               work = binding.string_sizes_path_work || corrupt!("Dynamic shared String arm has no bound size work")
-                                               context_for_bound_role(binding.string_sizes_context, work, traversal.budget, dynamic_plan)
-                                             else
-                                               context_for_path_role(contexts, selected_path, ".string_sizes", nil, traversal.budget, dynamic_plan)
-                                             end
-                              read_u64(size_context)
-                            else
-                              data_context.read_var_uint
-                            end
-            envelope = data_context.read_slice(envelope_size)
-            # The shared scalar visitor preflights the selected value's edge
-            # only after seeing a non-Nothing descriptor and before allocating
-            # it.
-            shared_scalar_depth = depth.to_i64 + shared_value_depth_origin.to_i64
-            traversal.ensure_depth(shared_scalar_depth)
-            child_type, child_value = BinaryValueCodec.decode_dynamic_bulk_child(
-              envelope,
-              traversal.budget,
-              shared_scalar_depth.to_i32,
-              true,
-              allow_json: true,
-              allow_aggregate_function: true,
-              allow_recursive_qbit: true,
-            )
-            if value = child_value
-              BinaryValue.dynamic(type, value)
-            else
-              BinaryValue.dynamic(type)
-            end
-          else
-            child_type = arm_binding.try(&.type) || plan.arm_type(path, index)
-            leaf_key = if arm_binding
-                         arm_binding.json_leaf_key
-                       elsif child_type.contains_json?
-                         BinaryDynamicJsonLeafKey.new(path, index, [] of Int32)
-                       else
-                         nil
-                       end
-            traversal.preflight_children(1_u64)
-            traversal.ensure_depth(depth + 1)
-            ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings, arm_binding)
-            child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, leaf_key, shared_value_depth_origin, dynamic_read_bindings, arm_binding)
-            BinaryValue.dynamic(type, child)
-          end
-        end
+        decode_dynamic_value(
+          type,
+          path,
+          depth,
+          contexts,
+          traversal,
+          profile,
+          low_cardinality_values,
+          low_cardinality_cursors,
+          dynamic_plan,
+          qbit_roles,
+          qbit_role_offset,
+          qbit_site_roles,
+          json_object_reader,
+          shared_value_depth_origin,
+          dynamic_read_bindings,
+          false,
+        ).as(BinaryValue)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
         child_type = type.child_at(0)
         traversal.preflight_children(1_u64)
@@ -773,31 +824,7 @@ module CrystalClick
         child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin, dynamic_read_bindings, scalar_read_binding)
         BinaryValue.simple_aggregate(type, child)
       when BinaryDataType::TAG_STRING
-        if profile.with_size_stream?
-          size_context = if binding = scalar_read_binding
-                           work = binding.string_sizes_path_work || corrupt!("Dynamic String arm has no bound size work")
-                           context_for_bound_role(binding.string_sizes_context, work, traversal.budget, dynamic_plan)
-                         else
-                           context_for_path_role(contexts, path, ".string_sizes", nil, traversal.budget, dynamic_plan)
-                         end
-          size = read_u64(size_context)
-          data_context = if binding = scalar_read_binding
-                           work = binding.data_path_work || corrupt!("Dynamic String arm has no bound data work")
-                           context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
-                         else
-                           context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan)
-                         end
-          raw = data_context.read_slice(size)
-        else
-          context = if binding = scalar_read_binding
-                      work = binding.data_path_work || corrupt!("Dynamic String arm has no bound data work")
-                      context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
-                    else
-                      context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan)
-                    end
-          size = context.read_var_uint
-          raw = context.read_slice(size)
-        end
+        raw = read_string_lane_slice(path, contexts, profile, traversal.budget, dynamic_plan, scalar_read_binding)
         BinaryValue.string(type, raw)
       when BinaryDataType::TAG_BOOL
         context = if binding = scalar_read_binding
@@ -924,6 +951,158 @@ module CrystalClick
         raw = data_context.read_slice(width.to_u64)
         BinaryValue.fixed(type, raw)
       end
+    end
+
+    private def self.decode_dynamic_value(
+      type : BinaryDataType,
+      path : String,
+      depth : Int,
+      contexts : Hash(String, BinaryCodecContext),
+      traversal : BinaryCodecContext,
+      profile : BinaryBulkProfile,
+      low_cardinality_values : Hash(String, Array(BinaryValue)),
+      low_cardinality_cursors : Hash(String, Int32),
+      dynamic_plan : BinaryDynamicBulkPlan?,
+      qbit_roles : Array(String)?,
+      qbit_role_offset : Int32,
+      qbit_site_roles : Hash(String, Tuple(QBitType, Array(String)))?,
+      json_object_reader : BinaryDynamicBulkJsonObjectReader?,
+      shared_value_depth_origin : Int,
+      dynamic_read_bindings : DynamicMarkReadBindings?,
+      borrow_string_slices : Bool,
+    ) : BinaryValue | Bytes
+      plan = dynamic_plan || corrupt!("binary Dynamic value has no structure plan")
+      site_binding = dynamic_read_bindings.try(&.site(path))
+      discriminator_context = if binding = site_binding
+                                context_for_bound_role(binding.discriminator_context, binding.discriminator_path_work, traversal.budget, dynamic_plan)
+                              else
+                                context_for_path_role(contexts, path, ".discriminators", nil, traversal.budget, dynamic_plan)
+                              end
+      discriminator = discriminator_context.read_byte
+      if discriminator == 0xff_u8
+        return BinaryValue.dynamic(type)
+      end
+
+      index = discriminator.to_i
+      arm_count = site_binding.try(&.arm_count) || plan.arm_count(path)
+      if index >= arm_count
+        corrupt!("Dynamic bulk discriminator is outside its actual arm roster")
+      end
+      arm_binding = site_binding.try(&.arm(index))
+      selected_path = if binding = arm_binding
+                        charge_cached_path_work(binding.path_work, traversal.budget) if dynamic_plan
+                        binding.path
+                      else
+                        child_path(path, ".arm.", index, traversal.budget, dynamic_plan)
+                      end
+      shared_index = site_binding.try(&.shared_index) || plan.shared_index(path)
+      if index == shared_index
+        # Preflight Dynamic-to-descriptor before the shared scalar helper
+        # visits the descriptor. It then owns descriptor-to-value accounting.
+        traversal.preflight_children(1_u64)
+        data_context = if binding = arm_binding
+                         work = binding.data_path_work || corrupt!("Dynamic shared String arm has no bound data work")
+                         context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
+                       else
+                         context_for_path_role(contexts, selected_path, ".data", nil, traversal.budget, dynamic_plan)
+                       end
+        envelope_size = if profile.with_size_stream?
+                          size_context = if binding = arm_binding
+                                           work = binding.string_sizes_path_work || corrupt!("Dynamic shared String arm has no bound size work")
+                                           context_for_bound_role(binding.string_sizes_context, work, traversal.budget, dynamic_plan)
+                                         else
+                                           context_for_path_role(contexts, selected_path, ".string_sizes", nil, traversal.budget, dynamic_plan)
+                                         end
+                          read_u64(size_context)
+                        else
+                          data_context.read_var_uint
+                        end
+        envelope = data_context.read_slice(envelope_size)
+        shared_scalar_depth = depth.to_i64 + shared_value_depth_origin.to_i64
+        traversal.ensure_depth(shared_scalar_depth)
+        if borrow_string_slices
+          _child_type, child_value, string_slice = BinaryValueCodec.decode_dynamic_bulk_child_with_string_slice(
+            envelope,
+            traversal.budget,
+            shared_scalar_depth.to_i32,
+            true,
+            allow_json: true,
+            allow_aggregate_function: true,
+            allow_recursive_qbit: true,
+          )
+          return string_slice if string_slice
+          BinaryValue.dynamic(type, child_value)
+        else
+          _child_type, child_value = BinaryValueCodec.decode_dynamic_bulk_child(
+            envelope,
+            traversal.budget,
+            shared_scalar_depth.to_i32,
+            true,
+            allow_json: true,
+            allow_aggregate_function: true,
+            allow_recursive_qbit: true,
+          )
+          BinaryValue.dynamic(type, child_value)
+        end
+      else
+        child_type = arm_binding.try(&.type) || plan.arm_type(path, index)
+        leaf_key = if arm_binding
+                     arm_binding.json_leaf_key
+                   elsif child_type.contains_json?
+                     BinaryDynamicJsonLeafKey.new(path, index, [] of Int32)
+                   else
+                     nil
+                   end
+        traversal.preflight_children(1_u64)
+        traversal.ensure_depth(depth + 1)
+        ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings, arm_binding)
+        if borrow_string_slices && child_type.tag == BinaryDataType::TAG_STRING
+          traversal.visit_node(depth + 1)
+          read_string_lane_slice(selected_path, contexts, profile, traversal.budget, dynamic_plan, arm_binding)
+        else
+          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, leaf_key, shared_value_depth_origin, dynamic_read_bindings, arm_binding)
+          BinaryValue.dynamic(type, child)
+        end
+      end
+    end
+
+    # Read exactly one String occurrence through the common sized or inline
+    # lane cursor. The caller owns its node visit so normal recursive decoding
+    # and the borrowed Dynamic root have identical receipts.
+    private def self.read_string_lane_slice(
+      path : String,
+      contexts : Hash(String, BinaryCodecContext),
+      profile : BinaryBulkProfile,
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+      scalar_read_binding : DynamicArmReadBinding?,
+    ) : Bytes
+      if profile.with_size_stream?
+        size_context = if binding = scalar_read_binding
+                         work = binding.string_sizes_path_work || corrupt!("Dynamic String arm has no bound size work")
+                         context_for_bound_role(binding.string_sizes_context, work, budget, dynamic_plan)
+                       else
+                         context_for_path_role(contexts, path, ".string_sizes", nil, budget, dynamic_plan)
+                       end
+        size = read_u64(size_context)
+        data_context = if binding = scalar_read_binding
+                         work = binding.data_path_work || corrupt!("Dynamic String arm has no bound data work")
+                         context_for_bound_role(binding.data_context, work, budget, dynamic_plan)
+                       else
+                         context_for_path_role(contexts, path, ".data", nil, budget, dynamic_plan)
+                       end
+        raw = data_context.read_slice(size)
+      else
+        data_context = if binding = scalar_read_binding
+                         work = binding.data_path_work || corrupt!("Dynamic String arm has no bound data work")
+                         context_for_bound_role(binding.data_context, work, budget, dynamic_plan)
+                       else
+                         context_for_path_role(contexts, path, ".data", nil, budget, dynamic_plan)
+                       end
+        size = data_context.read_var_uint
+        raw = data_context.read_slice(size)
+      end
+      Bytes.new(raw.to_unsafe, raw.size, read_only: true)
     end
 
     private def self.child_path(

@@ -215,10 +215,10 @@ def install(root: Path) -> None:
     )
     replace_once(
         "object_shared_advanced_chunk_codec.cr",
-        "          decoded = decode_path_for_copy_verification(path, row_count, budget, profile, nested_context)\n\n"
+        "          decoded = decode_path_for_column_verification(path, row_count, budget, profile, nested_context)\n\n"
         "          row_index = 0\n",
         "          diagnostic_data_decode_started = Time.instant\n"
-        "          decoded = decode_path_for_copy_verification(path, row_count, budget, profile, nested_context)\n"
+        "          decoded = decode_path_for_column_verification(path, row_count, budget, profile, nested_context)\n"
         "          CrystalClick::CompactJSONScanProbeCounters.record_path_data_decode!(\n"
         "            path.name, row_count.to_u64, path.streams.data_size.to_u64,\n"
         "            (Time.instant - diagnostic_data_decode_started).total_nanoseconds.to_u64,\n"

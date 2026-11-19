@@ -31,6 +31,13 @@ module CrystalClick
       Bytes.new(@data.size) { |index| @data[index] }
     end
 
+    # :nodoc:
+    # Read-only internal view into the detached Data owner. Callers retaining
+    # this slice must retain this ObjectSharedPathStreams instance as well.
+    def data_view : Bytes
+      Bytes.new(@data.to_unsafe, @data.size, read_only: true)
+    end
+
     def events : Array(ObjectSharedPathSubstreamEvent)
       @events.dup
     end

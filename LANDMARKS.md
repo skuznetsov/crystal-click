@@ -89,6 +89,14 @@
   Visible Data decode frames accounted for 1,568 waits. Refresh the
   [post-slice profile](docs/COMPACT_JSON_SCAN_BENCHMARK.md#overflow-profile-after-copy-string-slices)
   after changes to Data ownership, ordinary decode, worker scheduling, or Boehm.
+- Compact columnar SharedData verifies exact Dynamic `String` Data values
+  as read-only slices of the normalized lanes before delivering each batch.
+  On the same overflow part against `05ee0c7`, read allocations fell 20.6%
+  and read p95 fell 3.7% at one worker and 30.3% at four. The four-worker read
+  median is 1.38× the one-worker median. At four workers, 3,184 of the 3,283
+  remaining sampled Boehm mutex waits were in free-list refill. Refresh the
+  [matched Data-slice comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#shareddata-data-string-slices)
+  after changing Data ownership, decoder budgets, worker scheduling, or Boehm.
 
 ## Compressed Compact aggregate projection indexes — W301
 

@@ -645,10 +645,10 @@ module CrystalClick
       slots.times { budget.charge_node }
       binding_bytes = column_bindings_workspace_bytes(path_count)
       decoded_rows_bytes = checked_workspace_add(
-        instance_sizeof(Array(BinaryValue)).to_u64,
+        instance_sizeof(Array(ObjectSharedPathComparisonValue)).to_u64,
         checked_multiply(
           row_count.to_u64,
-          sizeof(Pointer(BinaryValue)).to_u64,
+          sizeof(ObjectSharedPathComparisonValue).to_u64,
           false,
           "path compare row slots",
         ),
@@ -666,7 +666,7 @@ module CrystalClick
           path = bucket.path_at(path_index)
           column = columns_by_index[dictionary_index]
           output.validate_workspace!(compare_workspace_bytes)
-          decoded = decode_path_for_copy_verification(path, row_count, budget, profile, nested_context)
+          decoded = decode_path_for_column_verification(path, row_count, budget, profile, nested_context)
 
           row_index = 0
           column.each_cell_representation_in_range(row_offset, row_count) do |copy_row, copy_cell|
@@ -678,8 +678,16 @@ module CrystalClick
               raise CorruptPartError.new("Object shared Copy column contains duplicate or out-of-range rows")
             end
             dynamic_value = decoded.row_at(row_index)
-            unless !dynamic_value.is_null? && dynamic_value.child_count == 1 &&
-                   values_equal?(copy_cell, dynamic_value.child_at(0), budget, 1)
+            equal = case dynamic_value
+                    when BinaryValue
+                      !dynamic_value.is_null? && dynamic_value.child_count == 1 &&
+                        values_equal?(copy_cell, dynamic_value.child_at(0), budget, 1)
+                    when Bytes
+                      values_equal?(copy_cell, dynamic_value, budget, 1)
+                    else
+                      false
+                    end
+            unless equal
               raise CorruptPartError.new("Object shared Copy value disagrees with its per-path Dynamic row")
             end
             row_index += 1
@@ -734,6 +742,43 @@ module CrystalClick
       decoded
     end
 
+    private def self.decode_path_for_column_verification(
+      path : ObjectSharedPhysicalPath,
+      row_count : Int32,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      nested_context : ObjectSharedNestedSerializationContext?,
+    ) : ObjectSharedPathComparisonResult
+      streams = path.streams
+      budget.ensure_wire_bytes(streams.data_size.to_u64)
+      budget.ensure_future_elements(streams.event_count.to_u64)
+      decoded = if context = nested_context
+                  ObjectSharedPathCodec.decode_for_copy_verification_with_json_children_with_budget(
+                    streams.data_view,
+                    streams.events,
+                    row_count,
+                    BinaryDataType.dynamic(max_types: JSON_DYNAMIC_MAX_TYPES),
+                    budget,
+                    context,
+                    profile,
+                    streams.coordinate_context,
+                  )
+                else
+                  ObjectSharedPathCodec.decode_for_copy_verification_with_structures_with_budget(
+                    streams.data_view,
+                    streams.events,
+                    row_count,
+                    DYNAMIC_TYPE,
+                    budget,
+                    profile: profile,
+                  )
+                end
+      unless decoded.row_count == row_count
+        raise CorruptPartError.new("Object shared path Dynamic row count disagrees with Copy")
+      end
+      decoded
+    end
+
     private def self.column_bindings_workspace_bytes(path_count : UInt64) : UInt64
       references = checked_multiply(
         path_count,
@@ -761,6 +806,15 @@ module CrystalClick
       end
     end
 
+    private def self.ensure_absent_path_value!(value : ObjectSharedPathComparisonValue) : Nil
+      case value
+      when BinaryValue
+        ensure_absent_path_value!(value)
+      when Bytes
+        raise CorruptPartError.new("absent Object shared path has a non-NULL Dynamic row")
+      end
+    end
+
     private def self.values_equal?(
       left : CompactJsonColumnarCell,
       right : BinaryValue,
@@ -780,6 +834,33 @@ module CrystalClick
       return false unless bytes.size == right.byte_size
       budget.charge_elements(bytes.size.to_u64)
       right.string_payload_equals?(bytes)
+    end
+
+    private def self.values_equal?(
+      left : CompactJsonColumnarCell,
+      right : Bytes,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+    ) : Bool
+      budget.visit_node(depth)
+      return false unless left.type == CompactJsonColumnarCell::STRING_TYPE
+      return false if left.is_null?
+      left_size = if bytes = left.borrowed_string_bytes?
+                    bytes.size
+                  elsif value = left.owned_value?
+                    value.byte_size
+                  else
+                    return false
+                  end
+      return false unless right.size == left_size
+      budget.charge_elements(right.size.to_u64)
+      if bytes = left.borrowed_string_bytes?
+        bytes == right
+      elsif value = left.owned_value?
+        value.string_payload_equals?(right)
+      else
+        false
+      end
     end
 
     private def self.values_equal?(
