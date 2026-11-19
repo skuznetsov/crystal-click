@@ -63,6 +63,11 @@ the comparison. Run the comparison a second time with
 `--native-read-allocations` and a separate report path for native allocation
 counts on macOS with `ENABLE_LIBRARIES=OFF`.
 
+For a Crystal-only comparison, supply `--baseline-crystal-bin` and omit
+`--cpp-bin` and `--native-read-allocations`. Both binaries go through the
+same schedule, RowBinary, and post-open checksum checks. Use `86b3225` in
+the `git archive` command to reproduce the empty child storage baseline.
+
 The public callback and source-binding checks use both fixture directories.
 
 ```sh
@@ -85,9 +90,10 @@ mark batch in the read timer. The public columnar API uses the same decoder
 and validates the source immediately before each ordered callback. The C++
 runner calls `IMergeTreeReader::readRows` into reusable typed columns with synchronous
 `pread` and no shared uncompressed, mark, or prefix caches. The comparison
-driver rotates through all six runner orders, verifies worker assignments,
-and hashes the part files before and after the run. Worker and part startup
-are recorded separately.
+driver rotates runner orders, verifies worker assignments, and hashes the
+part files before and after the run. Worker and part startup are recorded
+separately. The native workers construct their `IMergeTreeReader` instances
+during preparation and reuse them for each timed read.
 
 The read timer includes dispatch, decompression, and production of the retained
 output. Serialization follows on the coordinator and has a separate timer.
@@ -101,6 +107,51 @@ includes `realloc` requests and captures allocator traffic from all workers.
 Boehm bytes and system requested bytes use their respective allocator
 accounting. The timing run leaves the native observer disabled.
 
+## Shared empty child storage results
+
+`BinaryValue` reuses one private empty child array for values with no
+children. It still takes ownership of scalar bytes and copies nonempty child
+arrays. Calls to `elements` return detached arrays, including empty ones.
+In a separate Release probe retaining 25,000 String values with four-byte
+payloads and one shared type descriptor, Boehm allocated 64 fewer bytes per
+retained value, from 248.04 to 184.04 bytes.
+
+Both runners used the `columnar` backend on Crystal 1.22.3 Release with
+LLVM 23.1.5 and Boehm 8.2.12 enabled. The Apple M2 Max and macOS 26.6.2
+host had background activity. The `86b3225` baseline and the candidate
+ran in alternating order with eight blocks, two warmups, and six timed
+scans per block for each part and worker count. The part manifests and
+RowBinary hashes matched the previous fixtures. All 384 timed scans and
+128 warmups matched ordered RowBinary.
+Both runners at both worker counts rejected a post-open checksum mutation
+on each part. The driver also rejected an oracle with one changed byte and
+the original length.
+
+| Compact part | Workers | Baseline read p50 / p95, ms | Shared empty array read p50 / p95, ms | Read allocations p50, MiB before → after | Combined p50 / p95, ms before → after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| No overflow | 1 | 10.645 / 11.976 | 9.825 / 10.640 | 23.980 → 21.409 | 17.962 / 19.329 → 16.603 / 17.876 |
+| No overflow | 4 | 21.784 / 26.607 | 19.486 / 23.921 | 23.992 → 21.417 | 29.433 / 34.584 → 25.990 / 31.790 |
+| SharedData overflow | 1 | 40.673 / 43.236 | 36.553 / 39.789 | 98.845 → 92.275 | 57.488 / 65.644 → 54.624 / 60.969 |
+| SharedData overflow | 4 | 87.850 / 96.692 | 80.576 / 86.224 | 98.860 → 92.288 | 104.091 / 114.093 → 98.737 / 105.022 |
+
+Read p50 fell by 7.7–10.6% and p95 by 8.0–11.2%. The median paired read
+time change was negative in 31 of 32 blocks. Median read collections
+on the overflow part moved from three to two at one worker and stayed at
+two at four workers. Overflow serialization p50 rose from 16.810 to 17.831
+ms at one worker and from 16.219 to 18.513 ms at four workers. The combined
+median fell by about 5% at both worker counts. Four workers still took 2.20×
+the one-worker read median on that part. The ClickHouse measurements below
+are from the earlier campaign.
+
+The four targeted Release suites passed 40 examples, including ownership of
+empty child arrays, the two fixture-backed scans, validly encoded Copy and
+Data disagreements, and source changes between callbacks.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `86b3225` columnar Release runner | `3dbf629fa6700c307967f581e2b638bd33d7e3262749370351a1da0b7e8efe28` |
+| Shared empty child storage Release runner | `e44c352bcc79dd77693b4faf28e82b6e506c7b4be543aa5e0259a8afdf889185` |
+
 ## Direct SharedData columnar results
 
 Both Crystal binaries use the `columnar` backend. The baseline is `9b5e65a`.
@@ -113,7 +164,8 @@ Both readers verify the compressed frames they read. For this full-column
 MRK4 read, ClickHouse uses the mark-seek callback to skip the per-path Data
 and populates SharedData from Copy. The Crystal read timer includes the
 per-path Data comparison, part plan construction, and the source rechecks at
-mark boundaries. RowBinary equality is checked after the read timers.
+mark boundaries. RowBinary equality is checked after the read timers. The
+read latencies describe the work of each engine with its validation path.
 [ClickHouse Compact reader](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/Storages/MergeTree/MergeTreeReaderCompact.cpp#L258-L277),
 [SharedData serializer](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationObjectSharedData.cpp#L1548-L1770).
 
@@ -126,7 +178,9 @@ all 576 measurements and 192 warmups per pass matched the RowBinary bytes
 in mark order. The twelve post-open checksum mutations per pass were
 rejected. The `data.bin`, `.mrk4`, and RowBinary hashes matched the previous
 fixtures. Combined latency takes percentiles of the sum of read and
-serialization times for each sample.
+serialization times for each native sample. Crystal measures the contiguous
+interval from plan construction through serialization, which also includes
+the post-read GC counter snapshots and mark ordering.
 
 | Compact part | Reader | Workers | Read p50 / p95, ms | Serialize p50 / p95, ms | Combined p50 / p95, ms |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -189,8 +243,7 @@ pass checked all 576 measured reads and 192 warmups against the ordered
 RowBinary export and rejected the six post-open checksum mutations.
 
 The `shared` and `columnar` modes used the same Crystal executable. The
-combined column takes percentiles of read plus serialization per sample.
-The times below come from the pass with the native allocation observer off.
+times below come from the pass with the native allocation observer off.
 
 | Compact part | Reader | Workers | Read p50 / p95, ms | Serialize p50 / p95, ms | Combined p50 / p95, ms |
 | --- | --- | ---: | ---: | ---: | ---: |

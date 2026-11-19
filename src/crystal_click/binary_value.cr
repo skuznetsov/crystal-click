@@ -5,6 +5,8 @@ module CrystalClick
   class BinaryValue
     getter type : BinaryDataType
 
+    private EMPTY_ELEMENTS = [] of BinaryValue
+
     @payload : Bytes?
     @elements : Array(BinaryValue)
     @null : Bool
@@ -15,14 +17,14 @@ module CrystalClick
     private def initialize(
       @type : BinaryDataType,
       payload : Bytes? = nil,
-      elements : Array(BinaryValue) = [] of BinaryValue,
+      elements : Array(BinaryValue) = EMPTY_ELEMENTS,
       @null : Bool = false,
       @variant_index : UInt8? = nil,
       @qbit_value : QBitValue? = nil,
       @json_row : BinaryJsonRow? = nil,
     )
       @payload = payload.try { |bytes| Bytes.new(bytes.size) { |index| bytes[index] } }
-      @elements = elements.dup
+      @elements = elements.empty? ? EMPTY_ELEMENTS : elements.dup
     end
 
     # Construct raw bytes for a fixed-width numeric/float leaf or FixedString.
@@ -70,7 +72,7 @@ module CrystalClick
       unless type.tag == BinaryDataType::TAG_QBIT && type.qbit_type == value.type
         raise ArgumentError.new("QBit value type does not match its nominal descriptor")
       end
-      new(type, nil, [] of BinaryValue, false, nil, value)
+      new(type, nil, EMPTY_ELEMENTS, false, nil, value)
     end
 
     # Retain one immutable storage-body value beneath a nominal Custom Geo
@@ -91,7 +93,7 @@ module CrystalClick
       unless type.tag == BinaryDataType::TAG_JSON && row.type == type
         raise ArgumentError.new("JSON row does not match its nominal descriptor")
       end
-      new(type, nil, [] of BinaryValue, false, nil, nil, row)
+      new(type, nil, EMPTY_ELEMENTS, false, nil, nil, row)
     end
 
     def self.string(value : String) : BinaryValue
@@ -178,7 +180,7 @@ module CrystalClick
       unless type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_NULLABLE
         raise ArgumentError.new("NULL value requires Nothing or Nullable type")
       end
-      new(type, nil, [] of BinaryValue, true)
+      new(type, nil, EMPTY_ELEMENTS, true)
     end
 
     # Dynamic retains its nominal type descriptor while carrying either NULL
@@ -208,7 +210,7 @@ module CrystalClick
       if selected = child
         new(type, nil, [selected] of BinaryValue)
       else
-        new(type, nil, [] of BinaryValue, true)
+        new(type, nil, EMPTY_ELEMENTS, true)
       end
     end
 
@@ -218,7 +220,7 @@ module CrystalClick
       unless type.tag == BinaryDataType::TAG_VARIANT
         raise ArgumentError.new("Variant NULL value requires Variant type")
       end
-      new(type, nil, [] of BinaryValue, true)
+      new(type, nil, EMPTY_ELEMENTS, true)
     end
 
     def self.variant(type : BinaryDataType, index : Int, child : BinaryValue) : BinaryValue
@@ -266,7 +268,7 @@ module CrystalClick
         end
         new(type, nil, [child] of BinaryValue, false)
       else
-        new(type, nil, [] of BinaryValue, true)
+        new(type, nil, EMPTY_ELEMENTS, true)
       end
     end
 

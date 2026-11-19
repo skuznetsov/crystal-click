@@ -50,8 +50,10 @@ def compare(options: argparse.Namespace) -> dict:
         crystal_readers["crystal_baseline"] = (
             options.baseline_crystal_bin.resolve(strict=True), options.baseline_crystal_backend,
         )
-    cpp_bin = options.cpp_bin.resolve(strict=True)
-    engines = [*crystal_readers, "clickhouse"]
+    cpp_bin = options.cpp_bin.resolve(strict=True) if options.cpp_bin else None
+    engines = list(crystal_readers)
+    if cpp_bin:
+        engines.append("clickhouse")
     orders = list(itertools.permutations(engines))
     expected = oracle.read_bytes()
     oracle_hash = sha256_path(oracle)
@@ -61,15 +63,15 @@ def compare(options: argparse.Namespace) -> dict:
     samples = []
     with tempfile.TemporaryDirectory(prefix="compact-json-read-rows-", dir=options.scratch) as directory:
         root = Path(directory).resolve()
-        # ATTACH may detach an invalid part. Only give the native runner a
-        # disposable copy, including for the checksum mutation controls.
+        # Use one disposable copy for every checksum mutation control.
+        # The native runner also uses this layout for ATTACH.
         table_id = "1c622091-4108-4184-a53d-204b0b2cb229"
         table = root / "native" / "store" / table_id[:3] / table_id
         table.mkdir(parents=True)
-        native_part = table / part.name
-        shutil.copytree(part, native_part)
-        if part_hashes(native_part) != original_hashes:
-            raise RuntimeError("native part copy differs from the original")
+        disposable_part = table / part.name
+        shutil.copytree(part, disposable_part)
+        if part_hashes(disposable_part) != original_hashes:
+            raise RuntimeError("disposable part differs from the original")
 
         def reader(engine: str, workers: int, trial: Path, selection: Path):
             if engine in crystal_readers:
@@ -91,8 +93,8 @@ def compare(options: argparse.Namespace) -> dict:
             trial.mkdir()
             # Use the same store layout for both gates, and restore before
             # any subsequent reader opens the file.
-            with reader(engine, workers, trial, native_part) as process:
-                with (native_part / "data.bin").open("r+b", buffering=0) as data:
+            with reader(engine, workers, trial, disposable_part) as process:
+                with (disposable_part / "data.bin").open("r+b", buffering=0) as data:
                     original = data.read(1)
                     if len(original) != 1:
                         raise RuntimeError("missing first frame checksum byte")
@@ -116,7 +118,7 @@ def compare(options: argparse.Namespace) -> dict:
                 with ExitStack() as stack:
                     processes = {
                         engine: stack.enter_context(reader(
-                            engine, workers, trial, part if engine in crystal_readers else native_part,
+                            engine, workers, trial, part if engine in crystal_readers else disposable_part,
                         ))
                         for engine in engines
                     }
@@ -162,7 +164,7 @@ def compare(options: argparse.Namespace) -> dict:
                                                 "pair": index - options.warmups, **sample})
                     for process in processes.values():
                         process.quit()
-        if part_hashes(native_part) != original_hashes or part_hashes(part) != original_hashes:
+        if part_hashes(disposable_part) != original_hashes or part_hashes(part) != original_hashes:
             raise RuntimeError("part files changed during the comparison")
 
     def percentiles(values: list[int]) -> dict:
@@ -197,11 +199,13 @@ def compare(options: argparse.Namespace) -> dict:
                         stats[field] = percentiles([sample[field] for sample in selected])
             summary.append({"engine": engine, "workers": workers, "sample_count": len(selected), **stats})
     report = {"part_hashes": original_hashes, "oracle_sha256": oracle_hash,
-              "crystal_binary_sha256": sha256_path(crystal_bin), "clickhouse_binary_sha256": sha256_path(cpp_bin),
+              "crystal_binary_sha256": sha256_path(crystal_bin),
               "crystal_backends": {engine: backend for engine, (_, backend) in crystal_readers.items()},
               "blocks": options.blocks, "warmups_per_block": options.warmups, "repeats_per_block": options.repeats,
               "native_read_allocations": options.native_read_allocations,
               "checksum_controls_passed": True, "summary": summary, "samples": samples}
+    if cpp_bin:
+        report["clickhouse_binary_sha256"] = sha256_path(cpp_bin)
     if options.baseline_crystal_bin:
         report["crystal_baseline_binary_sha256"] = sha256_path(crystal_readers["crystal_baseline"][0])
     return report
@@ -209,8 +213,9 @@ def compare(options: argparse.Namespace) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("part", "oracle", "crystal-bin", "cpp-bin", "scratch", "output"):
+    for name in ("part", "oracle", "crystal-bin", "scratch", "output"):
         parser.add_argument(f"--{name}", type=Path, required=True)
+    parser.add_argument("--cpp-bin", type=Path, help="built ClickHouse readRows runner")
     parser.add_argument("--baseline-crystal-bin", type=Path)
     parser.add_argument("--crystal-backend", choices=("typed", "shared", "columnar"), default="typed")
     parser.add_argument("--baseline-crystal-backend", choices=("typed", "shared", "columnar"), default="typed")
@@ -222,6 +227,10 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     if arguments.blocks < 1 or arguments.warmups < 0 or arguments.repeats < 1:
         parser.error("blocks and repeats must be positive, and warmups must be nonnegative")
+    if not (arguments.cpp_bin or arguments.baseline_crystal_bin):
+        parser.error("supply --cpp-bin, --baseline-crystal-bin, or both")
+    if arguments.native_read_allocations and not arguments.cpp_bin:
+        parser.error("--native-read-allocations requires --cpp-bin")
     report = compare(arguments)
     arguments.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report["summary"], indent=2))

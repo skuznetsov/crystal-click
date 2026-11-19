@@ -619,6 +619,43 @@ describe "W117 binary DataType and scalar value codec" do
     array_value.elements.size.should eq(1)
   end
 
+  it "shares empty child storage without exposing it through values or inputs" do
+    string_type = w117_type("String")
+    first_empty_string = CrystalClick::BinaryValue.string(string_type, Bytes[])
+    second_empty_string = CrystalClick::BinaryValue.string(string_type, Bytes[])
+    nullable_string = CrystalClick::BinaryDataType.nullable(string_type)
+    first_empty_nullable = CrystalClick::BinaryValue.null(nullable_string)
+    second_empty_nullable = CrystalClick::BinaryValue.null(nullable_string)
+    first_hash = first_empty_string.hash
+    nullable_hash = first_empty_nullable.hash
+
+    first_children = first_empty_string.elements
+    nullable_children = first_empty_nullable.elements
+    first_children << CrystalClick::BinaryValue.uint64(1_u64)
+    nullable_children << CrystalClick::BinaryValue.string("outside")
+
+    first_children.size.should eq(1)
+    nullable_children.size.should eq(1)
+    first_empty_string.elements.should be_empty
+    first_empty_nullable.elements.should be_empty
+    first_empty_string.element_count.should eq(0)
+    first_empty_nullable.child_count.should eq(0)
+    first_empty_string.should_not eq(second_empty_string)
+    first_empty_nullable.should_not eq(second_empty_nullable)
+    first_empty_string.hash.should eq(first_hash)
+    first_empty_nullable.hash.should eq(nullable_hash)
+    expect_raises(IndexError) { first_empty_string.element_at(-1) }
+    expect_raises(IndexError) { first_empty_nullable.child_at(-1) }
+
+    array_type = CrystalClick::BinaryDataType.array(string_type)
+    source_elements = [] of CrystalClick::BinaryValue
+    empty_array = CrystalClick::BinaryValue.array(array_type, source_elements)
+    source_elements << CrystalClick::BinaryValue.string("added later")
+    empty_array.elements.should be_empty
+    empty_array.element_count.should eq(0)
+    expect_raises(IndexError) { empty_array.element_at(-1) }
+  end
+
   it "rejects inconsistent value payload types, widths, and container arity" do
     expect_raises(ArgumentError) do
       CrystalClick::BinaryValue.fixed(w117_type("Int64"), Bytes[0x01_u8])

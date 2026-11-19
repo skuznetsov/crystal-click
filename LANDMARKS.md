@@ -41,6 +41,10 @@
   appends Copy values by bound column ordinal and verifies every populated
   cell and gap against per-path Data. The scan authenticates the source before
   each callback and reuses the worker's output when the callback returns.
+  The pinned native full-document MRK4 reader gets SharedData values from
+  Copy. The matched Crystal comparison measures leaf allocation changes
+  with Copy/Data and source checks in both builds. See the
+  [allocation comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#shared-empty-child-storage-results).
   Refresh the [retained readRows comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#direct-shareddata-columnar-results)
   after changing the output lifetime, source checks, JSON or SharedData
   decode, worker schedule, allocator, or native pin.
