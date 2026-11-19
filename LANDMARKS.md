@@ -82,6 +82,13 @@
   [Copy slice comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#shareddata-copy-string-slices)
   after changing Copy ownership, cell accounting, verification, worker
   delivery, or the allocator.
+- At `05ee0c7`, on the same overflow part, four-worker Copy decode p50
+  was 0.306 ms on the slowest worker. Ordinary decode and Data decode
+  took 18.111 and 13.168 ms. Boehm mutex waits accounted for 3,351 of
+  4,970 sampled decode stacks, with 3,098 under `GC_generic_malloc_many`.
+  Visible Data decode frames accounted for 1,568 waits. Refresh the
+  [post-slice profile](docs/COMPACT_JSON_SCAN_BENCHMARK.md#overflow-profile-after-copy-string-slices)
+  after changes to Data ownership, ordinary decode, worker scheduling, or Boehm.
 
 ## Compressed Compact aggregate projection indexes — W301
 

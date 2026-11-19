@@ -478,11 +478,11 @@ sorting and fetch the deferred columns for the selected rows. The full
 [SharedData path selection](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationObjectSharedData.cpp#L1476-L1485),
 [query-plan lazy materialization](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/Processors/QueryPlan/Optimizations/optimizeLazyMaterialization.cpp#L748-L787).
 
-Crystal decodes each Copy value into a `BinaryValue`, independently decodes
-per-path Data into temporary Dynamic values, and compares exact types, values,
-and presence before yielding a batch. Ordinary typed and Dynamic columns still
-construct per-value objects. The part plan also reopens source metadata and
-rehashes its authenticated frame set before a batch can be delivered. These
+At `87bf8da`, Crystal decoded each Copy value into a `BinaryValue`. The reader
+independently decodes per-path Data into temporary Dynamic values and compares
+exact types, values, and presence before yielding a batch. Ordinary typed and
+Dynamic columns still construct per-value objects. The part plan reopens source
+metadata and rehashes its authenticated frame set before delivering a batch. These
 checks cover valid-checksum Copy/Data disagreements and in-place source
 changes as well as failed compression checksums. Moving decode and comparison
 to bound column buffers can reduce object churn while preserving these checks.
@@ -758,6 +758,119 @@ callbacks.
 | Copy String slices Release runner | `913532d9165e055cece07ac46e40faeb7649a61b202b0fa794dd6325eab70493` |
 | Matched overflow report | `9dd98f0eda1c324735c921f257e3770eb14a2c0a84e7bc328f8ca0a5abf68973` |
 | No-overflow control report | `4cf8a41aede33d6fa9a694f62cd194dc38d6a7605ab906b3e8c91800ad662018` |
+
+### Overflow profile after Copy String slices
+
+The stock and stage-diagnostic Release runners used `05ee0c7` on the same
+8,192-row overflow part and four 2,048-row marks as the preceding profile.
+ClickHouse 26.10.1.1201 regenerated matching `data.bin`, `data.mrk4`, and
+ordered `id, toJSONString(doc)` RowBinary SHA-256 values. Both runners used
+Crystal 1.22.3, LLVM 23.1.5, and Boehm 8.2.12 on Apple M2 Max with macOS
+26.6.2 and `-Dpreview_mt -Dexecution_context`.
+
+Eight interleaved blocks gave 48 timed scans and 16 warmups per runner and
+worker count. All 192 timed outputs matched the 1,922,070-byte RowBinary
+oracle byte for byte. Read time includes part preparation, columnar decode,
+Copy/Data comparison and source checks. The combined timer also includes
+ordered RowBinary serialization. Verification of the serialized bytes follows
+each sample. The allocation counters cover the read interval across the
+whole process.
+
+| Workers | Stock read p50 / p95, ms | Stock read + RowBinary p50 / p95, ms | Read allocation p50 / p95, MiB | Read collections p50 / p95 |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 23.107 / 26.456 | 37.990 / 43.895 | 50.291 / 50.313 | 1 / 2 |
+| 4 | 40.569 / 53.668 | 55.883 / 69.400 | 50.313 / 50.342 | 1.5 / 4 |
+
+| Workers | Diagnostic read | Slowest worker | Ordinary path decode | Copy decode | Data decode | Copy/Data equality |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 23.772 / 27.305 | 15.592 / 17.524 | 8.160 / 9.775 | 1.323 / 1.572 | 3.950 / 6.138 | 0.708 / 0.968 |
+| 4 | 40.832 / 46.512 | 32.734 / 37.431 | 18.111 / 24.137 | 0.306 / 0.705 | 13.168 / 15.978 | 0.334 / 0.599 |
+
+Stage times are p50 / p95 in milliseconds for the slowest worker in
+each scan and include time waiting on the allocator. Percentiles across
+stages describe separate distributions. Diagnostic read p50 was 2.9% above
+stock with one worker and 0.6% above with four. The four-worker diagnostic
+p95 was 13.3% lower than stock in this shared-host run. Use the stock read
+series for latency comparisons and the diagnostic series to locate work.
+Each diagnostic scan inflated 16 LZ4 frames, checked their source five
+times, and decoded and compared 24,576 SharedData path rows.
+
+Copy decode p50 moved from 18.437 to 0.306 ms on the slowest of four
+workers across the two profiles. Data verification and ordinary decode
+now dominate the worker's measured phases. Data decode includes the
+path cursor setup and value construction. Ordinary decode includes
+declared typed and promoted Dynamic paths. At four workers, the largest
+ordinary path medians were `dynamic_flag` at 4.973 ms and `rank` at
+4.625 ms. These phases include allocator waits, and the profile does not
+attribute allocated bytes to individual paths.
+
+The one-mark `first` control used one active worker for either request
+count and matched the first 479,497 bytes of the full oracle. With four
+workers requested, seven control scans gave Copy, Data, and ordinary
+decode medians of 0.296, 1.435, and 2.362 ms. Worker 0 processed the same
+mark in the four-active-worker run at 0.304, 11.661, and 18.955 ms,
+respectively. The control compares the same logical mark with one or four
+workers active. It uses a separate timing series on the shared host.
+
+Three fresh two-second `/usr/bin/sample PID 2 1 -file FILE` captures per
+worker count sampled the stock binary. Each runner completed two warmups
+and 24 checked scans. Counts use exclusive stack weights on named
+`compact-json-worker-*` threads under
+`ObjectDocumentCodec.decode_core_with_budget`. A Boehm wait is a
+`__psynch_mutexwait` leaf with pthread mutex and libgc ancestors.
+
+| Workers | Decode stacks | Boehm mutex waits by capture | Boehm mutex waits, pooled | In a collection stack, pooled |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 891 | 1/293, 3/288, 7/310 | 11/891 (1.2%) | 138/891 (15.5%) |
+| 4 | 4,970 | 1,091/1,652, 1,032/1,505, 1,228/1,813 | 3,351/4,970 (67.4%) | 136/4,970 (2.7%) |
+
+At four workers, 3,098 of the 3,351 waits were under
+`GC_generic_malloc_many`, the thread-local free-list refill. One wait
+included a collection frame. Visible Data decoder frames accounted for
+1,568 waits, ordinary decode frames for 793, and Copy decoder frames for
+two. Inlining leaves some stacks without a visible owning stage. These
+percentages describe sampled worker occupancy. The stock read median and
+p95 were 1.76 and 2.03 times the one-worker times.
+[Boehm free-list refill](https://github.com/bdwgc/bdwgc/blob/v8.2.12/include/gc_inline.h#L87-L104).
+
+Both runners at both worker counts rejected post-open checksum mutations
+at `data.bin[0]` and at `data.bin[30030]` in a Data-only frame, and
+rejected a one-byte change to the same-length RowBinary oracle. The
+original part hashes were restored after each mutation. All 19 focused
+Release examples passed, including validly encoded Copy/Data type and
+payload disagreements, absent Copy cells, and source validation between
+split-batch callbacks.
+[Direct column checks](../spec/object_shared_advanced_direct_columns_w263_spec.cr),
+[part plan checks](../spec/compact_shared_advanced_json_part_plan_spec.cr).
+
+The first candidate to measure is a checked Data cursor for scalar
+`String` arms. Consume discriminators and sizes in row order and compare
+borrowed Data bytes with the existing Copy cells before delivery. This can
+remove temporary Dynamic wrappers, child arrays, and String payload copies.
+Keep exact presence, type, budget, and source validation and use the
+recursive decoder for other layouts. If a path needs reusable scratch,
+store row or type indexes, byte offsets, and lengths in a bounded
+worker-local array of structs. Keep the prepared lane alive while borrowing
+bytes from it.
+[Data verification](../src/crystal_click/object_shared_advanced_chunk_codec.cr#L630-L735),
+[Data path decoder](../src/crystal_click/object_shared_path_codec.cr#L241-L343).
+
+Ordinary fields have the largest remaining phase on this fixture. Start
+with the `Nullable(UInt32)` `rank` path and scalar arms of `dynamic_flag`.
+Write primitive values, presence bits, and type tags into reusable column
+buffers. The existing Copy cell already stores a struct inline, and
+the field column already reuses its backing arrays. Removing the
+per-occurrence `BinaryValue` and its owned payloads targets the remaining
+allocation hot path. Measure allocated bytes and four-worker read p95
+against the same marks and verification again after each change.
+[Ordinary decode and column append](../src/crystal_click/object_document_codec.cr#L1049-L1120),
+[columnar cells](../src/crystal_click/compact_json_columnar_cell.cr#L5-L16).
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Stock Release runner | `61160c1bc5b32bcc13b508c891de1a184b4563378bb510ba1f8cfabffd97b896` |
+| Diagnostic Release runner | `86456a7e0370e3eb7bc681499f93d197ba4a5cbf27f4c8ca18ba34469121b773` |
+| Matched timing report | `fbdb2dcc96929acdb217a712f216dca86de88b4785ee0f37dc67170fa581f9a6` |
 
 ### Previous shared-plan diagnostics
 
