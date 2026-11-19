@@ -376,15 +376,109 @@ output reset after serialization was 0.015/0.016 ms and is recorded separately.
 
 ## Crystal diagnostics
 
-Use an isolated source copy and apply the diagnostic hooks. The instrumented
-binary accepts one worker. `none`, `first`, and `all` select 0, 1, or 4 marks.
-Preparation time encloses the full-window read, its checksum and decompression,
-and the JSON plan work. The source recheck timer measures current-path
-validation during preparation and after worker output. The checksum and
-decompression counters count frames read for decoding. The recheck counter
-counts the frames hashed by source validation. Count-only physical ranges
-include empty substreams. Use the uninstrumented binaries for wall-time
-comparisons.
+### Boehm and decoder stack samples
+
+The uninstrumented `87bf8da` Release runner scanned the two hash-matched
+fixtures with Boehm enabled. On macOS, `/usr/bin/sample PID 2 1 -file FILE`
+sampled the retained runner three times per part and worker count. For each
+file, a fresh interactive `columnar` runner completed two warmups and up to
+24 `scan` commands while the sampler ran. Each scan passed the ordered
+RowBinary check. The stack denominator is the number of sampled stacks in
+`ObjectDocumentCodec.decode_core_with_budget` on the named JSON workers. It
+excludes the idle workers, main thread, and Boehm marker threads. Fractions
+are inclusive and can overlap. Blocked threads contribute to these counts.
+
+| Compact part | Workers | JSON decode stacks | In Boehm | In a Boehm mutex wait | In a collection stack | Under `BinaryValue.new` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| No overflow | 1 | 444 | 45.9% | 3.4% | 16.4% | 31.1% |
+| No overflow | 4 | 3,589 | 89.9% | 71.2% | 2.1% | 52.3% |
+| SharedData overflow | 1 | 2,059 | 47.5% | 1.6% | 13.2% | 18.6% |
+| SharedData overflow | 4 | 12,040 | 88.1% | 65.6% | 1.5% | 17.0% |
+
+With four workers, 2,551 of 2,557 mutex-wait stacks without overflow and
+7,881 of 7,900 with overflow lacked a collection frame. The no-overflow
+stacks mostly waited in `GC_generic_malloc_many`, which refills per-thread
+free lists. On overflow, `BinaryBulkDecoder.child_path` appeared in 23.7%
+of the one-worker decode stacks and 49.9% of the four-worker decode stacks.
+At four workers it was an ancestor of 4,399 mutex waits outside collection.
+The [Dynamic bulk row loop](../src/crystal_click/binary_bulk_decoder.cr#L610-L641)
+rebuilds names and looks up stream contexts for discriminators and selected
+arms. The [path builder](../src/crystal_click/binary_bulk_decoder.cr#L792-L832)
+allocates strings even when the row reads the same stream as the previous
+row. Resolving the contexts when binding the mark would remove this repeated
+work while keeping the bounds, depth, and budget checks. The stack fractions
+measure sampled thread occupancy. Use elapsed measurements for collector
+pauses and wall-time changes.
+
+### What the ClickHouse reader does
+
+The pinned native Compact reader installs a substream mark-seek callback. For
+the entire Advanced SharedData column, it reads the per-chunk path dictionaries,
+seeks past flattened per-path Data and its metadata, and reads Copy offsets,
+path indexes, and serialized values directly into column buffers. Ordinary
+declared and Dynamic paths also deserialize directly into their destination
+columns, with one serializer call per path per granule. The native reader can
+defer interpreting SharedData scalar payloads until a consumer needs them.
+[Compact mark seeks](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/Storages/MergeTree/MergeTreeReaderCompact.cpp#L256-L267),
+[Advanced SharedData](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationObjectSharedData.cpp#L1550-L1766),
+[ordinary JSON paths](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationObject.cpp#L1126-L1163).
+
+Crystal decodes each Copy value into a `BinaryValue`, independently decodes
+per-path Data into temporary Dynamic values, and compares exact types, values,
+and presence before yielding a batch. Ordinary typed and Dynamic columns still
+construct per-value objects. The part plan also reopens source metadata and
+rehashes its authenticated frame set before a batch can be delivered. These
+checks cover valid-checksum Copy/Data disagreements and in-place source
+changes as well as failed compression checksums. Moving decode and comparison
+to bound column buffers can reduce object churn while preserving these checks.
+[Crystal Copy decoder](../src/crystal_click/object_shared_copy_codec.cr#L190-L246),
+[Copy/Data check](../src/crystal_click/object_shared_advanced_chunk_codec.cr#L630-L697),
+[source validation](../src/crystal_click/compact_static_json_advanced_part_plan.cr#L259-L283).
+
+### Native compressed-frame coverage
+
+An isolated ClickHouse 26.10.1.1201 server attached the exact two fixtures.
+With `checksum_on_read=1` it selected one part and four marks per query. Each
+ordered `id, toJSONString(doc)` RowBinary result matched the reference bytes.
+The SQL profile counters below are query-wide. A single data reader appeared
+in the thread log with `max_threads=4`. The
+[direct `readRows` results](#direct-shareddata-columnar-results) provide the
+previous worker-matched timing comparison.
+
+| Compact part | Crystal `data.bin` blocks | Crystal inflated bytes | Native query blocks | Native query inflated bytes |
+| --- | ---: | ---: | ---: | ---: |
+| No overflow | 8 | 471,803 | 12 | 475,459 |
+| SharedData overflow | 16 | 1,557,142 | 16 | 1,265,710 |
+
+The frame headers and MRK4 substream offsets account for the difference. Each
+overflow mark contains one full 73,772-byte inflated frame entirely inside
+`doc.object_shared_data.1.data`. The other frame containing the end of Data
+also contains Copy. Excluding only the four Data-only frames gives 12 blocks
+and 1,262,054 inflated bytes from `data.bin`, a reduction of 295,088 bytes.
+The remaining query-wide counters add the same four blocks, 3,494 compressed
+bytes and 3,656 inflated bytes on both parts. Skipping Data therefore saves
+deserialization and also avoids inflating those four whole frames in this
+layout. Substream placement determines the physical savings.
+
+On a disposable overflow part after open, flipping the checksum byte at
+`data.bin[30030]` in the first Data-only frame left the native RowBinary and
+compressed counters identical. Flipping `data.bin[0]` in the first retained
+ID frame raised native checksum error 40. Crystal rejected the Data-only
+mutation at both worker counts. The controls restored the original part
+hashes. The native counters measure decoding of compressed blocks. An OS
+buffered read can still cover the bytes of a skipped block.
+
+### Instrumented stage counters
+
+Use an isolated source copy for the diagnostic hooks. The `columnar` backend
+accepts one or four workers. `none`, `first`, and `all` select 0, 1, or 4
+marks. The full-window read and initial source validation happen during
+part plan preparation. The source recheck timer includes that validation
+and each validation after worker output. Checksums and LZ4 are nested within
+those stages. Path timers live in individual worker slots. Use the slowest
+worker per scan for elapsed stage comparisons and the sum for aggregate worker
+work. Run the stock binary alongside the instrumented binary to measure the
+effect of instrumentation on elapsed time.
 
 ```sh
 mkdir "$bench_work/diagnostic-src"
@@ -396,18 +490,90 @@ TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
     "$bench_work/diagnostic-src/benchmarks/compact_json_scan_probe.cr" \
     -o "$bench_work/diagnostic-probe"
 
-for selection in none first all; do
-  "$bench_work/diagnostic-probe" shared "$bench_work/fixture/0_1_1_0" \
-    "$bench_work/fixture/0_1_1_0.rowbinary" 1 "$selection" retained 1 7
+for bench_fixture in fixture overflow-fixture; do
+  bench_part="$bench_work/$bench_fixture/0_1_1_0"
+  python3 -B scripts/compact_json_scan_benchmark.py \
+    --part "$bench_part" --oracle "$bench_part.rowbinary" \
+    --crystal-bin "$bench_work/diagnostic-probe" --crystal-backend columnar \
+    --baseline-crystal-bin "$bench_work/crystal-probe" --baseline-crystal-backend columnar \
+    --scratch "$bench_work" --output "$bench_work/$bench_fixture-phases.json"
+  for bench_workers in 1 4; do
+    for bench_selection in none first; do
+      "$bench_work/diagnostic-probe" columnar "$bench_part" \
+        "$bench_part.rowbinary" "$bench_workers" "$bench_selection" retained 1 7
+    done
+  done
 done
 ```
 
 An empty result in Crystal still runs the whole-grid JSON validation. An empty
 native schedule issues no `readRows` calls. For nonempty schedules, both
-readers authenticate frames they decode. The shared plan also verifies the
-authenticated source before releasing retained rows.
+readers authenticate the frames they decode. The shared Crystal plan verifies
+the authenticated source before releasing each retained batch.
 
-### Shared-plan diagnostics
+### Current stage measurements
+
+Both Crystal binaries were built from `87bf8da` using Crystal 1.22.3
+Release, LLVM 23.1.5 and Boehm 8.2.12 on an Apple M2 Max. The full selections
+used eight alternating blocks of two warmups and six timed scans. All 384
+timed reads and 128 warmups matched ordered RowBinary, the assigned marks,
+and the retained worker IDs. Eight post-open first-frame mutations failed
+with checksum errors. The diagnostic runner also rejected an oracle of the
+original length with one changed byte. The `none` and `first` controls each
+used seven timed scans after one warmup per part and requested worker count.
+These controls matched the corresponding RowBinary prefix.
+
+| Compact part | Workers | Stock read p50 / p95, ms | Stock read + RowBinary p50 / p95, ms | Boehm read MiB / collections, p50 |
+| --- | ---: | ---: | ---: | ---: |
+| No overflow | 1 | 9.901 / 10.659 | 16.936 / 18.146 | 21.411 / 1 |
+| No overflow | 4 | 17.395 / 19.813 | 24.492 / 28.021 | 21.420 / 1 |
+| SharedData overflow | 1 | 36.780 / 39.005 | 54.874 / 59.746 | 92.269 / 2 |
+| SharedData overflow | 4 | 76.629 / 81.539 | 95.032 / 101.230 | 92.286 / 2 |
+
+Instrumented read medians moved by −0.58% to +2.05% across the paired cells.
+Use these instrumented medians for stage attribution. The coordinator wait
+includes active worker work. Its difference from the slowest worker's elapsed
+time was 0.013–0.020 ms when comparing the cell medians.
+
+| Compact part | Workers | Shared plan | Source checks | CityHash | LZ4 | Dispatch | Wait for worker results |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| No overflow | 1 | 2.631 | 0.963 | 0.123 | 0.132 | 0.003 | 6.694 |
+| No overflow | 4 | 2.640 | 1.004 | 0.123 | 0.133 | 0.008 | 14.283 |
+| SharedData overflow | 1 | 6.017 | 1.015 | 0.148 | 0.187 | 0.003 | 30.364 |
+| SharedData overflow | 4 | 6.107 | 1.064 | 0.149 | 0.185 | 0.010 | 69.297 |
+
+Times above are p50 in milliseconds, and the stages overlap. The part plan
+includes LZ4 and the first source check. CityHash includes the initial frame
+checks and the hashes inside all later source checks. The full scan validates
+the source five times and rehashes 40 or 80 frames by fixture. Every selection
+inflates the full 8 or 16 frames once. The empty selection took 3.04–3.47 ms
+without overflow and 7.77–8.22 ms with overflow, with no value decoding on
+the workers.
+
+| Compact part | Workers | Slowest worker | Ordinary path decode | SharedData Copy decode | SharedData Data decode | Copy/Data equality |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| No overflow | 1 | 6.681 | 5.806 | 0.110 | 0 | 0 |
+| No overflow | 4 | 14.267 | 13.801 | 0.028 | 0 | 0 |
+| SharedData overflow | 1 | 30.344 | 8.241 | 5.289 | 12.277 | 3.415 |
+| SharedData overflow | 4 | 69.279 | 6.682 | 17.520 | 42.127 | 1.914 |
+
+Times are p50 in milliseconds from the slowest worker in each sample. Ordinary
+path decode times exclude appending the values to the output. The overflow
+case decodes and compares 24,576 SharedData cells across the part. The `first`
+case has one active worker for either requested worker count. On overflow its
+Data decode takes 4.20–4.25 ms for one mark and rises to 42.13 ms on the slowest
+worker when four workers decode one mark each. The allocation volume across
+all marks barely changes by worker count. The wait stacks show where much
+of this concurrency cost lands. Hoist Dynamic context binding out of the
+row loop first, then measure typed buffer reuse in Copy and Data while
+retaining the comparison and budget checks.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Stock `87bf8da` Release runner | `7bb7195263ebc64a3e54b00748f53c60e0c4663075a5f74c2b9aaed4baf155db` |
+| Stage diagnostic Release runner | `7129028350b16d92edf2fc145d8103d7317c82454ae7a9234caf5d90df52363d` |
+
+### Previous shared-plan diagnostics
 
 Every selection prepared one complete plan and read the shared physical
 window once. Each window inflated 471,803 bytes across eight LZ4 frames.

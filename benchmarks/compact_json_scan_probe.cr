@@ -1,124 +1,343 @@
 # One-part Compact Advanced JSON probe. Build with `--release` for wall-time
 # measurements. Define `-Dcompact_json_scan_diagnostic` in an isolated source
 # copy modified by instrument_compact_json_probe.py to collect counters separately.
-require "set"
-
 module CrystalClick
   module CompactJSONScanProbeCounters
-    @@full_window_prepare_passes = 0_u64
-    @@full_window_prepare_ns = 0_u64
-    @@read_window_calls = 0_u64
-    @@full_grid_window_reads = 0_u64
-    @@source_read_calls = 0_u64
-    @@source_range_count = 0_u64
-    @@source_nonempty_ranges = 0_u64
-    @@source_logical_bytes = 0_u64
-    @@checksum_check_calls = 0_u64
-    @@unique_checked_frames = Set(Int64).new
-    @@checksum_bytes_hashed = 0_u64
-    @@checksum_ns = 0_u64
-    @@source_recheck_calls = 0_u64
-    @@source_recheck_ns = 0_u64
-    @@source_rechecked_frames = 0_u64
-    @@decompression_calls = 0_u64
-    @@decompression_payload_bytes = 0_u64
-    @@decompressed_bytes = 0_u64
-    @@decompression_ns = 0_u64
-    @@decompression_methods = Hash(String, UInt64).new(0_u64)
+    # A keyed table keeps this diagnostics-only accounting schema compact.
+    # Updates are local to each fiber. Reduction happens once workers are idle.
+    class CounterSet
+      @values = Hash(Symbol, UInt64).new(0_u64)
 
-    def self.reset! : Nil
-      @@full_window_prepare_passes = 0_u64
-      @@full_window_prepare_ns = 0_u64
-      @@read_window_calls = 0_u64
-      @@full_grid_window_reads = 0_u64
-      @@source_read_calls = 0_u64
-      @@source_range_count = 0_u64
-      @@source_nonempty_ranges = 0_u64
-      @@source_logical_bytes = 0_u64
-      @@checksum_check_calls = 0_u64
-      @@unique_checked_frames.clear
-      @@checksum_bytes_hashed = 0_u64
-      @@checksum_ns = 0_u64
-      @@source_recheck_calls = 0_u64
-      @@source_recheck_ns = 0_u64
-      @@source_rechecked_frames = 0_u64
-      @@decompression_calls = 0_u64
-      @@decompression_payload_bytes = 0_u64
-      @@decompressed_bytes = 0_u64
-      @@decompression_ns = 0_u64
-      @@decompression_methods.clear
-    end
+      def add!(key : Symbol, amount : UInt64 = 1_u64) : Nil
+        @values[key] = @values[key] + amount
+      end
 
-    def self.record_full_window_prepare!(elapsed_ns : UInt64) : Nil
-      @@full_window_prepare_passes += 1_u64
-      @@full_window_prepare_ns += elapsed_ns
-    end
+      def value(key : Symbol) : UInt64
+        @values[key]
+      end
 
-    def self.record_read_window!(first_mark : Int, mark_count : Int, total_marks : Int) : Nil
-      @@read_window_calls += 1_u64
-      @@full_grid_window_reads += 1_u64 if first_mark == 0 && mark_count == total_marks
-    end
+      def reset! : Nil
+        @values.clear
+      end
 
-    def self.record_source_read!(ranges : Array({Int64, Int64})) : Nil
-      @@source_read_calls += 1_u64
-      @@source_range_count += ranges.size.to_u64
-      ranges.each do |start, finish|
-        next if finish == start
-        @@source_nonempty_ranges += 1_u64
-        @@source_logical_bytes += (finish - start).to_u64
+      def merge!(other : CounterSet) : Nil
+        other.@values.each { |key, amount| add!(key, amount) }
+      end
+
+      def snapshot : Hash(String, UInt64)
+        result = Hash(String, UInt64).new(initial_capacity: @values.size)
+        @values.each { |key, amount| result[key.to_s] = amount }
+        result
       end
     end
 
-    def self.record_checked_frame!(offset : Int64, compressed_size : Int64, elapsed_ns : UInt64) : Nil
-      @@checksum_check_calls += 1_u64
-      @@unique_checked_frames.add(offset)
-      @@checksum_bytes_hashed += compressed_size.to_u64
-      @@checksum_ns += elapsed_ns
+    class PathMetrics
+      @counts = CounterSet.new
+
+      def record_data_decode!(rows : UInt64, bytes : UInt64, elapsed_ns : UInt64) : Nil
+        @counts.add!(:data_decode_calls)
+        @counts.add!(:data_decode_rows, rows)
+        @counts.add!(:data_decode_bytes, bytes)
+        @counts.add!(:data_decode_ns, elapsed_ns)
+      end
+
+      def record_equality!(rows : UInt64, elapsed_ns : UInt64) : Nil
+        @counts.add!(:equality_calls)
+        @counts.add!(:equality_rows, rows)
+        @counts.add!(:equality_ns, elapsed_ns)
+      end
+
+      def record_materialization!(rows : UInt64, elapsed_ns : UInt64) : Nil
+        @counts.add!(:materialization_calls)
+        @counts.add!(:materialization_rows, rows)
+        @counts.add!(:materialization_ns, elapsed_ns)
+      end
+
+      def add!(other : PathMetrics) : Nil
+        @counts.merge!(other.@counts)
+      end
+
+      def snapshot : Hash(String, UInt64)
+        @counts.snapshot
+      end
+    end
+
+    class Slot
+      alias Snapshot = NamedTuple(
+        label: String,
+        thread_id: UInt64,
+        counters: Hash(String, UInt64),
+        shared_paths: Hash(String, Hash(String, UInt64)),
+        typed_paths: Hash(String, Hash(String, UInt64)),
+        typed_dynamic_paths: Hash(String, Hash(String, UInt64)),
+        dynamic_paths: Hash(String, Hash(String, UInt64)),
+      )
+
+      getter label : String
+      getter thread_id : UInt64
+      @counts = CounterSet.new
+      @shared_paths = Hash(String, PathMetrics).new
+      @typed_paths = Hash(String, PathMetrics).new
+      @typed_dynamic_paths = Hash(String, PathMetrics).new
+      @dynamic_paths = Hash(String, PathMetrics).new
+
+      def initialize(@label : String, @thread_id : UInt64)
+      end
+
+      def reset! : Nil
+        @counts.reset!
+        @shared_paths.clear
+        @typed_paths.clear
+        @typed_dynamic_paths.clear
+        @dynamic_paths.clear
+      end
+
+      def record_full_window_prepare!(elapsed_ns : UInt64, used_capture : Bool) : Nil
+        @counts.add!(:full_window_prepare_passes)
+        @counts.add!(:full_window_prepare_with_capture) if used_capture
+        @counts.add!(:full_window_prepare_ns, elapsed_ns)
+      end
+
+      def record_source_read!(ranges : Array({Int64, Int64})) : Nil
+        @counts.add!(:source_read_calls)
+        @counts.add!(:source_range_count, ranges.size.to_u64)
+        ranges.each do |start, finish|
+          next if finish == start
+          @counts.add!(:source_nonempty_ranges)
+          @counts.add!(:source_logical_bytes, (finish - start).to_u64)
+        end
+      end
+
+      def record_checked_frame!(compressed_size : Int64, elapsed_ns : UInt64, recheck : Bool) : Nil
+        @counts.add!(:checksum_check_calls)
+        @counts.add!(:checksum_recheck_calls) if recheck
+        @counts.add!(:checksum_bytes_hashed, compressed_size.to_u64)
+        @counts.add!(:checksum_ns, elapsed_ns)
+        @counts.add!(:checksum_recheck_ns, elapsed_ns) if recheck
+      end
+
+      def record_source_recheck!(frame_count : Int, elapsed_ns : UInt64) : Nil
+        @counts.add!(:source_recheck_calls)
+        @counts.add!(:source_recheck_ns, elapsed_ns)
+        @counts.add!(:source_rechecked_frames, frame_count.to_u64)
+      end
+
+      def record_decompression!(method : UInt8, payload_size : Int64, output_size : Int64, elapsed_ns : UInt64) : Nil
+        @counts.add!(:decompression_calls)
+        @counts.add!(:decompression_payload_bytes, payload_size.to_u64)
+        @counts.add!(:decompressed_bytes, output_size.to_u64)
+        @counts.add!(:decompression_ns, elapsed_ns)
+        case method
+        when 0x82_u8 then @counts.add!(:decompression_lz4)
+        when 0x90_u8 then @counts.add!(:decompression_zstd)
+        when 0x91_u8 then @counts.add!(:decompression_multiple)
+        else              @counts.add!(:decompression_other)
+        end
+      end
+
+      def record_copy_snapshot!(bytes : UInt64, elapsed_ns : UInt64) : Nil
+        @counts.add!(:copy_snapshot_calls)
+        @counts.add!(:copy_snapshot_bytes, bytes)
+        @counts.add!(:copy_snapshot_ns, elapsed_ns)
+      end
+
+      def record_copy_decode!(rows : UInt64, bytes : UInt64, elapsed_ns : UInt64) : Nil
+        @counts.add!(:copy_decode_calls)
+        @counts.add!(:copy_decode_rows, rows)
+        @counts.add!(:copy_decode_bytes, bytes)
+        @counts.add!(:copy_decode_ns, elapsed_ns)
+      end
+
+      def record_path_data_decode!(path : String, rows : UInt64, bytes : UInt64, elapsed_ns : UInt64) : Nil
+        path_metrics!(@shared_paths, path).record_data_decode!(rows, bytes, elapsed_ns)
+      end
+
+      def record_path_equality!(path : String, rows : UInt64, elapsed_ns : UInt64) : Nil
+        path_metrics!(@shared_paths, path).record_equality!(rows, elapsed_ns)
+      end
+
+      def record_typed_materialization!(path : String, dynamic : Bool, rows : UInt64, elapsed_ns : UInt64) : Nil
+        entries = dynamic ? @typed_dynamic_paths : @typed_paths
+        path_metrics!(entries, path).record_materialization!(rows, elapsed_ns)
+      end
+
+      def record_dynamic_materialization!(path : String, rows : UInt64, elapsed_ns : UInt64) : Nil
+        path_metrics!(@dynamic_paths, path).record_materialization!(rows, elapsed_ns)
+      end
+
+      def record_columnar_shape!(paths : UInt64, fallback_types : UInt64, elapsed_ns : UInt64) : Nil
+        @counts.add!(:columnar_shape_builds)
+        @counts.add!(:columnar_shape_paths, paths)
+        @counts.add!(:columnar_shape_fallback_types, fallback_types)
+        @counts.add!(:columnar_shape_ns, elapsed_ns)
+      end
+
+      def add!(other : Slot) : Nil
+        @counts.merge!(other.@counts)
+        merge_paths!(@shared_paths, other.@shared_paths)
+        merge_paths!(@typed_paths, other.@typed_paths)
+        merge_paths!(@typed_dynamic_paths, other.@typed_dynamic_paths)
+        merge_paths!(@dynamic_paths, other.@dynamic_paths)
+      end
+
+      def snapshot : Snapshot
+        {
+          label:               @label,
+          thread_id:           @thread_id,
+          counters:            @counts.snapshot,
+          shared_paths:        path_snapshot(@shared_paths),
+          typed_paths:         path_snapshot(@typed_paths),
+          typed_dynamic_paths: path_snapshot(@typed_dynamic_paths),
+          dynamic_paths:       path_snapshot(@dynamic_paths),
+        }
+      end
+
+      def value(key : Symbol) : UInt64
+        @counts.value(key)
+      end
+
+      def add_counter!(key : Symbol, value : UInt64) : Nil
+        @counts.add!(key, value)
+      end
+
+      private def path_metrics!(entries : Hash(String, PathMetrics), path : String) : PathMetrics
+        entries[path]? || begin
+          metrics = PathMetrics.new
+          entries[String.new(path.to_slice)] = metrics
+          metrics
+        end
+      end
+
+      private def path_snapshot(entries : Hash(String, PathMetrics)) : Hash(String, Hash(String, UInt64))
+        result = Hash(String, Hash(String, UInt64)).new(initial_capacity: entries.size)
+        entries.each { |path, metrics| result[path] = metrics.snapshot }
+        result
+      end
+
+      private def merge_paths!(destination : Hash(String, PathMetrics), source : Hash(String, PathMetrics)) : Nil
+        source.each do |path, metrics|
+          target = path_metrics!(destination, path)
+          target.add!(metrics)
+        end
+      end
+    end
+
+    @@fiber_ids = [] of UInt64
+    @@slots = [] of Slot
+    @@registered = false
+
+    # Register the coordinator first and workers in their public worker order.
+    # Workers are idle at registration; each subsequently owns one slot, so
+    # the hot counter updates need no lock and reductions happen at the barrier.
+    def self.register_threads!(worker_ids : Array(UInt64), worker_fiber_ids : Array(UInt64)) : Nil
+      @@registered = false
+      @@fiber_ids = [Fiber.current.object_id.to_u64] + worker_fiber_ids
+      @@slots = Array(Slot).new(worker_ids.size + 1)
+      @@slots << Slot.new("coordinator", Thread.current.object_id.to_u64)
+      worker_ids.each_with_index do |thread_id, worker|
+        @@slots << Slot.new("worker-#{worker}", thread_id)
+      end
+      @@registered = true
+    end
+
+    def self.reset! : Nil
+      @@slots.each(&.reset!)
+    end
+
+    def self.coordinator_value(key : Symbol) : UInt64
+      @@slots[0].value(key)
+    end
+
+    def self.record_coordinator_counter!(key : Symbol, value : UInt64) : Nil
+      @@slots[0].add_counter!(key, value)
+    end
+
+    def self.record_full_window_prepare!(elapsed_ns : UInt64, used_capture : Bool) : Nil
+      return unless @@registered
+      current_slot.record_full_window_prepare!(elapsed_ns, used_capture)
+    end
+
+    def self.record_source_read!(ranges : Array({Int64, Int64})) : Nil
+      return unless @@registered
+      current_slot.record_source_read!(ranges)
+    end
+
+    def self.record_checked_frame!(compressed_size : Int64, elapsed_ns : UInt64, recheck : Bool) : Nil
+      return unless @@registered
+      current_slot.record_checked_frame!(compressed_size, elapsed_ns, recheck)
     end
 
     def self.record_source_recheck!(frame_count : Int, elapsed_ns : UInt64) : Nil
-      @@source_recheck_calls += 1_u64
-      @@source_recheck_ns += elapsed_ns
-      @@source_rechecked_frames += frame_count.to_u64
+      return unless @@registered
+      current_slot.record_source_recheck!(frame_count, elapsed_ns)
     end
 
     def self.record_decompression!(method : UInt8, payload_size : Int64, output_size : Int64, elapsed_ns : UInt64) : Nil
-      @@decompression_calls += 1_u64
-      @@decompression_payload_bytes += payload_size.to_u64
-      @@decompressed_bytes += output_size.to_u64
-      @@decompression_ns += elapsed_ns
-      name = case method
-             when 0x82_u8 then "LZ4"
-             when 0x90_u8 then "ZSTD"
-             when 0x91_u8 then "MULTIPLE"
-             else              "0x#{method.to_s(16)}"
-             end
-      @@decompression_methods[name] = @@decompression_methods[name] + 1_u64
+      return unless @@registered
+      current_slot.record_decompression!(method, payload_size, output_size, elapsed_ns)
     end
 
+    def self.record_copy_snapshot!(bytes : UInt64, elapsed_ns : UInt64) : Nil
+      return unless @@registered
+      current_slot.record_copy_snapshot!(bytes, elapsed_ns)
+    end
+
+    def self.record_copy_decode!(rows : UInt64, bytes : UInt64, elapsed_ns : UInt64) : Nil
+      return unless @@registered
+      current_slot.record_copy_decode!(rows, bytes, elapsed_ns)
+    end
+
+    def self.record_path_data_decode!(path : String, rows : UInt64, bytes : UInt64, elapsed_ns : UInt64) : Nil
+      return unless @@registered
+      current_slot.record_path_data_decode!(path, rows, bytes, elapsed_ns)
+    end
+
+    def self.record_path_equality!(path : String, rows : UInt64, elapsed_ns : UInt64) : Nil
+      return unless @@registered
+      current_slot.record_path_equality!(path, rows, elapsed_ns)
+    end
+
+    def self.record_typed_materialization!(path : String, dynamic : Bool, rows : UInt64, elapsed_ns : UInt64) : Nil
+      return unless @@registered
+      current_slot.record_typed_materialization!(path, dynamic, rows, elapsed_ns)
+    end
+
+    def self.record_dynamic_materialization!(path : String, rows : UInt64, elapsed_ns : UInt64) : Nil
+      return unless @@registered
+      current_slot.record_dynamic_materialization!(path, rows, elapsed_ns)
+    end
+
+    def self.record_columnar_shape!(paths : UInt64, fallback_types : UInt64, elapsed_ns : UInt64) : Nil
+      return unless @@registered
+      current_slot.record_columnar_shape!(paths, fallback_types, elapsed_ns)
+    end
+
+    # Called only after all assigned workers have returned. Per-worker elapsed
+    # counters are preserved while a worker-only sum is reduced for quick
+    # comparison with the separate max-worker and end-to-end wall timings.
     def self.snapshot
+      workers = Slot.new("workers-sum", 0_u64)
+      per_worker = [] of Slot::Snapshot
+      index = 1
+      while index < @@slots.size
+        slot = @@slots[index]
+        workers.add!(slot)
+        per_worker << slot.snapshot
+        index += 1
+      end
       {
-        full_window_prepare_passes:  @@full_window_prepare_passes,
-        full_window_prepare_ns:      @@full_window_prepare_ns,
-        read_window_calls:           @@read_window_calls,
-        full_grid_window_reads:      @@full_grid_window_reads,
-        source_read_calls:           @@source_read_calls,
-        source_range_count:          @@source_range_count,
-        source_nonempty_ranges:      @@source_nonempty_ranges,
-        source_logical_bytes:        @@source_logical_bytes,
-        checksum_check_calls:        @@checksum_check_calls,
-        unique_checked_frames:       @@unique_checked_frames.size.to_u64,
-        checksum_bytes_hashed:       @@checksum_bytes_hashed,
-        checksum_ns:                 @@checksum_ns,
-        source_recheck_calls:        @@source_recheck_calls,
-        source_recheck_ns:           @@source_recheck_ns,
-        source_rechecked_frames:     @@source_rechecked_frames,
-        decompression_calls:         @@decompression_calls,
-        decompression_payload_bytes: @@decompression_payload_bytes,
-        decompressed_bytes:          @@decompressed_bytes,
-        decompression_ns:            @@decompression_ns,
-        decompression_methods:       @@decompression_methods.dup,
+        coordinator: @@slots[0].snapshot,
+        worker_sum:  workers.snapshot,
+        per_worker:  per_worker,
       }
+    end
+
+    private def self.current_slot : Slot
+      fiber_id = Fiber.current.object_id.to_u64
+      @@fiber_ids.each_with_index do |registered_id, index|
+        return @@slots[index] if registered_id == fiber_id
+      end
+      raise "unexpected Compact JSON diagnostic fiber after registration"
     end
   end
 end
@@ -447,9 +666,6 @@ module CompactJSONScanProbe
     error("columnar backend requires the retained track") if backend == "columnar" && track != "retained"
     error("warmups and repeats must be nonnegative and repeats positive") if warmups < 0 || repeats <= 0
     error("use 0 warmups when the caller sends scan commands") if interactive && warmups != 0
-    {% if flag?(:compact_json_scan_diagnostic) %}
-      error("the diagnostic probe requires one worker") unless workers == 1
-    {% end %}
     marks = marks_for(mode)
     assignments = assignments(marks, workers)
     oracle = File.read(oracle_path).to_slice
@@ -461,6 +677,9 @@ module CompactJSONScanProbe
     results = Channel(WorkerResult).new(workers)
     errors = Channel(Exception).new(workers)
     ready = Channel(NamedTuple(worker: Int32, open_ns: Int64, thread_id: UInt64)).new(workers)
+    {% if flag?(:compact_json_scan_diagnostic) %}
+      ready_fiber_ids = Channel(NamedTuple(worker: Int32, fiber_id: UInt64)).new(workers)
+    {% end %}
     contexts = Array(Fiber::ExecutionContext::Isolated).new(workers)
     begin
       prepare_started = Time.instant
@@ -477,6 +696,9 @@ module CompactJSONScanProbe
             table = shared_table || open_table(backend, part_path)
             open_ns = (Time.instant - open_started).total_nanoseconds.to_i64
             ready.send({worker: worker_index, open_ns: open_ns, thread_id: Thread.current.object_id.to_u64})
+            {% if flag?(:compact_json_scan_diagnostic) %}
+              ready_fiber_ids.send({worker: worker_index, fiber_id: Fiber.current.object_id.to_u64})
+            {% end %}
             retained_columnar = nil.as(Array(CrystalClick::CompactJsonColumnarBatch)?)
             loop do
               job = jobs[worker_index].receive?
@@ -564,6 +786,14 @@ module CompactJSONScanProbe
       end
       prepare_wall_ns = (Time.instant - prepare_started).total_nanoseconds.to_i64
       ready_records.sort_by!(&.[:worker])
+      {% if flag?(:compact_json_scan_diagnostic) %}
+        worker_fiber_ids = Array(UInt64).new(workers, 0_u64)
+        workers.times do
+          record = ready_fiber_ids.receive
+          worker_fiber_ids[record[:worker]] = record[:fiber_id]
+        end
+        CrystalClick::CompactJSONScanProbeCounters.register_threads!(ready_records.map(&.[:thread_id]), worker_fiber_ids)
+      {% end %}
 
       if interactive
         puts "READY"
@@ -594,12 +824,19 @@ module CompactJSONScanProbe
         end
         shared_plan_ns = (Time.instant - started).total_nanoseconds.to_i64 if shared_plan
         active_count = 0
+        {% if flag?(:compact_json_scan_diagnostic) %}
+          dispatch_started = Time.instant
+        {% end %}
         assignments.each_with_index do |worker_marks, worker|
           if selected = worker_marks
             jobs[worker].send(Job.new(run_id, selected, shared_plan))
             active_count += 1
           end
         end
+        {% if flag?(:compact_json_scan_diagnostic) %}
+          worker_dispatch_wall_ns = (Time.instant - dispatch_started).total_nanoseconds.to_i64
+          worker_wait_started = Time.instant
+        {% end %}
         completed = Array(WorkerResult).new(active_count)
         while completed.size < active_count
           select
@@ -609,6 +846,9 @@ module CompactJSONScanProbe
             raise exception
           end
         end
+        {% if flag?(:compact_json_scan_diagnostic) %}
+          worker_result_wait_wall_ns = (Time.instant - worker_wait_started).total_nanoseconds.to_i64
+        {% end %}
         # The coordinator owns the release of retained rows, as in the public
         # parallel scan. This probe has exactly one batch per selected mark.
         if plan = shared_plan
@@ -663,11 +903,20 @@ module CompactJSONScanProbe
           raise CrystalClick::CorruptPartError.new("RowBinary output differs from ClickHouse oracle (got #{actual.size}, expected #{expected.size})")
         end
         {% if flag?(:compact_json_scan_diagnostic) %}
-          unless CrystalClick::CompactJSONScanProbeCounters.snapshot[:full_window_prepare_passes] > 0
+          unless CrystalClick::CompactJSONScanProbeCounters.coordinator_value(:full_window_prepare_passes) > 0_u64
             error("no root JSON preparation recorded; apply the diagnostic hooks to the isolated source copy")
           end
         {% end %}
         next if run_id < warmups
+
+        {% if flag?(:compact_json_scan_diagnostic) %}
+          CrystalClick::CompactJSONScanProbeCounters.record_coordinator_counter!(
+            :worker_dispatch_wall_ns, worker_dispatch_wall_ns.to_u64,
+          )
+          CrystalClick::CompactJSONScanProbeCounters.record_coordinator_counter!(
+            :worker_result_wait_wall_ns, worker_result_wait_wall_ns.to_u64,
+          )
+        {% end %}
 
         worker_rows = completed.map do |result|
           {
@@ -683,6 +932,9 @@ module CompactJSONScanProbe
         end
         worker_scan_ns_sum = completed.sum(&.worker_scan_ns)
         worker_serialization_ns_sum = completed.sum(&.serialization_ns)
+        worker_scan_ns_max = completed.reduce(0_i64) do |maximum, result|
+          Math.max(maximum, result.worker_scan_ns)
+        end
         puts({
           mode:                          mode,
           track:                         track,
@@ -709,6 +961,7 @@ module CompactJSONScanProbe
           gc_allocated_bytes_delta:      gc_total_bytes_after - gc_total_bytes_before,
           gc_collections:                gc_collections_after - gc_collections_before,
           worker_scan_ns_sum:            worker_scan_ns_sum,
+          worker_scan_ns_max:            worker_scan_ns_max,
           worker_serialization_ns_sum:   worker_serialization_ns_sum,
           rowbinary_bytes:               actual.size,
           rowbinary_sha256:              Digest::SHA256.hexdigest(actual),
