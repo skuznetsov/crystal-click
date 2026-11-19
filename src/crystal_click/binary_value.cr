@@ -6,6 +6,10 @@ module CrystalClick
     getter type : BinaryDataType
 
     private EMPTY_ELEMENTS = [] of BinaryValue
+    # These private canonical payloads are shared only by the decoder's
+    # validated Bool factory. BinaryValue.bytes always returns a detached copy.
+    private BOOL_FALSE_PAYLOAD = "\x00".to_slice
+    private BOOL_TRUE_PAYLOAD  = "\x01".to_slice
 
     @payload : Bytes?
     @elements : Array(BinaryValue)
@@ -22,8 +26,15 @@ module CrystalClick
       @variant_index : UInt8? = nil,
       @qbit_value : QBitValue? = nil,
       @json_row : BinaryJsonRow? = nil,
+      share_readonly_payload : Bool = false,
     )
-      @payload = payload.try { |bytes| Bytes.new(bytes.size) { |index| bytes[index] } }
+      @payload = payload.try do |bytes|
+        if share_readonly_payload
+          bytes
+        else
+          Bytes.new(bytes.size) { |index| bytes[index] }
+        end
+      end
       @elements = elements.empty? ? EMPTY_ELEMENTS : elements.dup
     end
 
@@ -112,6 +123,17 @@ module CrystalClick
 
     def self.bool(value : Bool) : BinaryValue
       new(BinaryDataType.primitive("Bool"), Bytes[BoolValueCodec.encode(value)])
+    end
+
+    # :nodoc:
+    # The bulk decoder already validated this descriptor. Its immutable
+    # canonical payload can be shared safely because public byte access copies.
+    def self.bool(type : BinaryDataType, value : Bool) : BinaryValue
+      unless type.tag == BinaryDataType::TAG_BOOL
+        raise ArgumentError.new("Bool value requires a Bool descriptor")
+      end
+      payload = value ? BOOL_TRUE_PAYLOAD : BOOL_FALSE_PAYLOAD
+      new(type, payload, share_readonly_payload: true)
     end
 
     def self.int64(value : Int64) : BinaryValue

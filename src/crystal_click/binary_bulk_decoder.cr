@@ -283,6 +283,9 @@ module CrystalClick
         mark = selected_first + window_offset
         root_count = rows_per_mark[mark].to_i32
         contexts = selected_contexts(streams, ordinary_roles, mark, budget)
+        scalar_read_binding = if root_count > 0 && dynamic_plan.nil?
+                                root_scalar_read_binding(type, contexts, profile)
+                              end
         dynamic_read_bindings = if root_count > 0
                                   if dynamic_structure_plan = dynamic_plan
                                     DynamicMarkReadBindings.new(dynamic_structure_plan, contexts, profile)
@@ -290,7 +293,7 @@ module CrystalClick
                                 else
                                   nil
                                 end
-        ensure_minimum_count(type, "root", root_count.to_u64, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
+        ensure_minimum_count(type, "root", root_count.to_u64, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings, scalar_read_binding)
 
         traversal.ensure_future_nodes(type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : root_count.to_u64)
         traversal.ensure_depth(1) if root_count > 0
@@ -337,6 +340,7 @@ module CrystalClick
               json_leaf_key,
               shared_value_depth_origin,
               dynamic_read_bindings,
+              scalar_read_binding,
             ).as(T)
           {% else %}
             unless type.tag == BinaryDataType::TAG_DYNAMIC
@@ -656,6 +660,40 @@ module CrystalClick
       contexts
     end
 
+    # Bind an ordinary scalar root's lane contexts once per mark. Dynamic arm
+    # bindings use the same leaf accessors, but their cached path work is
+    # charged only when a Dynamic plan is active. Ordinary root paths have
+    # always charged no path work, so these zero work values preserve receipts.
+    private def self.root_scalar_read_binding(
+      type : BinaryDataType,
+      contexts : Hash(String, BinaryCodecContext),
+      profile : BinaryBulkProfile,
+    ) : DynamicArmReadBinding?
+      string_type = type.tag == BinaryDataType::TAG_STRING
+      direct_leaf = string_type || type.tag == BinaryDataType::TAG_BOOL ||
+                    type.tag == BinaryDataType::TAG_NOTHING || !type.fixed_width.nil?
+      return nil unless direct_leaf
+
+      data_context = contexts["root.data"]?
+      string_sizes_path_work = nil.as(UInt64?)
+      string_sizes_context = nil.as(BinaryCodecContext?)
+      if string_type && profile.with_size_stream?
+        string_sizes_path_work = 0_u64
+        string_sizes_context = contexts["root.string_sizes"]?
+      end
+
+      DynamicArmReadBinding.new(
+        "root",
+        0_u64,
+        type,
+        0_u64,
+        data_context,
+        string_sizes_path_work,
+        string_sizes_context,
+        nil,
+      )
+    end
+
     # Prove a per-occurrence lower bound in each required role before allocating
     # root or child value arrays. Arrays and Maps can have zero children, so
     # their child lanes deliberately contribute no bound until their sizes are
@@ -939,7 +977,7 @@ module CrystalClick
                   else
                     context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan)
                   end
-        BinaryValue.bool(BoolValueCodec.decode(context.read_byte))
+        BinaryValue.bool(type, BoolValueCodec.decode(context.read_byte))
       when BinaryDataType::TAG_NOTHING
         context = if binding = scalar_read_binding
                     work = binding.data_path_work || corrupt!("Dynamic scalar arm has no bound data work")

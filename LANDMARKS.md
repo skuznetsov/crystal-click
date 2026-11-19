@@ -105,6 +105,14 @@
   Refresh the [matched rank comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#declared-nullableuint32-slices)
   after changes to declared path ownership, decoder budgets, worker
   scheduling, or Boehm.
+- Ordinary scalar bulk decoders bind lane cursors per mark and reuse
+  validated Bool descriptors and canonical payload bytes. On the same
+  overflow part against `76e0f24`, median read allocations fell 15.8% and
+  four-worker read p95 fell 38.8%. Four-worker decode waits in sampled
+  Boehm mutex stacks fell from 2,633 to 1,315 for the same scan count.
+  Materialized `BinaryValue` cells dominate the remaining wait stacks.
+  Refresh the [matched scalar comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#ordinary-scalar-cursors-and-bool-storage)
+  after changes to scalar ownership, lane binding, worker scheduling, or Boehm.
 
 ## Compressed Compact aggregate projection indexes — W301
 

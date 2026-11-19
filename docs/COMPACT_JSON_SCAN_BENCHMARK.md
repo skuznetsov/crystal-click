@@ -66,10 +66,11 @@ counts on macOS with `ENABLE_LIBRARIES=OFF`.
 For a Crystal-only comparison, supply `--baseline-crystal-bin` and omit
 `--cpp-bin` and `--native-read-allocations`. Both binaries go through the
 same schedule, RowBinary, and post-open checksum checks. Set the revision in
-`git archive` to `04b421f` for the declared `Nullable(UInt32)` slice baseline,
-`05ee0c7` for the Data String slice baseline, `e2571d1` for the Copy String
-slice baseline, `2dee2ae` for the Dynamic binding baseline, or `86b3225` for
-the empty child storage baseline.
+`git archive` to `76e0f24` for the scalar cursor and Bool payload comparison,
+`04b421f` for the declared `Nullable(UInt32)` slice baseline, `05ee0c7` for
+the Data String slice baseline, `e2571d1` for the Copy String slice baseline,
+`2dee2ae` for the Dynamic binding baseline, or `86b3225` for the empty child
+storage baseline.
 
 The public callback and source-binding checks use both fixture directories.
 
@@ -1028,6 +1029,80 @@ of Copy/Data disagreements in value, type, and presence.
 | Newline-separated raw stack profile checksums, sorted by capture path | `4487b1e6a7f481ba24bf919d12aa79960c28678dd170c30f62d28454bcd42d47` |
 | Twelve rejection controls report | `6c5eacc0554d130263c33d2502738478575762884c77afbf678f210f5034f3ca` |
 | Grouped Release spec output | `1aeee0eae56b4cc234baf45690a23ac1a4e2cce711d0c370d629ec77b3ab04d5` |
+| Ordered ClickHouse RowBinary export | `3495978197741a4e241a2201bd92030afbb7590588bccb2ab3da107b1059d62b` |
+
+### Ordinary scalar cursors and Bool storage
+
+The bulk decoder binds each ordinary scalar root's data and optional
+String sizes cursors once per nonempty mark. Decoded Bool values reuse
+the validated type descriptor and the canonical read-only byte for
+their value. Each cell keeps its own `BinaryValue` identity, and
+`bytes` returns a detached copy. Stream extent checks and codec budget
+receipts are preserved.
+[Bulk decoder](../src/crystal_click/binary_bulk_decoder.cr),
+[scalar regression checks](../spec/binary_bulk_w122_spec.cr).
+
+The matched Release comparison against `76e0f24` uses the same four
+marks, 8,192 rows, and retained worker schedule on the SharedData overflow
+part, with Crystal 1.22.3, LLVM 23.1.5, and Boehm 8.2.12 on an Apple M2
+Max with macOS 26.6.2. The data, marks, and ordered RowBinary export match
+the earlier overflow fixture hashes. Each build and worker count contributed
+48 timed scans across eight interleaved blocks with two warmups per build
+per block. Read time includes preparing the authenticated part plan and
+validating source checksums between batches. All 192 timed scans matched
+the ordered ClickHouse 26.10.1.1201 RowBinary export byte for byte.
+
+| Workers | Read p50 / p95, ms before → after | Boehm read allocations p50 / p95, MiB before → after | Read + serialize p50 / p95, ms before → after |
+| ---: | ---: | ---: | ---: |
+| 1 | 16.030 / 17.447 → 13.462 / 14.659 | 35.598 / 35.623 → 29.973 / 29.991 | 29.431 / 32.595 → 26.120 / 28.349 |
+| 4 | 23.505 / 32.474 → 15.957 / 19.882 | 35.616 / 35.638 → 29.987 / 30.025 | 36.952 / 45.886 → 29.004 / 34.313 |
+
+Read time improved in all 48 pairs at both worker counts. Median Boehm
+read allocation fell about 15.8%. The four-worker read median was 1.19×
+the one-worker median on this part, compared with 1.47× before the change.
+Median read collections stayed at one per scan at both worker counts.
+
+The stack profile interleaves three fresh captures per build and worker
+count. Each uses `sample PID 2 1` after two warmups and sends 24 scans
+after the sampler announces startup. The retained readers check every
+scan against RowBinary. Only `compact-json-worker-*` stacks under
+`ObjectDocumentCodec.decode_core_with_budget` count toward decode samples.
+Mutex samples have a kernel `__psynch_mutexwait` leaf below pthread
+mutex and Boehm frames.
+
+| Workers | Boehm mutex waits / decode samples before → after | Waits in free-list refill before → after |
+| ---: | ---: | ---: |
+| 1 | 14/534 (2.6%) → 4/380 (1.1%) | 14 → 4 |
+| 4 | 2,633/3,892 (67.7%) → 1,315/2,001 (65.7%) | 2,523 → 1,191 |
+
+At four workers, Bool descriptor construction accounted for 620 baseline
+wait samples. The per-row String and scalar role interpolation helpers
+accounted for 410. Both signatures fell to zero in the updated captures.
+There were 972 remaining wait samples with a direct
+`BinaryValue.new` caller in bulk decode and 179 under the validated
+Bool factory. These counts describe sampled worker occupancy for equal
+scan workloads. The timing comparison measures elapsed time separately.
+
+Both builds rejected post-open checksum corruption at `data.bin[0]` and
+at `data.bin[30030]`, which belongs to a Data-only frame. Both also rejected
+a same-length RowBinary oracle with one changed byte at each worker count.
+All twelve controls used disposable copies, and the measured part and
+oracle still matched their original hashes.
+
+All 60 grouped Release examples passed with both native fixtures enabled.
+The suite checks Copy/Data disagreement in value, type, and presence, and
+the new scalar tests cover exact budgets, selected mark windows, malformed
+lanes, canonical Bool bytes, and detached byte access. On `76e0f24`, the
+focused suite failed only at the new assertion for Bool descriptor reuse.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `76e0f24` stock Release runner | `478a232e9dbbf4a47c7c58009169ee101f5d45c6434562515002dcbd17463862` |
+| Bound scalar Release runner | `2d41aa08e9ee177f23d60c6f9462d6d8ae73ed352573cad2fd756f5385b8c858` |
+| Matched timing report | `2dbd0ffc6e80275feccb32ec5f8034d91595f2f3737b5632753f564e17c9e28f` |
+| Newline-separated raw stack profile checksums, sorted by capture path | `8e90a431108204af6e261cdca376af89159273423acb2394b6360cc8bdd1de08` |
+| Twelve rejection controls report | `6e2c4603fcca661bd68859d48c0ec814f1234cf9bc74d522996a3a9c36c4adc0` |
+| Grouped Release spec output | `58303ce8638124c6b893d2d0161cd70139fe48c2e3479605ecbb5266552df1f0` |
 | Ordered ClickHouse RowBinary export | `3495978197741a4e241a2201bd92030afbb7590588bccb2ab3da107b1059d62b` |
 
 ### Previous shared-plan diagnostics
