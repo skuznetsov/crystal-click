@@ -1,6 +1,49 @@
 module CrystalClick
   # Recursive reader for the normalized per-mark physical-lane profile.
   module BinaryBulkDecoder
+    # Decode one exact Nullable(UInt32) root directly into caller-owned native
+    # buffers. The ordinary decoder remains the reference path for every
+    # other type and for callers that need BinaryValue ownership.
+    def self.decode_nullable_uint32_into(
+      type : BinaryDataType,
+      streams : BinaryBulkStreams,
+      rows_per_mark : Array(UInt64),
+      budget : BinaryCodecBudget,
+      values : Slice(UInt32),
+      nulls : Slice(UInt8),
+      first_mark : Int = 0,
+      mark_count : Int = 1,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : Nil
+      unless nullable_uint32_type?(type)
+        raise ArgumentError.new("direct Nullable(UInt32) decode requires the exact ordinary Nullable(UInt32) type")
+      end
+      unless streams.mark_count == 1 && rows_per_mark.size == 1 && first_mark == 0 && mark_count == 1
+        raise ArgumentError.new("direct Nullable(UInt32) decode requires exactly one complete mark")
+      end
+      selected_rows = rows_per_mark[0]
+      if selected_rows > Int32::MAX.to_u64 || values.size.to_u64 != selected_rows || nulls.size.to_u64 != selected_rows
+        raise ArgumentError.new("direct Nullable(UInt32) destinations must exactly match the selected row count")
+      end
+
+      decode_internal(
+        type,
+        streams,
+        rows_per_mark,
+        budget,
+        first_mark,
+        mark_count,
+        profile,
+        nil,
+        nil,
+        1,
+        nil,
+        BinaryValue,
+        {values, nulls},
+      )
+      nil
+    end
+
     def self.decode(
       type : BinaryDataType,
       streams : BinaryBulkStreams,
@@ -83,6 +126,7 @@ module CrystalClick
       shared_value_depth_origin : Int,
       json_leaf_key : BinaryDynamicJsonLeafKey?,
       row_type : T.class,
+      nullable_uint32_target : Tuple(Slice(UInt32), Slice(UInt8))? = nil,
     ) : Array(Array(T)) forall T
       if type.geometry_storage_variant?
         raise UnsupportedFormatError.new("Geometry's fixed-order storage Variant cannot be decoded independently")
@@ -120,6 +164,9 @@ module CrystalClick
         corrupt!("binary bulk row-count grid does not match its mark domain")
       end
       selected_first, selected_count = validate_selection(first_mark, mark_count, real_marks)
+      if nullable_uint32_target && !(real_marks == 1 && selected_first == 0 && selected_count == 1)
+        raise ArgumentError.new("direct Nullable(UInt32) decode requires exactly one complete mark")
+      end
 
       traversal = BinaryCodecContext.new(budget.limits, nil, false, budget, false, false)
       traversal.validate_type_tree(type)
@@ -247,6 +294,24 @@ module CrystalClick
 
         traversal.ensure_future_nodes(type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : root_count.to_u64)
         traversal.ensure_depth(1) if root_count > 0
+        if target = nullable_uint32_target
+          unless T == BinaryValue && nullable_uint32_type?(type) && dynamic_plan.nil? &&
+                 json_object_reader.nil? && json_leaf_key.nil?
+            raise ArgumentError.new("direct Nullable(UInt32) target does not match its decoder type")
+          end
+          decode_nullable_uint32_mark!(
+            type,
+            root_count,
+            contexts,
+            traversal,
+            budget,
+            target[0],
+            target[1],
+          )
+          contexts.each_value(&.ensure_consumed)
+          result << ([] of T)
+          next
+        end
         lc_values_for_mark = Hash(String, Array(BinaryValue)).new
         low_cardinality_values.each do |path, mark_values|
           lc_values_for_mark[path] = mark_values[window_offset]
@@ -312,6 +377,47 @@ module CrystalClick
         reader.ensure_consumed!
       end
       result
+    end
+
+    private def self.nullable_uint32_type?(type : BinaryDataType) : Bool
+      type.tag == BinaryDataType::TAG_NULLABLE && type.child_count == 1 &&
+        type.child_at(0).tag == BinaryDataType::TAG_UINT32 && type.child_at(0).child_count == 0
+    end
+
+    private def self.decode_nullable_uint32_mark!(
+      type : BinaryDataType,
+      root_count : Int32,
+      contexts : Hash(String, BinaryCodecContext),
+      traversal : BinaryCodecContext,
+      budget : BinaryCodecBudget,
+      values : Slice(UInt32),
+      nulls : Slice(UInt8),
+    ) : Nil
+      unless nullable_uint32_type?(type) && values.size == root_count && nulls.size == root_count
+        raise ArgumentError.new("direct Nullable(UInt32) buffers do not match the decoded mark")
+      end
+      child_type = type.child_at(0)
+      null_map = context_for_path_role(contexts, "root", ".nulls", nil, budget, nil)
+      nested_path = child_path("root", ".nested", nil, budget, nil)
+      nested_data = context_for_path_role(contexts, nested_path, ".data", nil, budget, nil)
+      root_count.times do |row|
+        traversal.visit_node(1)
+        flag = null_map.read_byte
+        unless flag == 0_u8 || flag == 1_u8
+          corrupt!("Nullable bulk null-map flag must be zero or one")
+        end
+        preflight_child_type(traversal, child_type, 1_u64)
+        traversal.ensure_depth(2)
+        traversal.visit_node(2)
+        raw = nested_data.read_slice(sizeof(UInt32).to_u64)
+        value = 0_u32
+        sizeof(UInt32).times do |index|
+          value |= raw[index].to_u32 << (index * 8)
+        end
+        values[row] = value
+        nulls[row] = flag
+      end
+      nil
     end
 
     private def self.validate_selection(first_mark : Int, mark_count : Int?, real_marks : Int32) : {Int32, Int32}

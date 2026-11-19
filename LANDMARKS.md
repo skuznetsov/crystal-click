@@ -97,6 +97,14 @@
   remaining sampled Boehm mutex waits were in free-list refill. Refresh the
   [matched Data-slice comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#shareddata-data-string-slices)
   after changing Data ownership, decoder budgets, worker scheduling, or Boehm.
+- Declared Compact JSON `Nullable(UInt32)` paths expose borrowed value
+  and byte NULL slices for each callback window. On the same overflow
+  part against `04b421f`, read p95 fell 12.3% at one worker and 14.8%
+  at four. Median Boehm read allocation fell 10.8%. At four workers,
+  2,440 of the 2,534 remaining mutex samples were in free-list refill.
+  Refresh the [matched rank comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#declared-nullableuint32-slices)
+  after changes to declared path ownership, decoder budgets, worker
+  scheduling, or Boehm.
 
 ## Compressed Compact aggregate projection indexes — W301
 

@@ -593,12 +593,32 @@ module CompactJSONScanProbe
           emitted = false
           batch.column_count.times do |index|
             column = batch.column_at(index)
-            column.with_cell_at(row) do |cell|
+            if column.nullable_uint32_lane_active?
+              values = column.nullable_uint32_values
+              nulls = column.nullable_uint32_nulls
+              unless values.size == batch.row_count && nulls.size == batch.row_count
+                raise CrystalClick::CorruptPartError.new("columnar Nullable(UInt32) row counts differ")
+              end
               json << ',' if emitted
               column.path.to_json(json)
               json << ':'
-              write_json_value(json, cell)
+              case nulls[row]
+              when 0_u8
+                json << values[row].to_s
+              when 1_u8
+                json << "null"
+              else
+                raise CrystalClick::CorruptPartError.new("columnar Nullable(UInt32) null map is malformed")
+              end
               emitted = true
+            else
+              column.with_cell_at(row) do |cell|
+                json << ',' if emitted
+                column.path.to_json(json)
+                json << ':'
+                write_json_value(json, cell)
+                emitted = true
+              end
             end
           end
           json << '}'

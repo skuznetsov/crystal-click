@@ -99,6 +99,14 @@ existing value semantics without assembling an `ObjectDocument` for each
 root row. Ordinary selected `UInt64` columns are available in the same
 batch as aligned slices.
 
+A declared ordinary `Nullable(UInt32)` path such as `rank` exposes two
+aligned views when `column.nullable_uint32_lane_active?` is true.
+`column.nullable_uint32_values` returns `Slice(UInt32)` and
+`column.nullable_uint32_nulls` returns `Slice(UInt8)` for the current
+callback window. A mask byte of `1` marks NULL and `0` marks a value.
+Read the value only for a row with mask byte `0`. `value_at` remains
+available for callers that need an owned `BinaryValue`.
+
 Each SharedData chunk binds its Copy dictionary ordinals to the batch's
 sparse columns. The Copy decoder appends values to those columns. The
 reader verifies each path's presence and value against its independently
@@ -122,7 +130,7 @@ end
 An absent path or cell is represented by `nil`. A present value can carry
 its own nullable state. The callback runs on the calling fiber in source
 order and can receive a bounded window of one mark. The batch, its columns,
-and read-only companion slices borrow the worker's storage until the
+and read-only slices borrow the worker's storage until the
 callback returns. Call `batch.snapshot` inside the callback to retain the
 current window. The entire selected schedule is admitted before output,
 and the source binding is checked again before every callback.

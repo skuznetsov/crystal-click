@@ -66,9 +66,10 @@ counts on macOS with `ENABLE_LIBRARIES=OFF`.
 For a Crystal-only comparison, supply `--baseline-crystal-bin` and omit
 `--cpp-bin` and `--native-read-allocations`. Both binaries go through the
 same schedule, RowBinary, and post-open checksum checks. Set the revision in
-`git archive` to `05ee0c7` for the Data String slice baseline, `e2571d1`
-for the Copy String slice baseline, `2dee2ae` for the Dynamic binding
-baseline, or `86b3225` for the empty child storage baseline.
+`git archive` to `04b421f` for the declared `Nullable(UInt32)` slice baseline,
+`05ee0c7` for the Data String slice baseline, `e2571d1` for the Copy String
+slice baseline, `2dee2ae` for the Dynamic binding baseline, or `86b3225` for
+the empty child storage baseline.
 
 The public callback and source-binding checks use both fixture directories.
 
@@ -80,7 +81,8 @@ CRYSTAL_CLICK_COLUMNAR_JSON_FIXTURE_ROOT="$bench_work" \
     spec/compact_shared_advanced_json_part_plan_spec.cr \
     spec/object_shared_advanced_direct_columns_w263_spec.cr \
     spec/binary_dynamic_bulk_values_w155_spec.cr \
-    spec/binary_dynamic_bulk_shared_context_w155_spec.cr
+    spec/binary_dynamic_bulk_shared_context_w155_spec.cr \
+    spec/binary_bulk_w122_spec.cr
 ```
 
 With one worker every runner reads `[0,1,2,3]`. With four workers each gets one
@@ -954,6 +956,78 @@ String, UInt64, and absent rows match the baseline codec budget counters.
 | Matched timing report | `b2815f8bbd17b6a02ef51aab9710076f751245e05b5bc750d6bbdce1c27aaebd` |
 | Twelve raw stack profile checksums, sorted by capture path | `1d8e435f9aee30901da15fdb7f7bc08366871d8a53777264cbe3b41ce21dfa40` |
 | Twelve rejection controls report | `78ea633a9d9cd1acf6e1da9fe078476532a5cc635b19eda3a6aea7983731c36c` |
+| Ordered ClickHouse RowBinary export | `3495978197741a4e241a2201bd92030afbb7590588bccb2ab3da107b1059d62b` |
+
+### Declared Nullable(UInt32) slices
+
+The columnar scan decodes declared `Nullable(UInt32)` paths such as `rank`
+into reusable `Slice(UInt32)` values and a byte-per-row NULL map. It consumes
+the physical payload even where the map is `1`. The direct decoder uses the
+same role and mark grid validation and charges the same nodes, elements, and
+wire bytes as recursive Bulk decoding. Both slices expose the active callback
+window. A snapshot copies that window into its own buffers, and callers can
+still materialize individual cells through `value_at`.
+[Direct decoder](../src/crystal_click/binary_bulk_decoder.cr),
+[callback API](COMPACT_TYPED_READER_FRONTIER.md#borrowed-columnar-json-batches).
+
+The stock `04b421f` and slice runners use the same retained worker schedule on
+the four-mark, 8,192-row SharedData overflow fixture. Both use Crystal 1.22.3
+Release, LLVM 23.1.5 and Boehm 8.2.12 on an Apple M2 Max with macOS 26.6.2.
+Each build and worker count contributed 48 timed scans across eight
+interleaved blocks, with two warmups per build per block. The probe retains
+one output arena per assigned mark for ordered serialization. Read time
+includes the complete part plan and source checks. The combined measurement
+adds RowBinary serialization, which reads `rank` through the new typed views
+on the slice runner. All 192 timed results matched the ClickHouse
+26.10.1.1201 RowBinary export byte for byte. Background jobs remained active
+on the host.
+
+| Workers | Read p50 / p95, ms before → after | Boehm read allocations p50 / p95, MiB before → after | Read + serialize p50 / p95, ms before → after |
+| ---: | ---: | ---: | ---: |
+| 1 | 19.616 / 22.059 → 16.627 / 19.340 | 39.927 / 39.949 → 35.600 / 35.621 | 35.341 / 42.840 → 30.693 / 36.419 |
+| 4 | 26.659 / 29.984 → 21.934 / 25.546 | 39.945 / 39.977 → 35.614 / 35.641 | 42.207 / 48.111 → 36.432 / 42.390 |
+
+The slice runner read faster in 45 of 48 pairs at one worker and in 44 of
+48 at four. Median observed read allocation fell 4.33 MiB, or 10.8%, at
+both worker counts. The four-worker read median was 1.32× the one-worker
+median on this part.
+
+Three fresh `/usr/bin/sample PID 2 1 -file FILE` captures per build and worker
+count issued 24 RowBinary-checked scans each after two warmups. Count only
+decode samples on named `compact-json-worker-*` threads with an
+`ObjectDocumentCodec.decode_core_with_budget` frame. A Boehm mutex wait
+has a kernel `__psynch_mutexwait` leaf with pthread mutex and Boehm frames.
+
+| Workers | Boehm mutex waits / decode samples before → after | Waits in free-list refill before → after |
+| ---: | ---: | ---: |
+| 1 | 15/711 (2.1%) → 4/608 (0.7%) | 14 → 4 |
+| 4 | 3,379/4,929 (68.6%) → 2,534/3,769 (67.2%) | 3,278 → 2,440 |
+
+These proportions describe sampled worker occupancy. At four workers,
+96.3% of the remaining Boehm mutex samples have a `GC_generic_malloc_many`
+frame, which refills the thread-local free list.
+
+Both builds rejected mutations at `data.bin[0]` and `data.bin[30030]`
+after opening the part, including the Data-only frame at offset 30030.
+Both also rejected a same-length RowBinary oracle with one byte changed.
+These twelve rejection controls used disposable copies.
+
+The grouped Release suite passed all 54 examples with both native fixtures.
+The direct decoder matched recursive values and budget counters, including
+consumption of a nonzero nested payload under NULL. The tests cover malformed
+lanes, read-only split views, buffer reuse, detached snapshots, and rejection
+of Copy/Data disagreements in value, type, and presence.
+[Columnar scan and lane checks](../spec/compact_shared_advanced_json_columnar_spec.cr),
+[Direct SharedData checks](../spec/object_shared_advanced_direct_columns_w263_spec.cr).
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `04b421f` stock Release runner | `92bf8899fdbe712cd990baf37321e000a499b7dc3d83a45f66aed018095281c8` |
+| Declared `Nullable(UInt32)` slice runner | `b54ccef5679ac17ca1df3f2831835c05695cfa37ad32b99e0c0b84b7cbc71c95` |
+| Matched timing report | `a828e1cd7f914c78b968affa18906fedf8338c7ccfbd51d106c421a5021e35e7` |
+| Newline-separated raw stack profile checksums, sorted by capture path | `4487b1e6a7f481ba24bf919d12aa79960c28678dd170c30f62d28454bcd42d47` |
+| Twelve rejection controls report | `6c5eacc0554d130263c33d2502738478575762884c77afbf678f210f5034f3ca` |
+| Grouped Release spec output | `1aeee0eae56b4cc234baf45690a23ac1a4e2cce711d0c370d629ec77b3ab04d5` |
 | Ordered ClickHouse RowBinary export | `3495978197741a4e241a2201bd92030afbb7590588bccb2ab3da107b1059d62b` |
 
 ### Previous shared-plan diagnostics

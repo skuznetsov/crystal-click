@@ -26,6 +26,14 @@ private module CompactJsonColumnarGuardFixture
     CrystalClick::BinaryDataType.nullable(uint64)
   end
 
+  def uint32 : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.primitive("UInt32")
+  end
+
+  def nullable_uint32 : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.nullable(uint32)
+  end
+
   def json_type : CrystalClick::BinaryDataType
     CrystalClick::BinaryDataType.json(
       max_dynamic_paths: 64,
@@ -189,6 +197,13 @@ private module CompactJsonColumnarGuardFixture
     result
   end
 
+  def fixed_uint32(value : UInt32) : CrystalClick::BinaryValue
+    bytes = Bytes.new(4) do |index|
+      ((value >> (index * 8)) & 0xff_u32).to_u8
+    end
+    CrystalClick::BinaryValue.fixed(uint32, bytes)
+  end
+
   def write_varuint(io : IO, value : UInt64) : Nil
     remaining = value
     while remaining >= 0x80_u64
@@ -227,6 +242,57 @@ private def cjcv_copy_part_files(source : String, destination : String) : Nil
   File.rename(staged_checksums, File.join(destination, "checksums.txt"))
 end
 
+private def cjcv_bulk_stream_variant(
+  source : CrystalClick::BinaryBulkStreams,
+  overrides : Hash(String, Bytes) = Hash(String, Bytes).new,
+  extra_roles : Hash(String, Bytes) = Hash(String, Bytes).new,
+) : CrystalClick::BinaryBulkStreams
+  streams = Hash(String, CrystalClick::BinaryBulkStream).new
+  source.roles.each do |role|
+    original = source.stream(role)
+    bytes = overrides[role]? || original.bytes
+    streams[role] = CrystalClick::BinaryBulkStream.new(bytes, [0_u64, bytes.size.to_u64])
+  end
+  extra_roles.each do |role, bytes|
+    streams[role] = CrystalClick::BinaryBulkStream.new(bytes, [0_u64, bytes.size.to_u64])
+  end
+  CrystalClick::BinaryBulkStreams.new(source.mark_count, streams)
+end
+
+private def cjcv_write_u32(bytes : Bytes, offset : Int, value : UInt32) : Nil
+  4.times do |index|
+    bytes[offset + index] = ((value >> (index * 8)) & 0xff_u32).to_u8
+  end
+  nil
+end
+
+private def cjcv_assert_nullable_uint32_decode_rejects(
+  type : CrystalClick::BinaryDataType,
+  streams : CrystalClick::BinaryBulkStreams,
+) : Nil
+  expect_raises(CrystalClick::CorruptPartError) do
+    CrystalClick::BinaryBulkCodec.decode_with_budget(
+      type,
+      streams,
+      [3_u64],
+      CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS),
+    )
+  end
+
+  values = Slice(UInt32).new(3)
+  nulls = Slice(UInt8).new(3)
+  expect_raises(CrystalClick::CorruptPartError) do
+    CrystalClick::BinaryBulkDecoder.decode_nullable_uint32_into(
+      type,
+      streams,
+      [3_u64],
+      CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS),
+      values,
+      nulls,
+    )
+  end
+end
+
 private def cjcv_late_root_frame(part_path : String, mark_index : Int32) : Int32
   physical = CrystalClick::CompactPartPhysicalContext.open(part_path)
   window = physical.read_window(CompactJsonColumnarGuardFixture::COLUMN, mark_index, 1).granules.first
@@ -257,6 +323,7 @@ private def cjcv_scan_rows(
     File.basename(batch.part_path).should eq(batch.part_name)
     batch.column_for("id").not_nil!.fallback_type.should eq(CompactJsonColumnarGuardFixture.uint64)
     batch.column_for("rank").not_nil!.fallback_type.should eq(CompactJsonColumnarGuardFixture.nullable_uint64)
+    batch.column_for("rank").not_nil!.has_nullable_uint32_lane?.should be_false
     batch.column_count.should be > CrystalClick::WidePartTable::MAX_COLUMNS
 
     batch.row_count.times do |row|
@@ -278,7 +345,6 @@ private def cjcv_scan_rows(
       rank_column.type_at(row).should eq(CompactJsonColumnarGuardFixture.nullable_uint64)
       rank_column.nullable_at?(row).should be_true
       rank_value.is_null?.should eq(document.value_for("rank").is_null?)
-
       payload_column = batch.column_for("payload").not_nil!
       payload_column.fallback_type.should be_nil
       expected_payload = document.has_path?("payload") ? document.value_for("payload") : nil
@@ -331,6 +397,129 @@ private def cjcv_scan_rows(
 end
 
 describe "Compact shared Advanced root JSON columnar batches" do
+  it "matches recursive Nullable(UInt32) decoding while retaining every nested payload byte" do
+    type = CompactJsonColumnarGuardFixture.nullable_uint32
+    input = [
+      CrystalClick::BinaryValue.nullable(type, CompactJsonColumnarGuardFixture.fixed_uint32(0_u32)),
+      CrystalClick::BinaryValue.nullable(type),
+      CrystalClick::BinaryValue.nullable(type, CompactJsonColumnarGuardFixture.fixed_uint32(UInt32::MAX)),
+    ] of CrystalClick::BinaryValue
+    encoded = CrystalClick::BinaryBulkCodec.encode(type, [input] of Array(CrystalClick::BinaryValue))
+    encoded.roles.should eq(["root.nested.data", "root.nulls"])
+    encoded.stream("root.nulls").bytes.to_a.should eq([0_u8, 1_u8, 0_u8])
+
+    nested = encoded.stream("root.nested.data").bytes
+    nested.size.should eq(12)
+    cjcv_write_u32(nested, 4, 0xdead_beef_u32)
+    overrides = {"root.nested.data" => nested} of String => Bytes
+    mutated = cjcv_bulk_stream_variant(encoded, overrides)
+
+    recursive_budget = CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS)
+    recursive = CrystalClick::BinaryBulkCodec.decode_with_budget(type, mutated, [3_u64], recursive_budget)
+    recursive.size.should eq(1)
+    recursive.first.size.should eq(3)
+    recursive.first[0].is_null?.should be_false
+    CompactJsonColumnarGuardFixture.uint32_value(recursive.first[0].child_at(0)).should eq(0_u32)
+    recursive.first[1].is_null?.should be_true
+    recursive.first[2].is_null?.should be_false
+    CompactJsonColumnarGuardFixture.uint32_value(recursive.first[2].child_at(0)).should eq(UInt32::MAX)
+
+    direct_values = Slice(UInt32).new(3)
+    direct_nulls = Slice(UInt8).new(3)
+    direct_budget = CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS)
+    CrystalClick::BinaryBulkDecoder.decode_nullable_uint32_into(
+      type,
+      mutated,
+      [3_u64],
+      direct_budget,
+      direct_values,
+      direct_nulls,
+    )
+    direct_values.to_a.should eq([0_u32, 0xdead_beef_u32, UInt32::MAX])
+    direct_nulls.to_a.should eq([0_u8, 1_u8, 0_u8])
+    direct_budget.node_count.should eq(recursive_budget.node_count)
+    direct_budget.element_count.should eq(recursive_budget.element_count)
+    direct_budget.wire_byte_count.should eq(recursive_budget.wire_byte_count)
+    direct_budget.wire_byte_count.should eq(15_i64)
+
+    below_raw_lane_limits = CrystalClick::BinaryCodecLimits.new(
+      max_depth: CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS.max_depth,
+      max_nodes: CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS.max_nodes,
+      max_elements: CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS.max_elements,
+      max_bytes: 14,
+    )
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::BinaryBulkCodec.decode_with_budget(
+        type,
+        mutated,
+        [3_u64],
+        CrystalClick::BinaryCodecBudget.new(below_raw_lane_limits),
+      )
+    end
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::BinaryBulkDecoder.decode_nullable_uint32_into(
+        type,
+        mutated,
+        [3_u64],
+        CrystalClick::BinaryCodecBudget.new(below_raw_lane_limits),
+        Slice(UInt32).new(3),
+        Slice(UInt8).new(3),
+      )
+    end
+  end
+
+  it "rejects malformed direct Nullable(UInt32) lane grids like the recursive decoder" do
+    type = CompactJsonColumnarGuardFixture.nullable_uint32
+    input = [
+      CrystalClick::BinaryValue.nullable(type, CompactJsonColumnarGuardFixture.fixed_uint32(0_u32)),
+      CrystalClick::BinaryValue.nullable(type),
+      CrystalClick::BinaryValue.nullable(type, CompactJsonColumnarGuardFixture.fixed_uint32(UInt32::MAX)),
+    ] of CrystalClick::BinaryValue
+    encoded = CrystalClick::BinaryBulkCodec.encode(type, [input] of Array(CrystalClick::BinaryValue))
+
+    bad_flags = encoded.stream("root.nulls").bytes
+    bad_flags[1] = 2_u8
+    cjcv_assert_nullable_uint32_decode_rejects(
+      type,
+      cjcv_bulk_stream_variant(encoded, {"root.nulls" => bad_flags} of String => Bytes),
+    )
+
+    nested = encoded.stream("root.nested.data").bytes
+    short_nested = Bytes.new(nested.size - 1) { |index| nested[index] }
+    cjcv_assert_nullable_uint32_decode_rejects(
+      type,
+      cjcv_bulk_stream_variant(encoded, {"root.nested.data" => short_nested} of String => Bytes),
+    )
+
+    extended_nested = Bytes.new(nested.size + 1) do |index|
+      index < nested.size ? nested[index] : 0xff_u8
+    end
+    cjcv_assert_nullable_uint32_decode_rejects(
+      type,
+      cjcv_bulk_stream_variant(encoded, {"root.nested.data" => extended_nested} of String => Bytes),
+    )
+
+    cjcv_assert_nullable_uint32_decode_rejects(
+      type,
+      cjcv_bulk_stream_variant(
+        encoded,
+        Hash(String, Bytes).new,
+        {"root.unplanned" => Bytes[0_u8]} of String => Bytes,
+      ),
+    )
+
+    expect_raises(ArgumentError) do
+      CrystalClick::BinaryBulkDecoder.decode_nullable_uint32_into(
+        type,
+        encoded,
+        [3_u64],
+        CrystalClick::BinaryCodecBudget.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS),
+        Slice(UInt32).new(2),
+        Slice(UInt8).new(3),
+      )
+    end
+  end
+
   # The writer emits one chunk per row for SharedData v3; v2 uses one chunk per mark.
   [2_u64, 3_u64].each do |shared_version|
     it "emits exact RowBinary and split-relative locations with SharedData v#{shared_version}" do
@@ -375,6 +564,124 @@ describe "Compact shared Advanced root JSON columnar batches" do
         FileUtils.rm_rf(parent)
       end
     end
+  end
+
+  it "retains exact Nullable(UInt32) lanes across windows and detached snapshots" do
+    rank_type = CompactJsonColumnarGuardFixture.nullable_uint32
+    empty_batch = CrystalClick::CompactJsonColumnarBatch.from_layout(
+      ["rank"],
+      [] of String,
+      {} of String => CrystalClick::BinaryDataType,
+      2,
+      2_u64,
+    )
+    lane_batch = CrystalClick::CompactJsonColumnarBatch.from_layout(
+      ["rank"],
+      [] of String,
+      {"rank" => rank_type} of String => CrystalClick::BinaryDataType,
+      2,
+      2_u64,
+    )
+    (lane_batch.retained_workspace_bytes - empty_batch.retained_workspace_bytes).should eq(10_u64)
+    realistic_empty_batch = CrystalClick::CompactJsonColumnarBatch.from_layout(
+      ["rank"],
+      [] of String,
+      {} of String => CrystalClick::BinaryDataType,
+      CrystalClick::WidePartTable::MAX_MARK_ROWS.to_i,
+      2_u64,
+    )
+    under_lane_budget = realistic_empty_batch.retained_workspace_bytes + 1_u64
+    CrystalClick::CompactJsonColumnarBatch.from_layout(
+      ["rank"],
+      [] of String,
+      {} of String => CrystalClick::BinaryDataType,
+      CrystalClick::WidePartTable::MAX_MARK_ROWS.to_i,
+      2_u64,
+      under_lane_budget,
+    )
+    expect_raises(CrystalClick::CorruptPartError) do
+      CrystalClick::CompactJsonColumnarBatch.from_layout(
+        ["rank"],
+        [] of String,
+        {"rank" => rank_type} of String => CrystalClick::BinaryDataType,
+        CrystalClick::WidePartTable::MAX_MARK_ROWS.to_i,
+        2_u64,
+        under_lane_budget,
+      )
+    end
+
+    batch = CrystalClick::CompactJsonColumnarBatch.from_layout(
+      ["rank", "payload"],
+      [] of String,
+      {"rank" => rank_type} of String => CrystalClick::BinaryDataType,
+      2,
+      16_u64,
+    )
+    batch.begin_mark!(0, "native-rank", "/native-rank", 0, 0_u64, 10_u64, 40_u64, 2_u64)
+    lane = batch.begin_nullable_uint32_fill!("rank", rank_type).not_nil!
+    lane[0][0] = 0xdead_beef_u32
+    lane[0][1] = UInt32::MAX
+    lane[1][0] = 1_u8
+    lane[1][1] = 0_u8
+    batch.complete_nullable_uint32_fill!("rank", 2)
+
+    rank_column = batch.column_for("rank").not_nil!
+    prior_rank_column = rank_column
+    rank_column.has_nullable_uint32_lane?.should be_true
+    rank_column.nullable_uint32_lane_active?.should be_true
+
+    batch.set_window!(0, 2, 0_u64, 10_u64, 40_u64)
+    values = rank_column.nullable_uint32_values
+    nulls = rank_column.nullable_uint32_nulls
+    values.size.should eq(2)
+    nulls.size.should eq(2)
+    values.read_only?.should be_true
+    nulls.read_only?.should be_true
+    value_address = values.to_unsafe.address
+    null_address = nulls.to_unsafe.address
+    values.to_a.should eq([0xdead_beef_u32, UInt32::MAX])
+    nulls.to_a.should eq([1_u8, 0_u8])
+    rank_column.present_at?(0).should be_true
+    rank_column.type_at(0).should eq(rank_type)
+    rank_column.nullable_at?(0).should be_true
+    rank_column.value_at(0).not_nil!.is_null?.should be_true
+    CompactJsonColumnarGuardFixture.uint32_value(rank_column.value_at(1).not_nil!.child_at(0)).should eq(UInt32::MAX)
+    payload = batch.column_for("payload").not_nil!
+    payload.present_at?(0).should be_false
+    payload.value_at(0).should be_nil
+    expect_raises(Exception) { values[0] = 1_u32 }
+    expect_raises(Exception) { nulls[0] = 0_u8 }
+    snapshot = batch.snapshot
+    batch.mark_row_offset.should eq(0_u64)
+    batch.part_row_offset.should eq(10_u64)
+
+    batch.begin_mark!(0, "native-rank", "/native-rank", 1, 0_u64, 12_u64, 42_u64, 1_u64)
+    rank_column.same?(prior_rank_column).should be_true
+    rank_column.nullable_uint32_lane_active?.should be_false
+    refill = batch.begin_nullable_uint32_fill!("rank", rank_type).not_nil!
+    refill[0][0] = 0x1234_u32
+    refill[1][0] = 0_u8
+    batch.complete_nullable_uint32_fill!("rank", 1)
+    batch.set_window!(0, 1, 0_u64, 12_u64, 42_u64)
+    refill_values = rank_column.nullable_uint32_values
+    refill_nulls = rank_column.nullable_uint32_nulls
+    refill_values.to_unsafe.address.should eq(value_address)
+    refill_nulls.to_unsafe.address.should eq(null_address)
+    refill_values[0].should eq(0x1234_u32)
+    refill_nulls[0].should eq(0_u8)
+    value = rank_column.value_at(0).not_nil!
+    CompactJsonColumnarGuardFixture.uint32_value(value.child_at(0)).should be > 0xff_u32
+    batch.mark_index.should eq(1_i32)
+    batch.part_row_offset.should eq(12_u64)
+    batch.source_row_offset.should eq(42_u64)
+
+    snapshot_rank = snapshot.column_for("rank").not_nil!
+    snapshot_rank.nullable_uint32_values.to_a.should eq([0xdead_beef_u32, UInt32::MAX])
+    snapshot_rank.nullable_uint32_nulls.to_a.should eq([1_u8, 0_u8])
+    snapshot_rank.value_at(0).not_nil!.is_null?.should be_true
+    CompactJsonColumnarGuardFixture.uint32_value(snapshot_rank.value_at(1).not_nil!.child_at(0)).should eq(UInt32::MAX)
+    snapshot.mark_row_offset.should eq(0_u64)
+    snapshot.part_row_offset.should eq(10_u64)
   end
 
   it "reuses one borrowed batch and column wrapper while a snapshot survives later windows" do
@@ -648,8 +955,20 @@ private def cjcv_official_fixture_probe(part : String, oracle_path : String) : N
     table.scan_compact_json_columnar(workers: workers, batch_rows: 128) do |batch|
       ids = batch.uint64_column("id")
       ids.size.should eq(batch.row_count)
+      rank = batch.column_for("rank").not_nil!
+      rank.has_nullable_uint32_lane?.should be_true
+      rank.nullable_uint32_lane_active?.should be_true
+      rank_values = rank.nullable_uint32_values
+      rank_nulls = rank.nullable_uint32_nulls
+      rank_values.size.should eq(batch.row_count)
+      rank_nulls.size.should eq(batch.row_count)
       batch.row_count.times do |row|
         id = ids[row]
+        expected_null = id % 7_u64 == 0_u64
+        rank_nulls[row].should eq(expected_null ? 1_u8 : 0_u8)
+        unless expected_null
+          rank_values[row].should eq((id % 32_768_u64).to_u32)
+        end
         observed_ids << id
         observed_documents += 1_u64
         actual_bytes.write_bytes(id, IO::ByteFormat::LittleEndian)

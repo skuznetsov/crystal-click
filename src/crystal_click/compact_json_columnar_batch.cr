@@ -1,7 +1,8 @@
 module CrystalClick
   # Reusable borrowed output arena for one Compact Advanced root JSON scan.
-  # Column wrappers and value buffers survive mark resets. Path cells are
-  # sparse, while selected UInt64 companions use retained dense arrays.
+  # Column wrappers and value buffers survive mark resets. Most path cells are
+  # sparse, while selected UInt64 and Nullable(UInt32) lanes use retained
+  # native buffers.
   class CompactJsonColumnarBatch
     getter part_index : Int32
     getter part_name : String
@@ -60,6 +61,8 @@ module CrystalClick
       if companion_columns.size > WidePartTable::MAX_COLUMNS
         raise BoundsError.new("Compact JSON companion roster exceeds its selected-column bound")
       end
+      @workspace_header_bytes = calculate_header_workspace_bytes(paths, companion_columns, fallback_types, max_rows)
+      check_workspace!(@workspace_header_bytes)
 
       @columns = Array(CompactJsonColumnarColumn).new(paths.size)
       @columns_by_path = Hash(String, CompactJsonColumnarColumn).new(initial_capacity: paths.size)
@@ -72,7 +75,7 @@ module CrystalClick
           raise CorruptPartError.new("Compact JSON columnar path roster is duplicated")
         end
         fallback_type = fallback_types[path]?
-        column = CompactJsonColumnarColumn.new(String.new(path.to_slice), fallback_type)
+        column = CompactJsonColumnarColumn.new(String.new(path.to_slice), fallback_type, max_rows)
         @columns << column
         @columns_by_path[column.path] = column
       end
@@ -104,8 +107,6 @@ module CrystalClick
       @companion_buffer_bytes = 0_u64
       @companion_reserved_bytes = 0_u64
       @companion_columns_filled = 0_i32
-      @workspace_header_bytes = calculate_header_workspace_bytes
-      check_workspace!(@workspace_header_bytes)
     end
 
     def columns : Slice(CompactJsonColumnarColumn)
@@ -118,6 +119,33 @@ module CrystalClick
 
     def column_for(path : String) : CompactJsonColumnarColumn?
       @columns_by_path[path]?
+    end
+
+    # :nodoc:
+    # Return native, mutable full-mark destinations only when the exact
+    # declared Nullable(UInt32) output column owns this representation.
+    def begin_nullable_uint32_fill!(path : String, type : BinaryDataType) : Tuple(Slice(UInt32), Slice(UInt8))?
+      column = @columns_by_path[path]? || return nil
+      rows = @mark_row_count.to_u64
+      if @cell_count > UInt64::MAX - rows || @cell_count + rows > @max_cells
+        raise CorruptPartError.new("Compact JSON columnar output exceeds the codec element bound")
+      end
+      column.begin_nullable_uint32_fill!(type, @mark_row_count)
+    end
+
+    # :nodoc:
+    def complete_nullable_uint32_fill!(path : String, rows : Int) : Nil
+      if rows < 0
+        raise CorruptPartError.new("Compact JSON Nullable(UInt32) fill has a negative row count")
+      end
+      column = @columns_by_path[path]? || raise(CorruptPartError.new("Compact JSON Nullable(UInt32) column is outside its sealed roster"))
+      if @cell_count > UInt64::MAX - rows.to_u64 || @cell_count + rows.to_u64 > @max_cells
+        raise CorruptPartError.new("Compact JSON columnar output exceeds the codec element bound")
+      end
+      column.complete_nullable_uint32_fill!(rows)
+      @cell_count += rows.to_u64
+      validate_workspace!
+      nil
     end
 
     # :nodoc:
@@ -185,8 +213,13 @@ module CrystalClick
         @row_count.to_u64,
       )
       @columns.each do |column|
-        column.each_active_cell do |row, value|
-          copy.append_value!(column.path, row - @window_start, value)
+        if column.copy_nullable_uint32_window_to!(copy.column_for(column.path) ||
+                                                  raise(CorruptPartError.new("Compact JSON snapshot lost a path column")))
+          copy.note_nullable_uint32_snapshot_fill!(@row_count)
+        else
+          column.each_active_cell do |row, value|
+            copy.append_value!(column.path, row - @window_start, value)
+          end
         end
       end
       @companion_names.each do |name|
@@ -371,6 +404,19 @@ module CrystalClick
     end
 
     # :nodoc:
+    # Count a dense native lane copied by a column snapshot; its source cells
+    # already have an exact one-per-row representation and need no row-index
+    # or CompactJsonColumnarCell placeholders.
+    def note_nullable_uint32_snapshot_fill!(rows : Int) : Nil
+      if rows < 0 || @cell_count > UInt64::MAX - rows.to_u64 || @cell_count + rows.to_u64 > @max_cells
+        raise CorruptPartError.new("Compact JSON snapshot exceeds the codec element bound")
+      end
+      @cell_count += rows.to_u64
+      validate_workspace!
+      nil
+    end
+
+    # :nodoc:
     def finish_companion_fill! : Nil
       @companion_names.each_with_index do |name, index|
         current_rows = @uint64_columns[name].size.to_u64
@@ -388,29 +434,40 @@ module CrystalClick
       nil
     end
 
-    private def calculate_header_workspace_bytes : UInt64
+    private def calculate_header_workspace_bytes(
+      paths : Array(String),
+      companion_columns : Array(String),
+      fallback_types : Hash(String, BinaryDataType),
+      max_rows : Int,
+    ) : UInt64
       bytes = instance_sizeof(CompactJsonColumnarBatch).to_u64
       bytes = checked_add(bytes, instance_sizeof(Array(CompactJsonColumnarColumn)).to_u64)
-      bytes = checked_add(bytes, checked_multiply(@columns.size.to_u64, sizeof(Pointer(CompactJsonColumnarColumn)).to_u64))
+      bytes = checked_add(bytes, checked_multiply(paths.size.to_u64, sizeof(Pointer(CompactJsonColumnarColumn)).to_u64))
       bytes = checked_add(bytes, instance_sizeof(Hash(String, CompactJsonColumnarColumn)).to_u64)
       bytes = checked_add(bytes, instance_sizeof(Hash(String, Array(UInt64))).to_u64)
       bytes = checked_add(bytes, instance_sizeof(Array(String)).to_u64)
-      bytes = checked_add(bytes, checked_multiply(@companion_names.size.to_u64, sizeof(Pointer(String)).to_u64))
+      bytes = checked_add(bytes, checked_multiply(companion_columns.size.to_u64, sizeof(Pointer(String)).to_u64))
       bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
-      bytes = checked_add(bytes, checked_multiply(@companion_high_water_rows.size.to_u64, sizeof(UInt64).to_u64))
+      bytes = checked_add(bytes, checked_multiply(companion_columns.size.to_u64, sizeof(UInt64).to_u64))
       # Account for hash slots and key references in both path maps. This is a
       # conservative logical owner estimate, not allocator-capacity/RSS.
       bytes = checked_add(bytes,
-        checked_multiply(@columns.size.to_u64, (64 + sizeof(Pointer(String)) * 2).to_u64))
+        checked_multiply(paths.size.to_u64, (64 + sizeof(Pointer(String)) * 2).to_u64))
       bytes = checked_add(bytes,
-        checked_multiply(@companion_names.size.to_u64, (64 + sizeof(Pointer(String)) * 2).to_u64))
-      @columns.each do |column|
+        checked_multiply(companion_columns.size.to_u64, (64 + sizeof(Pointer(String)) * 2).to_u64))
+      lane_bytes = checked_multiply(max_rows.to_u64, (sizeof(UInt32) + sizeof(UInt8)).to_u64)
+      paths.each do |path|
         bytes = checked_add(bytes, instance_sizeof(CompactJsonColumnarColumn).to_u64)
-        bytes = checked_add(bytes, string_owner_bytes(column.path))
+        bytes = checked_add(bytes, string_owner_bytes(path))
         bytes = checked_add(bytes, instance_sizeof(Array(Int32)).to_u64)
         bytes = checked_add(bytes, instance_sizeof(Array(CompactJsonColumnarCell)).to_u64)
+        if type = fallback_types[path]?
+          if CompactJsonColumnarColumn.nullable_uint32_type?(type)
+            bytes = checked_add(bytes, lane_bytes)
+          end
+        end
       end
-      @companion_names.each do |name|
+      companion_columns.each do |name|
         bytes = checked_add(bytes, string_owner_bytes(name))
         bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
       end

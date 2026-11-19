@@ -1047,6 +1047,22 @@ module CrystalClick
             end
           end
         else
+          if (target = columnar) && (lane = target[:output].begin_nullable_uint32_fill!(path, type))
+            BinaryBulkDecoder.decode_nullable_uint32_into(
+              type,
+              streams.typed_for(path),
+              rows_per_mark,
+              budget,
+              lane[0],
+              lane[1],
+              first_mark: selected_first,
+              mark_count: selected_count,
+              profile: profile,
+            )
+            budget.charge_elements(rows_per_mark[selected_first])
+            target[:output].complete_nullable_uint32_fill!(path, rows_per_mark[selected_first].to_i)
+            next
+          end
           typed_rows[path] = BinaryBulkCodec.decode_with_budget(
             type,
             streams.typed_for(path),
