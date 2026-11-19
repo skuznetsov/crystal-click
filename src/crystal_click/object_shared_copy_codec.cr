@@ -187,6 +187,12 @@ module CrystalClick
     # only the current decoded scalar and append it directly to that column.
     # The legacy decode APIs above intentionally keep their row ownership and
     # NULL semantics for callers outside this lane.
+    # The low-level byte-array entry point keeps its established detached-value
+    # behavior because callers may mutate their lane buffers after decoding.
+    # The internal borrow seam is used only by ObjectSharedCopyStreams after it
+    # has detached and frozen all three lanes; retained slices live with that
+    # prepared input owner. Public raw-buffer callers must keep the default.
+    # :nodoc:
     def self.decode_into_columns_with_budget(
       sizes : Bytes,
       indexes : Bytes,
@@ -196,6 +202,31 @@ module CrystalClick
       output : CompactJsonColumnarBatch,
       row_offset : Int32,
       budget : BinaryCodecBudget,
+      borrow_string_slices : Bool = false,
+    ) : UInt64
+      decode_into_columns_internal(
+        sizes,
+        indexes,
+        values,
+        bucket_structures,
+        columns_by_index,
+        output,
+        row_offset,
+        budget,
+        borrow_string_slices: borrow_string_slices,
+      )
+    end
+
+    private def self.decode_into_columns_internal(
+      sizes : Bytes,
+      indexes : Bytes,
+      values : Bytes,
+      bucket_structures : Array(ObjectSharedChunkStructure),
+      columns_by_index : Array(CompactJsonColumnarColumn),
+      output : CompactJsonColumnarBatch,
+      row_offset : Int32,
+      budget : BinaryCodecBudget,
+      borrow_string_slices : Bool,
     ) : UInt64
       dictionary, row_count, total_entries, width = preflight_decode_layout(
         sizes, indexes, values, bucket_structures, budget,
@@ -235,18 +266,35 @@ module CrystalClick
           dictionary_index = read_index(indexes, index_offset, width).to_i
           index_offset += width
 
-          type, value = read_dynamic_value(values_context, budget)
-          if type.tag == BinaryDataType::TAG_NOTHING || type.tag == BinaryDataType::TAG_NULLABLE || value.is_null?
+          value = read_dynamic_column_value(values_context, budget, borrow_string_slices)
+          if value.type.tag == BinaryDataType::TAG_NOTHING ||
+             value.type.tag == BinaryDataType::TAG_NULLABLE || value.is_null?
             raise CorruptPartError.new("Object shared Copy contains a top-level Nothing or NULL value")
           end
           column = columns_by_index[dictionary_index]
-          output.append_column_value!(column, row_offset + row_index, value, binding_workspace_bytes)
+          output.append_column_cell!(column, row_offset + row_index, value, binding_workspace_bytes)
           entry_index += 1
         end
         row_index += 1
       end
       values_context.ensure_consumed
       row_count.to_u64
+    end
+
+    private def self.read_dynamic_column_value(
+      values_context : BinaryCodecContext,
+      budget : BinaryCodecBudget,
+      borrow_string_slices : Bool,
+    ) : CompactJsonColumnarCell
+      envelope_size = values_context.read_var_uint
+      if borrow_string_slices
+        if bytes = values_context.read_dynamic_string_slice_envelope(envelope_size)
+          return CompactJsonColumnarCell.borrowed_string(bytes)
+        end
+      end
+      envelope = values_context.read_slice(envelope_size)
+      type, decoded_value = decode_dynamic_value(envelope, budget)
+      CompactJsonColumnarCell.owned(decoded_value || BinaryValue.null(type))
     end
 
     private def self.preflight_decode_layout(
@@ -329,7 +377,15 @@ module CrystalClick
     ) : Tuple(BinaryDataType, BinaryValue)
       envelope_size = values_context.read_var_uint
       envelope = values_context.read_slice(envelope_size)
-      type, decoded_value = BinaryValueCodec.decode_dynamic_bulk_child(
+      type, decoded_value = decode_dynamic_value(envelope, budget)
+      {type, decoded_value || BinaryValue.null(type)}
+    end
+
+    private def self.decode_dynamic_value(
+      envelope : Bytes,
+      budget : BinaryCodecBudget,
+    ) : Tuple(BinaryDataType, BinaryValue?)
+      BinaryValueCodec.decode_dynamic_bulk_child(
         envelope,
         budget,
         1,
@@ -337,7 +393,6 @@ module CrystalClick
         allow_recursive_qbit: true,
         allow_qbit_variants: false,
       )
-      {type, decoded_value || BinaryValue.null(type)}
     end
 
     private def self.scan_indexes(

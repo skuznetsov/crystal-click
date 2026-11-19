@@ -72,6 +72,16 @@
   records the one-mark control and checksum, Copy/Data, and RowBinary guards.
   Refresh after changing value materialization, decoder allocation, worker
   scheduling, or Boehm.
+- Compact Advanced SharedData keeps primitive Copy `String` payloads in
+  read-only slices of prepared lanes and compares them with per-path Data
+  before delivery. The callback borrows the slice and `value_at` and
+  `snapshot` retain owned values. On the same overflow part, median read
+  allocation fell 24.7% against `e2571d1` and read p50 fell 24.1% and 26.2%
+  at one and four workers. Four workers still took 1.84 times the
+  one-worker read median in the retained probe. Refresh the
+  [Copy slice comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#shareddata-copy-string-slices)
+  after changing Copy ownership, cell accounting, verification, worker
+  delivery, or the allocator.
 
 ## Compressed Compact aggregate projection indexes — W301
 

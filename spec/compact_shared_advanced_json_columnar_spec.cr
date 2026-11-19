@@ -503,7 +503,7 @@ describe "Compact shared Advanced root JSON columnar batches" do
     batch.uint64_column("pk").to_a.should eq([1_u64, 2_u64, 3_u64, 4_u64])
     batch.reset!
     after_reset = batch.retained_workspace_bytes
-    slot_bytes = sizeof(Int32).to_u64 + sizeof(Pointer(CrystalClick::BinaryValue)).to_u64
+    slot_bytes = sizeof(Int32).to_u64 + sizeof(CrystalClick::CompactJsonColumnarCell).to_u64
     companion_slot_bytes = 4_u64 * sizeof(UInt64).to_u64
     (after_reset - empty_workspace).should eq(4_u64 * slot_bytes + companion_slot_bytes)
 

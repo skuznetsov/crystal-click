@@ -7,7 +7,7 @@ module CrystalClick
     getter fallback_type : BinaryDataType?
 
     @row_indexes : Array(Int32)
-    @values : Array(BinaryValue)
+    @values : Array(CompactJsonColumnarCell)
     @window_start : Int32
     @window_count : Int32
     @dense_prefix : Bool
@@ -15,7 +15,7 @@ module CrystalClick
 
     def initialize(@path : String, @fallback_type : BinaryDataType? = nil)
       @row_indexes = [] of Int32
-      @values = [] of BinaryValue
+      @values = [] of CompactJsonColumnarCell
       @window_start = 0_i32
       @window_count = 0_i32
       @dense_prefix = true
@@ -26,27 +26,44 @@ module CrystalClick
       @window_count
     end
 
-    # Returns nil for an absent path at this row. A present NULL remains a
-    # BinaryValue with its exact descriptor and `is_null?` state.
+    # Returns nil for an absent path at this row. A present NULL remains an
+    # owned BinaryValue with its exact descriptor and `is_null?` state.
     def value_at(row : Int) : BinaryValue?
-      absolute_row = absolute_row!(row)
-      if @dense_prefix && absolute_row < @values.size
-        return @values[absolute_row]
-      end
-      index = lower_bound(absolute_row)
-      return nil unless index < @row_indexes.size && @row_indexes[index] == absolute_row
-      @values[index]
+      cell = cell_at(row)
+      cell.try(&.materialize)
     end
 
     def present_at?(row : Int) : Bool
-      !value_at(row).nil?
+      !cell_at(row).nil?
+    end
+
+    # :nodoc:
+    # Borrow one cell for the duration of a callback. `borrowed_string_bytes?`
+    # is read-only and valid while the batch remains on this callback's mark.
+    def with_cell_at(row : Int, &block : CompactJsonColumnarCell -> T) : Bool forall T
+      if cell = cell_at(row)
+        yield cell
+        true
+      else
+        false
+      end
     end
 
     # :nodoc:
     # Visit present cells in one mark-relative row range in sorted order. This
-    # lets sparse cross-representation checks handle absent gaps with a single
-    # monotone pass instead of binary-searching once per row.
+    # legacy view materializes borrowed Strings, preserving its BinaryValue
+    # callback contract for callers that explicitly request it.
     def each_cell_in_range(start : Int32, count : Int32, &block : Int32, BinaryValue -> Nil) : Nil
+      each_cell_representation_in_range(start, count) { |row, cell| yield row, cell.materialize }
+    end
+
+    # :nodoc:
+    # Internal borrowed-cell walk for direct verification and snapshots.
+    def each_cell_representation_in_range(
+      start : Int32,
+      count : Int32,
+      &block : Int32, CompactJsonColumnarCell -> Nil
+    ) : Nil
       window_finish = @window_start + @window_count
       if count < 0 || start < @window_start || start > Int32::MAX - count
         raise IndexError.new("Compact JSON column row range is outside the active batch window")
@@ -67,6 +84,11 @@ module CrystalClick
     # Appends are row-monotonic, so duplicate ownership (when the established
     # Object assembly precedence permits it) can only touch the final cell.
     def last_value_at(row : Int32) : BinaryValue?
+      last_cell_at(row).try(&.materialize)
+    end
+
+    # :nodoc:
+    def last_cell_at(row : Int32) : CompactJsonColumnarCell?
       if !@row_indexes.empty? && @row_indexes[-1] == row
         @values[-1]
       else
@@ -75,12 +97,12 @@ module CrystalClick
     end
 
     def type_at(row : Int) : BinaryDataType?
-      value_at(row).try(&.type) || @fallback_type
+      cell_at(row).try(&.type) || @fallback_type
     end
 
     def nullable_at?(row : Int) : Bool
-      if value = value_at(row)
-        value.type.tag == BinaryDataType::TAG_NULLABLE || value.is_null?
+      if cell = cell_at(row)
+        cell.type.tag == BinaryDataType::TAG_NULLABLE || cell.is_null?
       else
         @fallback_type.try(&.tag) == BinaryDataType::TAG_NULLABLE
       end
@@ -98,6 +120,11 @@ module CrystalClick
 
     # :nodoc:
     def append!(row : Int32, value : BinaryValue) : Bool
+      append_cell!(row, CompactJsonColumnarCell.owned(value))
+    end
+
+    # :nodoc:
+    def append_cell!(row : Int32, value : CompactJsonColumnarCell) : Bool
       if !@row_indexes.empty? && @row_indexes[-1] == row
         # Preserve ObjectDocument assembly precedence if two admitted owners
         # write the same path for one row: later writes replace earlier ones.
@@ -140,7 +167,17 @@ module CrystalClick
       return 0_u64 if current <= @accounted_buffer_cells
       delta_cells = current - @accounted_buffer_cells
       @accounted_buffer_cells = current
-      delta_cells * (sizeof(Int32).to_u64 + sizeof(Pointer(BinaryValue)).to_u64)
+      delta_cells * (sizeof(Int32).to_u64 + sizeof(CompactJsonColumnarCell).to_u64)
+    end
+
+    private def cell_at(row : Int) : CompactJsonColumnarCell?
+      absolute_row = absolute_row!(row)
+      if @dense_prefix && absolute_row < @values.size
+        return @values[absolute_row]
+      end
+      index = lower_bound(absolute_row)
+      return nil unless index < @row_indexes.size && @row_indexes[index] == absolute_row
+      @values[index]
     end
 
     private def absolute_row!(row : Int) : Int32

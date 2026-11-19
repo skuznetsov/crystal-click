@@ -234,9 +234,26 @@ module CrystalClick
     # This module deliberately accepts only the minimal canonical VarUInt
     # profile; ClickHouse's general binary decoder is not claimed to require it.
     def read_var_uint : UInt64
+      read_var_uint_with_byte_reader { read_byte }
+    end
+
+    # Read one canonical VarUInt without crossing a nested envelope boundary.
+    # The ordinary reader uses the same canonical checks without this bound.
+    private def read_var_uint_bounded(maximum_bytes : UInt64) : UInt64
+      start_offset = @input_offset
+      read_var_uint_with_byte_reader do
+        if (@input_offset - start_offset).to_u64 >= maximum_bytes
+          corrupt!("binary codec input is truncated")
+        end
+        read_byte
+      end
+    end
+
+    @[AlwaysInline]
+    private def read_var_uint_with_byte_reader(&read_next : -> UInt8) : UInt64
       value = 0_u64
       10.times do |index|
-        byte = read_byte
+        byte = yield
         payload = (byte & 0x7f_u8).to_u64
         if index == 9 && payload > 1_u64
           raise CorruptPartError.new("binary codec VarUInt overflows UInt64")
@@ -254,6 +271,41 @@ module CrystalClick
         end
       end
       raise CorruptPartError.new("binary codec VarUInt is too long")
+    end
+
+    # Read the value bytes for the exact top-level String descriptor from the
+    # current lane cursor. A nil result leaves the cursor untouched when the
+    # envelope is not String. Successful results are read-only spans into the
+    # lane and consume exactly the declared envelope extent.
+    def read_dynamic_string_slice_envelope(envelope_size : UInt64) : Bytes?
+      return nil if envelope_size == 0_u64
+      if envelope_size > Int32::MAX.to_u64
+        corrupt!("binary codec byte range is truncated or too large")
+      end
+      ensure_remaining_input_bytes(envelope_size)
+      source = @input || raise CorruptPartError.new("binary codec has no input")
+      type_tag = source[@input_offset]
+      return nil unless type_tag == BinaryDataType::TAG_STRING
+
+      start_offset = @input_offset
+      visit_node(1)
+      # `type_tag` above verifies the exact primitive descriptor; advance the
+      # cursor once without rereading it. The immutable lane was bounds-checked
+      # above, so this is the same consumed byte as read_byte.
+      @input_offset += 1
+
+      visit_node(1)
+      length = read_var_uint_bounded(envelope_size - 1_u64)
+      consumed = (@input_offset - start_offset).to_u64
+      remaining_envelope_bytes = envelope_size - consumed
+      if length > remaining_envelope_bytes
+        corrupt!("binary codec byte range is truncated or too large")
+      end
+      bytes = read_slice(length)
+      unless (@input_offset - start_offset).to_u64 == envelope_size
+        corrupt!("binary codec input has trailing bytes")
+      end
+      Bytes.new(bytes.to_unsafe, bytes.size, read_only: true)
     end
 
     def read_slice(size : UInt64) : Bytes

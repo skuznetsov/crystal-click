@@ -49,14 +49,15 @@ module CrystalClick
       budget : BinaryCodecBudget,
     ) : UInt64
       ObjectSharedCopyCodec.decode_into_columns_with_budget(
-        @sizes,
-        @indexes,
-        @values,
+        Bytes.new(@sizes.to_unsafe, @sizes.size, read_only: true),
+        Bytes.new(@indexes.to_unsafe, @indexes.size, read_only: true),
+        Bytes.new(@values.to_unsafe, @values.size, read_only: true),
         bucket_structures,
         columns_by_index,
         output,
         row_offset,
         budget,
+        borrow_string_slices: true,
       )
     end
   end

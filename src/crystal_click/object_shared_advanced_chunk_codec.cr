@@ -669,7 +669,7 @@ module CrystalClick
           decoded = decode_path_for_copy_verification(path, row_count, budget, profile, nested_context)
 
           row_index = 0
-          column.each_cell_in_range(row_offset, row_count) do |copy_row, copy_value|
+          column.each_cell_representation_in_range(row_offset, row_count) do |copy_row, copy_cell|
             while row_index < row_count && row_offset + row_index < copy_row
               ensure_absent_path_value!(decoded.row_at(row_index))
               row_index += 1
@@ -679,7 +679,7 @@ module CrystalClick
             end
             dynamic_value = decoded.row_at(row_index)
             unless !dynamic_value.is_null? && dynamic_value.child_count == 1 &&
-                   values_equal?(copy_value, dynamic_value.child_at(0), budget, 1)
+                   values_equal?(copy_cell, dynamic_value.child_at(0), budget, 1)
               raise CorruptPartError.new("Object shared Copy value disagrees with its per-path Dynamic row")
             end
             row_index += 1
@@ -759,6 +759,27 @@ module CrystalClick
       unless value.is_null? && value.child_count == 0
         raise CorruptPartError.new("absent Object shared path has a non-NULL Dynamic row")
       end
+    end
+
+    private def self.values_equal?(
+      left : CompactJsonColumnarCell,
+      right : BinaryValue,
+      budget : BinaryCodecBudget,
+      depth : Int32,
+    ) : Bool
+      unless bytes = left.borrowed_string_bytes?
+        return values_equal?(left.materialize, right, budget, depth)
+      end
+
+      budget.visit_node(depth)
+      left_type = left.type
+      return false unless left_type == right.type
+      return false unless left.is_null? == right.is_null?
+      return true if left.is_null?
+      return false unless left_type.tag == BinaryDataType::TAG_STRING
+      return false unless bytes.size == right.byte_size
+      budget.charge_elements(bytes.size.to_u64)
+      right.string_payload_equals?(bytes)
     end
 
     private def self.values_equal?(

@@ -440,6 +440,14 @@ module CompactJSONScanProbe
     nil
   end
 
+  def self.write_json_value(io : IO, cell : CrystalClick::CompactJsonColumnarCell) : Nil
+    if bytes = cell.borrowed_string_bytes?
+      JSON.build(io) { |json| json.string { |escaped| escaped.write(bytes) } }
+    else
+      write_json_value(io, cell.materialize)
+    end
+  end
+
   def self.document_json(document : CrystalClick::ObjectDocument) : String
     io = IO::Memory.new
     io << '{'
@@ -585,12 +593,13 @@ module CompactJSONScanProbe
           emitted = false
           batch.column_count.times do |index|
             column = batch.column_at(index)
-            next unless value = column.value_at(row)
-            json << ',' if emitted
-            column.path.to_json(json)
-            json << ':'
-            write_json_value(json, value)
-            emitted = true
+            column.with_cell_at(row) do |cell|
+              json << ',' if emitted
+              column.path.to_json(json)
+              json << ':'
+              write_json_value(json, cell)
+              emitted = true
+            end
           end
           json << '}'
           output.write_bytes(ids[row], IO::ByteFormat::LittleEndian)

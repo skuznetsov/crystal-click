@@ -66,8 +66,9 @@ counts on macOS with `ENABLE_LIBRARIES=OFF`.
 For a Crystal-only comparison, supply `--baseline-crystal-bin` and omit
 `--cpp-bin` and `--native-read-allocations`. Both binaries go through the
 same schedule, RowBinary, and post-open checksum checks. Set the revision in
-`git archive` to `2dee2ae` for the Dynamic binding baseline or `86b3225` for
-the empty child storage baseline.
+`git archive` to `e2571d1` for the Copy String slice baseline, `2dee2ae` for
+the Dynamic binding baseline, or `86b3225` for the empty child storage
+baseline.
 
 The public callback and source-binding checks use both fixture directories.
 
@@ -691,6 +692,72 @@ and source changes between callbacks.
 | Stock Release runner | `41ae3224113d20d36cfc640818b37070cd3c7892496791942823e3a00561ea49` |
 | Diagnostic Release runner | `d3cdbac6a51496c12d6dd007ecc3eb2a39af56ec24ab27d8fc1c5fffd4875dab` |
 | Matched timing report | `1ce3affc98a012679581b8b09f1e4eafbbe623cce5304e1049f65ca8f6cd5f13` |
+
+### SharedData Copy String slices
+
+The columnar reader borrows top-level primitive `String` payloads from the
+prepared Copy values lane. It bounds each length prefix and payload by the
+declared envelope, then compares presence, type, length and bytes with
+the per-path Data before delivery. Other Copy types use the recursive codec.
+`with_cell_at` exposes read-only bytes during the callback. `value_at` and
+`snapshot` give the caller owned values. The prepared lane accounts for
+the borrowed payload and the column accounts for the inline cell slot.
+
+Both `columnar` runners read the same 8,192-row overflow part used in the
+preceding profile. The `e2571d1` baseline and the updated build used Crystal
+1.22.3 Release with `-Dpreview_mt -Dexecution_context`, LLVM 23.1.5, and
+Boehm 8.2.12 on the shared Apple M2 Max host. The read timer includes plan
+preparation, decoding, Copy/Data comparison and source checks. The combined
+timer adds ordered RowBinary serialization. The updated serializer escapes
+borrowed String bytes directly with the Crystal JSON builder. Both runners
+reuse their worker threads within a block and verify the ClickHouse
+26.10.1.1201 oracle after every sample.
+
+Eight interleaved blocks used two warmups and six timed scans per build and
+worker count. Each of the 192 timed scans matched the 1,922,070-byte
+RowBinary oracle and the same four positive marks. Times and allocated
+bytes are per scan. The read allocation counters include all workers.
+
+| Workers | Read p50 / p95, ms before → after | Read + serialize p50 / p95, ms before → after | Boehm read allocation p50 / p95, MiB before → after | Boehm read collections p50 / p95 before → after |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 28.219 / 31.084 → 21.424 / 22.813 | 43.731 / 48.406 → 35.436 / 38.152 | 66.791 / 66.811 → 50.294 / 50.314 | 1 / 2 → 2 / 2 |
+| 4 | 53.429 / 58.486 → 39.418 / 46.385 | 70.274 / 76.586 → 54.457 / 61.033 | 66.807 / 66.836 → 50.310 / 50.336 | 1 / 3 → 2 / 4 |
+
+All eight block read medians improved at each worker count. The updated
+read was faster in 48 of 48 matched pairs with one worker and 47 of 48
+with four. Read allocation p50 fell 24.7% at each worker count. Allocation
+p50 through serialization fell from 99.804 to 82.556 MiB with one worker
+and from 99.821 to 82.573 MiB with four. The four-worker read median was
+1.84 times the one-worker median after the change. The median of the
+slowest worker's elapsed decode interval was 31.890 ms at four workers,
+compared with 14.281 ms for one worker decoding all four marks. This probe
+measures retained worker dispatch and one result per worker. The public
+callback scan acknowledges each batch window separately.
+
+A two-block control on the no-overflow fixture gave 12 scans per build
+and worker count. Read allocation medians stayed within 0.003 MiB of
+baseline. Read p50 / p95 moved from 9.499 / 10.259 to 9.413 / 9.809 ms at
+one worker and from 18.384 / 21.264 to 18.641 / 20.509 ms at four. Combined
+p50 rose from 25.367 to 25.933 ms at four workers. The short control has
+mixed paired latency results on the shared host. The inline cell adds
+16 bytes per slot even for owned values, and the workspace bound charges
+the actual slot width.
+
+Both builds at both worker counts rejected post-open checksum mutations
+at `data.bin[0]` and `data.bin[30030]` on the overflow part, plus a one-byte
+change to the same-length RowBinary oracle. All 30 focused Release examples
+passed, including both ClickHouse fixture cases through the public callback
+API. The specs cover unusual String bytes, a VarUInt truncated at the
+envelope boundary, byte budgets, validly encoded Copy/Data type and payload
+disagreements, retention across batch reuse, and source checks between
+callbacks.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `e2571d1` Release runner | `3621af0c8ee86833824bc2f316a37d4d603fe382c230b0303fbaf479f878b529` |
+| Copy String slices Release runner | `913532d9165e055cece07ac46e40faeb7649a61b202b0fa794dd6325eab70493` |
+| Matched overflow report | `9dd98f0eda1c324735c921f257e3770eb14a2c0a84e7bc328f8ca0a5abf68973` |
+| No-overflow control report | `4cf8a41aede33d6fa9a694f62cd194dc38d6a7605ab906b3e8c91800ad662018` |
 
 ### Previous shared-plan diagnostics
 

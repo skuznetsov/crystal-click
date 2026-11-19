@@ -251,22 +251,35 @@ module CrystalClick
       value : BinaryValue,
       additional_workspace_bytes : UInt64 = 0_u64,
     ) : Bool
+      append_column_cell!(column, row, CompactJsonColumnarCell.owned(value), additional_workspace_bytes)
+    end
+
+    # :nodoc:
+    # Retain a cell representation directly. The Copy String path uses this
+    # overload to keep its read-only lane span inline instead of copying it
+    # into a BinaryValue payload.
+    def append_column_cell!(
+      column : CompactJsonColumnarColumn,
+      row : Int,
+      value : CompactJsonColumnarCell,
+      additional_workspace_bytes : UInt64 = 0_u64,
+    ) : Bool
       if row < 0 || row >= @mark_row_count
         raise CorruptPartError.new("Compact JSON columnar value row is outside its mark")
       end
-      prior = column.last_value_at(row.to_i32)
-      inserted = column.append!(row.to_i32, value)
+      prior = column.last_cell_at(row.to_i32)
+      inserted = column.append_cell!(row.to_i32, value)
       @column_buffer_bytes = checked_add(@column_buffer_bytes, column.account_buffer_high_water_cells!)
       if inserted
         @cell_count += 1_u64
       elsif previous = prior
-        previous_bytes = binary_value_workspace_bytes(previous)
+        previous_bytes = columnar_cell_workspace_bytes(previous)
         if previous_bytes > @cell_payload_bytes
           raise CorruptPartError.new("Compact JSON column payload accounting underflows")
         end
         @cell_payload_bytes -= previous_bytes
       end
-      @cell_payload_bytes = checked_add(@cell_payload_bytes, binary_value_workspace_bytes(value))
+      @cell_payload_bytes = checked_add(@cell_payload_bytes, columnar_cell_workspace_bytes(value))
       if @cell_count > @max_cells
         raise CorruptPartError.new("Compact JSON columnar output exceeds the codec element bound")
       end
@@ -395,7 +408,7 @@ module CrystalClick
         bytes = checked_add(bytes, instance_sizeof(CompactJsonColumnarColumn).to_u64)
         bytes = checked_add(bytes, string_owner_bytes(column.path))
         bytes = checked_add(bytes, instance_sizeof(Array(Int32)).to_u64)
-        bytes = checked_add(bytes, instance_sizeof(Array(BinaryValue)).to_u64)
+        bytes = checked_add(bytes, instance_sizeof(Array(CompactJsonColumnarCell)).to_u64)
       end
       @companion_names.each do |name|
         bytes = checked_add(bytes, string_owner_bytes(name))
@@ -434,6 +447,12 @@ module CrystalClick
         end
       end
       bytes
+    end
+
+    private def columnar_cell_workspace_bytes(value : CompactJsonColumnarCell) : UInt64
+      # Borrowed String payload bytes already belong to the prepared Copy lane
+      # and are charged there. The output retains only its inline slice slot.
+      value.owned_value?.try { |owned| binary_value_workspace_bytes(owned) } || 0_u64
     end
 
     private def projected_companion_buffer_bytes(required_rows : Int) : UInt64

@@ -342,6 +342,15 @@ module CrystalClick
       @payload.try(&.size) || 0
     end
 
+    # :nodoc:
+    # Compare an already-owned String payload to a borrowed read-only span
+    # without exposing the BinaryValue's mutable backing slice.
+    def string_payload_equals?(bytes : Bytes) : Bool
+      return false unless @type.tag == BinaryDataType::TAG_STRING
+      payload = @payload || return false
+      payload == bytes
+    end
+
     def byte_at(index : Int) : UInt8
       if value = @qbit_value
         if index < 0 || index >= value.raw_bytesize

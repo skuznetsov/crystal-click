@@ -4,9 +4,9 @@ private def w263_direct_limits : CrystalClick::BinaryCodecLimits
   CrystalClick::BinaryCodecLimits.new(64, 100_000, 1_000_000, 64 * 1024 * 1024)
 end
 
-private def w263_direct_row(pairs : Array(Tuple(String, String))) : CrystalClick::ObjectSharedMapRow
+private def w263_direct_typed_row(pairs : Array(Tuple(String, CrystalClick::BinaryValue))) : CrystalClick::ObjectSharedMapRow
   entries = pairs.map do |pair|
-    CrystalClick::ObjectSharedMapEntry.new(pair[0].to_slice, CrystalClick::BinaryValue.string(pair[1]))
+    CrystalClick::ObjectSharedMapEntry.new(pair[0].to_slice, pair[1])
   end
   entries.sort! do |left, right|
     CrystalClick::ObjectSharedChunkStructure.compare_paths(
@@ -15,6 +15,13 @@ private def w263_direct_row(pairs : Array(Tuple(String, String))) : CrystalClick
     )
   end
   CrystalClick::ObjectSharedMapRow.new(entries)
+end
+
+private def w263_direct_row(pairs : Array(Tuple(String, String))) : CrystalClick::ObjectSharedMapRow
+  values = pairs.map do |pair|
+    {pair[0], CrystalClick::BinaryValue.string(pair[1])}
+  end
+  w263_direct_typed_row(values)
 end
 
 private def w263_direct_batch(
@@ -59,6 +66,25 @@ private def w263_decode_into_columns(
   batch
 end
 
+private def w263_decode_into_columns_with_limits(
+  buckets : Array(CrystalClick::ObjectSharedPhysicalChunk),
+  copy : CrystalClick::ObjectSharedCopyStreams,
+  row_count : Int32,
+  limits : CrystalClick::BinaryCodecLimits,
+) : Tuple(CrystalClick::CompactJsonColumnarBatch, CrystalClick::BinaryCodecBudget)
+  batch = w263_direct_batch(buckets, row_count)
+  budget = CrystalClick::BinaryCodecBudget.new(limits)
+  decoded_rows = CrystalClick::ObjectSharedAdvancedChunkCodec.decode_into_columns(
+    buckets,
+    copy,
+    budget,
+    batch,
+    0_i32,
+  ) { |_path| }
+  decoded_rows.should eq(row_count.to_u64)
+  {batch, budget}
+end
+
 describe "W263 direct SharedData Copy-to-column decode" do
   it "appends sparse Copy values directly and verifies their per-path Data rows" do
     rows = [
@@ -81,6 +107,236 @@ describe "W263 direct SharedData Copy-to-column decode" do
     w263_direct_text(path_b.value_at(0).not_nil!).should eq("b0")
     path_b.value_at(1).should be_nil
     w263_direct_text(path_b.value_at(2).not_nil!).should eq("b2")
+  end
+
+  it "preserves exact empty and arbitrary String bytes across short and long VarUInt frames" do
+    values = [
+      Bytes.empty,
+      Bytes[0xff_u8, 0x00_u8, 0x80_u8, 0xc3_u8, 0x28_u8],
+      Bytes.new(125) { 0x31_u8 },
+      Bytes.new(126) { 0x32_u8 },
+      Bytes.new(127) { 0x33_u8 },
+      Bytes.new(128) { 0x34_u8 },
+    ] of Bytes
+    string_type = CrystalClick::BinaryDataType.primitive("String")
+    rows = values.map do |bytes|
+      w263_direct_typed_row([
+        {"direct-string", CrystalClick::BinaryValue.string(string_type, bytes)},
+      ] of Tuple(String, CrystalClick::BinaryValue))
+    end.to_a
+    encoded = CrystalClick::ObjectSharedAdvancedChunkCodec.encode(
+      rows,
+      1,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits, true),
+    )
+
+    # One descriptor byte plus the String length VarUInt and bytes makes the
+    # 125/126-byte String envelopes exactly 127/128 bytes. The final pair also
+    # crosses the inner String-length VarUInt boundary at 127/128 bytes.
+    lane = encoded.copy_streams.values
+    limits = w263_direct_limits
+    context = CrystalClick::BinaryCodecContext.new(
+      limits,
+      lane,
+      false,
+      CrystalClick::BinaryCodecBudget.new(limits),
+      false,
+    )
+    [2_u64, 7_u64, 127_u64, 128_u64, 129_u64, 131_u64].each_with_index do |expected_size, index|
+      prefix_offset = context.input_offset
+      envelope_size = context.read_var_uint
+      envelope_size.should eq(expected_size)
+      (context.input_offset - prefix_offset).should eq(index < 3 ? 1 : 2)
+      context.read_slice(envelope_size)
+    end
+    context.ensure_consumed
+
+    batch = w263_decode_into_columns(encoded.buckets, encoded.copy_streams, values.size)
+    column = batch.column_for("direct-string").not_nil!
+    values.each_with_index do |bytes, row|
+      column.with_cell_at(row) do |cell|
+        borrowed = cell.borrowed_string_bytes?
+        borrowed.should_not be_nil
+        borrowed.not_nil!.should eq(bytes)
+        if row == 1
+          expect_raises(Exception, "Can't write to read-only Slice") do
+            borrowed.not_nil![0] = 0x42_u8
+          end
+          borrowed.not_nil!.should eq(bytes)
+        end
+      end.should be_true
+      column.value_at(row).not_nil!.bytes.should eq(bytes)
+    end
+  end
+
+  it "keeps a retained String BinaryValue stable when its batch is reset and reused" do
+    string_type = CrystalClick::BinaryDataType.primitive("String")
+    first = CrystalClick::ObjectSharedAdvancedChunkCodec.encode(
+      [w263_direct_typed_row([
+        {"direct-retained", CrystalClick::BinaryValue.string(string_type, Bytes[0x00_u8, 0xff_u8, 0x61_u8])},
+      ] of Tuple(String, CrystalClick::BinaryValue))] of CrystalClick::ObjectSharedMapRow,
+      1,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits, true),
+    )
+    batch = w263_direct_batch(first.buckets, 1)
+    CrystalClick::ObjectSharedAdvancedChunkCodec.decode_into_columns(
+      first.buckets,
+      first.copy_streams,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits),
+      batch,
+      0_i32,
+    ) { |_path| }
+    retained = batch.column_for("direct-retained").not_nil!.value_at(0).not_nil!
+    retained.bytes.should eq(Bytes[0x00_u8, 0xff_u8, 0x61_u8])
+
+    second = CrystalClick::ObjectSharedAdvancedChunkCodec.encode(
+      [w263_direct_typed_row([
+        {"direct-retained", CrystalClick::BinaryValue.string(string_type, Bytes[0x62_u8, 0x00_u8, 0x63_u8, 0xfe_u8])},
+      ] of Tuple(String, CrystalClick::BinaryValue))] of CrystalClick::ObjectSharedMapRow,
+      1,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits, true),
+    )
+    batch.reset!
+    batch.begin_mark!(0, "part", "/part", 1, 0_u64, 1_u64, 1_u64, 1_u64)
+    CrystalClick::ObjectSharedAdvancedChunkCodec.decode_into_columns(
+      second.buckets,
+      second.copy_streams,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits),
+      batch,
+      0_i32,
+    ) { |_path| }
+
+    retained.bytes.should eq(Bytes[0x00_u8, 0xff_u8, 0x61_u8])
+    batch.column_for("direct-retained").not_nil!.value_at(0).not_nil!.bytes.should eq(
+      Bytes[0x62_u8, 0x00_u8, 0x63_u8, 0xfe_u8],
+    )
+  end
+
+  it "preserves mixed String, non-String, and absent values for one Copy path" do
+    string_type = CrystalClick::BinaryDataType.primitive("String")
+    rows = [
+      w263_direct_typed_row([
+        {"direct-mixed", CrystalClick::BinaryValue.string(string_type, Bytes[0x00_u8, 0xff_u8])},
+      ] of Tuple(String, CrystalClick::BinaryValue)),
+      w263_direct_typed_row([
+        {"direct-mixed", CrystalClick::BinaryValue.uint64(91_u64)},
+      ] of Tuple(String, CrystalClick::BinaryValue)),
+      w263_direct_typed_row([
+        {"direct-mixed", CrystalClick::BinaryValue.string(string_type, Bytes.empty)},
+      ] of Tuple(String, CrystalClick::BinaryValue)),
+      w263_direct_typed_row([] of Tuple(String, CrystalClick::BinaryValue)),
+    ] of CrystalClick::ObjectSharedMapRow
+    encoded = CrystalClick::ObjectSharedAdvancedChunkCodec.encode(
+      rows,
+      1,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits, true),
+    )
+
+    batch = w263_decode_into_columns(encoded.buckets, encoded.copy_streams, 4)
+    column = batch.column_for("direct-mixed").not_nil!
+    column.value_at(0).not_nil!.bytes.should eq(Bytes[0x00_u8, 0xff_u8])
+    column.value_at(1).not_nil!.as_uint64.should eq(91_u64)
+    column.value_at(2).not_nil!.bytes.should eq(Bytes.empty)
+    column.value_at(3).should be_nil
+    column.with_cell_at(1) do |cell|
+      cell.borrowed_string_bytes?.should be_nil
+    end.should be_true
+    column.with_cell_at(3) do |_cell|
+      fail "an absent Copy path row must not have a retained cell"
+    end.should be_false
+  end
+
+  it "honors exact and one-byte-short Copy decode byte limits" do
+    rows = [w263_direct_row([{"direct-limited", "bounded"}] of Tuple(String, String))] of CrystalClick::ObjectSharedMapRow
+    encoded = CrystalClick::ObjectSharedAdvancedChunkCodec.encode(
+      rows,
+      1,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits, true),
+    )
+    _batch, unrestricted_budget = w263_decode_into_columns_with_limits(
+      encoded.buckets,
+      encoded.copy_streams,
+      1,
+      w263_direct_limits,
+    )
+    required_bytes = unrestricted_budget.wire_byte_count.to_i
+    exact_limits = CrystalClick::BinaryCodecLimits.new(64, 100_000, 1_000_000, required_bytes)
+    w263_decode_into_columns_with_limits(encoded.buckets, encoded.copy_streams, 1, exact_limits)[0].row_count.should eq(1)
+
+    short_limits = CrystalClick::BinaryCodecLimits.new(64, 100_000, 1_000_000, required_bytes - 1)
+    expect_raises(CrystalClick::CorruptPartError, "binary codec byte limit exceeded") do
+      w263_decode_into_columns_with_limits(encoded.buckets, encoded.copy_streams, 1, short_limits)
+    end
+  end
+
+  it "bounds an inner String VarUInt to its Copy envelope despite following bytes" do
+    string_type = CrystalClick::BinaryDataType.primitive("String")
+    rows = [
+      w263_direct_typed_row([
+        {"direct-bounded", CrystalClick::BinaryValue.string(string_type, Bytes[0x61_u8])},
+      ] of Tuple(String, CrystalClick::BinaryValue)),
+      w263_direct_typed_row([
+        {"direct-bounded", CrystalClick::BinaryValue.string(string_type, Bytes.new(128) { 0x4d_u8 })},
+      ] of Tuple(String, CrystalClick::BinaryValue)),
+    ] of CrystalClick::ObjectSharedMapRow
+    encoded = CrystalClick::ObjectSharedAdvancedChunkCodec.encode(
+      rows,
+      1,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits, true),
+    )
+    values = encoded.copy_streams.values
+    # Shrink row zero's envelope to descriptor + one VarUInt byte, then make
+    # that byte a continuation. A buggy unbounded reader could consume the
+    # following payload and the long second envelope as the missing VarUInt.
+    values[0] = 2_u8
+    values[2] = 0x80_u8
+    values[3] = 0x01_u8
+    copy = CrystalClick::ObjectSharedCopyStreams.new(
+      encoded.copy_streams.sizes,
+      encoded.copy_streams.indexes,
+      values,
+    )
+    batch = w263_direct_batch(encoded.buckets, 2)
+
+    expect_raises(CrystalClick::CorruptPartError, "binary codec input is truncated") do
+      CrystalClick::ObjectSharedAdvancedChunkCodec.decode_into_columns(
+        encoded.buckets,
+        copy,
+        CrystalClick::BinaryCodecBudget.new(w263_direct_limits),
+        batch,
+        0_i32,
+      ) { |_path| }
+    end
+  end
+
+  it "rejects a valid same-path Copy String whose valid Data row has a different type" do
+    string_rows = [w263_direct_typed_row([
+      {"direct-type", CrystalClick::BinaryValue.string("text")},
+    ] of Tuple(String, CrystalClick::BinaryValue))] of CrystalClick::ObjectSharedMapRow
+    numeric_rows = [w263_direct_typed_row([
+      {"direct-type", CrystalClick::BinaryValue.uint64(42_u64)},
+    ] of Tuple(String, CrystalClick::BinaryValue))] of CrystalClick::ObjectSharedMapRow
+    string_encoded = CrystalClick::ObjectSharedAdvancedChunkCodec.encode(
+      string_rows,
+      1,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits, true),
+    )
+    numeric_encoded = CrystalClick::ObjectSharedAdvancedChunkCodec.encode(
+      numeric_rows,
+      1,
+      CrystalClick::BinaryCodecBudget.new(w263_direct_limits, true),
+    )
+    batch = w263_direct_batch(numeric_encoded.buckets, 1)
+
+    expect_raises(CrystalClick::CorruptPartError, "Object shared Copy value disagrees with its per-path Dynamic row") do
+      CrystalClick::ObjectSharedAdvancedChunkCodec.decode_into_columns(
+        numeric_encoded.buckets,
+        string_encoded.copy_streams,
+        CrystalClick::BinaryCodecBudget.new(w263_direct_limits),
+        batch,
+        0_i32,
+      ) { |_path| }
+    end
   end
 
   it "rejects a repeated dictionary index in one Copy row" do
