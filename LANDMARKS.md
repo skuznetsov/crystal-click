@@ -63,6 +63,15 @@
   Refresh after changing cursor lifetime, role planning, decode accounting,
   output lifetime, or the allocator. See the
   [matched measurements and guards](docs/COMPACT_JSON_SCAN_BENCHMARK.md#dynamic-substream-binding-results).
+- On the same overflow part at `d0f23a3`, four-worker Copy decode had a
+  median of 18.437 ms on the slowest worker and Data had a median of
+  7.620 ms. Boehm mutex waits accounted for 6,782 of 9,974 sampled decode
+  stacks, with 6,625 under `GC_generic_malloc_many`. The visible Copy value
+  decoder accounted for 3,213 waits. The
+  [overflow profile](docs/COMPACT_JSON_SCAN_BENCHMARK.md#overflow-profile-after-dynamic-binding)
+  records the one-mark control and checksum, Copy/Data, and RowBinary guards.
+  Refresh after changing value materialization, decoder allocation, worker
+  scheduling, or Boehm.
 
 ## Compressed Compact aggregate projection indexes — W301
 

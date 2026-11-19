@@ -469,6 +469,14 @@ defer interpreting SharedData scalar payloads until a consumer needs them.
 [Advanced SharedData](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationObjectSharedData.cpp#L1550-L1766),
 [ordinary JSON paths](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationObject.cpp#L1126-L1163).
 
+The Copy storage route also serves full-document reads. For a named path,
+Advanced SharedData can seek to the corresponding Data spans. At the query
+plan level, eligible `LIMIT` queries carry row indexes through filtering or
+sorting and fetch the deferred columns for the selected rows. The full
+`id, doc` `readRows` schedule here retains every row.
+[SharedData path selection](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/DataTypes/Serializations/SerializationObjectSharedData.cpp#L1476-L1485),
+[query-plan lazy materialization](https://github.com/ClickHouse/ClickHouse/blob/d9bcb5ab007f0f6299f7f973f2642245bab3d028/src/Processors/QueryPlan/Optimizations/optimizeLazyMaterialization.cpp#L748-L787).
+
 Crystal decodes each Copy value into a `BinaryValue`, independently decodes
 per-path Data into temporary Dynamic values, and compares exact types, values,
 and presence before yielding a batch. Ordinary typed and Dynamic columns still
@@ -617,6 +625,72 @@ of this concurrency cost lands. See the follow-up
 | --- | --- |
 | Stock `87bf8da` Release runner | `7bb7195263ebc64a3e54b00748f53c60e0c4663075a5f74c2b9aaed4baf155db` |
 | Stage diagnostic Release runner | `7129028350b16d92edf2fc145d8103d7317c82454ae7a9234caf5d90df52363d` |
+
+### Overflow profile after Dynamic binding
+
+The follow-up profiled `d0f23a3` on the same 8,192-row overflow part, with
+the same `data.bin`, `data.mrk4`, and ordered RowBinary SHA-256 values as
+the [binding comparison](#dynamic-substream-binding-results). Both runners
+used Crystal 1.22.3 Release, LLVM 23.1.5, and Boehm 8.2.12 on the shared
+Apple M2 Max host. Eight alternating blocks gave 48 timed scans and 16
+warmups per runner and worker count. The driver verified exact RowBinary,
+mark assignments, retained worker IDs, and the original part hashes.
+
+| Workers | Stock read p50 / p95, ms | Stock read + RowBinary p50 / p95, ms | Read allocation p50 / p95, MiB | Read collections p50 / p95 |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 28.627 / 33.902 | 44.875 / 50.866 | 66.794 / 66.809 | 1 / 2 |
+| 4 | 49.806 / 53.880 | 66.387 / 71.413 | 66.805 / 66.833 | 1 / 2 |
+
+| Workers | Diagnostic read | Slowest worker | Ordinary path decode | SharedData Copy decode | SharedData Data decode | Copy/Data equality |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 29.203 / 37.735 | 21.659 / 29.360 | 7.700 / 13.524 | 5.443 / 7.833 | 3.426 / 5.958 | 3.275 / 5.471 |
+| 4 | 50.037 / 56.331 | 42.977 / 48.339 | 14.610 / 21.026 | 18.437 / 21.870 | 7.620 / 10.634 | 1.831 / 2.622 |
+
+Times are p50 / p95 in milliseconds. Stage timers report elapsed time for
+the slowest worker in each scan, including allocator waits. Diagnostic read
+p50 was 2.0% and 0.5% higher than stock and p95 was 11.3% and 4.5% higher
+at one and four workers, respectively. Each diagnostic scan inflated 16 LZ4
+frames, rechecked those frames five times, and decoded and compared 24,576
+path rows. The `first` control used one active worker for either request, one
+warmup, and seven timed scans. Copy medians were 2.871 and 2.894 ms. On
+the same mark with all four workers active, Copy took 17.738 ms and Data
+took 6.400 ms compared with 1.727 ms for Data in the four-worker `first`
+control.
+
+Three fresh two-second `/usr/bin/sample PID 2 1` captures per worker count
+sampled the stock binary. Each runner completed two warmups and 24 checked
+scans. The denominator counts stacks in
+`ObjectDocumentCodec.decode_core_with_budget` on `compact-json-worker-*`
+threads. The wait count uses a
+`__psynch_mutexwait` leaf under a Boehm frame and the pthread mutex path.
+
+| Workers | Decode stacks | Boehm mutex waits by capture | Boehm mutex waits, pooled | In a collection stack, pooled |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 1,315 | 2/441, 1/433, 2/441 | 5/1,315 (0.4%) | 130/1,315 (9.9%) |
+| 4 | 9,974 | 2,155/3,157, 2,360/3,481, 2,267/3,336 | 6,782/9,974 (68.0%) | 162/9,974 (1.6%) |
+
+At four workers, 6,625 mutex samples were under `GC_generic_malloc_many`,
+the thread-local free-list refill. Of the 6,782 wait samples, 6,767 had no
+collection frame on that thread. The visible Copy value decode frame
+accounted for 3,213 waits, and the per-path Data decode frame for 1,107.
+The stack counts measure thread occupancy. The elapsed stage timers include
+time spent waiting. Relative to the earlier `87bf8da` profile, Data fell
+from 42.127 to 7.620 ms at four workers across runs, and Copy had the
+largest stage median in the new four-worker profile.
+
+Both runners at both worker counts rejected post-open checksum mutations at
+`data.bin[0]` and `data.bin[30030]` and a one-byte change to the same-length
+RowBinary oracle. Thirteen focused Release examples in
+[`object_shared_advanced_direct_columns_w263_spec.cr`](../spec/object_shared_advanced_direct_columns_w263_spec.cr)
+and [`compact_shared_advanced_json_part_plan_spec.cr`](../spec/compact_shared_advanced_json_part_plan_spec.cr)
+passed, covering valid but disagreeing Data streams, missing Copy cells,
+and source changes between callbacks.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Stock Release runner | `41ae3224113d20d36cfc640818b37070cd3c7892496791942823e3a00561ea49` |
+| Diagnostic Release runner | `d3cdbac6a51496c12d6dd007ecc3eb2a39af56ec24ab27d8fc1c5fffd4875dab` |
+| Matched timing report | `1ce3affc98a012679581b8b09f1e4eafbbe623cce5304e1049f65ca8f6cd5f13` |
 
 ### Previous shared-plan diagnostics
 
