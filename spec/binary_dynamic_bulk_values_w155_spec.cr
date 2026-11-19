@@ -148,6 +148,134 @@ describe "W155 paired normalized Dynamic bulk values" do
     sized_decoded[2][0].is_null?.should be_true
   end
 
+  it "rebinds repeated shared and ordinary arms to each mark slice at the exact read charge" do
+    dynamic_type = CrystalClick::BinaryDataType.dynamic(max_types: 1)
+    uint64_type = CrystalClick::BinaryDataType.primitive("UInt64")
+    string_type = CrystalClick::BinaryDataType.primitive("String")
+    shared_type = CrystalClick::BinaryDataType.array(string_type)
+    structures = {"root" => CrystalClick::DynamicStructure.new([uint64_type] of CrystalClick::BinaryDataType)}
+
+    shared = ->(strings : Array(String)) do
+      elements = strings.map { |value| CrystalClick::BinaryValue.string(value) }
+      CrystalClick::BinaryValue.array(shared_type, elements)
+    end
+    ordinary = ->(value : UInt64) do
+      CrystalClick::BinaryValue.fixed(uint64_type, w155_value_u64(value))
+    end
+    dynamic = ->(child : CrystalClick::BinaryValue?) do
+      CrystalClick::BinaryValue.dynamic(dynamic_type, child)
+    end
+
+    granules = [
+      [
+        dynamic.call(shared.call(["a"] of String)),
+        dynamic.call(shared.call(["a much longer shared value", "tail"] of String)),
+        dynamic.call(ordinary.call(7_u64)),
+        dynamic.call(ordinary.call(8_u64)),
+        dynamic.call(shared.call([] of String)),
+      ] of CrystalClick::BinaryValue,
+      [
+        dynamic.call(ordinary.call(99_u64)),
+        dynamic.call(shared.call(["a different next-mark width"] of String)),
+        dynamic.call(shared.call(["z"] of String)),
+      ] of CrystalClick::BinaryValue,
+      [] of CrystalClick::BinaryValue,
+    ] of Array(CrystalClick::BinaryValue)
+    rows_per_mark = [5_u64, 3_u64, 0_u64]
+
+    profiles = [
+      CrystalClick::BinaryBulkProfile.single_stream,
+      CrystalClick::BinaryBulkProfile.with_size_stream,
+    ] of CrystalClick::BinaryBulkProfile
+    profiles.each do |profile|
+      streams = CrystalClick::BinaryDynamicBulkCodec.encode(
+        dynamic_type,
+        structures,
+        granules,
+        profile: profile,
+      )
+      expected_counts = if profile.with_size_stream?
+                          {69_i64, 57_i64, 2_222_i64}
+                        else
+                          {63_i64, 51_i64, 1_865_i64}
+                        end
+      exact_limits = w155_value_limits(
+        max_nodes: expected_counts[0].to_i,
+        max_elements: expected_counts[1].to_i,
+        max_bytes: expected_counts[2].to_i,
+      )
+      exact = CrystalClick::BinaryCodecBudget.new(exact_limits)
+      decoded = CrystalClick::BinaryDynamicBulkCodec.decode_with_budget(
+        dynamic_type,
+        streams,
+        rows_per_mark,
+        exact,
+        profile: profile,
+      )
+
+      decoded.map(&.size).should eq([5, 3, 0])
+      decoded[0][0].child_at(0).element_at(0).as_string.should eq("a")
+      decoded[0][1].child_at(0).element_at(0).as_string.should eq("a much longer shared value")
+      decoded[0][1].child_at(0).element_at(1).as_string.should eq("tail")
+      decoded[0][2].child_at(0).as_uint64.should eq(7_u64)
+      decoded[0][3].child_at(0).as_uint64.should eq(8_u64)
+      decoded[0][4].child_at(0).element_count.should eq(0)
+      decoded[1][0].child_at(0).as_uint64.should eq(99_u64)
+      decoded[1][1].child_at(0).element_at(0).as_string.should eq("a different next-mark width")
+      decoded[1][2].child_at(0).element_at(0).as_string.should eq("z")
+      {exact.node_count, exact.element_count, exact.wire_byte_count}.should eq(expected_counts)
+
+      short_bytes = w155_value_limits(
+        max_nodes: expected_counts[0].to_i,
+        max_elements: expected_counts[1].to_i,
+        max_bytes: expected_counts[2].to_i - 1,
+      )
+      expect_raises(CrystalClick::CorruptPartError) do
+        CrystalClick::BinaryDynamicBulkCodec.decode(
+          dynamic_type,
+          streams,
+          rows_per_mark,
+          limits: short_bytes,
+          profile: profile,
+        )
+      end
+
+      data_role = "root.arm.0.data"
+      original = streams.data.stream(data_role)
+      original_bytes = original.bytes
+      original_offsets = original.offsets
+      first_mark_end = original_offsets[1].to_i
+      cut_at = first_mark_end - 1
+      truncated_bytes = Bytes.new(original_bytes.size - 1) do |index|
+        original_bytes[index < cut_at ? index : index + 1]
+      end
+      truncated_offsets = original_offsets.map_with_index do |offset, index|
+        index == 0 ? offset : offset - 1_u64
+      end
+      damaged_lanes = Hash(String, CrystalClick::BinaryBulkStream).new
+      streams.data.roles.each do |role|
+        damaged_lanes[role] = if role == data_role
+                                CrystalClick::BinaryBulkStream.new(truncated_bytes, truncated_offsets)
+                              else
+                                streams.data.stream(role)
+                              end
+      end
+      damaged = CrystalClick::BinaryDynamicBulkStreams.new(
+        streams.structures,
+        CrystalClick::BinaryBulkStreams.new(streams.data.mark_count, damaged_lanes),
+      )
+      first_mark_end.should be > 1
+      expect_raises(CrystalClick::CorruptPartError) do
+        CrystalClick::BinaryDynamicBulkCodec.decode(
+          dynamic_type,
+          damaged,
+          rows_per_mark,
+          profile: profile,
+        )
+      end
+    end
+  end
+
   it "accepts a valid SharedVariant String already present in the roster and normalizes it on re-encode" do
     dynamic_type = CrystalClick::BinaryDataType.dynamic(max_types: 1)
     literal_lanes = Hash(String, CrystalClick::BinaryBulkStream).new

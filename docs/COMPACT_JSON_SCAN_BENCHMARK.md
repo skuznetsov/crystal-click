@@ -65,8 +65,9 @@ counts on macOS with `ENABLE_LIBRARIES=OFF`.
 
 For a Crystal-only comparison, supply `--baseline-crystal-bin` and omit
 `--cpp-bin` and `--native-read-allocations`. Both binaries go through the
-same schedule, RowBinary, and post-open checksum checks. Use `86b3225` in
-the `git archive` command to reproduce the empty child storage baseline.
+same schedule, RowBinary, and post-open checksum checks. Set the revision in
+`git archive` to `2dee2ae` for the Dynamic binding baseline or `86b3225` for
+the empty child storage baseline.
 
 The public callback and source-binding checks use both fixture directories.
 
@@ -106,6 +107,55 @@ and their requested bytes in the read interval across the process. It
 includes `realloc` requests and captures allocator traffic from all workers.
 Boehm bytes and system requested bytes use their respective allocator
 accounting. The timing run leaves the native observer disabled.
+
+## Dynamic substream binding results
+
+The bulk reader binds Dynamic discriminator, scalar arm and SharedVariant
+String cursors to slices for the current mark. The arm record also holds the
+canonical path, the actual type and the seed key for a recursive JSON leaf.
+The reader charges the original path work at each use and checks that each
+cursor consumed its complete slice. Composite arm values use the recursive
+decoder.
+
+Both `columnar` runners used Crystal 1.22.3 Release, LLVM 23.1.5 and Boehm
+8.2.12 on an Apple M2 Max with macOS 26.6.2 and background activity. The
+`2dee2ae` baseline and the candidate alternated within eight blocks of two
+warmups and six timed scans per build, part and worker count. Both fixtures
+matched the previous `data.bin`, `data.mrk4` and ordered RowBinary hashes.
+The read timer includes the part plan, decoding and all of the source checks.
+The combined timer adds coordinator serialization.
+
+| Compact part | Workers | Read p50 / p95, ms before → after | Boehm read allocations p50 / p95, MiB before → after | Read + serialize p50 / p95, ms before → after |
+| --- | ---: | ---: | ---: | ---: |
+| No overflow | 1 | 9.709 / 10.211 → 9.608 / 10.150 | 21.410 / 21.424 → 21.408 / 21.423 | 15.624 / 17.301 → 16.915 / 17.867 |
+| No overflow | 4 | 19.325 / 21.809 → 18.968 / 21.387 | 21.419 / 21.440 → 21.414 / 21.441 | 25.572 / 29.195 → 25.631 / 27.888 |
+| SharedData overflow | 1 | 36.579 / 43.241 → 27.623 / 30.321 | 92.270 / 92.298 → 66.793 / 66.817 | 54.534 / 62.813 → 43.112 / 47.841 |
+| SharedData overflow | 4 | 82.960 / 87.999 → 53.432 / 57.558 | 92.281 / 92.310 → 66.811 / 66.827 | 100.441 / 106.509 → 69.082 / 73.548 |
+
+On overflow, all 48 paired reads were faster at each worker count. Read
+p50 fell by 24.5% with one worker and 35.6% with four. Read allocation
+p50 and p95 fell by 27.6% at both worker counts. The four-worker read
+median was 1.93× the one-worker median after the change, down from 2.27×.
+
+Without overflow, read allocation medians stayed near 21.4 MiB. A repeat
+with the same 48-sample schedule put read p50 / p95 at 9.645 / 10.710 →
+9.522 / 10.360 ms with one worker and 18.822 / 21.427 → 18.868 / 21.450 ms
+with four. The initial one-worker combined median rose by 8.3%, mostly in
+serialization. In the repeat it fell by 1.5%, from 16.613 to 16.366 ms.
+
+All 384 primary timed scans, 128 warmups and the no-overflow repeat matched
+ordered RowBinary and the selected marks. Both builds at both worker counts
+rejected a post-open checksum mutation on each part. The overflow SharedData
+Data frame mutation also failed with one and four workers, and the candidate
+rejected a one-byte change in a RowBinary oracle of the original length.
+The 79 targeted Release examples include between-batch source changes,
+validly encoded Copy/Data mismatches, and an exact-budget regression that
+rebinds repeated Dynamic arms across marks under both String profiles.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `2dee2ae` columnar Release runner | `7713139325ab2cd3bce527c973a04531178fdeadf18e1178e5b8980a5df818ec` |
+| Dynamic binding columnar Release runner | `b1793f05a3ad08199fe3ea9f403ff5a312b73cf2d0e3f2d861414777f06f4754` |
 
 ## Shared empty child storage results
 
@@ -401,14 +451,10 @@ stacks mostly waited in `GC_generic_malloc_many`, which refills per-thread
 free lists. On overflow, `BinaryBulkDecoder.child_path` appeared in 23.7%
 of the one-worker decode stacks and 49.9% of the four-worker decode stacks.
 At four workers it was an ancestor of 4,399 mutex waits outside collection.
-The [Dynamic bulk row loop](../src/crystal_click/binary_bulk_decoder.cr#L610-L641)
-rebuilds names and looks up stream contexts for discriminators and selected
-arms. The [path builder](../src/crystal_click/binary_bulk_decoder.cr#L792-L832)
-allocates strings even when the row reads the same stream as the previous
-row. Resolving the contexts when binding the mark would remove this repeated
-work while keeping the bounds, depth, and budget checks. The stack fractions
-measure sampled thread occupancy. Use elapsed measurements for collector
-pauses and wall-time changes.
+In that revision, the Dynamic bulk row loop rebuilt stream names and looked
+up discriminator and arm cursors on each value. The stack fractions measure
+sampled thread occupancy. Use elapsed measurements for collector pauses
+and wall-time changes.
 
 ### What the ClickHouse reader does
 
@@ -511,7 +557,7 @@ native schedule issues no `readRows` calls. For nonempty schedules, both
 readers authenticate the frames they decode. The shared Crystal plan verifies
 the authenticated source before releasing each retained batch.
 
-### Current stage measurements
+### Baseline stage measurements
 
 Both Crystal binaries were built from `87bf8da` using Crystal 1.22.3
 Release, LLVM 23.1.5 and Boehm 8.2.12 on an Apple M2 Max. The full selections
@@ -564,9 +610,8 @@ case has one active worker for either requested worker count. On overflow its
 Data decode takes 4.20–4.25 ms for one mark and rises to 42.13 ms on the slowest
 worker when four workers decode one mark each. The allocation volume across
 all marks barely changes by worker count. The wait stacks show where much
-of this concurrency cost lands. Hoist Dynamic context binding out of the
-row loop first, then measure typed buffer reuse in Copy and Data while
-retaining the comparison and budget checks.
+of this concurrency cost lands. See the follow-up
+[Dynamic substream binding results](#dynamic-substream-binding-results).
 
 | Evidence | SHA-256 |
 | --- | --- |

@@ -162,7 +162,14 @@ module CrystalClick
         mark = selected_first + window_offset
         root_count = rows_per_mark[mark].to_i32
         contexts = selected_contexts(streams, ordinary_roles, mark, budget)
-        ensure_minimum_count(type, "root", root_count.to_u64, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+        dynamic_read_bindings = if root_count > 0
+                                  if dynamic_structure_plan = dynamic_plan
+                                    DynamicMarkReadBindings.new(dynamic_structure_plan, contexts, profile)
+                                  end
+                                else
+                                  nil
+                                end
+        ensure_minimum_count(type, "root", root_count.to_u64, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
 
         traversal.ensure_future_nodes(type.tag == BinaryDataType::TAG_LOW_CARDINALITY ? 0_u64 : root_count.to_u64)
         traversal.ensure_depth(1) if root_count > 0
@@ -173,7 +180,7 @@ module CrystalClick
         lc_cursors = Hash(String, Int32).new(0)
         json_object_reader.try(&.begin_mark(mark))
         values = Array(BinaryValue).new(root_count) do
-          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key, shared_value_depth_origin)
+          decode_value(type, "root", 1, contexts, traversal, profile, lc_values_for_mark, lc_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key, shared_value_depth_origin, dynamic_read_bindings)
         end
         contexts.each_value do |context|
           context.ensure_consumed
@@ -442,10 +449,12 @@ module CrystalClick
       qbit_roles : Array(String)? = nil,
       qbit_role_offset : Int32 = 0,
       qbit_site_roles : Hash(String, Tuple(QBitType, Array(String)))? = nil,
+      dynamic_read_bindings : DynamicMarkReadBindings? = nil,
+      scalar_read_binding : DynamicArmReadBinding? = nil,
     ) : Nil
       case type.tag
       when BinaryDataType::TAG_CUSTOM
-        ensure_minimum_count(type.child_at(0), path, count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+        ensure_minimum_count(type.child_at(0), path, count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings, scalar_read_binding)
       when BinaryDataType::TAG_QBIT
         qbit_type = type.qbit_type || unsupported!("QBit bulk descriptor is missing its nominal type")
         site_entry = qbit_site_roles.try { |entries| entries[path]? }
@@ -469,42 +478,73 @@ module CrystalClick
                   else
                     BinaryAggregateFunctionStatePlan.for_type(type).minimum_state_bytes.to_u64
                   end
-        ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, minimum)
+        ensure_path_role_minimum(contexts, path, ".data", nil, count, minimum, budget, dynamic_plan)
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
-          ensure_role_minimum(contexts, child_path(path, ".string_sizes", nil, budget, dynamic_plan), count, 8_u64)
+          if binding = scalar_read_binding
+            work = binding.string_sizes_path_work || corrupt!("Dynamic String arm has no bound size work")
+            ensure_bound_role_minimum(work, binding.string_sizes_context, count, 8_u64, budget, dynamic_plan)
+          else
+            ensure_path_role_minimum(contexts, path, ".string_sizes", nil, count, 8_u64, budget, dynamic_plan)
+          end
         else
-          ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
+          if binding = scalar_read_binding
+            work = binding.data_path_work || corrupt!("Dynamic scalar arm has no bound data work")
+            ensure_bound_role_minimum(work, binding.data_context, count, 1_u64, budget, dynamic_plan)
+          else
+            ensure_path_role_minimum(contexts, path, ".data", nil, count, 1_u64, budget, dynamic_plan)
+          end
         end
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED, BinaryDataType::TAG_MAP
-        ensure_role_minimum(contexts, child_path(path, ".sizes", nil, budget, dynamic_plan), count, 8_u64)
+        ensure_path_role_minimum(contexts, path, ".sizes", nil, count, 8_u64, budget, dynamic_plan)
       when BinaryDataType::TAG_VARIANT
-        ensure_role_minimum(contexts, child_path(path, ".discriminators", nil, budget, dynamic_plan), count, 1_u64)
+        ensure_path_role_minimum(contexts, path, ".discriminators", nil, count, 1_u64, budget, dynamic_plan)
       when BinaryDataType::TAG_DYNAMIC
-        ensure_role_minimum(contexts, child_path(path, ".discriminators", nil, budget, dynamic_plan), count, 1_u64)
+        if site_binding = dynamic_read_bindings.try(&.site(path))
+          ensure_bound_role_minimum(
+            site_binding.discriminator_path_work,
+            site_binding.discriminator_context,
+            count,
+            1_u64,
+            budget,
+            dynamic_plan,
+          )
+        else
+          ensure_path_role_minimum(contexts, path, ".discriminators", nil, count, 1_u64, budget, dynamic_plan)
+        end
       when BinaryDataType::TAG_JSON
         # Direct JSON actual values are consumed by the paired Object reader.
         nil
       when BinaryDataType::TAG_LOW_CARDINALITY
         # The LC owner validates every mark and pays its full-state wire cost.
       when BinaryDataType::TAG_NULLABLE
-        ensure_role_minimum(contexts, child_path(path, ".nulls", nil, budget, dynamic_plan), count, 1_u64)
-        ensure_minimum_count(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+        ensure_path_role_minimum(contexts, path, ".nulls", nil, count, 1_u64, budget, dynamic_plan)
+        ensure_minimum_count(type.child_at(0), child_path(path, ".nested", nil, budget, dynamic_plan), count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
       when BinaryDataType::TAG_SIMPLE_AGGREGATE
-        ensure_minimum_count(type.child_at(0), path, count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+        ensure_minimum_count(type.child_at(0), path, count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings, scalar_read_binding)
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         if type.child_count == 0
-          ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
+          ensure_path_role_minimum(contexts, path, ".data", nil, count, 1_u64, budget, dynamic_plan)
         else
           type.child_count.times do |index|
-            ensure_minimum_count(type.child_at(index), child_path(path, ".field.", index, budget, dynamic_plan), count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+            ensure_minimum_count(type.child_at(index), child_path(path, ".field.", index, budget, dynamic_plan), count, profile, contexts, budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
           end
         end
       when BinaryDataType::TAG_NOTHING, BinaryDataType::TAG_BOOL
-        ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, 1_u64)
+        if binding = scalar_read_binding
+          work = binding.data_path_work || corrupt!("Dynamic scalar arm has no bound data work")
+          ensure_bound_role_minimum(work, binding.data_context, count, 1_u64, budget, dynamic_plan)
+        else
+          ensure_path_role_minimum(contexts, path, ".data", nil, count, 1_u64, budget, dynamic_plan)
+        end
       else
         width = type.fixed_width || unsupported!("unsupported binary bulk DataType")
-        ensure_role_minimum(contexts, child_path(path, ".data", nil, budget, dynamic_plan), count, width.to_u64)
+        if binding = scalar_read_binding
+          work = binding.data_path_work || corrupt!("Dynamic scalar arm has no bound data work")
+          ensure_bound_role_minimum(work, binding.data_context, count, width.to_u64, budget, dynamic_plan)
+        else
+          ensure_path_role_minimum(contexts, path, ".data", nil, count, width.to_u64, budget, dynamic_plan)
+        end
       end
       nil
     end
@@ -523,6 +563,39 @@ module CrystalClick
       context.ensure_remaining_input_bytes(count * width)
     end
 
+    private def self.ensure_path_role_minimum(
+      contexts : Hash(String, BinaryCodecContext),
+      path : String,
+      suffix : String,
+      index : Int32?,
+      count : UInt64,
+      width : UInt64,
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+    ) : Nil
+      role = child_path(path, suffix, index, budget, dynamic_plan)
+      ensure_role_minimum(contexts, role, count, width)
+      nil
+    end
+
+    private def self.ensure_bound_role_minimum(
+      path_work : UInt64,
+      direct_context : BinaryCodecContext?,
+      count : UInt64,
+      width : UInt64,
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+    ) : Nil
+      charge_cached_path_work(path_work, budget) if dynamic_plan
+      return if count == 0_u64 || width == 0_u64
+      if count > UInt64::MAX // width
+        corrupt!("binary bulk minimum lane size overflows UInt64")
+      end
+      context = direct_context || corrupt!("binary bulk value addresses an unplanned lane")
+      context.ensure_remaining_input_bytes(count * width)
+      nil
+    end
+
     private def self.decode_value(
       type : BinaryDataType,
       path : String,
@@ -539,6 +612,8 @@ module CrystalClick
       json_object_reader : BinaryDynamicBulkJsonObjectReader? = nil,
       json_leaf_key : BinaryDynamicJsonLeafKey? = nil,
       shared_value_depth_origin : Int = 1,
+      dynamic_read_bindings : DynamicMarkReadBindings? = nil,
+      scalar_read_binding : DynamicArmReadBinding? = nil,
     ) : BinaryValue
       if type.tag == BinaryDataType::TAG_LOW_CARDINALITY
         traversal.ensure_depth(depth)
@@ -560,8 +635,8 @@ module CrystalClick
         child_type = type.child_at(0)
         traversal.preflight_children(1_u64)
         traversal.ensure_depth(depth + 1)
-        ensure_minimum_count(child_type, path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-        body = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
+        ensure_minimum_count(child_type, path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings, scalar_read_binding)
+        body = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin, dynamic_read_bindings, scalar_read_binding)
         BinaryValue.custom(type, body)
       when BinaryDataType::TAG_QBIT
         qbit_type = type.qbit_type || unsupported!("QBit bulk descriptor is missing its nominal type")
@@ -582,7 +657,7 @@ module CrystalClick
         end
         BinaryValue.qbit(value)
       when BinaryDataType::TAG_AGGREGATE_FUNCTION
-        context = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan))
+        context = context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan)
         if type.aggregate_count_type
           count = BinaryAggregateCountStateCodec.read(context)
           BinaryValue.aggregate_count_state(type, count)
@@ -590,7 +665,7 @@ module CrystalClick
           BinaryValue.aggregate_function_state_from_context(type, context, depth)
         end
       when BinaryDataType::TAG_VARIANT
-        discriminator = context_for(contexts, child_path(path, ".discriminators", nil, traversal.budget, dynamic_plan)).read_byte
+        discriminator = context_for_path_role(contexts, path, ".discriminators", nil, traversal.budget, dynamic_plan).read_byte
         if discriminator == 0xff_u8
           BinaryValue.variant_null(type)
         else
@@ -602,30 +677,55 @@ module CrystalClick
           selected_path = child_path(path, ".arm.", discriminator.to_i, traversal.budget, dynamic_plan)
           preflight_child_type(traversal, child_type, 1_u64)
           traversal.ensure_depth(depth + 1)
-          ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(index) }, shared_value_depth_origin)
+          ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
+          child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(index) }, shared_value_depth_origin, dynamic_read_bindings)
           BinaryValue.variant(type, discriminator.to_i, child)
         end
       when BinaryDataType::TAG_DYNAMIC
         plan = dynamic_plan || corrupt!("binary Dynamic value has no structure plan")
-        discriminator = context_for(contexts, child_path(path, ".discriminators", nil, traversal.budget, dynamic_plan)).read_byte
+        site_binding = dynamic_read_bindings.try(&.site(path))
+        discriminator_context = if binding = site_binding
+                                  context_for_bound_role(binding.discriminator_context, binding.discriminator_path_work, traversal.budget, dynamic_plan)
+                                else
+                                  context_for_path_role(contexts, path, ".discriminators", nil, traversal.budget, dynamic_plan)
+                                end
+        discriminator = discriminator_context.read_byte
         if discriminator == 0xff_u8
           BinaryValue.dynamic(type)
         else
           index = discriminator.to_i
-          if index >= plan.arm_count(path)
+          arm_count = site_binding.try(&.arm_count) || plan.arm_count(path)
+          if index >= arm_count
             corrupt!("Dynamic bulk discriminator is outside its actual arm roster")
           end
-          selected_path = child_path(path, ".arm.", index, traversal.budget, dynamic_plan)
-          if index == plan.shared_index(path)
+          arm_binding = site_binding.try(&.arm(index))
+          selected_path = if binding = arm_binding
+                            charge_cached_path_work(binding.path_work, traversal.budget) if dynamic_plan
+                            binding.path
+                          else
+                            child_path(path, ".arm.", index, traversal.budget, dynamic_plan)
+                          end
+          shared_index = site_binding.try(&.shared_index) || plan.shared_index(path)
+          if index == shared_index
             # Preflight the Dynamic-to-envelope descriptor edge before even
             # reading the selected String envelope. The helper owns the
             # descriptor/value visits and, for non-Nothing, the descriptor's
             # child edge.
             traversal.preflight_children(1_u64)
-            data_context = context_for(contexts, child_path(selected_path, ".data", nil, traversal.budget, dynamic_plan))
+            data_context = if binding = arm_binding
+                             work = binding.data_path_work || corrupt!("Dynamic shared String arm has no bound data work")
+                             context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
+                           else
+                             context_for_path_role(contexts, selected_path, ".data", nil, traversal.budget, dynamic_plan)
+                           end
             envelope_size = if profile.with_size_stream?
-                              read_u64(context_for(contexts, child_path(selected_path, ".string_sizes", nil, traversal.budget, dynamic_plan)))
+                              size_context = if binding = arm_binding
+                                               work = binding.string_sizes_path_work || corrupt!("Dynamic shared String arm has no bound size work")
+                                               context_for_bound_role(binding.string_sizes_context, work, traversal.budget, dynamic_plan)
+                                             else
+                                               context_for_path_role(contexts, selected_path, ".string_sizes", nil, traversal.budget, dynamic_plan)
+                                             end
+                              read_u64(size_context)
                             else
                               data_context.read_var_uint
                             end
@@ -650,16 +750,18 @@ module CrystalClick
               BinaryValue.dynamic(type)
             end
           else
-            child_type = plan.arm_type(path, index)
-            leaf_key = if child_type.contains_json?
+            child_type = arm_binding.try(&.type) || plan.arm_type(path, index)
+            leaf_key = if arm_binding
+                         arm_binding.json_leaf_key
+                       elsif child_type.contains_json?
                          BinaryDynamicJsonLeafKey.new(path, index, [] of Int32)
                        else
                          nil
                        end
             traversal.preflight_children(1_u64)
             traversal.ensure_depth(depth + 1)
-            ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-            child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, leaf_key, shared_value_depth_origin)
+            ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings, arm_binding)
+            child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, leaf_key, shared_value_depth_origin, dynamic_read_bindings, arm_binding)
             BinaryValue.dynamic(type, child)
           end
         end
@@ -667,23 +769,52 @@ module CrystalClick
         child_type = type.child_at(0)
         traversal.preflight_children(1_u64)
         traversal.ensure_depth(depth + 1)
-        ensure_minimum_count(child_type, path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-        child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
+        ensure_minimum_count(child_type, path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings, scalar_read_binding)
+        child = decode_value(child_type, path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin, dynamic_read_bindings, scalar_read_binding)
         BinaryValue.simple_aggregate(type, child)
       when BinaryDataType::TAG_STRING
         if profile.with_size_stream?
-          size = read_u64(context_for(contexts, child_path(path, ".string_sizes", nil, traversal.budget, dynamic_plan)))
-          raw = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_slice(size)
+          size_context = if binding = scalar_read_binding
+                           work = binding.string_sizes_path_work || corrupt!("Dynamic String arm has no bound size work")
+                           context_for_bound_role(binding.string_sizes_context, work, traversal.budget, dynamic_plan)
+                         else
+                           context_for_path_role(contexts, path, ".string_sizes", nil, traversal.budget, dynamic_plan)
+                         end
+          size = read_u64(size_context)
+          data_context = if binding = scalar_read_binding
+                           work = binding.data_path_work || corrupt!("Dynamic String arm has no bound data work")
+                           context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
+                         else
+                           context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan)
+                         end
+          raw = data_context.read_slice(size)
         else
-          context = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan))
+          context = if binding = scalar_read_binding
+                      work = binding.data_path_work || corrupt!("Dynamic String arm has no bound data work")
+                      context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
+                    else
+                      context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan)
+                    end
           size = context.read_var_uint
           raw = context.read_slice(size)
         end
         BinaryValue.string(type, raw)
       when BinaryDataType::TAG_BOOL
-        BinaryValue.bool(BoolValueCodec.decode(context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_byte))
+        context = if binding = scalar_read_binding
+                    work = binding.data_path_work || corrupt!("Dynamic scalar arm has no bound data work")
+                    context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
+                  else
+                    context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan)
+                  end
+        BinaryValue.bool(BoolValueCodec.decode(context.read_byte))
       when BinaryDataType::TAG_NOTHING
-        byte = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_byte
+        context = if binding = scalar_read_binding
+                    work = binding.data_path_work || corrupt!("Dynamic scalar arm has no bound data work")
+                    context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
+                  else
+                    context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan)
+                  end
+        byte = context.read_byte
         unless byte == 0x30_u8
           corrupt!("Nothing bulk placeholder is not canonical ASCII zero")
         end
@@ -693,16 +824,16 @@ module CrystalClick
         key = json_leaf_key || corrupt!("bound Dynamic JSON leaf has no exact binding key")
         BinaryValue.json(type, reader.next_row(key, depth))
       when BinaryDataType::TAG_ARRAY, BinaryDataType::TAG_NESTED
-        sizes = context_for(contexts, child_path(path, ".sizes", nil, traversal.budget, dynamic_plan))
+        sizes = context_for_path_role(contexts, path, ".sizes", nil, traversal.budget, dynamic_plan)
         raw_count = read_u64(sizes)
         count = checked_collection_count(raw_count, "Array element count")
         preflight_child_type(traversal, type.child_at(0), raw_count) unless raw_count == 0_u64
         traversal.ensure_depth(depth + 1) unless raw_count == 0_u64
         elements_path = child_path(path, ".elements", nil, traversal.budget, dynamic_plan)
-        ensure_minimum_count(type.child_at(0), elements_path, raw_count, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+        ensure_minimum_count(type.child_at(0), elements_path, raw_count, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
         child_type = type.child_at(0)
         elements = Array(BinaryValue).new(count) do
-          decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
+          decode_value(child_type, elements_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin, dynamic_read_bindings)
         end
         if type.tag == BinaryDataType::TAG_NESTED
           BinaryValue.nested(type, elements)
@@ -712,7 +843,7 @@ module CrystalClick
       when BinaryDataType::TAG_UNNAMED_TUPLE, BinaryDataType::TAG_NAMED_TUPLE
         count = type.child_count
         if count == 0
-          byte = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_byte
+          byte = context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan).read_byte
           unless byte == 0x30_u8
             corrupt!("empty Tuple bulk placeholder is not canonical ASCII zero")
           end
@@ -728,17 +859,17 @@ module CrystalClick
           count.times do |index|
             child_type = type.child_at(index)
             selected_path = child_path(path, ".field.", index, traversal.budget, dynamic_plan)
-            ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+            ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
           end
           fields = Array(BinaryValue).new(count) do |index|
             child_type = type.child_at(index)
             selected_path = child_path(path, ".field.", index, traversal.budget, dynamic_plan)
-            decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(index) }, shared_value_depth_origin)
+            decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(index) }, shared_value_depth_origin, dynamic_read_bindings)
           end
           BinaryValue.tuple(type, fields)
         end
       when BinaryDataType::TAG_MAP
-        raw_pairs = read_u64(context_for(contexts, child_path(path, ".sizes", nil, traversal.budget, dynamic_plan)))
+        raw_pairs = read_u64(context_for_path_role(contexts, path, ".sizes", nil, traversal.budget, dynamic_plan))
         if raw_pairs > UInt64::MAX // 2_u64
           corrupt!("Map pair count overflows its flat element count")
         end
@@ -756,16 +887,16 @@ module CrystalClick
         traversal.ensure_depth(depth + 1) unless flat_count == 0_u64
         key_path = child_path(path, ".elements.field.0", nil, traversal.budget, dynamic_plan)
         value_path = child_path(path, ".elements.field.1", nil, traversal.budget, dynamic_plan)
-        ensure_minimum_count(type.child_at(0), key_path, raw_pairs, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-        ensure_minimum_count(type.child_at(1), value_path, raw_pairs, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
+        ensure_minimum_count(type.child_at(0), key_path, raw_pairs, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
+        ensure_minimum_count(type.child_at(1), value_path, raw_pairs, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
         entries = Array(BinaryValue).new(count) do |index|
           child_index = index.even? ? 0 : 1
           selected_path = child_index == 0 ? key_path : value_path
-          decode_value(type.child_at(child_index), selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(child_index) }, shared_value_depth_origin)
+          decode_value(type.child_at(child_index), selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(child_index) }, shared_value_depth_origin, dynamic_read_bindings)
         end
         BinaryValue.map(type, entries)
       when BinaryDataType::TAG_NULLABLE
-        flag = context_for(contexts, child_path(path, ".nulls", nil, traversal.budget, dynamic_plan)).read_byte
+        flag = context_for_path_role(contexts, path, ".nulls", nil, traversal.budget, dynamic_plan).read_byte
         unless flag == 0_u8 || flag == 1_u8
           corrupt!("Nullable bulk null-map flag must be zero or one")
         end
@@ -773,8 +904,8 @@ module CrystalClick
         traversal.ensure_depth(depth + 1)
         child_type = type.child_at(0)
         selected_path = child_path(path, ".nested", nil, traversal.budget, dynamic_plan)
-        ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles)
-        child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin)
+        ensure_minimum_count(child_type, selected_path, 1_u64, profile, contexts, traversal.budget, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, dynamic_read_bindings)
+        child = decode_value(child_type, selected_path, depth + 1, contexts, traversal, profile, low_cardinality_values, low_cardinality_cursors, dynamic_plan, qbit_roles, qbit_role_offset, qbit_site_roles, json_object_reader, json_leaf_key.try { |key| key.with_child(0) }, shared_value_depth_origin, dynamic_read_bindings)
         if flag == 1_u8
           BinaryValue.null(type)
         elsif child_type.tag == BinaryDataType::TAG_NOTHING
@@ -784,7 +915,13 @@ module CrystalClick
         end
       else
         width = type.fixed_width || unsupported!("unsupported binary bulk leaf")
-        raw = context_for(contexts, child_path(path, ".data", nil, traversal.budget, dynamic_plan)).read_slice(width.to_u64)
+        data_context = if binding = scalar_read_binding
+                         work = binding.data_path_work || corrupt!("Dynamic scalar arm has no bound data work")
+                         context_for_bound_role(binding.data_context, work, traversal.budget, dynamic_plan)
+                       else
+                         context_for_path_role(contexts, path, ".data", nil, traversal.budget, dynamic_plan)
+                       end
+        raw = data_context.read_slice(width.to_u64)
         BinaryValue.fixed(type, raw)
       end
     end
@@ -847,6 +984,32 @@ module CrystalClick
 
     private def self.context_for(contexts : Hash(String, BinaryCodecContext), role : String) : BinaryCodecContext
       contexts[role]? || corrupt!("binary bulk value addresses an unplanned lane")
+    end
+
+    private def self.context_for_path_role(
+      contexts : Hash(String, BinaryCodecContext),
+      path : String,
+      suffix : String,
+      index : Int32?,
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+    ) : BinaryCodecContext
+      context_for(contexts, child_path(path, suffix, index, budget, dynamic_plan))
+    end
+
+    private def self.context_for_bound_role(
+      context : BinaryCodecContext?,
+      path_work : UInt64,
+      budget : BinaryCodecBudget,
+      dynamic_plan : BinaryDynamicBulkPlan?,
+    ) : BinaryCodecContext
+      charge_cached_path_work(path_work, budget) if dynamic_plan
+      context || corrupt!("binary bulk value addresses an unplanned lane")
+    end
+
+    private def self.charge_cached_path_work(path_work : UInt64, budget : BinaryCodecBudget) : Nil
+      budget.ensure_wire_bytes(path_work)
+      budget.charge_wire_bytes(path_work)
     end
 
     private def self.read_u64(context : BinaryCodecContext) : UInt64

@@ -48,13 +48,21 @@
   Refresh the [retained readRows comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#direct-shareddata-columnar-results)
   after changing the output lifetime, source checks, JSON or SharedData
   decode, worker schedule, allocator, or native pin.
-- On the two 8,192-row Compact Advanced JSON fixtures, four-worker decode
-  stacks frequently wait on the Boehm allocation lock. On overflow,
-  rebuilding Dynamic substream names in `BinaryBulkDecoder.child_path`
-  accounts for over half of sampled allocator mutex waits outside collection.
+- At `87bf8da`, four-worker decode stacks on the two 8,192-row Compact
+  Advanced JSON fixtures frequently waited on the Boehm allocation lock.
+  On overflow, rebuilding Dynamic substream names in
+  `BinaryBulkDecoder.child_path` accounted for over half of sampled allocator
+  mutex waits outside collection.
   The [stage and stack profile](docs/COMPACT_JSON_SCAN_BENCHMARK.md#crystal-diagnostics)
   keeps the Copy/Data checks, source validation, and RowBinary oracle in scope.
   Refresh it after changing substream binding, value ownership, or Boehm.
+- Dynamic discriminator and scalar arm cursors bind per mark and retain the
+  previous per-use budget charges. On the overflow fixture, read allocation
+  fell 27.6% and median read time fell 24.5% and 35.6% for one and four
+  workers against `2dee2ae`. Four workers took 1.93× the one-worker median.
+  Refresh after changing cursor lifetime, role planning, decode accounting,
+  output lifetime, or the allocator. See the
+  [matched measurements and guards](docs/COMPACT_JSON_SCAN_BENCHMARK.md#dynamic-substream-binding-results).
 
 ## Compressed Compact aggregate projection indexes — W301
 
