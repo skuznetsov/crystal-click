@@ -1723,6 +1723,49 @@ Run the block schedule above with `scan mark_only` and `scan masked`. Use
 | First timing and controls report | `f0d1941e56d90a9662cbcdbc91a87cee349791c965d7587bea7a9bead7270ec6` |
 | Repeat timing and controls report | `627b8d215af8b0febd05827f6616f555dfc78dcde07583e87956ba9cdf145b7c` |
 
+### Filtered RowBinary comparison with ClickHouse Server
+
+Report both engines' p50 and p95 and the Crystal / ClickHouse latency ratio
+for each comparable interval and worker count. Include the workload, check
+coverage, and ClickHouse entry point. Give earlier reference results with
+their measured revision and workload.
+
+Crystal `6857a63` and ClickHouse Server 26.10.1.1201 used byte-identical
+copies of the same overflow part. Both selected four marks and returned
+the same ordered 2,048 rows and 482,839 RowBinary bytes for `id % 4 = 0`.
+The SQL used `SELECT id, toJSONString(doc) ... PREWHERE id % 4 = 0 ORDER BY id`
+with `checksum_on_read=1`, `max_block_size=2048`, query, condition, uncompressed,
+and prefix caches disabled, read-in-order optimization disabled, concurrent
+read thresholds zero, and `merge_tree_min_read_task_size=1`. Query and thread
+logs confirmed one reader for `max_threads=1` and four readers with one
+2,048-row mark each for `max_threads=4` in three untimed trials per pass.
+
+Crystal uses the `scan_and_serialize_ns` interval from the filter probe.
+ClickHouse uses `X-ClickHouse-Summary.elapsed_ns` before sending the buffered
+RowBinary response (`wait_end_of_query=1`, `buffer_size=2097152`). This server
+interval includes SQL planning and pipeline execution. Two passes rotated
+all six orders of the server and two Crystal routes in eight blocks with
+two warmups and six timed cycles per block. The table pools 96 timed scans
+per cell on the same M2 Max, where one-minute system load ranged from 15.6
+to 19.1. Crystal ran with Boehm enabled. Every warmup and sample matched the
+pinned oracle.
+
+| Readers | Crystal route | Crystal p50 / p95, ms | ClickHouse p50 / p95, ms | Crystal / ClickHouse p50 / p95 |
+|---:|---|---:|---:|---:|
+| 1 | Mark-only | 21.885 / 25.664 | 18.995 / 27.589 | 1.15 / 0.93 |
+| 1 | Masked | 20.526 / 27.510 | 18.995 / 27.589 | 1.08 / 1.00 |
+| 4 | Mark-only | 23.518 / 34.229 | 18.685 / 21.036 | 1.26 / 1.63 |
+| 4 | Masked | 22.918 / 27.752 | 18.685 / 21.036 | 1.23 / 1.32 |
+
+At one reader, ClickHouse p95 moved from 33.467 to 19.605 ms across the
+two passes. The pooled p95 is sensitive to that variation. Both readers
+rejected a checksum mutation at byte zero. Crystal also rejected a checksum
+mutation in the Data-only frame at offset 30,030 and a valid-checksum
+Copy/Data disagreement before delivery. The server returned the original
+output with the Data-only frame's checksum changed. The earlier direct
+[`readRows` comparison](#direct-shareddata-columnar-results) covers the
+unfiltered 8,192-row workload and has its own read interval.
+
 ### Previous shared-plan diagnostics
 
 Every selection prepared one complete plan and read the shared physical
