@@ -399,8 +399,15 @@ if __name__ == "__main__":
     parser.add_argument("source_copy", type=Path)
     parser.add_argument("--lz4-only", action="store_true",
                         help="install only the central complete-frame decompression counter")
+    parser.add_argument("--filter-stages", action="store_true",
+                        help="install only Compact JSON filter-stage counters in an isolated source copy")
     arguments = parser.parse_args()
-    if arguments.lz4_only:
+    if arguments.lz4_only and arguments.filter_stages:
+        parser.error("--lz4-only and --filter-stages are separate diagnostic modes")
+    if arguments.filter_stages:
+        from instrument_compact_json_filter_stages import install
+        install(arguments.source_copy)
+    elif arguments.lz4_only:
         install_lz4_only(arguments.source_copy)
     else:
         install(arguments.source_copy)

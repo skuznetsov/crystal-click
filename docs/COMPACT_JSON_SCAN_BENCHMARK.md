@@ -1298,6 +1298,152 @@ python3 -B scripts/compact_json_filter_scan_benchmark.py \
   --scratch "$bench_work/row-mask-run" --output "$bench_work/row-mask-report.json"
 ```
 
+### Stage costs of packing selected JSON rows
+
+The follow-up used the same pinned overflow part and `id % 4 == 0`. Four
+workers decode one mark each, and one worker decodes all four. Both routes
+verify all 8,192 source rows and produce the same 2,048 ordered RowBinary
+rows. The masked route retains only those rows in the borrowed batches.
+
+Stock timing used source revision `b02c925` in Release with Boehm enabled.
+Each row of the table represents 48 pairs from eight retained-worker
+processes, with alternating route order and two warmup pairs per process.
+Read time includes source checks and worker delivery. The probe compares
+RowBinary bytes and source offsets after timing each sample.
+
+| Workers | Mark-only read p50 / p95 (ms) | Masked read p50 / p95 (ms) | Paired masked minus mark-only p50 (ms) | Masked faster |
+|---:|---:|---:|---:|---:|
+| 1 | 15.866 / 20.370 | 16.671 / 20.319 | +0.405 | 17 / 48 |
+| 4 | 17.171 / 22.500 | 18.191 / 24.089 | +1.344 | 10 / 48 |
+
+The median paired delta was positive in six of eight one-worker blocks and
+all eight four-worker blocks. With every row selected, both routes used the
+full-mark decoder and the median paired deltas were -0.148 and -0.111 ms.
+Median read allocations on the spread predicate stayed within 30.13–30.14
+MiB. The shared M2 Max host ran other workloads, with one-minute load averages
+of 17.47 before and 17.66 after the stock run. The four-worker p95 difference
+changed sign since the preceding campaign.
+
+An independent LZ4-only build confirmed 16 frames on either route and at
+both worker counts, with 138,576 payload bytes and 1,557,142 output bytes.
+One-shot LZ4 elapsed was 0.209 / 0.179 ms at one worker and 0.197 / 0.189 ms
+at four, in mark-only and masked order.
+
+#### Interleaved stage measurements
+
+A second run interleaved the same stock executable with a separate stage
+probe. Each of the four route and build orders ran 12 times per predicate
+and worker count. The spread case used all four workers when requested.
+The shared host's one-minute load average rose from 10.35 to 10.87.
+
+| Workers | Stock mark-only p50 / p95 (ms) | Stock masked p50 / p95 (ms) | Paired stock delta p50 (ms) | Stage mark-only p50 / p95 (ms) | Stage masked p50 / p95 (ms) |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 16.635 / 17.937 | 16.599 / 17.792 | +0.072 | 15.328 / 17.615 | 16.085 / 17.484 |
+| 4 | 16.632 / 24.193 | 17.633 / 22.940 | +1.113 | 17.933 / 24.680 | 19.595 / 27.318 |
+
+The four-worker p50 gap repeated in the clean timing series. The one-worker
+gap was sensitive to the series. The paired median stage-build effect for
+mark-only and masked was -0.064 and -0.102 ms at one worker and +1.612 and
++2.023 ms at four. Use the stock results for scan latency.
+
+| Stage on `id % 4 == 0` | 1 worker, mark-only → masked p50 / p95 (ms) | 4 workers, mark-only → masked p50 / p95 (ms) |
+|---|---:|---:|
+| UInt64 predicate pass and matching indexes | 0.050 / 0.054 → 0.051 / 0.054 | 0.050 / 0.053 → 0.051 / 0.057 |
+| Dense source-to-output row map, including reset | — → 0.007 / 0.008 | — → 0.009 / 0.012 |
+| Copy dictionary metadata, index scan, materialization | 0.654 / 0.674 → 0.667 / 0.691 | 0.662 / 0.789 → 0.671 / 0.865 |
+| Copy value framing and selected-route reference fill | — → 0.213 / 0.220 | — → 0.213 / 0.260 |
+| Data parse and Copy/Data check, with estimated appends removed | 1.545 / 2.808 → 1.577 / 2.986 | 2.393 / 3.290 → 2.436 / 3.552 |
+| Batch assembly outside SharedData appends | 0.685 / 0.759 → 0.423 / 0.520 | 1.086 / 1.781 → 0.742 / 0.953 |
+| Batch assembly including estimated SharedData appends | 1.189 / 1.250 → 0.862 / 0.947 | 1.614 / 2.285 → 1.189 / 1.381 |
+| Copy and Data spans combined, including SharedData appends | 2.828 / 4.063 → 2.901 / 4.314 | 3.680 / 4.805 → 3.773 / 5.158 |
+| Maximum worker mark-decode elapsed per scan | 7.260 / 8.484 → 7.109 / 8.026 | 9.752 / 13.381 → 10.686 / 16.607 |
+
+Stage times sum elapsed intervals across marks and worker threads before
+the percentiles. Parallel intervals can overlap. The maximum worker row
+uses the longest worker total per scan. The Copy fill visits 24,576 value
+envelopes across 12 path lanes and writes their source rows, offsets, and
+lengths to the ledger. Mark-only parses the same envelopes while decoding
+Copy cells directly into the full batch. The combined Copy/Data row sums
+dictionary work, the Copy value loop, and Data verification once per scan.
+
+Assembly outside SharedData appends covers ordinary column appends, the
+companion UInt64 fill, nullable packing, and explicit arena setup, reset,
+finish, and validation. SharedData append estimates scale one timed call
+per 32, rotating the sample phase by mark. They include timer cost and
+serve as an approximate split inside the inclusive decode spans.
+
+The dense row map and Copy reference fill take about 0.22 ms together at
+p50. Batch assembly takes less time on the masked route, while Data parsing
+shows similar median elapsed. On the slowest worker in each four-worker
+scan, the elapsed interval outside the named
+decode stages rose from 8.439 to 9.391 ms at p50. The paired median increase
+in that remainder was 0.858 ms. It includes ordinary-path decoding, other
+mark work, and off-CPU intervals. The stage timings alone leave those
+contributors unresolved.
+
+An additional 48-pair spread run interleaved the stock probe with a build
+that brackets each mark-decode call with a monotonic clock and Darwin's
+thread CPU clock. At four workers the stock read p50 was 16.709 → 17.396 ms
+(mark-only → masked). Among paired clocked scans, the slowest worker's
+elapsed decode rose by 1.147 ms at p50. For that same worker in each scan,
+the paired median CPU increase was 0.200 ms and the paired median increase
+in elapsed minus CPU was 0.626 ms. These medians are calculated separately.
+The sum of CPU time over all four workers also rose by 2.150 ms at paired
+p50. At one worker the paired CPU and elapsed-minus-CPU deltas were
+-0.263 ms and +0.015 ms. The clocked build affects timing and elapsed minus
+CPU includes both scheduling and blocking. The increase leaves the cause
+of that off-CPU time open. All 384 samples matched the RowBinary oracle and
+source offsets, and the clocked build passed the same corruption controls.
+
+Each of the 768 stock samples, 768 instrumented samples, and 16 frame
+diagnostics matched the ordered RowBinary bytes and physical source-row
+offsets. Both builds rejected a changed checksum and a Copy/Data mismatch
+with valid checksums on both routes at both requested worker counts. The
+Copy/Data control rejected before publishing a callback. The LZ4 repeat
+confirmed the same 16 frames and byte totals per spread scan.
+
+| Evidence from this run | SHA-256 |
+|---|---|
+| Stock timing probe | `3d6c9b1b4bdea2481ec55d3b271b15a3335d60f5c96e1d31069d2166827da899` |
+| Stock timing report with 768 samples | `ab2885c1e44801e2051716bbdf8c60544c2616cf906041e0c27a755b3a524e4d` |
+| Stage probe | `5a57c75c709b40f2097497d67e1974f543133e88299af445cb23ebbf5b181e37` |
+| Instrumented source snapshot | `41a5145c8b9ed614e26233d5c627c39a918103e1c008d2c84b3264ed5620c1a3` |
+| Interleaved stock and stage report | `d2877689209f2ad6422cca4dc2e4d26fa59bf7787e25c457916e4b5eb5615e17` |
+| Thread-clock probe | `38de079dfb74ee49d096ff12b0c953dbdebd66c304f71b0bc707c14897d99875` |
+| Interleaved stock and thread-clock report | `945f4c8045bdf5881c92d7b275b5aa74761e8700f17587e25338558f819527b8` |
+| LZ4 diagnostic probe | `b16d83cf96bb2ac2b16a087c299b517b467cb80e55ed88a6e5a3d60edec70bbf` |
+| Independent LZ4 report with 16 samples | `f9e118b7809d58e0b56aa4aadc1c727191db7c9acd81cdf6605bf47abf32464f` |
+
+Generate the same `overflow-fixture` and build stock and LZ4-only probes
+from `b02c925` as in the preceding comparisons. Install the stage hooks
+in a second disposable source copy. The timing hooks leave the checkout
+out of the build and are specific to this source revision.
+
+```sh
+mkdir "$bench_work/filter-stage-src" "$bench_work/filter-stage-run"
+git archive b02c925 src benchmarks/compact_json_filter_scan_probe.cr \
+  scripts/support/compact_physical_context_w259_fixture.cr | \
+  tar -x -C "$bench_work/filter-stage-src"
+cp scripts/support/compact_json_filter_stage_counters.cr \
+  "$bench_work/filter-stage-src/scripts/support/"
+python3 -B scripts/instrument_compact_json_probe.py \
+  "$bench_work/filter-stage-src" --filter-stages
+TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
+  crystal build --release -Dpreview_mt -Dexecution_context \
+    -Dcompact_json_filter_stage_diagnostic \
+    "$bench_work/filter-stage-src/benchmarks/compact_json_filter_scan_probe.cr" \
+    -o "$bench_work/filter-stage-probe"
+
+bench_part="$bench_work/overflow-fixture/0_1_1_0"
+python3 -B scripts/compact_json_filter_scan_benchmark.py \
+  --comparison mark-vs-mask \
+  --part "$bench_part" --oracle "$bench_part.rowbinary" \
+  --probe "$bench_work/filter-probe" \
+  --diagnostic-probe "$bench_work/filter-diagnostic-probe" \
+  --stage-probe "$bench_work/filter-stage-probe" \
+  --scratch "$bench_work/filter-stage-run" --output "$bench_work/filter-stage-report.json"
+```
+
 ### Previous shared-plan diagnostics
 
 Every selection prepared one complete plan and read the shared physical

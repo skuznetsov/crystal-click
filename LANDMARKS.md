@@ -126,8 +126,9 @@
   `scan_compact_json_filtered_rows`. Its borrowed offsets still address the
   physical mark. SharedData Copy and Data must agree for rejected rows before
   publishing the batch. On the pinned overflow part, retaining one row in
-  four keeps all four marks and their 16 key and JSON LZ4 frames. Refresh the
-  [paired row-mask measurements](docs/COMPACT_JSON_SCAN_BENCHMARK.md#row-selection-inside-advanced-root-json-marks)
+  four keeps all four marks and their 16 key and JSON LZ4 frames. The masked
+  decoder builds a Copy reference ledger for every source row in these marks.
+  Refresh the [paired timing and stage measurements](docs/COMPACT_JSON_SCAN_BENCHMARK.md#stage-costs-of-packing-selected-json-rows)
   after changes to the selected decoder, workspace, validation, or fixture.
 
 ## Compressed Compact aggregate projection indexes — W301
