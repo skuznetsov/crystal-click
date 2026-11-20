@@ -130,6 +130,14 @@
   decoder builds a Copy reference ledger for every source row in these marks.
   Refresh the [paired timing and stage measurements](docs/COMPACT_JSON_SCAN_BENCHMARK.md#stage-costs-of-packing-selected-json-rows)
   after changes to the selected decoder, workspace, validation, or fixture.
+- At `168760c`, keeping one row in four with the masked decoder raised
+  four-worker overflow read time by 1.095 ms at paired stock p50. A
+  separate Boehm callback run measured a 0.302 ms increase in full GC
+  pauses and a 0.636 ms increase in read time outside those pauses.
+  System Trace identifies native runnable intervals and allocator mutex
+  blocks, with substantial trace overhead.
+  Refresh the [GC and scheduler comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#gc-and-worker-scheduling-during-row-selection)
+  after changes to row selection, worker scheduling, allocation, or Boehm.
 
 ## Compressed Compact aggregate projection indexes — W301
 

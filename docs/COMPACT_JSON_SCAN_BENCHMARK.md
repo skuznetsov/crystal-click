@@ -1444,6 +1444,206 @@ python3 -B scripts/compact_json_filter_scan_benchmark.py \
   --scratch "$bench_work/filter-stage-run" --output "$bench_work/filter-stage-report.json"
 ```
 
+### GC and worker scheduling during row selection
+
+The follow-up used source `168760c`, Crystal 1.22.3 in Release with
+`-Dpreview_mt -Dexecution_context`, and Boehm 8.2.12 on an M2 Max running
+macOS 26.6.2. ClickHouse 26.10.1.1201 reproduced the same pinned `data.bin`,
+`data.mrk4`, and RowBinary hashes. `id % 4 == 0` kept all four marks and
+2,048 of the 8,192 rows. Mark-only decodes all rows in those marks before
+filtering. The masked route builds a smaller batch and verifies Copy/Data
+for every source row. The read interval includes mark selection, worker
+dispatch and delivery, and source authentication. RowBinary serialization
+and comparison run after that interval. Paired deltas throughout this
+section take masked minus mark-only within each alternating-order pair
+before calculating the median. p95 uses nearest rank.
+
+The uninstrumented run measured 48 alternating-order pairs at each worker
+count across eight processes, with two warmup pairs per process. The
+one-minute host load average was 11.09 before the run and 11.13 after it.
+
+| Workers | Mark-only read p50 / p95 (ms) | Masked read p50 / p95 (ms) | Paired delta p50 (ms) | Collections p50, mark-only → masked |
+|---:|---:|---:|---:|---:|
+| 1 | 16.124 / 19.516 | 16.909 / 18.387 | -0.028 | 2 → 3 |
+| 4 | 16.581 / 24.433 | 17.753 / 25.856 | +1.095 | 1 → 1 |
+
+The all-rows control selects the full-mark decoder on both routes. Its
+paired median delta was +0.020 ms at one worker and -0.308 ms at four.
+All 384 timings matched the ClickHouse RowBinary and physical row offsets.
+Both routes rejected a post-open checksum change and a SharedData Copy/Data
+mismatch with valid checksums, at both worker counts.
+
+The diagnostic runner records Boehm stop and resume callbacks against the
+same monotonic clock as the read and mark boundaries. The full pause spans
+`POST_STOP_WORLD` to `PRE_START_WORLD`. The stop/resume interval also
+includes the work of suspending and restarting threads. Darwin emits the
+per-thread callbacks with a Mach port, which the probe maps to the same
+native thread recorded by System Trace. [Boehm collection callbacks](https://github.com/bdwgc/bdwgc/blob/v8.2.12/alloc.c#L764),
+[Darwin thread callbacks](https://github.com/bdwgc/bdwgc/blob/v8.2.12/darwin_stop_world.c#L583).
+
+The untraced callback run interleaved a separate diagnostic build and the
+stock binary for 48 pairs per build and worker count. The diagnostic ring
+dropped zero records and its in-read full-stop count matched `GC.prof_stats`
+in every measured scan. Read markers agreed with the probe's elapsed read
+timer within 2.4 µs. The shared host's one-minute load average rose from
+18.47 to 26.13.
+
+| Workers | Metric | Mark-only p50 / p95 (ms) | Masked p50 / p95 (ms) | Paired delta p50 (ms) |
+|---:|---|---:|---:|---:|
+| 1 | Diagnostic read | 16.857 / 20.347 | 16.625 / 21.679 | -0.422 |
+| 1 | Full GC pause | 2.348 / 4.854 | 2.274 / 4.849 | -0.012 |
+| 1 | GC stop/resume interval | 2.375 / 4.873 | 2.292 / 4.869 | 0.000 |
+| 4 | Diagnostic read | 19.877 / 25.008 | 20.660 / 28.012 | +1.549 |
+| 4 | Full GC pause | 2.202 / 4.619 | 2.941 / 4.710 | +0.302 |
+| 4 | GC stop/resume interval | 2.228 / 4.692 | 2.983 / 4.759 | +0.291 |
+
+The four-worker diagnostic build added +1.920 ms (mark-only) and +2.359 ms
+(masked) to the paired read medians versus stock. Within that build, the
+four-worker read time outside full stops still rose by +0.636 ms. The
+reduction subtracts the GC pauses from each read marker's duration before
+taking paired differences. Both builds passed the same corruption controls
+and matched RowBinary and source offsets on all 384 timings in the
+interleaved run.
+
+#### System Trace
+
+System Trace recorded native thread states and syscalls for the same
+callback build. The scheduler reduction uses 16 complete AB/BA pairs at
+each worker count after two warmup pairs. It joins the `read` and `mark`
+signposts to native worker thread IDs and clips state intervals to the
+read. `Runnable` counts time ready to run before dispatch. `Preempted`
+counts time displaced from the CPU. [Apple thread scheduling states](https://developer.apple.com/videos/play/wwdc2026/268/?time=759).
+
+The Boehm row counts `Blocked` intervals inside `BSC_psynch_mutexwait`
+on the mutex used by `GC_alloc_lock`. The pinned arm64 `libgc` disassembly
+locates it at image base plus `0x20158`. Both the syscall address and
+allocator stacks were checked. There were 2 matching worker syscalls in
+the measured reads with one worker and 5,612 with four.
+The syscall and scheduling rows sum thread time over decode workers, so
+intervals can overlap in wall time and can coincide with a GC pause.
+
+| Workers | Metric | Mark-only p50 / p95 (ms) | Masked p50 / p95 (ms) | Paired delta p50 (ms) |
+|---:|---|---:|---:|---:|
+| 1 | Traced read | 19.410 / 55.577 | 19.579 / 37.856 | -0.287 |
+| 1 | Runnable | 0.337 / 2.937 | 0.454 / 7.117 | +0.163 |
+| 1 | Preempted | 0.081 / 6.355 | 0.109 / 8.810 | +0.003 |
+| 1 | Boehm allocator mutex blocked | 0.000 / 0.000 | 0.000 / 0.000 | 0.000 |
+| 4 | Traced read | 35.271 / 122.826 | 41.556 / 106.950 | +9.857 |
+| 4 | Runnable | 12.118 / 35.000 | 16.113 / 81.411 | +4.258 |
+| 4 | Preempted | 3.279 / 19.799 | 2.701 / 23.526 | -0.490 |
+| 4 | Boehm allocator mutex blocked | 10.769 / 19.006 | 9.201 / 65.363 | +1.671 |
+
+The four-worker mark-decode worker with the longest elapsed interval in
+each scan gained +1.801 ms runnable and lost 1.275 ms blocked at the
+allocator mutex at paired p50. The all-worker mutex p95 is sensitive to
+one sample per arm at this sample count. System Trace raised four-worker
+read medians to 1.8–2.0 times those of the untraced callback run. These
+measurements establish where threads wait under tracing. The stock
+regression still has an unresolved breakdown. The scheduler tables above
+use System Trace, since the callback stderr stream was incomplete on the
+four-worker trace. A later one-worker scan exhausted the retained reader's
+decoded-byte budget, after the 16 complete pairs used here.
+
+All 64 reduced trace samples matched RowBinary and source offsets. Worker
+state coverage had zero gaps, overlaps, or unknown states inside the
+selected windows. The read signpost durations and Crystal's timer agreed
+within 28 µs.
+
+#### Allocator call time without System Trace
+
+A separate run inserted a local interposer for `pthread_mutex_lock` with
+the pinned Boehm mutex address. It timed calls on the same Mach clock as
+the callback probe and kept only calls on decode workers inside the read
+window. A forced allocator-lock control recorded a 41.8 ms acquisition.
+The ordinary-mutex control recorded allocator calls under 0.2 µs while
+holding the ordinary mutex. All 16 interposer processes dumped their full
+record buffers. All 384 samples matched RowBinary and source offsets.
+Both builds passed the checksum and Copy/Data corruption controls.
+
+Call duration includes uncontended acquisitions and any scheduling or GC
+delays that overlap the call. These totals sum elapsed time over worker
+threads. The second four-worker row removes each call's overlap with the
+GC stop/resume interval.
+
+| Workers | Metric | Mark-only p50 / p95 (ms) | Masked p50 / p95 (ms) | Paired delta p50 (ms) |
+|---:|---|---:|---:|---:|
+| 1 | Allocator call time | 0.036 / 0.047 | 0.038 / 0.058 | +0.002 |
+| 4 | Allocator call time | 14.948 / 26.353 | 15.966 / 27.595 | +3.781 |
+| 4 | Allocator call time outside GC stop/resume | 13.125 / 21.265 | 15.461 / 25.799 | +4.240 |
+
+At four workers, the interposer added +1.139 ms (mark-only) and +0.015 ms
+(masked) to the paired read medians versus stock. At one worker it shifted
+them by -2.547 ms and -2.115 ms. The matched stock read delta for four
+workers was +1.305 ms. This run corroborates additional time inside
+allocator calls at four workers. System Trace separately found increased
+runnable time on the slowest decode worker and a shorter interval blocked
+at the allocator mutex. How much each contributes to the stock regression
+remains open.
+
+| Evidence from this run | SHA-256 |
+|---|---|
+| Source archive | `a4eaaf24be1267a379c35c49ae512b74a7e8ea81a7ba369e9d62f5bc7adcad2f` |
+| Stock probe | `f41e2965d4d3d08b138aac45c4f3b507b1364dbadf6287038f1c7d050b1fd16c` |
+| Stock report | `e75ff23be34ee8483c9b07a2922d02dc11d112ad46e9013a55c6e8af372b6d2f` |
+| Boehm arm64 dylib | `5f74d1a03ba7a27860463522d16a9b4cbc6a648e93a5bb915c79652584443073` |
+| Callback probe | `6432346705e779d94862b7669a8491b9622ca2a21d22d12eb957bdd5365dd58d` |
+| Interleaved callback and stock report | `b0429527f743aede8682944b92b27bed8168577070d8adfb9775d7822fff98cb` |
+| Callback GC pause reduction | `2203927a08b034868c2115f0746680cecf518e316eba10645b63868dadd21a47` |
+| One-worker System Trace reduction | `d334f82571e1b03306ca1a3c09ab61f90eb5efb166fabac3f9a5f261b1b58f2e` |
+| Four-worker System Trace reduction | `c6926873530013399226033dd77f244077f1b6890bb51f443d90da40120745bc` |
+| Pinned allocator call interposer | `16380a5df5c5afc6b0a8fc874448b2f3c2daa8e9d51677b5784a739bbfa4c59f` |
+| Interleaved interposer and stock report | `e02d24f71f000f901b12f8ba8af1a8d0dd7d9acafa9a6c548a26254d3563e338` |
+
+#### Reproduce the GC and scheduling measurements
+
+Generate the pinned `overflow-fixture` in an SSD scratch directory using
+the fixture commands above. Use an absolute path for `bench_work`. Build
+the stock probe from `168760c` before adding callback hooks to that
+disposable source copy. The stock benchmark also writes the filtered
+oracle used by the callback probe.
+
+```sh
+mkdir -p "$bench_work/gc-src" "$bench_work/gc-tmp" "$bench_work/gc-cache" \
+  "$bench_work/gc-stock-cache" "$bench_work/gc-stock-run"
+git archive 168760c src benchmarks/compact_json_filter_scan_probe.cr \
+  scripts/support/compact_physical_context_w259_fixture.cr | \
+  tar -x -C "$bench_work/gc-src"
+bench_part="$bench_work/overflow-fixture/0_1_1_0"
+TMPDIR="$bench_work/gc-tmp" CRYSTAL_CACHE_DIR="$bench_work/gc-stock-cache" \
+  crystal build --release -Dpreview_mt -Dexecution_context \
+    "$bench_work/gc-src/benchmarks/compact_json_filter_scan_probe.cr" \
+    -o "$bench_work/gc-stock-probe"
+python3 -B scripts/compact_json_filter_scan_benchmark.py \
+  --comparison mark-vs-mask --timing-only \
+  --part "$bench_part" --oracle "$bench_part.rowbinary" \
+  --probe "$bench_work/gc-stock-probe" \
+  --scratch "$bench_work/gc-stock-run" --output "$bench_work/gc-stock-report.json"
+
+python3 -B scripts/instrument_compact_json_gc_probe.py --root "$bench_work/gc-src"
+clang -std=c11 -O2 -Wall -Wextra -DGC_THREADS -I"$(brew --prefix bdw-gc)/include" \
+  -c scripts/compact_json_gc_probe.c -o "$bench_work/gc-probe.o"
+TMPDIR="$bench_work/gc-tmp" CRYSTAL_CACHE_DIR="$bench_work/gc-cache" \
+  crystal build --release -Dpreview_mt -Dexecution_context \
+    "$bench_work/gc-src/benchmarks/compact_json_filter_scan_probe.cr" \
+    --link-flags "$bench_work/gc-probe.o" -o "$bench_work/gc-probe"
+TMPDIR="$bench_work/gc-tmp" \
+  "$bench_work/gc-probe" "$bench_part" "$bench_part.rowbinary" \
+    "$bench_work/gc-stock-run/oracle-spread.rowbinary" 4 spread --stdin 2>"$bench_work/gc-w4.tsv"
+```
+
+Pass `scan mark_only` and `scan masked` in alternating order after
+`READY`. Read and validate each JSON response before issuing the next
+command. Use two warmup pairs and six measured pairs per process for the
+untraced campaign. `quit` writes the callback ring after the workers join.
+For tracing, attach `xcrun xctrace record --template "System Trace"` to the
+ready process before sending scans and record up to 16 measured pairs per
+process. Export `OSSignpostIntervals`, `thread-info`, `thread-state`, and
+`syscall` using `xcrun xctrace export --xpath`. Match phase intervals by
+scan ID and mark intervals by scan ID, worker slot, and mark, then use
+the recorded thread IDs to join native state and syscall intervals.
+For new `libgc` binaries, resolve the allocator mutex address from that
+binary and its own loaded image base.
+
 ### Previous shared-plan diagnostics
 
 Every selection prepared one complete plan and read the shared physical
