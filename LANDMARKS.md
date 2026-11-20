@@ -113,6 +113,15 @@
   Materialized `BinaryValue` cells dominate the remaining wait stacks.
   Refresh the [matched scalar comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#ordinary-scalar-cursors-and-bool-storage)
   after changes to scalar ownership, lane binding, worker scheduling, or Boehm.
+- A single regular MRK4 Advanced root JSON part can filter on one direct
+  UInt64 column before reading JSON. The ordered callback borrows selected
+  full marks and their matching row indexes. Its source receipt authenticates
+  every predicate frame, including keys of skipped marks, and the selected
+  JSON frames. The pinned overflow part inflates four key frames plus three
+  frames per selected JSON mark. Refresh the
+  [filter-first comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#filter-first-advanced-root-json-scan)
+  after changes to mark selection, frame boundaries, source receipts, worker
+  delivery, or the ClickHouse fixture pin.
 
 ## Compressed Compact aggregate projection indexes — W301
 

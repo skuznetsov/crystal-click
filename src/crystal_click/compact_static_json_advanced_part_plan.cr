@@ -13,7 +13,7 @@ module CrystalClick
 
   # Reusable source binding for one Advanced MRK4 root JSON scan. The binding
   # fingerprints metadata captured at reader admission and authenticated
-  # compressed frames captured with the complete JSON+UInt64 source read.
+  # compressed frames captured with the source spans used by this plan.
   class CompactStaticJsonAdvancedPartPlan
     @reader : CompactStaticJsonBulkColumnReader
     @part_path : String
@@ -24,6 +24,7 @@ module CrystalClick
     @frames : Array(CompressedFrameFingerprint)
     @frame_index : CompressedFrameIndex
     @advanced_marks : Array(CompactStaticJsonAdvancedPreparedMark)
+    @prepared_mark_indices : Array(Int32)?
     @mark_rows : Array(UInt64)
     @uint64_mark_bytes : Hash(String, Array(Bytes))
     @companion_columns : Array(String)
@@ -43,6 +44,7 @@ module CrystalClick
       source_files : Array(CompactStaticJsonPartFileFingerprint),
       frames : Array(CompressedFrameFingerprint),
       advanced_marks : Array(CompactStaticJsonAdvancedPreparedMark),
+      prepared_mark_indices : Array(Int32)?,
       mark_rows : Array(UInt64),
       uint64_mark_bytes : Hash(String, Array(Bytes)),
       companion_columns : Array(String),
@@ -53,23 +55,59 @@ module CrystalClick
       @source_files = source_files.dup
       @frames = frames.dup
       @advanced_marks = advanced_marks.dup
+      @prepared_mark_indices = prepared_mark_indices.try(&.dup)
       @mark_rows = mark_rows.dup
       @companion_columns = companion_columns.map { |name| String.new(name.to_slice) }
       @columnar_paths = nil
       @columnar_fallback_types = nil
       @columnar_workspace_bytes = 0_u64
+      unless !@advanced_marks.empty? && !@frames.empty?
+        raise CorruptPartError.new("Compact Advanced plan has no selected prepared marks")
+      end
+      if indices = @prepared_mark_indices
+        unless @advanced_marks.size == indices.size
+          raise CorruptPartError.new("Compact Advanced plan selected marks differ from retained owners")
+        end
+        previous_mark = -1_i32
+        indices.each_with_index do |mark, ordinal|
+          unless mark > previous_mark && mark < @mark_rows.size
+            raise CorruptPartError.new("Compact Advanced plan selected marks are unordered or outside the full grid")
+          end
+          unless @advanced_marks[ordinal].logical_row_count == @mark_rows[mark]
+            raise CorruptPartError.new("Compact Advanced prepared mark differs from its absolute row grid")
+          end
+          previous_mark = mark
+        end
+      else
+        unless @advanced_marks.size == @mark_rows.size
+          raise CorruptPartError.new("Compact Advanced dense plan differs from its full row grid")
+        end
+        @advanced_marks.each_with_index do |owner, mark|
+          unless owner.logical_row_count == @mark_rows[mark]
+            raise CorruptPartError.new("Compact Advanced prepared mark differs from its absolute row grid")
+          end
+        end
+      end
       @uint64_mark_bytes = Hash(String, Array(Bytes)).new(initial_capacity: uint64_mark_bytes.size)
       uint64_mark_bytes.each do |name, marks|
-        @uint64_mark_bytes[String.new(name.to_slice)] = marks.map(&.dup)
+        unless marks.size == @advanced_marks.size
+          raise CorruptPartError.new("Compact Advanced companion differs from its prepared mark ordinals")
+        end
+        copied_marks = Array(Bytes).new(marks.size)
+        marks.each_with_index do |bytes, ordinal|
+          mark = prepared_mark_at_ordinal(ordinal)
+          expected_size = checked_multiply(@mark_rows[mark], sizeof(UInt64).to_u64)
+          unless bytes.size.to_u64 == expected_size
+            raise CorruptPartError.new("Compact Advanced plan companion width differs from its row grid")
+          end
+          copied_marks << bytes.dup
+        end
+        @uint64_mark_bytes[String.new(name.to_slice)] = copied_marks
       end
-      unless !@advanced_marks.empty? &&
-             @advanced_marks.size == @mark_rows.size &&
-             !@frames.empty?
-        raise CorruptPartError.new("Compact Advanced plan is incomplete")
-      end
-      @uint64_mark_bytes.each_value do |marks|
-        unless marks.size == @mark_rows.size
-          raise CorruptPartError.new("Compact Advanced plan companion grid differs from its root grid")
+      @companion_columns.each do |name|
+        marks = @uint64_mark_bytes[name]?
+        unless marks && marks.size == @advanced_marks.size
+          raise CorruptPartError.new("Compact Advanced companion selection differs from its prepared marks")
         end
       end
       @retained_workspace_bytes = calculate_retained_workspace_bytes
@@ -87,7 +125,15 @@ module CrystalClick
       @advanced_marks.size.to_i32
     end
 
+    # :nodoc:
+    def prepared_mark_indices : Array(Int32)
+      @prepared_mark_indices.try(&.dup) || Array(Int32).new(@mark_rows.size) { |mark| mark.to_i32 }
+    end
+
     def mark_row_count_at(mark_index : Int) : UInt64
+      unless mark_index >= 0 && mark_index < @mark_rows.size
+        raise ArgumentError.new("Compact Advanced plan mark index is outside its full grid")
+      end
       @mark_rows[mark_index]
     end
 
@@ -159,7 +205,11 @@ module CrystalClick
       if retained_bytes >= total_workspace_limit
         raise CorruptPartError.new("Compact JSON columnar plan leaves no room for an output arena")
       end
-      max_rows = @mark_rows.max?.try(&.to_i) || 0
+      max_rows = if indices = @prepared_mark_indices
+                   indices.reduce(0_i64) { |maximum, mark| Math.max(maximum, @mark_rows[mark].to_i64) }.to_i
+                 else
+                   @mark_rows.max?.try(&.to_i) || 0
+                 end
       max_paths = Math.min(@reader.codec_limits.max_nodes, Int32::MAX.to_i64).to_i
       output = CompactJsonColumnarBatch.from_layout(
         paths,
@@ -183,8 +233,8 @@ module CrystalClick
       budget : BinaryCodecBudget,
       output : CompactJsonColumnarBatch,
     ) : Nil
-      unless mark_index >= 0 && mark_index < @advanced_marks.size
-        raise ArgumentError.new("Compact Advanced plan mark index is outside its sealed grid")
+      unless mark_index >= 0 && mark_index < @mark_rows.size
+        raise ArgumentError.new("Compact Advanced plan mark index is outside its full grid")
       end
       unless budget.same?(@preparation_budget) || budget.includes_preparation_from?(@preparation_budget)
         raise ArgumentError.new("Compact Advanced columnar decode requires its preparation receipt")
@@ -192,11 +242,15 @@ module CrystalClick
       unless @columnar_paths && @columnar_fallback_types
         raise CorruptPartError.new("Compact JSON columnar shape must be prepared before decoding")
       end
+      ordinal = prepared_ordinal_for_mark(mark_index)
+      unless ordinal
+        raise ArgumentError.new("Compact Advanced plan mark index was not prepared")
+      end
       rows = @mark_rows[mark_index]
       output.begin_mark!(0, File.basename(@part_path), @part_path, mark_index, 0_u64, 0_u64, 0_u64, rows)
-      @advanced_marks[mark_index].decode_columnar_with_budget(budget, output)
+      @advanced_marks[ordinal].decode_columnar_with_budget(budget, output)
       @companion_columns.each do |name|
-        bytes = @uint64_mark_bytes[name][mark_index]
+        bytes = uint64_mark_bytes_at(name, ordinal)
         output.fill_uint64_column!(name, bytes, rows)
       end
       output.validate_workspace!
@@ -216,10 +270,24 @@ module CrystalClick
 
     def uint64_mark_bytes(column_name : String, mark_index : Int) : Bytes
       marks = @uint64_mark_bytes[column_name]?
-      unless marks && mark_index >= 0 && mark_index < marks.size
+      unless marks && mark_index >= 0 && mark_index < @mark_rows.size
         raise ArgumentError.new("Compact Advanced plan has no selected UInt64 mark")
       end
-      marks[mark_index].dup
+      ordinal = prepared_ordinal_for_mark(mark_index)
+      unless ordinal
+        raise ArgumentError.new("Compact Advanced plan mark index was not prepared")
+      end
+      marks[ordinal]?.try(&.dup) ||
+        raise(ArgumentError.new("Compact Advanced plan has no selected UInt64 mark"))
+    end
+
+    private def uint64_mark_bytes_at(column_name : String, ordinal : Int32) : Bytes
+      marks = @uint64_mark_bytes[column_name]?
+      unless marks
+        raise ArgumentError.new("Compact Advanced plan has no selected UInt64 mark")
+      end
+      marks.not_nil![ordinal]? ||
+        raise(ArgumentError.new("Compact Advanced plan has no selected UInt64 mark"))
     end
 
     # Applies the structural parse/preparation work performed once while the
@@ -243,13 +311,17 @@ module CrystalClick
       workspace_observer : Proc(UInt64, Nil)? = nil,
       assembly_workspace : ObjectDocumentDecodeWorkspace? = nil,
     ) : Array(ObjectDocument)
-      unless mark_index >= 0 && mark_index < @advanced_marks.size
-        raise ArgumentError.new("Compact Advanced plan mark index is outside its sealed grid")
+      unless mark_index >= 0 && mark_index < @mark_rows.size
+        raise ArgumentError.new("Compact Advanced plan mark index is outside its full grid")
+      end
+      ordinal = prepared_ordinal_for_mark(mark_index)
+      unless ordinal
+        raise ArgumentError.new("Compact Advanced plan mark index was not prepared")
       end
       unless budget.same?(@preparation_budget) || budget.includes_preparation_from?(@preparation_budget)
         raise ArgumentError.new("Compact Advanced plan decode requires its preparation receipt")
       end
-      owner = @advanced_marks[mark_index]
+      owner = @advanced_marks[ordinal]
       unless owner.logical_row_count == @mark_rows[mark_index]
         raise CorruptPartError.new("Compact Advanced prepared mark differs from the sealed row grid")
       end
@@ -285,6 +357,37 @@ module CrystalClick
 
     def retained_workspace_bytes : UInt64
       checked_add(@retained_workspace_bytes, @columnar_workspace_bytes)
+    end
+
+    private def prepared_mark_at_ordinal(ordinal : Int) : Int32
+      indices = @prepared_mark_indices
+      return ordinal.to_i32 unless indices
+      indices.not_nil![ordinal]
+    end
+
+    # Dense plans keep the original absolute-index fast path. Sparse plans
+    # retain only a sorted absolute-index vector and resolve marks by binary
+    # search, avoiding a second full-grid lookup table.
+    private def prepared_ordinal_for_mark(mark_index : Int) : Int32?
+      return nil if mark_index < 0 || mark_index >= @mark_rows.size
+      indices = @prepared_mark_indices
+      return mark_index.to_i32 if indices.nil? && mark_index < @advanced_marks.size
+
+      selected = indices || return nil
+      low = 0
+      high = selected.size - 1
+      while low <= high
+        middle = low + (high - low) // 2
+        candidate = selected[middle]
+        if candidate == mark_index
+          return middle.to_i32
+        elsif candidate < mark_index
+          low = middle + 1
+        else
+          high = middle - 1
+        end
+      end
+      nil
     end
 
     private def enforce_columnar_shape_workspace!(shape_build_bytes : UInt64) : Nil
@@ -327,6 +430,10 @@ module CrystalClick
         bytes = checked_add(bytes, checked_multiply(marks.size.to_u64, sizeof(Bytes).to_u64))
         marks.each { |mark| bytes = checked_add(bytes, mark.size.to_u64) }
       end
+      if indices = @prepared_mark_indices
+        bytes = checked_add(bytes, instance_sizeof(Array(Int32)).to_u64)
+        bytes = checked_add(bytes, checked_multiply(indices.size.to_u64, sizeof(Int32).to_u64))
+      end
       bytes = checked_add(bytes, instance_sizeof(Array(CompactStaticJsonPartFileFingerprint)).to_u64)
       bytes = checked_add(bytes,
         checked_multiply(@source_files.size.to_u64, sizeof(CompactStaticJsonPartFileFingerprint).to_u64))
@@ -339,8 +446,9 @@ module CrystalClick
 
     # :nodoc:
     # Reader-only factory. `source_files` must have been captured at reader
-    # admission; `frames` and UInt64 bytes come from the same complete mmap as
-    # the root JSON shards.
+    # admission. Dense plans take companions from the same complete capture as
+    # root JSON. Sparse plans take them from an exact, authenticated key-only
+    # capture made before the selected JSON spans.
     def self.build(
       reader : CompactStaticJsonBulkColumnReader,
       part_path : String,
@@ -354,12 +462,49 @@ module CrystalClick
       mark_rows : Array(UInt64),
       uint64_columns : Array(String),
       preparation_budget : BinaryCodecBudget,
+      prepared_mark_indices : Array(Int32)? = nil,
+      filter_capture : CompactPartPhysicalWindowCapture? = nil,
     ) : CompactStaticJsonAdvancedPartPlan
+      selected_marks = prepared_mark_indices
+      prepared_count = selected_marks.try(&.size) || advanced_marks.size
+      unless prepared_count > 0 && advanced_marks.size == prepared_count
+        raise CorruptPartError.new("Compact Advanced plan prepared marks differ from their absolute selection")
+      end
+      if indices = selected_marks
+        previous_mark = -1_i32
+        indices.each do |mark|
+          unless mark > previous_mark && mark < mark_rows.size
+            raise CorruptPartError.new("Compact Advanced plan selected marks are unordered or outside the full grid")
+          end
+          previous_mark = mark
+        end
+      elsif advanced_marks.size != mark_rows.size
+        raise CorruptPartError.new("Compact Advanced dense plan differs from its full physical grid")
+      end
+
       extras = Hash(String, Array(Bytes)).new(initial_capacity: uint64_columns.size)
+      if filter = filter_capture
+        unless uint64_columns.size == 1 && !filter.sparse? && filter.column_name == uint64_columns[0]
+          raise CorruptPartError.new("Compact Advanced filter receipt differs from its selected UInt64 companion")
+        end
+        reader.validate_filter_capture!(filter, uint64_columns[0])
+      end
       uint64_columns.each do |name|
-        marks = Array(Bytes).new(mark_rows.size)
-        mark_rows.size.times do |mark|
-          bytes = capture.companion_uint64_mark_bytes(name, mark)
+        marks = Array(Bytes).new(prepared_count)
+        prepared_count.times do |ordinal|
+          mark = if indices = selected_marks
+                   indices[ordinal]
+                 else
+                   ordinal.to_i32
+                 end
+          bytes = if filter
+                    if filter.root_mark_shard_count_at(mark) != 1
+                      raise CorruptPartError.new("Compact Advanced filter receipt has more than one physical slot")
+                    end
+                    filter.root_mark_shard_bytes_at(mark, 0)
+                  else
+                    capture.companion_uint64_mark_bytes(name, mark)
+                  end
           expected_size = checked_multiply(mark_rows[mark], sizeof(UInt64).to_u64)
           unless bytes.size.to_u64 == expected_size
             raise CorruptPartError.new("Compact Advanced plan UInt64 mark width differs from its row grid")
@@ -368,6 +513,12 @@ module CrystalClick
         end
         extras[String.new(name.to_slice)] = marks
       end
+
+      frames = if filter = filter_capture
+                 merge_frame_fingerprints(capture.authenticated_frames, filter.authenticated_frames)
+               else
+                 capture.authenticated_frames
+               end
       new(
         reader,
         part_path,
@@ -376,13 +527,48 @@ module CrystalClick
         transport_limits,
         frame_index,
         source_files,
-        capture.authenticated_frames,
+        frames,
         advanced_marks,
+        prepared_mark_indices,
         mark_rows,
         extras,
         uint64_columns,
         preparation_budget,
       )
+    end
+
+    private def self.merge_frame_fingerprints(
+      first : Array(CompressedFrameFingerprint),
+      second : Array(CompressedFrameFingerprint),
+    ) : Array(CompressedFrameFingerprint)
+      by_offset = Hash(Int64, CompressedFrameFingerprint).new(initial_capacity: first.size + second.size)
+      result = [] of CompressedFrameFingerprint
+      [first, second].each do |group|
+        group.each do |fingerprint|
+          if previous = by_offset[fingerprint.compressed_offset]?
+            unless same_frame_fingerprint?(previous, fingerprint)
+              raise CorruptPartError.new("Compact source frame changed between filter and selected JSON capture")
+            end
+          else
+            by_offset[fingerprint.compressed_offset] = fingerprint
+            result << fingerprint
+          end
+        end
+      end
+      result.sort_by!(&.compressed_offset)
+      result
+    end
+
+    private def self.same_frame_fingerprint?(
+      left : CompressedFrameFingerprint,
+      right : CompressedFrameFingerprint,
+    ) : Bool
+      left.compressed_offset == right.compressed_offset &&
+        left.end_offset == right.end_offset &&
+        left.logical_start == right.logical_start &&
+        left.logical_end == right.logical_end &&
+        left.method == right.method &&
+        left.checksum == right.checksum
     end
 
     # :nodoc:

@@ -1,5 +1,20 @@
 module CrystalClick
   class TypedPartTable
+    # Filter the UInt64 selection before decoding the JSON in a single
+    # regular Compact part. See CompactPartTable#scan_compact_json_filtered
+    # for the borrowed callback and source verification contract.
+    def scan_compact_json_filtered(
+      filter_column : String,
+      predicate : Proc(UInt64, Bool),
+      workers : Int = 1,
+      & : CompactJsonColumnarBatch, Slice(Int32) -> Nil
+    ) : Nil
+      unless @entries.size == 1 && !@projection_selected && (reader = @entries[0].reader.as?(CompactPartTable))
+        raise UnsupportedFormatError.new("filtered JSON scan requires one regular Compact part")
+      end
+      reader.scan_compact_json_filtered(filter_column, predicate, workers) { |batch, rows| yield batch, rows }
+    end
+
     # Decode Compact Advanced root JSON into worker-owned sparse columns. Each
     # output arena is retained for its worker/part pair and is borrowed only
     # until the corresponding callback returns.

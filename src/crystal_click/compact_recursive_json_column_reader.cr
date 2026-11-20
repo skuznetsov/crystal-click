@@ -310,6 +310,21 @@ module CrystalClick
     end
 
     # :nodoc:
+    def prepare_filtered_advanced_json_scan(
+      observer : Proc(UInt64, Nil),
+      filter_column : String,
+      predicate : Proc(UInt64, Bool),
+    ) : CompactFilteredJsonPartPlan
+      reader = @root_reader || raise(UnsupportedFormatError.new("filtered Compact JSON scan requires a root Object reader"))
+      outer = outer_workspace_without_root_delegate(reader)
+      delegate_observer = ->(workspace : UInt64) do
+        observer.call(checked_add(outer, workspace))
+        nil
+      end
+      reader.prepare_filtered_advanced_json_scan(delegate_observer, filter_column, predicate)
+    end
+
+    # :nodoc:
     def validate_advanced_part_plan!(
       plan : CompactStaticJsonAdvancedPartPlan,
       extra_uint64_columns : Array(String),

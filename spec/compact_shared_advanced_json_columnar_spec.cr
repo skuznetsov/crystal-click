@@ -108,6 +108,7 @@ private module CompactJsonColumnarGuardFixture
     base : UInt64 = 1_u64,
     replacement : Bool = false,
     shared_version : UInt64 = 2_u64,
+    frame_bytes : Int = 4096,
   ) : String
     rows = documents(base, replacement).map do |document|
       CrystalClick::StorageColumnValue.object_document(document)
@@ -121,7 +122,7 @@ private module CompactJsonColumnarGuardFixture
       keys,
       [json_column] of CrystalClick::CompactPartColumn,
       rows_per_mark: ROWS_PER_MARK,
-      frame_bytes: 4096,
+      frame_bytes: frame_bytes,
       mark_format: CrystalClick::CompactMarkFormat::Mrk4,
     )
   end
@@ -301,6 +302,93 @@ private def cjcv_late_root_frame(part_path : String, mark_index : Int32) : Int32
     return first if first < limit
   end
   raise "columnar fixture mark #{mark_index} has no root JSON frame"
+end
+
+private def cjcv_touched_frames(
+  physical : CrystalClick::CompactPartPhysicalContext,
+  column_name : String,
+  mark_index : Int32,
+) : Array(Int32)
+  frames = [] of Int32
+  window = physical.read_window(column_name, mark_index, 1).granules.first
+  window.shards.each do |shard|
+    first, limit = physical.frame_index.touched_frame_bounds(shard.logical_start, shard.logical_end)
+    first.upto(limit - 1) { |frame| frames << frame }
+  end
+  frames.uniq
+end
+
+private def cjcv_find_subslice(haystack : Bytes, needle : Bytes) : Int32?
+  return nil if needle.empty? || needle.size > haystack.size
+  0.upto(haystack.size - needle.size) do |offset|
+    matches = true
+    needle.size.times do |index|
+      unless haystack[offset + index] == needle[index]
+        matches = false
+        break
+      end
+    end
+    return offset if matches
+  end
+  nil
+end
+
+# Change one byte in a Copy String while preserving its lane length, frame
+# boundaries, compressed frame checksum, and outer part checksum manifest.
+private def cjcv_rewrite_copy_string_byte(
+  part_path : String,
+  mark_index : Int32,
+  text : String,
+  replacement_byte : UInt8,
+) : Nil
+  copy_values_stream = "#{CompactJsonColumnarGuardFixture::COLUMN}.object_shared_data.copy.values"
+  physical = CrystalClick::CompactPartPhysicalContext.open(part_path)
+  root = physical.read_window(CompactJsonColumnarGuardFixture::COLUMN, mark_index, 1).granules.first
+  copy = root.shards.find do |shard|
+    shard.stream_name == copy_values_stream
+  end || raise "columnar fixture mark #{mark_index} has no Copy values lane"
+  local_offset = cjcv_find_subslice(copy.bytes, text.to_slice) ||
+                 raise "columnar fixture Copy values lane does not contain #{text.inspect}"
+  logical_offset = copy.logical_start + local_offset.to_i64
+
+  data_path = File.join(part_path, "data.bin")
+  data = File.read(data_path).to_slice.dup
+  compressed_offset = 0_i64
+  logical_base = 0_i64
+  rewritten = false
+  while compressed_offset < data.size
+    frame = CrystalClick::CompressedBlock.decode_frame(data, compressed_offset)
+    logical_limit = logical_base + frame.output.size.to_i64
+    if logical_offset >= logical_base && logical_offset < logical_limit
+      output = frame.output.dup
+      output[(logical_offset - logical_base).to_i] = replacement_byte
+      encoded = CrystalClick::CompressedMarkWriter.encode_all(output, output.size)
+      old_size = (frame.end_offset - compressed_offset).to_i
+      encoded.size.should eq(old_size)
+      encoded.copy_to(data.to_unsafe + compressed_offset.to_i, encoded.size)
+      rewritten = true
+      break
+    end
+    logical_base = logical_limit
+    compressed_offset = frame.end_offset
+  end
+  rewritten.should be_true
+
+  File.write(data_path, data)
+  CompactPhysicalContextW259Fixture.refresh_checksums(part_path)
+
+  # A physical read reopens both checksums and the newly written frame before
+  # the filtered reader is asked to compare Copy with its per-path Data lane.
+  reopened = CrystalClick::CompactPartPhysicalContext.open(part_path)
+  reopened.mark_row_counts.should eq(Array(UInt64).new(4) { CompactJsonColumnarGuardFixture::ROWS_PER_MARK.to_u64 })
+  verified = reopened.read_window(CompactJsonColumnarGuardFixture::COLUMN, mark_index, 1).granules.first
+  verified_copy = verified.shards.find do |shard|
+    shard.stream_name == copy_values_stream
+  end || raise "columnar fixture Copy values lane disappeared after rewrite"
+  verified_copy.logical_start.should eq(copy.logical_start)
+  verified_copy.logical_end.should eq(copy.logical_end)
+  verified_copy.bytes[local_offset].should eq(replacement_byte)
+  nil
 end
 
 private def cjcv_scan_rows(
@@ -911,6 +999,310 @@ describe "Compact shared Advanced root JSON columnar batches" do
     end
   end
 
+  it "emits mark-local survivor indexes in physical order and matches eager JSON rows" do
+    parent = File.tempname("compact-json-filtered-order-")
+    part = File.join(parent, "all_1_1_0")
+    begin
+      Dir.mkdir(parent)
+      CompactJsonColumnarGuardFixture.write_part(part)
+      table = CrystalClick::TypedPartTable.open_selected_typed(
+        [part],
+        [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+      )
+      documents = CompactJsonColumnarGuardFixture.documents
+      eager_keys, eager_json, _eager_locations = cjcv_scan_rows(table, 1, 2, documents)
+      eager_keys.should eq((1_u64..CompactJsonColumnarGuardFixture::ROW_COUNT.to_u64).to_a)
+
+      predicate_keys = [] of UInt64
+      callback_marks = [] of Int32
+      callback_indices = [] of Array(Int32)
+      callback_offsets = [] of Tuple(UInt64, UInt64)
+      filtered_rows = [] of Tuple(UInt64, Bytes)
+      table.scan_compact_json_filtered(
+        CompactJsonColumnarGuardFixture::KEY,
+        ->(key : UInt64) do
+          predicate_keys << key
+          key == 3_u64 || key == 8_u64
+        end,
+        workers: 4,
+      ) do |batch, indices|
+        batch.row_count.should eq(CompactJsonColumnarGuardFixture::ROWS_PER_MARK)
+        indices.read_only?.should be_true
+        callback_marks << batch.mark_index
+        callback_indices << indices.to_a
+        callback_offsets << {batch.part_row_offset, batch.source_row_offset}
+        keys = batch.uint64_column(CompactJsonColumnarGuardFixture::KEY)
+        indices.each do |row|
+          filtered_rows << {
+            keys[row],
+            CompactJsonColumnarGuardFixture.rowbinary_from_batch(batch, row),
+          }
+        end
+      end
+
+      predicate_keys.should eq((1_u64..CompactJsonColumnarGuardFixture::ROW_COUNT.to_u64).to_a)
+      callback_marks.should eq([1_i32, 3_i32])
+      callback_indices.should eq([[0_i32], [1_i32]])
+      callback_offsets.should eq([{2_u64, 2_u64}, {6_u64, 6_u64}])
+      filtered_rows.should eq([
+        {3_u64, eager_json[2]},
+        {8_u64, eager_json[7]},
+      ] of Tuple(UInt64, Bytes))
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "skips zero-match and skipped-only JSON frames while strict scans still detect corruption" do
+    parent = File.tempname("compact-json-filtered-skipped-frame-")
+    part = File.join(parent, "all_1_1_0")
+    begin
+      Dir.mkdir(parent)
+      CompactJsonColumnarGuardFixture.write_part(part, frame_bytes: 512)
+      physical = CrystalClick::CompactPartPhysicalContext.open(part)
+      absent_json_frames = cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::COLUMN, 0_i32)
+      selected_json_frames = cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::COLUMN, 1_i32) +
+                             cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::COLUMN, 3_i32)
+      predicate_key_frames = (0_i32...4_i32).flat_map do |mark|
+        cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::KEY, mark)
+      end
+      skipped_only_json_frames = absent_json_frames.reject do |frame|
+        selected_json_frames.includes?(frame) || predicate_key_frames.includes?(frame)
+      end
+      skipped_only_json_frames.should_not be_empty
+      skipped_frame = skipped_only_json_frames.first
+      CompactPhysicalContextW259Fixture.corrupt_frame_payload(part, skipped_frame)
+      table = CrystalClick::TypedPartTable.open_selected_typed(
+        [part],
+        [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+      )
+
+      predicate_calls = 0
+      zero_match_callbacks = 0
+      table.scan_compact_json_filtered(
+        CompactJsonColumnarGuardFixture::KEY,
+        ->(_key : UInt64) do
+          predicate_calls += 1
+          false
+        end,
+        workers: 1,
+      ) { |_batch, _indices| zero_match_callbacks += 1 }
+      predicate_calls.should eq(CompactJsonColumnarGuardFixture::ROW_COUNT)
+      zero_match_callbacks.should eq(0)
+
+      callback_marks = [] of Int32
+      callback_indices = [] of Array(Int32)
+      filtered_rows = [] of Tuple(UInt64, Bytes)
+      table.scan_compact_json_filtered(
+        CompactJsonColumnarGuardFixture::KEY,
+        ->(key : UInt64) { key == 3_u64 || key == 8_u64 },
+        workers: 1,
+      ) do |batch, indices|
+        callback_marks << batch.mark_index
+        callback_indices << indices.to_a
+        keys = batch.uint64_column(CompactJsonColumnarGuardFixture::KEY)
+        indices.each do |row|
+          filtered_rows << {
+            keys[row],
+            CompactJsonColumnarGuardFixture.rowbinary_from_batch(batch, row),
+          }
+        end
+      end
+      callback_marks.should eq([1_i32, 3_i32])
+      callback_indices.should eq([[0_i32], [1_i32]])
+      filtered_rows.should eq([
+        {3_u64, CompactJsonColumnarGuardFixture.expected_rowbinary(CompactJsonColumnarGuardFixture.document(2_i32))},
+        {8_u64, CompactJsonColumnarGuardFixture.expected_rowbinary(CompactJsonColumnarGuardFixture.document(7_i32))},
+      ] of Tuple(UInt64, Bytes))
+
+      strict_callbacks = 0
+      strict_error = expect_raises(CrystalClick::CorruptPartError) do
+        table.scan_compact_json_columnar(workers: 1, batch_rows: 1) do |_batch|
+          strict_callbacks += 1
+        end
+      end
+      strict_error.message.should eq("compressed frame checksum mismatch")
+      strict_callbacks.should eq(0)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "rejects a checksum-corrupt JSON frame in a selected mark before delivery" do
+    parent = File.tempname("compact-json-filtered-selected-frame-")
+    part = File.join(parent, "all_1_1_0")
+    begin
+      Dir.mkdir(parent)
+      CompactJsonColumnarGuardFixture.write_part(part, frame_bytes: 512)
+      physical = CrystalClick::CompactPartPhysicalContext.open(part)
+      selected_json_frames = cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::COLUMN, 1_i32)
+      predicate_key_frames = (0_i32...4_i32).flat_map do |mark|
+        cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::KEY, mark)
+      end
+      selected_json_only_frames = selected_json_frames.reject do |frame|
+        predicate_key_frames.includes?(frame)
+      end
+      selected_json_only_frames.should_not be_empty
+      selected_frame = selected_json_only_frames.first
+      CompactPhysicalContextW259Fixture.corrupt_frame_payload(part, selected_frame)
+      table = CrystalClick::TypedPartTable.open_selected_typed(
+        [part],
+        [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+      )
+      callbacks = 0
+      error = expect_raises(CrystalClick::CorruptPartError) do
+        table.scan_compact_json_filtered(
+          CompactJsonColumnarGuardFixture::KEY,
+          ->(key : UInt64) { key == 3_u64 },
+          workers: 1,
+        ) do |_batch, _indices|
+          callbacks += 1
+        end
+      end
+      error.message.should eq("compressed frame checksum mismatch")
+      callbacks.should eq(0)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "rejects a valid-checksum Copy and Data disagreement in a selected mark" do
+    parent = File.tempname("compact-json-filtered-copy-data-")
+    part = File.join(parent, "all_1_1_0")
+    begin
+      Dir.mkdir(parent)
+      CompactJsonColumnarGuardFixture.write_part(part)
+      # beta is the third shared path, and row 2 supplies seed 2:
+      # shared_value("beta", 2, 2) emits this exact Copy payload.
+      cjcv_rewrite_copy_string_byte(part, 1_i32, "beta:2:2", 0x7a_u8)
+      table = CrystalClick::TypedPartTable.open_selected_typed(
+        [part],
+        [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+      )
+      callbacks = 0
+      error = expect_raises(CrystalClick::CorruptPartError) do
+        table.scan_compact_json_filtered(
+          CompactJsonColumnarGuardFixture::KEY,
+          ->(key : UInt64) { key == 3_u64 },
+          workers: 1,
+        ) do |_batch, _indices|
+          callbacks += 1
+        end
+      end
+      error.message.should eq("Object shared Copy value disagrees with its per-path Dynamic row")
+      callbacks.should eq(0)
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "revalidates selected JSON and predicate-key frames between ordered callbacks" do
+    [:json, :key].each do |mutated_lane|
+      parent = File.tempname("compact-json-filtered-between-callbacks-")
+      part = File.join(parent, "all_1_1_0")
+      begin
+        Dir.mkdir(parent)
+        CompactJsonColumnarGuardFixture.write_part(part, frame_bytes: 512)
+        physical = CrystalClick::CompactPartPhysicalContext.open(part)
+        selected_json_frames = cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::COLUMN, 1_i32) +
+                               cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::COLUMN, 3_i32)
+        selected_key_frames = cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::KEY, 1_i32) +
+                              cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::KEY, 3_i32)
+        frame = if mutated_lane == :json
+                  mark_three_frames = cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::COLUMN, 3_i32)
+                  mark_one_frames = cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::COLUMN, 1_i32)
+                  all_key_frames = (0_i32...4_i32).flat_map do |mark|
+                    cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::KEY, mark)
+                  end
+                  mark_three_frames.reject do |candidate|
+                    mark_one_frames.includes?(candidate) || all_key_frames.includes?(candidate)
+                  end.first || raise("columnar fixture has no selected-mark JSON-only frame after mark 1")
+                else
+                  skipped_mark_frames = cjcv_touched_frames(physical, CompactJsonColumnarGuardFixture::KEY, 2_i32)
+                  skipped_mark_frames.reject do |candidate|
+                    selected_key_frames.includes?(candidate) || selected_json_frames.includes?(candidate)
+                  end.first || raise("columnar fixture has no skipped-mark key-only frame")
+                end
+        frame_mark = mutated_lane == :json ? 3_i32 : 2_i32
+        frame_column = mutated_lane == :json ? CompactJsonColumnarGuardFixture::COLUMN : CompactJsonColumnarGuardFixture::KEY
+        cjcv_touched_frames(physical, frame_column, frame_mark).includes?(frame).should be_true
+        checksum_offset = physical.frame_index.frames[frame].compressed_offset
+        table = CrystalClick::TypedPartTable.open_selected_typed(
+          [part],
+          [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+        )
+        callbacks = 0
+        error = expect_raises(CrystalClick::CorruptPartError) do
+          table.scan_compact_json_filtered(
+            CompactJsonColumnarGuardFixture::KEY,
+            ->(key : UInt64) { key == 3_u64 || key == 8_u64 },
+            workers: 4,
+          ) do |_batch, _indices|
+            callbacks += 1
+            if callbacks == 1
+              File.open(File.join(part, "data.bin"), "r+") do |data|
+                data.seek(checksum_offset)
+                byte = data.read_byte.not_nil!
+                data.seek(checksum_offset)
+                data.write_byte(byte ^ 1_u8)
+              end
+            end
+          end
+        end
+        error.message.should eq("Compact source frame checksum mismatch")
+        callbacks.should eq(1)
+      ensure
+        FileUtils.rm_rf(parent)
+      end
+    end
+  end
+
+  it "cleans up parallel callbacks after a callback error with multiple selected marks" do
+    parent = File.tempname("compact-json-filtered-callback-error-")
+    part = File.join(parent, "all_1_1_0")
+    begin
+      Dir.mkdir(parent)
+      CompactJsonColumnarGuardFixture.write_part(part)
+      table = CrystalClick::TypedPartTable.open_selected_typed(
+        [part],
+        [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+      )
+      callbacks = 0
+      expect_raises(ArgumentError) do
+        table.scan_compact_json_filtered(
+          CompactJsonColumnarGuardFixture::KEY,
+          ->(key : UInt64) { key == 3_u64 || key == 8_u64 },
+          workers: 4,
+        ) do |_batch, _indices|
+          callbacks += 1
+          raise ArgumentError.new("intentional filtered callback failure")
+        end
+      end
+      callbacks.should eq(1)
+
+      retried_rows = [] of Tuple(UInt64, Bytes)
+      table.scan_compact_json_filtered(
+        CompactJsonColumnarGuardFixture::KEY,
+        ->(key : UInt64) { key == 3_u64 || key == 8_u64 },
+        workers: 4,
+      ) do |batch, indices|
+        keys = batch.uint64_column(CompactJsonColumnarGuardFixture::KEY)
+        indices.each do |row|
+          retried_rows << {
+            keys[row],
+            CompactJsonColumnarGuardFixture.rowbinary_from_batch(batch, row),
+          }
+        end
+      end
+      retried_rows.should eq([
+        {3_u64, CompactJsonColumnarGuardFixture.expected_rowbinary(CompactJsonColumnarGuardFixture.document(2_i32))},
+        {8_u64, CompactJsonColumnarGuardFixture.expected_rowbinary(CompactJsonColumnarGuardFixture.document(7_i32))},
+      ] of Tuple(UInt64, Bytes))
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
   it "cleans up parallel workers after a callback raises and allows the same table to rescan" do
     parent = File.tempname("compact-json-columnar-callback-error-")
     part = File.join(parent, "all_1_1_0")
@@ -1002,6 +1394,36 @@ if fixture_root = ENV["CRYSTAL_CLICK_COLUMNAR_JSON_FIXTURE_ROOT"]?
         part = File.join(fixture_root, directory, "0_1_1_0")
         oracle = File.join(fixture_root, directory, "0_1_1_0.rowbinary")
         cjcv_official_fixture_probe(part, oracle)
+      end
+    end
+
+    it "matches the filtered ClickHouse RowBinary sequence on the overflow part" do
+      part = File.join(fixture_root, "overflow-fixture", "0_1_1_0")
+      oracle = File.read(File.join(fixture_root, "overflow-fixture", "0_1_1_0.rowbinary")).to_slice
+      predicate = ->(id : UInt64) { id // 2048_u64 % 2_u64 == 1_u64 && id % 4_u64 == 0_u64 }
+      cursor = CrystalClick::BinaryCodecContext.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS, input: oracle)
+      expected = IO::Memory.new
+      until cursor.remaining_input_bytes == 0_u64
+        start = cursor.input_offset
+        id = IO::ByteFormat::LittleEndian.decode(UInt64, cursor.read_slice(8_u64))
+        cursor.read_slice(cursor.read_var_uint)
+        expected.write(oracle[start, cursor.input_offset - start]) if predicate.call(id)
+      end
+
+      table = CrystalClick::TypedPartTable.open_selected_typed([part], ["id", "doc"])
+      [1, 4].each do |workers|
+        output = IO::Memory.new
+        marks = [] of Int32
+        table.scan_compact_json_filtered("id", predicate, workers) do |batch, rows|
+          marks << batch.mark_index
+          ids = batch.uint64_column("id")
+          rows.each do |row|
+            output.write_bytes(ids[row], IO::ByteFormat::LittleEndian)
+            output.write(CompactJsonColumnarGuardFixture.rowbinary_from_batch(batch, row))
+          end
+        end
+        marks.should eq([1_i32, 3_i32])
+        output.to_slice.should eq(expected.to_slice)
       end
     end
   end

@@ -841,6 +841,138 @@ module CrystalClick
       {windows, fingerprints}
     end
 
+    # Metadata-only logical byte census for a sorted sparse MRK4 selection.
+    # Used to reserve the physical capture workspace before any detached
+    # selected shard buffers are allocated.
+    def selected_logical_bytes_for(column_name : String, mark_indices : Array(Int32)) : UInt64
+      unless @mode.mrk4? && !column_name.empty? && !mark_indices.empty?
+        raise UnsupportedFormatError.new("selected Compact byte census requires MRK4 marks")
+      end
+      if mark_indices.size > @mark_index.mark_count
+        raise ArgumentError.new("selected Compact byte census exceeds the mark grid")
+      end
+      slots = @columns_substreams.slots_for(column_name)
+      if slots.empty?
+        raise CorruptPartError.new("Compact selected byte census column has no physical slots")
+      end
+      total = 0_u64
+      previous_mark = -1_i32
+      mark_indices.each do |mark|
+        unless mark > previous_mark && mark < @mark_index.mark_count
+          raise ArgumentError.new("selected Compact byte census marks are unordered or outside the grid")
+        end
+        slots.each do |slot|
+          start = @mark_index.position_at(mark, slot.index)
+          finish = if slot.index + 1 < @mark_index.slot_count
+                     @mark_index.position_at(mark, slot.index + 1)
+                   else
+                     @mark_index.position_at(mark + 1, 0)
+                   end
+          if finish < start
+            raise CorruptPartError.new("Compact selected byte census span has descending coordinates")
+          end
+          width = (finish - start).to_u64
+          if width > UInt64::MAX - total
+            raise CorruptPartError.new("Compact selected byte census overflows UInt64")
+          end
+          total += width
+        end
+        previous_mark = mark
+      end
+      total
+    end
+
+    # Reads only the named column's selected absolute MRK4 marks. Mark indices
+    # must be strictly increasing so ranges, detached granules, and the
+    # returned map retain a stable physical ordinal. Each touched compressed
+    # frame is authenticated and decoded once for this selected read.
+    def read_selected_window_with_fingerprints(
+      column_name : String,
+      mark_indices : Array(Int32),
+    ) : Tuple(Hash(Int32, CompactPartPhysicalGranule), Array(CompressedFrameFingerprint))
+      unless @mode.mrk4?
+        raise UnsupportedFormatError.new("selected Compact source plans require MRK4 marks")
+      end
+      if column_name.empty? || mark_indices.empty?
+        raise ArgumentError.new("Compact selected source window is empty")
+      end
+      if mark_indices.size > @mark_index.mark_count || mark_indices.size > Int32::MAX
+        raise CorruptPartError.new("Compact selected source mark count exceeds its bound")
+      end
+
+      previous_mark = -1_i32
+      mark_indices.each do |mark|
+        unless mark > previous_mark && mark < @mark_index.mark_count
+          raise ArgumentError.new("Compact selected source marks are unordered, duplicated, or outside the grid")
+        end
+        previous_mark = mark
+      end
+
+      slots = @columns_substreams.slots_for(column_name)
+      if slots.empty?
+        raise CorruptPartError.new("Compact selected source column has no physical slots")
+      end
+      shard_count = mark_indices.size.to_i64 * slots.size.to_i64
+      if shard_count > Int32::MAX
+        raise CorruptPartError.new("Compact selected source shard count exceeds its bound")
+      end
+      descriptor_count = mark_indices.size.to_i64 + shard_count + slots.size.to_i64
+      if shard_count > Int64::MAX - descriptor_count
+        raise CorruptPartError.new("Compact selected source descriptor count overflows")
+      end
+      @budget.preflight_records(descriptor_count + shard_count)
+      @budget.reserve_records(descriptor_count)
+
+      ranges = Array({Int64, Int64}).new(shard_count.to_i)
+      mark_indices.each do |mark|
+        slots.each do |slot|
+          start = @mark_index.position_at(mark, slot.index)
+          finish = if slot.index + 1 < @mark_index.slot_count
+                     @mark_index.position_at(mark, slot.index + 1)
+                   else
+                     @mark_index.position_at(mark + 1, 0)
+                   end
+          if finish < start
+            raise CorruptPartError.new("Compact selected source slot has descending logical coordinates")
+          end
+          ranges << {start, finish}
+        end
+      end
+
+      fingerprints = [] of CompressedFrameFingerprint
+      shard_bytes = CompressedMarkReader.read_ranges(
+        @data_input.data_path,
+        @data_input.data_size,
+        ranges,
+        @budget,
+        fingerprints,
+        @mark_index.frame_index,
+      )
+      unless shard_bytes.size == ranges.size
+        raise CorruptPartError.new("Compact selected source window returned an incomplete shard set")
+      end
+
+      selected = Hash(Int32, CompactPartPhysicalGranule).new(initial_capacity: mark_indices.size)
+      range_index = 0
+      mark_indices.each do |mark|
+        rows = @mark_index.row_count_at(mark)
+        shards = Array(CompactPartPhysicalShard).new(slots.size)
+        slots.each do |slot|
+          start, finish = ranges[range_index]
+          shards << CompactPartPhysicalShard.new(
+            slot.index,
+            slot.stream_name,
+            start,
+            finish,
+            shard_bytes[range_index],
+          )
+          range_index += 1
+        end
+        selected[mark] = CompactPartPhysicalGranule.new(mark, row_offset_at(mark), rows, shards)
+      end
+      {selected, fingerprints}
+    end
+
     # Reads one admitted ordinary UInt64 mark without constructing detached
     # shard/granule/window copies. The caller supplies the slot index retained
     # during reader admission; this method rebinds it to the retained physical

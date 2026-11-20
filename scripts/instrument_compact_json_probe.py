@@ -339,7 +339,68 @@ def install(root: Path) -> None:
         path.write_text(source)
 
 
+def install_lz4_only(root: Path) -> None:
+    """Count completed frame decodes without installing the broader hooks."""
+    path = root / "src" / "crystal_click" / "compressed_block.cr"
+    source = path.read_text()
+    if "diagnostic_decode_started" in source and "record_decompression!" in source:
+        return
+
+    old_start = (
+        "      payload = data[header_offset + FRAME_HEADER_SIZE, payload_size.to_i]\n"
+        "      output = case method\n"
+        "               when METHOD_LZ4\n"
+        "                 if exact_destination = destination\n"
+    )
+    new_start = (
+        "      payload = data[header_offset + FRAME_HEADER_SIZE, payload_size.to_i]\n"
+        "      diagnostic_decode_started = Time.instant\n"
+        "      output = case method\n"
+        "               when METHOD_LZ4\n"
+        "                 if exact_destination = destination\n"
+    )
+    old_end = (
+        '      raise CorruptPartError.new("compressed frame output size mismatch") unless output.size.to_i64 == decompressed_size\n'
+        "      Frame.new(frame_end, output)\n"
+    )
+    new_end = (
+        '      raise CorruptPartError.new("compressed frame output size mismatch") unless output.size.to_i64 == decompressed_size\n'
+        "      CompactJSONScanProbeCounters.record_decompression!(\n"
+        "        method, payload_size, decompressed_size,\n"
+        "        (Time.instant - diagnostic_decode_started).total_nanoseconds.to_u64,\n"
+        "      )\n"
+        "      Frame.new(frame_end, output)\n"
+    )
+    if source.count(old_start) != 1 or source.count(old_end) != 1:
+        raise RuntimeError(f"{path}: expected one exact frame decode hook site")
+
+    # The legacy general-purpose probe asserts that its full diagnostics suite
+    # was installed. A targeted central counter intentionally does not install
+    # that suite, so suppress only that diagnostic-only assertion in the copy.
+    probe = root / "benchmarks" / "compact_json_scan_probe.cr"
+    probe_source = probe.read_text() if probe.exists() else None
+    legacy_assertion = (
+        "        {% if flag?(:compact_json_scan_diagnostic) %}\n"
+        "          unless CrystalClick::CompactJSONScanProbeCounters.coordinator_value(:full_window_prepare_passes) > 0_u64\n"
+        '            error("no root JSON preparation recorded; apply the diagnostic hooks to the isolated source copy")\n'
+        "          end\n"
+        "        {% end %}\n"
+    )
+    if probe_source and legacy_assertion in probe_source:
+        probe_source = probe_source.replace(legacy_assertion, "", 1)
+
+    path.write_text(source.replace(old_start, new_start, 1).replace(old_end, new_end, 1))
+    if probe_source is not None:
+        probe.write_text(probe_source)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source_copy", type=Path)
-    install(parser.parse_args().source_copy)
+    parser.add_argument("--lz4-only", action="store_true",
+                        help="install only the central complete-frame decompression counter")
+    arguments = parser.parse_args()
+    if arguments.lz4_only:
+        install_lz4_only(arguments.source_copy)
+    else:
+        install(arguments.source_copy)

@@ -18,6 +18,39 @@ The latest qualification below governs current admission. Older checkpoint
 sections are revision-scoped history; their former refusals and next steps do
 not override a later qualification.
 
+## Filter-first Advanced root JSON scan
+
+The first filter-first slice targets one regular Compact part with plain MRK4
+marks, one root Advanced JSON column, and one ordinary UInt64 companion. The
+caller supplies a UInt64 predicate. The scan evaluates it in physical row
+order and retains mark-local indexes. It prepares JSON only for marks with a
+nonempty selection, then delivers borrowed columnar marks and their matching
+indexes in physical order. Parallel workers may prepare batches ahead of the
+callback. Each worker owns its decode budget and output arena.
+
+The source binding covers the part metadata, every frame used to decide the
+predicate, and every frame used for the chosen JSON mark streams. Verify those
+frames at read and before ordered delivery. Run the exact SharedData Copy/Data
+comparison for each decoded mark. A compressed frame shared by two columns can
+be inflated for the predicate. A bad frame exclusive to a skipped JSON mark
+can escape this selected-frame check. The whole-grid scan verifies its complete
+JSON source. Other profiles and layouts are outside this slice.
+
+Required controls are a zero-selection scan, first surviving mark other than
+zero, noncontiguous selected marks, full selection, checksum failure in a
+touched frame, a valid-checksum Copy/Data disagreement, and a key frame change
+between callbacks. Cross-check the selected rows against the eager scan and an
+ordered ClickHouse RowBinary export. Compare p50 and p95 and count actual LZ4
+calls with one and four workers on the pinned overflow part. Include predicate
+reads, selected preparation, and source validation in the read interval.
+
+The grouped Release run passed 92 examples with the native plain and overflow
+fixtures enabled. A synthetic part also exercised a noncontiguous selection,
+changed checksum bytes in key and JSON frames between callbacks with an
+unchanged `checksums.txt`, and a selected Copy/Data mismatch with valid
+checksums. See the
+[filter-first scan measurements and commands](COMPACT_JSON_SCAN_BENCHMARK.md#filter-first-advanced-root-json-scan).
+
 ## Recursive/public/offline checkpoint — qualified within scope
 
 Qualification over `39b16a039e78806be3df4a9f31e0b198055b0160`:

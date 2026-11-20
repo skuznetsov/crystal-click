@@ -1105,6 +1105,113 @@ focused suite failed only at the new assertion for Bool descriptor reuse.
 | Grouped Release spec output | `58303ce8638124c6b893d2d0161cd70139fe48c2e3479605ecbb5266552df1f0` |
 | Ordered ClickHouse RowBinary export | `3495978197741a4e241a2201bd92030afbb7590588bccb2ab3da107b1059d62b` |
 
+### Filter-first Advanced root JSON scan
+
+The eager route prepares and decodes all four marks and evaluates the
+predicate on the decoded UInt64 companion. The filter-first route reads
+that companion first, retains the matching offsets, and prepares and
+decodes only the JSON marks with matches. Both decode a full JSON mark
+whenever the route visits it. Both verify the frame checksums and compare
+SharedData Copy and Data for the JSON they decode.
+
+The main comparison returns 2,048 rows per scan under two predicates.
+The range `2048 <= id < 4096` leaves one mark, while `id % 4 == 0`
+leaves matches in all four marks. An empty result and an unfiltered
+result also exercise the endpoints. The reference is the ordered native
+RowBinary export filtered using the same UInt64 predicate.
+
+The retained probe runs both routes on the same part reader in each block.
+Both routes keep worker threads and output buffers warm and build a fresh
+authenticated plan per scan. The read interval includes the predicate,
+source capture and decoding, worker dispatch and collection, and the
+source recheck before each mark is delivered. Measure RowBinary serialization
+after the read interval and compare every result byte-for-byte with the
+ClickHouse export. Each cell uses eight blocks of six measured pairs with two
+warm-up pairs per block and alternating route order. Report the sample median
+and nearest-rank p95. The latency build uses Crystal 1.22.3 and LLVM 23.1.5 in
+Release with Boehm enabled on an Apple M2 Max running macOS 26.6.2.
+
+| Predicate | Matching rows | Requested workers | JSON marks after filtering | Eager p50 / p95 (ms) | Filter-first p50 / p95 (ms) | LZ4 frames, eager → filter-first |
+|---|---:|---:|---:|---:|---:|---:|
+| Empty | 0 | 1 | 0 | 15.938 / 17.928 | 0.639 / 0.911 | 16 → 4 |
+| Empty | 0 | 4 | 0 | 16.503 / 25.651 | 0.639 / 1.331 | 16 → 4 |
+| One mark | 2,048 | 1 | 1 | 14.581 / 15.795 | 3.941 / 5.143 | 16 → 7 |
+| One mark | 2,048 | 4 | 1 | 17.013 / 18.661 | 5.166 / 5.801 | 16 → 7 |
+| Spread across marks | 2,048 | 1 | 4 | 14.549 / 19.171 | 14.749 / 16.511 | 16 → 16 |
+| Spread across marks | 2,048 | 4 | 4 | 17.649 / 21.976 | 17.821 / 20.169 | 16 → 16 |
+| All rows | 8,192 | 1 | 4 | 13.855 / 14.830 | 14.139 / 15.012 | 16 → 16 |
+| All rows | 8,192 | 4 | 4 | 15.873 / 18.561 | 16.283 / 18.354 | 16 → 16 |
+
+The one-mark case reduced read p95 by 67.4% and 68.9% and won all 48 pairs
+at each worker count. It used one active JSON worker at both settings.
+When every mark survived, the filter-first route raised the median by
+1.0–2.6% on this part. The p95 difference for the spread predicate changed sign
+between runs. Each of the four key frames is separate from the three JSON
+frames per mark on this fixture. The separate diagnostic build counts
+completed LZ4 calls across the read interval, including plan preparation.
+
+Every timed pair matched the independently filtered ClickHouse 26.10.1.1201
+RowBinary bytes. The native controls also rejected a touched frame with a bad
+checksum and a Copy/Data disagreement with a newly valid checksum. Both
+controls ran with one and four requested workers. The Copy/Data control
+preserved the original MRK4 coordinates and rejected before the first batch.
+
+| Evidence from this run | SHA-256 |
+|---|---|
+| Stock timing probe | `87b921037426955437eaa166b73ab80304847f13296477ba399ed574b613c85e` |
+| LZ4 diagnostic probe | `cdb4f1960cef39425b3d855f162e78af55e307f0043550107aac8cd24592bca5` |
+| Raw report with 768 timed samples and 16 diagnostic entries | `07667da5d3bee9189f83f31964a8c1c2eb707c8376d45089b71e0d5c28d3fdb0` |
+| Grouped Release output | `59acebf49033143aff0cbf3d0e3836d359ce8d7687d768683981674522a201ed` |
+
+Generate the `overflow-fixture` with the ClickHouse binary and
+`--shared-overflow` from [Reproduction](#reproduction). The filter driver
+pins the `data.bin`, `.mrk4`, and RowBinary hashes from that fixture. Build
+the regular probe and a separate copy with the frame decode counter.
+
+```sh
+TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
+  crystal build --release -Dpreview_mt -Dexecution_context \
+    benchmarks/compact_json_filter_scan_probe.cr -o "$bench_work/filter-probe"
+
+mkdir "$bench_work/filter-diagnostic-src" "$bench_work/filter-run"
+git archive HEAD src benchmarks/compact_json_filter_scan_probe.cr \
+  scripts/support/compact_physical_context_w259_fixture.cr | \
+  tar -x -C "$bench_work/filter-diagnostic-src"
+python3 -B scripts/instrument_compact_json_probe.py \
+  "$bench_work/filter-diagnostic-src" --lz4-only
+TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
+  crystal build --release -Dpreview_mt -Dexecution_context \
+    -Dcompact_json_scan_diagnostic \
+    "$bench_work/filter-diagnostic-src/benchmarks/compact_json_filter_scan_probe.cr" \
+    -o "$bench_work/filter-diagnostic-probe"
+
+bench_part="$bench_work/overflow-fixture/0_1_1_0"
+python3 -B scripts/compact_json_filter_scan_benchmark.py \
+  --part "$bench_part" --oracle "$bench_part.rowbinary" \
+  --probe "$bench_work/filter-probe" \
+  --diagnostic-probe "$bench_work/filter-diagnostic-probe" \
+  --scratch "$bench_work/filter-run" --output "$bench_work/filter-report.json"
+```
+
+The grouped Release check also includes the prepared part-plan, physical
+capture, and transport regression controls. Set `bench_work` to the fixture
+root containing both `fixture` and `overflow-fixture`.
+
+```sh
+CRYSTAL_CLICK_COLUMNAR_JSON_FIXTURE_ROOT="$bench_work" \
+  TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
+  crystal spec --release -Dpreview_mt -Dexecution_context \
+    spec/compact_shared_advanced_json_columnar_spec.cr \
+    spec/compact_shared_advanced_json_part_plan_spec.cr \
+    spec/compact_part_physical_window_capture_spec.cr \
+    spec/compact_physical_context_w259_spec.cr \
+    spec/compact_physical_context_w259_adversary_spec.cr \
+    spec/object_shared_advanced_direct_columns_w263_spec.cr \
+    spec/binary_dynamic_bulk_values_w155_spec.cr \
+    spec/binary_dynamic_bulk_shared_context_w155_spec.cr \
+    spec/binary_bulk_w122_spec.cr
+```
+
 ### Previous shared-plan diagnostics
 
 Every selection prepared one complete plan and read the shared physical

@@ -233,6 +233,26 @@ ordinary `UInt64` companions selected. The callback receives reusable JSON
 path columns aligned with the companion columns. See the
 [columnar JSON example](docs/COMPACT_TYPED_READER_FRONTIER.md#borrowed-columnar-json-batches).
 
+For one Compact MRK4 part with an Advanced JSON root, select the root and
+one ordinary `UInt64` column. The filtered scan reads the key first and
+decodes JSON only for marks with matching rows.
+
+```crystal
+reader = CrystalClick::TypedPartTable.open_selected_typed([part_path], ["id", "doc"])
+predicate = ->(id : UInt64) { id >= 2048_u64 && id < 4096_u64 }
+reader.scan_compact_json_filtered("id", predicate, workers: 4) do |mark, matching_rows|
+  ids = mark.uint64_column("id")
+  matching_rows.each do |row|
+    pp({ids[row], mark.column_for("rank").try(&.value_at(row))})
+  end
+end
+```
+
+The callback receives a borrowed full mark and the matching offsets within
+that mark. Checksums cover the frames read for the key and selected JSON
+marks. SharedData Copy and Data are compared before each mark is delivered.
+See the [filtered scan profile](docs/COMPACT_JSON_READER_FRONTIER.md#filter-first-advanced-root-json-scan).
+
 `workers: 1` scans serially. For repeated scans of ordinary Wide numeric parts
 with `.mrk2` marks, retain the
 `TypedPartTable` instance and call `scan_typed_parallel(workers: 4)` on it for

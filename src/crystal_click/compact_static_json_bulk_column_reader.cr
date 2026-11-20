@@ -236,6 +236,218 @@ module CrystalClick
     end
 
     # :nodoc:
+    # Evaluates a direct root UInt64 predicate before reading any root JSON
+    # spans. Only matching absolute marks enter sparse JSON preparation.
+    def prepare_filtered_advanced_json_scan(
+      workspace_observer : Proc(UInt64, Nil),
+      filter_column : String,
+      predicate : Proc(UInt64, Bool),
+    ) : CompactFilteredJsonPartPlan
+      unless @context.mode.mrk4? && @codec_budget.nil? && advanced_shared_plan_candidate?
+        raise UnsupportedFormatError.new("filtered Compact JSON scans require an Advanced MRK4 root Object")
+      end
+      if filter_column.empty? || filter_column == @column_name
+        raise ArgumentError.new("filtered Compact JSON scan requires a distinct UInt64 column")
+      end
+      unless @context.columns.find { |column, _type| column == filter_column }.try(&.[1]) == "UInt64"
+        raise UnsupportedFormatError.new("filtered Compact JSON predicate column must be UInt64")
+      end
+      @context.validate_uint64_single_callback_spans!(filter_column, PhysicalStreamName.escape(filter_column))
+
+      current_files = CompactStaticJsonAdvancedPartPlan.capture_source_files(
+        @part_path,
+        @context.marks_name,
+        @transport_limits,
+      )
+      unless same_source_file_fingerprints?(@admission_source_files, current_files)
+        raise CorruptPartError.new("Compact filtered JSON metadata changed since reader admission")
+      end
+
+      base_workspace = retained_workspace_bytes
+      filter_logical_bytes = @context.logical_bytes_for(filter_column)
+      workspace_observer.call(checked_add(
+        base_workspace,
+        filter_capture_workspace_bytes(filter_column, filter_logical_bytes),
+      ))
+      filter_capture = CompactPartPhysicalWindowCapture.read_complete_columns(
+        @context,
+        filter_column,
+        [] of String,
+      )
+      filter_capture_workspace = filter_capture.retained_workspace_bytes
+
+      mark_indices = [] of Int32
+      row_indices = [] of Array(Int32)
+      part_row_offsets = [] of UInt64
+      selected_rows = 0_u64
+      selected_mark_rows = 0_u64
+      current_offset = 0_u64
+      @mark_count.times do |mark|
+        rows = @mark_row_counts[mark]
+        unless filter_capture.root_mark_shard_count_at(mark) == 1
+          raise CorruptPartError.new("Compact UInt64 filter capture has more than one physical slot")
+        end
+        key_bytes = filter_capture.root_mark_shard_bytes_at(mark, 0)
+        expected_bytes = checked_multiply(rows, sizeof(UInt64).to_u64)
+        unless key_bytes.size.to_u64 == expected_bytes
+          raise CorruptPartError.new("Compact UInt64 filter mark width differs from its row grid")
+        end
+        unless filter_capture.root_mark_row_offset(mark) == current_offset
+          raise CorruptPartError.new("Compact UInt64 filter capture differs from its row-offset grid")
+        end
+
+        matching_rows = [] of Int32
+        rows.to_i.times do |row|
+          value = IO::ByteFormat::LittleEndian.decode(
+            UInt64,
+            key_bytes[row * sizeof(UInt64), sizeof(UInt64)],
+          )
+          if predicate.call(value)
+            projected_mark_count = mark_indices.size + (matching_rows.empty? ? 1 : 0)
+            projected_row_count = checked_add(selected_rows, matching_rows.size.to_u64 + 1_u64)
+            workspace_observer.call(checked_add(
+              checked_add(base_workspace, filter_capture_workspace),
+              filtered_selection_workspace_bytes(projected_mark_count.to_u64, projected_row_count, 0_u64),
+            ))
+            matching_rows << row.to_i32
+          end
+        end
+        unless matching_rows.empty?
+          mark_indices << mark.to_i32
+          row_indices << matching_rows
+          part_row_offsets << current_offset
+          selected_rows = checked_add(selected_rows, matching_rows.size.to_u64)
+          selected_mark_rows = checked_add(selected_mark_rows, rows)
+        end
+        if rows > UInt64::MAX - current_offset
+          raise CorruptPartError.new("Compact filtered JSON row offset overflows")
+        end
+        current_offset += rows
+      end
+      unless current_offset == @row_count
+        raise CorruptPartError.new("Compact filtered JSON key grid differs from the part row count")
+      end
+
+      key_frames = filter_capture.authenticated_frames
+      validate_filtered_source!(key_frames)
+      if mark_indices.empty?
+        plan = CompactFilteredJsonPartPlan.new(
+          self,
+          nil,
+          filter_column,
+          mark_indices,
+          row_indices,
+          part_row_offsets,
+          filter_capture,
+        )
+        active_workspace = checked_add(base_workspace, plan.retained_workspace_bytes)
+        active_workspace = checked_add(active_workspace, filter_capture_workspace)
+        active_workspace = checked_add(active_workspace,
+          filtered_selection_workspace_bytes(0_u64, 0_u64, 0_u64))
+        active_workspace = checked_add(active_workspace,
+          source_file_fingerprint_array_workspace_bytes(current_files))
+        workspace_observer.call(active_workspace)
+        return plan
+      end
+
+      selected_logical_bytes = @context.selected_logical_bytes_for(@column_name, mark_indices)
+      json_capture_workspace = physical_window_workspace_bytes_for(
+        selected_logical_bytes,
+        @physical_stream_names.size.to_u64,
+        @physical_stream_names,
+        mark_indices.size.to_u64,
+      )
+      json_capture_workspace = checked_add(
+        json_capture_workspace,
+        frame_fingerprint_workspace_bytes(@context.frame_index.frames.size.to_u64),
+      )
+      selection_workspace = filtered_selection_workspace_bytes(mark_indices.size.to_u64, selected_rows, 0_u64)
+      workspace_observer.call(checked_add(
+        retained_workspace_bytes,
+        checked_add(
+          filter_capture.retained_workspace_bytes,
+          checked_add(selection_workspace, json_capture_workspace),
+        ),
+      ))
+
+      json_capture = CompactPartPhysicalWindowCapture.read_selected_column(
+        @context,
+        @column_name,
+        mark_indices,
+      )
+      sparse_extra_workspace = checked_add(filter_capture_workspace, selection_workspace)
+      sparse_observer = ->(workspace : UInt64) do
+        workspace_observer.call(checked_add(workspace, sparse_extra_workspace))
+        nil
+      end
+      budget = BinaryCodecBudget.new(@limits)
+      owners = ensure_prepared!(
+        budget,
+        sparse_observer,
+        publish_advanced_state: false,
+        window_capture: json_capture,
+        selected_mark_indices: mark_indices,
+      )
+      unless owners
+        raise UnsupportedFormatError.new("selected Compact JSON mark does not use the Advanced shared layout")
+      end
+
+      plan_build_workspace = checked_add(base_workspace, filter_capture_workspace)
+      plan_build_workspace = checked_add(plan_build_workspace, json_capture_workspace)
+      plan_build_workspace = checked_add(plan_build_workspace, selection_workspace)
+      plan_build_workspace = checked_add(plan_build_workspace, advanced_request_workspace_bytes(owners))
+      plan_build_workspace = checked_add(plan_build_workspace,
+        source_file_fingerprint_array_workspace_bytes(current_files))
+      plan_build_workspace = checked_add(plan_build_workspace, selection_workspace)
+      plan_build_workspace = checked_add(plan_build_workspace,
+        filtered_advanced_plan_build_workspace_bytes(
+          owners.size.to_u64,
+          mark_indices.size.to_u64,
+          selected_mark_rows,
+          current_files,
+          @context.frame_index.frames.size.to_u64,
+          filter_column,
+        ))
+      workspace_observer.call(plan_build_workspace)
+
+      json_plan = CompactStaticJsonAdvancedPartPlan.build(
+        self,
+        @part_path,
+        @context.data_path,
+        @context.data_size,
+        @transport_limits,
+        @context.frame_index,
+        current_files,
+        json_capture,
+        owners,
+        @mark_row_counts,
+        [filter_column] of String,
+        budget,
+        mark_indices,
+        filter_capture,
+      )
+      json_plan.validate_source!
+      plan = CompactFilteredJsonPartPlan.new(
+        self,
+        json_plan,
+        filter_column,
+        mark_indices,
+        row_indices,
+        part_row_offsets,
+        filter_capture,
+      )
+      active_workspace = checked_add(base_workspace, plan.retained_workspace_bytes)
+      active_workspace = checked_add(active_workspace, filter_capture_workspace)
+      active_workspace = checked_add(active_workspace, json_capture_workspace)
+      active_workspace = checked_add(active_workspace, selection_workspace)
+      active_workspace = checked_add(active_workspace, owner_reference_array_workspace_bytes(owners))
+      active_workspace = checked_add(active_workspace,
+        source_file_fingerprint_array_workspace_bytes(current_files))
+      workspace_observer.call(active_workspace)
+      plan
+    end
+
+    # :nodoc:
     def validate_advanced_part_plan!(
       plan : CompactStaticJsonAdvancedPartPlan,
       extra_uint64_columns : Array(String),
@@ -247,12 +459,56 @@ module CrystalClick
       nil
     end
 
+    # :nodoc:
+    # Binds a key-only receipt to this root reader and exact physical context.
+    def validate_filter_capture!(
+      capture : CompactPartPhysicalWindowCapture,
+      filter_column : String,
+    ) : Nil
+      capture.validate_physical!(@context)
+      unless !capture.sparse? && capture.column_name == filter_column &&
+             @context.columns.find { |column, _type| column == filter_column }.try(&.[1]) == "UInt64"
+        raise CorruptPartError.new("Compact filtered source capture differs from its admitted UInt64 column")
+      end
+      @context.validate_uint64_single_callback_spans!(filter_column, PhysicalStreamName.escape(filter_column))
+      nil
+    end
+
+    # :nodoc:
+    # Revalidates the admitted metadata and only the authenticated frame set
+    # that determined the filter result.
+    def validate_filtered_source!(frames : Array(CompressedFrameFingerprint)) : Nil
+      current_files = CompactStaticJsonAdvancedPartPlan.capture_source_files(
+        @part_path,
+        @context.marks_name,
+        @transport_limits,
+      )
+      unless same_source_file_fingerprints?(@admission_source_files, current_files)
+        raise CorruptPartError.new("Compact filtered JSON source metadata changed after predicate evaluation")
+      end
+      CompressedMarkReader.validate_frame_fingerprints!(
+        @context.data_path,
+        @context.data_size,
+        frames,
+        @transport_limits,
+        @context.frame_index,
+      )
+      nil
+    end
+
     def source_declaration : String
       String.new(@source_declaration.to_slice)
     end
 
     def mark_row_counts : Array(UInt64)
       @mark_row_counts.dup
+    end
+
+    def mark_row_count_at(mark_index : Int) : UInt64
+      unless mark_index >= 0 && mark_index < @mark_count
+        raise ArgumentError.new("Compact static JSON mark is outside the physical grid")
+      end
+      @mark_row_counts[mark_index]
     end
 
     def physical_stream_names : Array(String)
@@ -438,38 +694,60 @@ module CrystalClick
       workspace_observer : Proc(UInt64, Nil),
       publish_advanced_state : Bool = true,
       window_capture : CompactPartPhysicalWindowCapture? = nil,
+      selected_mark_indices : Array(Int32)? = nil,
     ) : Array(CompactStaticJsonAdvancedPreparedMark)?
       base_workspace = retained_workspace_bytes
       physical_workspace = window_capture.try(&.retained_workspace_bytes) || checked_add(
         physical_window_workspace_bytes,
         instance_sizeof(CompactPartPhysicalWindowCapture).to_u64,
       )
-      workspace_observer.call(checked_add(base_workspace, @logical_read_bytes))
+      selected_logical_bytes = if selected_marks = selected_mark_indices
+                                 @context.selected_logical_bytes_for(@column_name, selected_marks)
+                               else
+                                 @logical_read_bytes
+                               end
+      workspace_observer.call(checked_add(base_workspace, selected_logical_bytes))
       workspace_observer.call(checked_add(base_workspace, physical_workspace))
 
-      # One fresh full-grid read authenticates every selected slot before
-      # parsing starts. The sealed capture lets each mark framer bind to that
-      # exact snapshot without rereading the same compressed source ranges.
-      # A later preparation creates a new capture and reopens the current path.
+      # The strict path authenticates the complete grid. Filtered preparation
+      # supplies an explicit sparse capture; its selected mark ordinals stay
+      # absolute and no unselected JSON span is read or parsed.
       capture = window_capture || CompactPartPhysicalWindowCapture.read_complete(@context, @column_name)
-      granules = capture.granules
-      unless granules.size == @mark_count
+      selected_marks = selected_mark_indices
+      prepared_mark_count = selected_marks.try(&.size) || @mark_count
+      if indices = selected_marks
+        unless !indices.empty? && capture.selected_mark_indices_match?(indices)
+          raise CorruptPartError.new("Compact static JSON capture differs from its absolute mark selection")
+        end
+      elsif capture.sparse? || capture.selected_mark_count != @mark_count
         raise CorruptPartError.new("Compact static JSON physical window has the wrong mark count")
       end
+      sparse_capture = capture.sparse?
+      granules = sparse_capture ? nil : capture.granules
 
-      streams = Array(ObjectDocumentStreams).new(@mark_count)
-      rows = Array(UInt64).new(@mark_count)
-      object_prefixes = Array(Bytes).new(@mark_count)
-      object_statistics_offsets = Array(Int32).new(@mark_count)
-      dynamic_prefixes = Array(Hash(String, Bytes)).new(@mark_count)
-      dynamic_statistics_offsets = Array(Hash(String, Int32)).new(@mark_count)
-      typed_json_contexts = Array(ObjectDocumentTypedDynamicJsonReadContext?).new(@mark_count)
-      advanced_marks = Array(CompactStaticJsonAdvancedPreparedMark).new(@mark_count)
-      advanced_layout = @advanced_layout
+      streams = Array(ObjectDocumentStreams).new(prepared_mark_count)
+      rows = Array(UInt64).new(prepared_mark_count)
+      object_prefixes = Array(Bytes).new(prepared_mark_count)
+      object_statistics_offsets = Array(Int32).new(prepared_mark_count)
+      dynamic_prefixes = Array(Hash(String, Bytes)).new(prepared_mark_count)
+      dynamic_statistics_offsets = Array(Hash(String, Int32)).new(prepared_mark_count)
+      typed_json_contexts = Array(ObjectDocumentTypedDynamicJsonReadContext?).new(prepared_mark_count)
+      advanced_marks = Array(CompactStaticJsonAdvancedPreparedMark).new(prepared_mark_count)
+      advanced_layout = sparse_capture ? nil : @advanced_layout
       typed_schema = nil.as(Hash(String, BinaryDataType)?)
-      frozen_names = @frozen_event_names.try { |names| copy_strings(names) }
+      frozen_names = sparse_capture ? nil : @frozen_event_names.try { |names| copy_strings(names) }
 
-      granules.each_with_index do |granule, mark_index|
+      prepared_mark_count.times do |prepared_ordinal|
+        mark_index = if indices = selected_marks
+                       indices[prepared_ordinal]
+                     else
+                       prepared_ordinal.to_i32
+                     end
+        granule = if dense_granules = granules
+                    dense_granules[mark_index]
+                  else
+                    capture.granule_at(mark_index)
+                  end
         unless granule.mark == mark_index && granule.row_count == @mark_row_counts[mark_index]
           raise CorruptPartError.new("Compact static JSON physical window differs from its validated mark grid")
         end
@@ -663,45 +941,66 @@ module CrystalClick
                               else
                                 Hash(String, BinaryDataType).new
                               end
-      prepared_context = CompactStaticJsonPreparedContext.new(
-        is_advanced ? nil : streams,
-        rows,
-        prepared_typed_schema,
-        object_prefixes,
-        object_statistics_offsets,
-        dynamic_prefixes,
-        dynamic_statistics_offsets,
-        typed_json_contexts,
-        2_i32,
-        2_i32,
-      )
-
-      # This is the final preparation boundary. Run every potentially throwing
-      # observer call before publishing the new metadata/context, so a caller
-      # that rejects the logical workspace estimate cannot leave a partial
-      # cache behind.
-      active_bytes = checked_add(base_workspace, physical_workspace)
-      active_bytes = checked_add(active_bytes, prepared_context.retained_workspace_bytes)
-      if is_advanced
-        active_bytes = checked_add(active_bytes, advanced_request_workspace_bytes(advanced_marks))
-      end
-      active_bytes = checked_add(active_bytes,
-        preparation_collections_workspace_bytes(
-          streams,
+      if sparse_capture
+        # Sparse preparation is an operation-local plan. Even a selected
+        # non-Advanced schedule must not publish strict whole-grid reader state.
+        active_bytes = checked_add(base_workspace, physical_workspace)
+        if is_advanced
+          active_bytes = checked_add(active_bytes, advanced_request_workspace_bytes(advanced_marks))
+        else
+          active_bytes = checked_add(active_bytes, instance_sizeof(CompactStaticJsonPreparedContext).to_u64)
+        end
+        active_bytes = checked_add(active_bytes,
+          preparation_collections_workspace_bytes(
+            streams,
+            rows,
+            typed_schema,
+            object_prefixes,
+            object_statistics_offsets,
+            dynamic_prefixes,
+            dynamic_statistics_offsets,
+            typed_json_contexts,
+          ))
+        workspace_observer.call(active_bytes)
+      else
+        prepared_context = CompactStaticJsonPreparedContext.new(
+          is_advanced ? nil : streams,
           rows,
-          typed_schema,
+          prepared_typed_schema,
           object_prefixes,
           object_statistics_offsets,
           dynamic_prefixes,
           dynamic_statistics_offsets,
           typed_json_contexts,
-        ))
-      workspace_observer.call(active_bytes)
+          2_i32,
+          2_i32,
+        )
 
-      unless is_advanced && !publish_advanced_state
-        @prepared_context = prepared_context
-        @frozen_event_names = frozen_names || [] of String
-        @advanced_layout = is_advanced
+        # Run every potentially throwing observer call before publishing the
+        # established full-grid metadata/context.
+        active_bytes = checked_add(base_workspace, physical_workspace)
+        active_bytes = checked_add(active_bytes, prepared_context.retained_workspace_bytes)
+        if is_advanced
+          active_bytes = checked_add(active_bytes, advanced_request_workspace_bytes(advanced_marks))
+        end
+        active_bytes = checked_add(active_bytes,
+          preparation_collections_workspace_bytes(
+            streams,
+            rows,
+            typed_schema,
+            object_prefixes,
+            object_statistics_offsets,
+            dynamic_prefixes,
+            dynamic_statistics_offsets,
+            typed_json_contexts,
+          ))
+        workspace_observer.call(active_bytes)
+
+        unless is_advanced && !publish_advanced_state
+          @prepared_context = prepared_context
+          @frozen_event_names = frozen_names || [] of String
+          @advanced_layout = is_advanced
+        end
       end
       is_advanced ? advanced_marks : nil
     end
@@ -909,6 +1208,103 @@ module CrystalClick
       checked_add(bytes, instance_sizeof(CompactPartPhysicalWindowCapture).to_u64)
     end
 
+    private def filter_capture_workspace_bytes(filter_column : String, logical_bytes : UInt64) : UInt64
+      bytes = physical_window_workspace_bytes_for(logical_bytes, 1_u64, [filter_column] of String)
+      bytes = checked_add(bytes, frame_fingerprint_workspace_bytes(@context.frame_index.frames.size.to_u64))
+      checked_add(bytes, instance_sizeof(CompactPartPhysicalWindowCapture).to_u64)
+    end
+
+    private def frame_fingerprint_workspace_bytes(frame_count : UInt64) : UInt64
+      one_copy = checked_add(
+        instance_sizeof(Array(CompressedFrameFingerprint)).to_u64,
+        checked_multiply(frame_count, sizeof(CompressedFrameFingerprint).to_u64),
+      )
+      checked_multiply(one_copy, 3_u64)
+    end
+
+    private def filtered_selection_workspace_bytes(
+      mark_count : UInt64,
+      row_count : UInt64,
+      key_frame_count : UInt64,
+    ) : UInt64
+      bytes = instance_sizeof(CompactFilteredJsonPartPlan).to_u64
+      bytes = checked_add(bytes, instance_sizeof(Array(Int32)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(mark_count, sizeof(Int32).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Array(Array(Int32))).to_u64)
+      bytes = checked_add(bytes, checked_multiply(mark_count, sizeof(Pointer(Array(Int32))).to_u64))
+      bytes = checked_add(bytes, checked_multiply(mark_count, instance_sizeof(Array(Int32)).to_u64))
+      bytes = checked_add(bytes, checked_multiply(row_count, sizeof(Int32).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(mark_count, sizeof(UInt64).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Array(CompressedFrameFingerprint)).to_u64)
+      checked_add(bytes, checked_multiply(key_frame_count, sizeof(CompressedFrameFingerprint).to_u64))
+    end
+
+    private def owner_reference_array_workspace_bytes(
+      owners : Array(CompactStaticJsonAdvancedPreparedMark),
+    ) : UInt64
+      bytes = instance_sizeof(Array(CompactStaticJsonAdvancedPreparedMark)).to_u64
+      checked_add(bytes,
+        checked_multiply(owners.size.to_u64, sizeof(Pointer(CompactStaticJsonAdvancedPreparedMark)).to_u64))
+    end
+
+    private def source_file_fingerprint_array_workspace_bytes(
+      files : Array(CompactStaticJsonPartFileFingerprint),
+    ) : UInt64
+      bytes = instance_sizeof(Array(CompactStaticJsonPartFileFingerprint)).to_u64
+      bytes = checked_add(bytes,
+        checked_multiply(files.size.to_u64, sizeof(CompactStaticJsonPartFileFingerprint).to_u64))
+      files.each { |file| bytes = checked_add(bytes, string_owner_bytes(file.name)) }
+      bytes
+    end
+
+    private def filtered_advanced_plan_build_workspace_bytes(
+      owner_count : UInt64,
+      selected_mark_count : UInt64,
+      selected_mark_rows : UInt64,
+      source_files : Array(CompactStaticJsonPartFileFingerprint),
+      frame_count : UInt64,
+      filter_column : String,
+    ) : UInt64
+      bytes = instance_sizeof(CompactStaticJsonAdvancedPartPlan).to_u64
+      bytes = checked_add(bytes, instance_sizeof(CompressedFrameIndex).to_u64)
+      bytes = checked_add(bytes, sizeof(Pointer(BinaryCodecBudget)).to_u64)
+      bytes = checked_add(bytes, string_owner_bytes(@part_path))
+      bytes = checked_add(bytes, string_owner_bytes(@context.data_path))
+
+      bytes = checked_add(bytes, instance_sizeof(Array(CompactStaticJsonAdvancedPreparedMark)).to_u64)
+      bytes = checked_add(bytes,
+        checked_multiply(owner_count, sizeof(Pointer(CompactStaticJsonAdvancedPreparedMark)).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(@mark_row_counts.size.to_u64, sizeof(UInt64).to_u64))
+
+      one_frame_copy = checked_add(
+        instance_sizeof(Array(CompressedFrameFingerprint)).to_u64,
+        checked_multiply(frame_count, sizeof(CompressedFrameFingerprint).to_u64),
+      )
+      bytes = checked_add(bytes, one_frame_copy)
+      bytes = checked_add(bytes,
+        checked_multiply(frame_count, (64 + sizeof(Pointer(CompressedFrameFingerprint))).to_u64))
+
+      bytes = checked_add(bytes, instance_sizeof(Hash(String, Array(Bytes))).to_u64)
+      bytes = checked_add(bytes, string_owner_bytes(filter_column))
+      bytes = checked_add(bytes, instance_sizeof(Array(Bytes)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(selected_mark_count, sizeof(Bytes).to_u64))
+      # The companion stores all rows in each selected mark and the plan
+      # detaches those bytes from its temporary construction input.
+      bytes = checked_add(bytes, checked_multiply(selected_mark_rows, (2 * sizeof(UInt64)).to_u64))
+      bytes = checked_add(bytes, instance_sizeof(Hash(String, Array(Bytes))).to_u64)
+      bytes = checked_add(bytes, instance_sizeof(Array(Bytes)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(selected_mark_count, sizeof(Bytes).to_u64))
+
+      bytes = checked_add(bytes, instance_sizeof(Array(Int32)).to_u64)
+      bytes = checked_add(bytes, checked_multiply(selected_mark_count, sizeof(Int32).to_u64))
+      bytes = checked_add(bytes, source_file_fingerprint_array_workspace_bytes(source_files))
+      bytes = checked_add(bytes, instance_sizeof(Array(String)).to_u64)
+      bytes = checked_add(bytes, sizeof(Pointer(String)).to_u64)
+      checked_add(bytes, string_owner_bytes(filter_column))
+    end
+
     private def advanced_shared_plan_candidate? : Bool
       copy_sizes = PhysicalStreamName.append_literal(
         @manifest.physical_prefix,
@@ -921,8 +1317,9 @@ module CrystalClick
       logical_bytes : UInt64,
       slots : UInt64,
       names : Array(String),
+      mark_count : UInt64 = @mark_count.to_u64,
     ) : UInt64
-      marks = @mark_count.to_u64
+      marks = mark_count
       shard_count = checked_multiply(marks, slots)
       bytes = checked_multiply(logical_bytes, 4_u64)
       shard_owner = checked_add(

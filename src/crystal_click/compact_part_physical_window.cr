@@ -35,16 +35,24 @@ module CrystalClick
     # without returning the trusted shard owners.
     def matches_shards_at?(mark : Int, shards : Array(CompactPartPhysicalShard)) : Bool
       return false if mark < @first_mark || mark - @first_mark >= @granules.size
-      granule = @granules[(mark - @first_mark).to_i]?
+      granule = retained_granule_at(mark)
       granule.try(&.matches_shards?(shards)) || false
     end
 
+    def granule_at(mark : Int) : CompactPartPhysicalGranule
+      retained_granule_at(mark).detached_copy
+    end
+
     def shard_count_at(mark : Int) : Int32
-      granule_at(mark).shard_count
+      retained_granule_at(mark).shard_count
     end
 
     def shard_bytes_at(mark : Int, slot_index : Int) : Bytes
-      granule_at(mark).shard_bytes_at(slot_index)
+      retained_granule_at(mark).shard_bytes_at(slot_index)
+    end
+
+    def row_offset_at(mark : Int) : UInt64
+      retained_granule_at(mark).row_offset
     end
 
     def retained_workspace_bytes : UInt64
@@ -57,7 +65,7 @@ module CrystalClick
       bytes
     end
 
-    private def granule_at(mark : Int) : CompactPartPhysicalGranule
+    private def retained_granule_at(mark : Int) : CompactPartPhysicalGranule
       unless mark >= @first_mark && mark - @first_mark < @granules.size
         raise ArgumentError.new("Compact window mark is outside its captured grid")
       end
