@@ -1764,7 +1764,36 @@ mutation in the Data-only frame at offset 30,030 and a valid-checksum
 Copy/Data disagreement before delivery. The server returned the original
 output with the Data-only frame's checksum changed. The earlier direct
 [`readRows` comparison](#direct-shareddata-columnar-results) covers the
-unfiltered 8,192-row workload and has its own read interval.
+unfiltered 8,192-row workload. Its native read skips per-path Data, too.
+The server ratios above apply to producing filtered RowBinary through the
+two public paths.
+
+#### Matched storage measurement for filtered JSON
+
+The [direct fixed-width benchmark](PARALLEL_TYPED_SCAN_FRONTIER.md#direct-reader-comparison-contract)
+compares the two storage readers at the same output and checksum boundary.
+To extend it to filtered JSON, run the Crystal filter probe against the C++
+`IMergeTreeReader::readRows` harness with a native filter and validation
+adapter. Use the same overflow part, marks 0–3, `id % 4 = 0`, and one or
+four workers. Each scan evaluates the predicate on 8,192 keys and produces
+the same ordered 2,048 `id, doc` rows with their original row positions.
+
+Time from the start of the key pass through delivery of the ordered columnar
+batches, including mask construction, checks, and worker dispatch and waits.
+At that boundary, a consumer can access the same typed path values and
+presence in both batches. Charge any deferred decoding needed to reach that
+boundary. Time part and worker startup separately, and include any
+data-dependent preparation in the scan. Measure RowBinary serialization in
+its own interval and compare the bytes and physical row positions afterward.
+
+For the checked scan, both runners verify frame checksums, compare SharedData
+Copy and Data for path presence, exact type, and value across the selected
+marks, and revalidate the source at batch delivery. At each worker count,
+require both runners to reject a touched-frame checksum mutation, a
+Data-only checksum mutation, and a valid-checksum Copy/Data mismatch in a
+filtered-out row before delivering a batch. A mutation after decoding and
+before delivery also exercises the source recheck. A paired run with
+these checks is needed for a filtered JSON storage p50/p95 ratio.
 
 ### Previous shared-plan diagnostics
 
