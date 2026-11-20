@@ -15,6 +15,33 @@ module CrystalClick
       workers : Int = 1,
       & : CompactJsonColumnarBatch, Slice(Int32) -> Nil
     ) : Nil
+      scan_filtered_json(filter_column, predicate, workers, decode_selected_rows: false) { |batch, rows| yield batch, rows }
+    end
+
+    # Filter an ordinary UInt64 column and decode JSON into a packed batch
+    # containing just the matching rows. The offsets are relative to the
+    # physical mark. Batch index i corresponds to matching_rows[i] in that
+    # mark, and the location fields describe the start of the physical mark.
+    # Both views are borrowed for the callback on the caller's fiber.
+    #
+    # As in #scan_compact_json_filtered, the scan checks the predicate and
+    # selected JSON frames and compares Copy/Data for the entire selected mark.
+    def scan_compact_json_filtered_rows(
+      filter_column : String,
+      predicate : Proc(UInt64, Bool),
+      workers : Int = 1,
+      & : CompactJsonColumnarBatch, Slice(Int32) -> Nil
+    ) : Nil
+      scan_filtered_json(filter_column, predicate, workers, decode_selected_rows: true) { |batch, rows| yield batch, rows }
+    end
+
+    private def scan_filtered_json(
+      filter_column : String,
+      predicate : Proc(UInt64, Bool),
+      workers : Int,
+      decode_selected_rows : Bool,
+      & : CompactJsonColumnarBatch, Slice(Int32) -> Nil
+    ) : Nil
       TypedPartTable.validate_parallel_workers!(workers)
       {% if flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
         if workers > 1
@@ -40,7 +67,7 @@ module CrystalClick
       output_limit = plan.retained_workspace_bytes + (workspace_limit - retained_bytes) // effective_workers.to_u64
       {% unless flag?(:without_mt) || (flag?(:preview_mt) && !flag?(:execution_context)) %}
         if effective_workers > 1
-          return scan_filtered_json_parallel(filtered, plan, marks, effective_workers, output_limit) do |batch, rows|
+          return scan_filtered_json_parallel(filtered, plan, marks, effective_workers, output_limit, decode_selected_rows) do |batch, rows|
             yield batch, rows
           end
         end
@@ -50,9 +77,12 @@ module CrystalClick
       plan.prepare_decode_budget!(budget)
       output = plan.new_columnar_output(output_limit)
       marks.each do |mark|
-        scan_compact_json_columnar_mark_into(mark, plan, budget, output, part_row_offset: filtered.part_row_offset_for(mark))
+        rows = filtered.row_indices_for(mark)
+        scan_compact_json_columnar_mark_into(mark, plan, budget, output,
+          part_row_offset: filtered.part_row_offset_for(mark),
+          matching_rows: decode_selected_rows ? rows : nil)
         filtered.validate_source!
-        yield output, filtered.row_indices_for(mark)
+        yield output, rows
       end
       nil
     end
@@ -94,6 +124,7 @@ module CrystalClick
         marks : Array(Int32),
         workers : Int,
         output_limit : UInt64,
+        decode_selected_rows : Bool,
         & : CompactJsonColumnarBatch, Slice(Int32) -> Nil
       ) : Nil
         outputs = Array(Channel(CompactJsonColumnarBatch)).new(workers) { Channel(CompactJsonColumnarBatch).new }
@@ -103,7 +134,7 @@ module CrystalClick
         begin
           workers.times do |worker|
             contexts << start_filtered_json_worker(filtered, plan, marks, workers, worker, output_limit,
-              outputs[worker], acknowledgements[worker])
+              outputs[worker], acknowledgements[worker], decode_selected_rows)
           end
           marks.each_with_index do |mark, index|
             worker = index % workers
@@ -143,6 +174,7 @@ module CrystalClick
         output_limit : UInt64,
         output : Channel(CompactJsonColumnarBatch),
         acknowledgement : Channel(Nil),
+        decode_selected_rows : Bool,
       ) : Fiber::ExecutionContext::Isolated
         Fiber::ExecutionContext::Isolated.new("crystal-click filtered Compact JSON worker #{worker}") do
           budget = plan.new_decode_budget
@@ -151,7 +183,9 @@ module CrystalClick
           index = worker
           while index < marks.size
             mark = marks[index]
-            scan_compact_json_columnar_mark_into(mark, plan, budget, batch, part_row_offset: filtered.part_row_offset_for(mark))
+            scan_compact_json_columnar_mark_into(mark, plan, budget, batch,
+              part_row_offset: filtered.part_row_offset_for(mark),
+              matching_rows: decode_selected_rows ? filtered.row_indices_for(mark) : nil)
             output.send(batch)
             acknowledgement.receive
             index += workers

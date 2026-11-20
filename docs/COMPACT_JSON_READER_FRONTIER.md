@@ -51,6 +51,39 @@ unchanged `checksums.txt`, and a selected Copy/Data mismatch with valid
 checksums. See the
 [filter-first scan measurements and commands](COMPACT_JSON_SCAN_BENCHMARK.md#filter-first-advanced-root-json-scan).
 
+## Row selection inside Advanced root JSON marks
+
+`scan_compact_json_filtered_rows` uses the same selected mark plan and delivers
+a packed batch with one row for each matching physical offset. All columns use
+the packed order. The callback borrows the sorted offsets and the worker's
+output arena. The batch location describes the physical start of the mark.
+Adding a matching offset to that location identifies the corresponding source
+row, including when the mark has gaps. The full-mark API remains available.
+
+Retain the filter-first source receipt, ordered delivery and callback-time
+recheck. Traversal must validate counts and value encodings for rejected rows
+in a selected mark. SharedData Copy and Data must agree even on a rejected
+row. Specialize scalar lanes where the stream supports skipping materialization
+while keeping those checks. Use the existing strict decoder for other shapes.
+The row mask operates after block inflation. A selected mark still needs the
+same authenticated frames for full Copy/Data verification.
+
+For a partial selection, each output arena reuses a source-to-packed row map
+and a slab of Copy payload coordinates. The slab groups references by physical
+path so the decoder can reconcile them with the path's Data stream before
+appending matches. The output workspace limit covers retained capacity and
+growth. A complete selection uses the full-mark decoder.
+
+Verify packed offsets, column alignment, repeat use, zero and full selection,
+and parallel delivery in the columnar specs. Change Copy on a rejected row in
+a selected mark while preserving its checksums. The scan must refuse before
+publishing that mark. Run the existing source mutation and decoder guards, and
+compare both APIs byte for byte with ordered ClickHouse RowBinary. Compare
+paired read p50/p95 and actual LZ4 calls on the pinned overflow part with one
+and four workers. A spread mask that keeps one row in four while visiting all
+marks isolates work inside the decoder from mark pruning. The isolated reader
+change can be reverted as one commit if validation or compatibility regresses.
+
 ## Recursive/public/offline checkpoint — qualified within scope
 
 Qualification over `39b16a039e78806be3df4a9f31e0b198055b0160`:

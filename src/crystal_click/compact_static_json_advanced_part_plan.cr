@@ -232,6 +232,7 @@ module CrystalClick
       mark_index : Int,
       budget : BinaryCodecBudget,
       output : CompactJsonColumnarBatch,
+      matching_rows : Slice(Int32)? = nil,
     ) : Nil
       unless mark_index >= 0 && mark_index < @mark_rows.size
         raise ArgumentError.new("Compact Advanced plan mark index is outside its full grid")
@@ -247,12 +248,27 @@ module CrystalClick
         raise ArgumentError.new("Compact Advanced plan mark index was not prepared")
       end
       rows = @mark_rows[mark_index]
-      output.begin_mark!(0, File.basename(@part_path), @part_path, mark_index, 0_u64, 0_u64, 0_u64, rows)
+      if selected_rows = matching_rows
+        output.begin_selected_mark!(
+          0,
+          File.basename(@part_path),
+          @part_path,
+          mark_index,
+          0_u64,
+          0_u64,
+          0_u64,
+          rows,
+          selected_rows,
+        )
+      else
+        output.begin_mark!(0, File.basename(@part_path), @part_path, mark_index, 0_u64, 0_u64, 0_u64, rows)
+      end
       @advanced_marks[ordinal].decode_columnar_with_budget(budget, output)
       @companion_columns.each do |name|
         bytes = uint64_mark_bytes_at(name, ordinal)
         output.fill_uint64_column!(name, bytes, rows)
       end
+      output.finish_selected_mark! if matching_rows
       output.validate_workspace!
       nil
     end

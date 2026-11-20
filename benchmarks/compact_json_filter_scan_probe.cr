@@ -1,4 +1,4 @@
-# Matched eager and filter-first Compact Advanced JSON read probe. Build this
+# Matched mark-only and row-masked Compact Advanced JSON read probe. Build this
 # with --release; the optional frame hook exists only in an isolated diagnostic
 # source copy created by instrument_compact_json_probe.py --lz4-only.
 require "json"
@@ -10,21 +10,43 @@ module CrystalClick
   module CompactJSONScanProbeCounters
     @@mutex = Mutex.new
     @@lz4_frames = 0_u64
+    @@lz4_payload_bytes = 0_u64
+    @@lz4_output_bytes = 0_u64
+    @@lz4_elapsed_ns = 0_u64
 
     def self.reset! : Nil
-      @@mutex.synchronize { @@lz4_frames = 0_u64 }
+      @@mutex.synchronize do
+        @@lz4_frames = 0_u64
+        @@lz4_payload_bytes = 0_u64
+        @@lz4_output_bytes = 0_u64
+        @@lz4_elapsed_ns = 0_u64
+      end
+      nil
     end
 
     # Called by the isolated diagnostic hook after a complete decompression.
-    def self.record_decompression!(method : UInt8, _payload_size : Int64, _output_size : Int64, _elapsed_ns : UInt64) : Nil
+    def self.record_decompression!(method : UInt8, payload_size : Int64, output_size : Int64, elapsed_ns : UInt64) : Nil
       return nil unless method == CompressedBlock::METHOD_LZ4
-      @@mutex.synchronize { @@lz4_frames += 1_u64 }
+      if payload_size < 0 || output_size < 0
+        raise CorruptPartError.new("LZ4 diagnostic observed a negative byte count")
+      end
+      @@mutex.synchronize do
+        @@lz4_frames += 1_u64
+        @@lz4_payload_bytes += payload_size.to_u64
+        @@lz4_output_bytes += output_size.to_u64
+        @@lz4_elapsed_ns += elapsed_ns
+      end
       nil
     end
 
     def self.snapshot : Hash(String, UInt64)
       @@mutex.synchronize do
-        {"total_lz4_frames" => @@lz4_frames}
+        {
+          "total_lz4_frames"        => @@lz4_frames,
+          "total_lz4_payload_bytes" => @@lz4_payload_bytes,
+          "total_lz4_output_bytes"  => @@lz4_output_bytes,
+          "total_lz4_elapsed_ns"    => @@lz4_elapsed_ns,
+        }
       end
     end
   end
@@ -48,26 +70,31 @@ module CompactJsonFilterScanProbe
     getter mark : Int32
     getter batch : CrystalClick::CompactJsonColumnarBatch
     getter rows : Slice(Int32)
+    getter packed : Bool
 
-    # Eager predicate evaluation owns this array. A lazy slice is backed by
-    # its filter receipt, which remains live until the sample is serialized.
+    # Eager predicate evaluation owns this array. Filtered-route slices are
+    # backed by their receipt, which remains live until the sample is serialized.
     @rows_owner : Array(Int32)?
 
     def initialize(@mark : Int32, @batch : CrystalClick::CompactJsonColumnarBatch,
-                   @rows : Slice(Int32), @rows_owner : Array(Int32)? = nil)
+                   @rows : Slice(Int32), @rows_owner : Array(Int32)? = nil,
+                   @packed : Bool = false)
     end
   end
 
   class ScanJob
     getter scan_id : Int32
+    getter route : String
     getter plan : CrystalClick::CompactStaticJsonAdvancedPartPlan
     getter marks : Array(Int32)
     getter output_limit : UInt64
-    getter part_row_offsets : Hash(Int32, UInt64)
+    getter part_row_offsets : Array(UInt64)
+    getter filtered_plan : CrystalClick::CompactFilteredJsonPartPlan?
 
-    def initialize(@scan_id : Int32, @plan : CrystalClick::CompactStaticJsonAdvancedPartPlan,
+    def initialize(@scan_id : Int32, @route : String, @plan : CrystalClick::CompactStaticJsonAdvancedPartPlan,
                    @marks : Array(Int32), @output_limit : UInt64,
-                   @part_row_offsets : Hash(Int32, UInt64))
+                   @part_row_offsets : Array(UInt64),
+                   @filtered_plan : CrystalClick::CompactFilteredJsonPartPlan? = nil)
     end
   end
 
@@ -150,7 +177,8 @@ module CompactJsonFilterScanProbe
     selected.each do |mark_result|
       batch = mark_result.batch
       ids = batch.uint64_column("id")
-      mark_result.rows.each do |row|
+      mark_result.rows.each_with_index do |source_row, dense_row|
+        row = mark_result.packed ? dense_row : source_row
         unless row >= 0 && row < batch.row_count
           raise CrystalClick::CorruptPartError.new("probe filtered row index is outside its decoded mark")
         end
@@ -191,6 +219,77 @@ module CompactJsonFilterScanProbe
       end
     end
     output.to_slice
+  end
+
+  private def verify_selected_source_offsets!(selected : Array(SelectedMark)) : String
+    encoded = IO::Memory.new
+    selected.sort_by!(&.mark)
+    selected.each do |mark_result|
+      batch = mark_result.batch
+      ids = batch.uint64_column("id")
+      mark_result.rows.each_with_index do |source_row, dense_row|
+        unless source_row >= 0 && source_row < ROWS_PER_MARK
+          raise CrystalClick::CorruptPartError.new("probe source row offset is outside its physical mark")
+        end
+        row = mark_result.packed ? dense_row : source_row
+        unless row < ids.size && batch.part_row_offset <= UInt64::MAX - source_row.to_u64
+          raise CrystalClick::CorruptPartError.new("probe selected output row cannot be mapped to its part offset")
+        end
+        expected_id = batch.part_row_offset + source_row.to_u64
+        unless ids[row] == expected_id
+          raise CrystalClick::CorruptPartError.new("probe packed output id differs from its original source offset")
+        end
+        encoded.write_bytes(mark_result.mark.to_u32, IO::ByteFormat::LittleEndian)
+        encoded.write_bytes(expected_id, IO::ByteFormat::LittleEndian)
+      end
+    end
+    Digest::SHA256.hexdigest(encoded.to_slice)
+  end
+
+  private def expected_source_rows(predicate_name : String, mark : Int32) : Array(Int32)
+    start = mark.to_u64 * ROWS_PER_MARK.to_u64
+    rows = [] of Int32
+    ROWS_PER_MARK.times do |row|
+      rows << row.to_i32 if predicate_matches?(predicate_name, start + row.to_u64)
+    end
+    rows
+  end
+
+  private def validate_probe_batches!(route : String, predicate_name : String,
+                                      completed : Array(CompletedMark), selected : Array(SelectedMark)) : Nil
+    expected_marks = [] of Int32
+    expected_rows_by_mark = Hash(Int32, Array(Int32)).new
+    MARKS.each do |mark|
+      rows = expected_source_rows(predicate_name, mark)
+      expected_rows_by_mark[mark] = rows
+      expected_marks << mark if !rows.empty? || route == "eager"
+    end
+    actual_marks = completed.map(&.mark)
+    unless actual_marks == expected_marks
+      raise CrystalClick::CorruptPartError.new("probe JSON mark list differs from the predicate's source offsets")
+    end
+
+    selected_by_mark = Hash(Int32, SelectedMark).new
+    selected.each { |entry| selected_by_mark[entry.mark] = entry }
+    expected_selected_marks = MARKS.select { |mark| !expected_rows_by_mark[mark].empty? }
+    unless selected.map(&.mark) == expected_selected_marks
+      raise CrystalClick::CorruptPartError.new("probe selected marks differ from the predicate's source offsets")
+    end
+
+    completed.each do |entry|
+      expected_rows = expected_rows_by_mark[entry.mark]
+      expected_batch_rows = route == "masked" ? expected_rows.size : ROWS_PER_MARK
+      unless entry.batch.row_count == expected_batch_rows
+        raise CrystalClick::CorruptPartError.new("probe decoded row count differs from the route's mark mask")
+      end
+      if !expected_rows.empty?
+        selected_entry = selected_by_mark[entry.mark]?
+        unless selected_entry && selected_entry.rows.to_a == expected_rows && selected_entry.packed == (route == "masked")
+          raise CrystalClick::CorruptPartError.new("probe selected source offsets differ from the predicate mask")
+        end
+      end
+    end
+    nil
   end
 
   private def mark_offsets(owner : CrystalClick::CompactPartTable) : Array(UInt64)
@@ -282,15 +381,8 @@ module CompactJsonFilterScanProbe
             raise CrystalClick::BoundsError.new("probe plan leaves no workspace for output")
           end
           per_worker_limit = retained + (output_workspace_limit - retained) // active_workers.to_u64
-          part_row_offsets = Hash(Int32, UInt64).new
-          worker_marks.each do |mark|
-            part_row_offsets[mark] = if filtered = filtered_plan
-                                       filtered.part_row_offset_for(mark)
-                                     else
-                                       offsets[mark]
-                                     end
-          end
-          jobs[worker].send(ScanJob.new(scan_id, plan, worker_marks, per_worker_limit, part_row_offsets))
+          jobs[worker].send(ScanJob.new(scan_id, route, plan, worker_marks, per_worker_limit,
+            offsets, filtered_plan))
         end
         received = 0
         while received < active_workers
@@ -351,20 +443,20 @@ module CompactJsonFilterScanProbe
         end
       end
     else
-      filtered = filtered_plan || raise(CrystalClick::CorruptPartError.new("lazy filter receipt disappeared"))
+      filtered = filtered_plan || raise(CrystalClick::CorruptPartError.new("filtered route receipt disappeared"))
       completed.each do |entry|
         # Complete source authentication immediately precedes each selected
         # JSON mark's ordered delivery to the row collector.
         filtered.validate_source!
         rows = filtered.row_indices_for(entry.mark)
-        selected << SelectedMark.new(entry.mark, entry.batch, rows)
+        selected << SelectedMark.new(entry.mark, entry.batch, rows, nil, route == "masked")
       end
     end
 
     if route == "eager" && filter_evaluations != 8192_i64
       raise CrystalClick::CorruptPartError.new("eager predicate did not visit every source row exactly once")
-    elsif route == "lazy" && filter_evaluations != 8192_i64
-      raise CrystalClick::CorruptPartError.new("lazy predicate did not visit every source row exactly once")
+    elsif route != "eager" && filter_evaluations != 8192_i64
+      raise CrystalClick::CorruptPartError.new("filtered predicate did not visit every source row exactly once")
     end
     json_mark_decode_invocations = completed.size.to_i32
     read_wall_ns = (Time.instant - read_started).total_nanoseconds.to_i64
@@ -376,6 +468,8 @@ module CompactJsonFilterScanProbe
     serialization_ns = (Time.instant - serialization_started).total_nanoseconds.to_i64
     scan_and_serialize_ns = (Time.instant - combined_started).total_nanoseconds.to_i64
 
+    validate_probe_batches!(route, predicate_name, completed, selected)
+    selected_source_offsets_sha256 = verify_selected_source_offsets!(selected)
     unless actual == filtered_oracle
       raise CrystalClick::CorruptPartError.new("filtered RowBinary output differs from the independent oracle")
     end
@@ -418,21 +512,25 @@ module CompactJsonFilterScanProbe
       "json_mark_indices"          => JSON::Any.new(
         (route == "eager" ? MARKS : marks).map { |mark| JSON::Any.new(mark.to_i64) },
       ),
-      "filter_evaluations"            => JSON::Any.new(filter_evaluations),
-      "json_plan_present"             => JSON::Any.new(!json_plan.nil?),
-      "json_mark_decode_invocations"  => JSON::Any.new(json_mark_decode_invocations),
-      "read_wall_ns"                  => JSON::Any.new(read_wall_ns),
-      "serialization_ns"              => JSON::Any.new(serialization_ns),
-      "scan_and_serialize_ns"         => JSON::Any.new(scan_and_serialize_ns),
-      "rows"                          => JSON::Any.new(actual_rows),
-      "rowbinary_bytes"               => JSON::Any.new(actual.size),
-      "oracle_exact"                  => JSON::Any.new(true),
-      "rowbinary_sha256"              => JSON::Any.new(output_sha256),
-      "full_oracle_sha256"            => JSON::Any.new(full_oracle_sha256),
-      "filtered_oracle_sha256"        => JSON::Any.new(filtered_oracle_sha256),
-      "gc_read_allocated_bytes_delta" => JSON::Any.new(gc_bytes_after_read - gc_bytes_before),
-      "gc_read_collections"           => JSON::Any.new(gc_collections_after_read - gc_collections_before),
-      "diagnostics"                   => diagnostics_json,
+      "filter_evaluations"             => JSON::Any.new(filter_evaluations),
+      "json_plan_present"              => JSON::Any.new(!json_plan.nil?),
+      "json_mark_decode_invocations"   => JSON::Any.new(json_mark_decode_invocations),
+      "json_mark_row_counts"           => JSON::Any.new(completed.map { |entry| JSON::Any.new(entry.batch.row_count) }),
+      "selected_source_offset_count"   => JSON::Any.new(selected.sum(0_i64) { |entry| entry.rows.size.to_i64 }),
+      "selected_source_offsets_sha256" => JSON::Any.new(selected_source_offsets_sha256),
+      "source_offsets_verified"        => JSON::Any.new(true),
+      "read_wall_ns"                   => JSON::Any.new(read_wall_ns),
+      "serialization_ns"               => JSON::Any.new(serialization_ns),
+      "scan_and_serialize_ns"          => JSON::Any.new(scan_and_serialize_ns),
+      "rows"                           => JSON::Any.new(actual_rows),
+      "rowbinary_bytes"                => JSON::Any.new(actual.size),
+      "oracle_exact"                   => JSON::Any.new(true),
+      "rowbinary_sha256"               => JSON::Any.new(output_sha256),
+      "full_oracle_sha256"             => JSON::Any.new(full_oracle_sha256),
+      "filtered_oracle_sha256"         => JSON::Any.new(filtered_oracle_sha256),
+      "gc_read_allocated_bytes_delta"  => JSON::Any.new(gc_bytes_after_read - gc_bytes_before),
+      "gc_read_collections"            => JSON::Any.new(gc_collections_after_read - gc_collections_before),
+      "diagnostics"                    => diagnostics_json,
     }
   end
 
@@ -610,9 +708,12 @@ module CompactJsonFilterScanProbe
     nil
   end
 
-  private def run_copy_data_control(part_path : String, workers : Int32) : Nil
+  private def run_copy_data_control(part_path : String, workers : Int32, route : String) : Nil
     unless workers == 1 || workers == 4
       raise ArgumentError.new("worker count must be 1 or 4")
+    end
+    unless route.in?("mark_only", "masked")
+      raise ArgumentError.new("Copy/Data control route must be mark_only or masked")
     end
     mutate_copy_data!(part_path)
     table = CrystalClick::CompactPartTable.open_selected_typed([part_path], ["id", "doc"])
@@ -620,12 +721,15 @@ module CompactJsonFilterScanProbe
     callbacks = 0_i32
     error = nil.as(String?)
     begin
-      table.scan_compact_json_filtered(
-        "id",
-        ->(value : UInt64) { value >= 2048_u64 && value < 4096_u64 },
-        workers: workers,
-      ) do |_batch, _rows|
-        callbacks += 1
+      predicate = ->(value : UInt64) { value >= 2048_u64 && value < 4096_u64 && value % 4_u64 == 0_u64 }
+      if route == "masked"
+        table.scan_compact_json_filtered_rows("id", predicate, workers: workers) do |_batch, _rows|
+          callbacks += 1
+        end
+      else
+        table.scan_compact_json_filtered("id", predicate, workers: workers) do |_batch, _rows|
+          callbacks += 1
+        end
       end
     rescue exception : CrystalClick::CorruptPartError
       error = exception.message
@@ -636,7 +740,8 @@ module CompactJsonFilterScanProbe
     unless message == "Object shared Copy value disagrees with its per-path Dynamic row" && callbacks == 0
       raise CrystalClick::CorruptPartError.new("Copy/Data control observed an unexpected rejection: #{message}")
     end
-    puts({"control" => "copy_data", "workers_requested" => workers, "rejected" => true,
+    puts({"control" => "copy_data", "route" => route, "predicate" => "cluster_spread",
+          "workers_requested" => workers, "rejected" => true,
           "callbacks" => callbacks, "error" => message}.to_json)
   end
 
@@ -654,7 +759,7 @@ module CompactJsonFilterScanProbe
       worker_index = worker.to_i32
       contexts << Fiber::ExecutionContext::Isolated.new("compact-json-filter-worker-#{worker_index}") do
         ready.send({worker: worker_index, thread_id: Thread.current.object_id.to_u64})
-        output_arenas = Hash(Int32, CrystalClick::CompactJsonColumnarBatch).new
+        output_arenas = Hash(Tuple(String, Int32), CrystalClick::CompactJsonColumnarBatch).new
         loop do
           job = jobs[worker_index].receive?
           break unless job
@@ -663,19 +768,39 @@ module CompactJsonFilterScanProbe
             job.plan.prepare_decode_budget!(budget)
             completed = [] of CompletedMark
             job.marks.each do |mark|
-              batch = output_arenas[mark]? || begin
+              arena_key = {job.route, mark}
+              batch = output_arenas[arena_key]? || begin
                 created = job.plan.new_columnar_output(job.output_limit)
-                output_arenas[mark] = created
+                output_arenas[arena_key] = created
                 created
               end
               batch.reset!
-              owner.scan_compact_json_columnar_mark_into(
-                mark,
-                job.plan,
-                budget,
-                batch,
-                part_row_offset: job.part_row_offsets[mark],
-              )
+              part_row_offset = if filtered = job.filtered_plan
+                                  filtered.part_row_offset_for(mark)
+                                else
+                                  job.part_row_offsets[mark]
+                                end
+              if job.route == "masked"
+                filtered = job.filtered_plan ||
+                           raise(CrystalClick::CorruptPartError.new("masked job lost its filter receipt"))
+                matching_rows = filtered.row_indices_for(mark)
+                owner.scan_compact_json_columnar_mark_into(
+                  mark,
+                  job.plan,
+                  budget,
+                  batch,
+                  part_row_offset: part_row_offset,
+                  matching_rows: matching_rows,
+                )
+              else
+                owner.scan_compact_json_columnar_mark_into(
+                  mark,
+                  job.plan,
+                  budget,
+                  batch,
+                  part_row_offset: part_row_offset,
+                )
+              end
               completed << CompletedMark.new(mark, batch)
             end
             results.send(WorkerResult.new(job.scan_id, worker_index, Thread.current.object_id.to_u64, completed))
@@ -723,10 +848,11 @@ module CompactJsonFilterScanProbe
         normalized = command.strip
         break if normalized == "quit"
         parts = normalized.split
-        unless parts.size == 2 && parts[0] == "scan" && parts[1].in?("eager", "lazy")
-          raise ArgumentError.new("stdin command must be 'scan eager', 'scan lazy', or 'quit'")
+        unless parts.size == 2 && parts[0] == "scan" && parts[1].in?("eager", "lazy", "mark_only", "masked")
+          raise ArgumentError.new("stdin command must be 'scan eager', 'scan mark_only', 'scan masked', or 'quit'")
         end
-        sample = run_scan(owner, jobs, results, errors, scan_id, workers, parts[1], predicate_name,
+        route = parts[1] == "lazy" ? "mark_only" : parts[1]
+        sample = run_scan(owner, jobs, results, errors, scan_id, workers, route, predicate_name,
           filtered_oracle, full_oracle_sha256, filtered_oracle_sha256, offsets, worker_thread_ids)
         puts sample.to_json
         STDOUT.flush
@@ -741,11 +867,11 @@ module CompactJsonFilterScanProbe
 
   def main : Nil
     if ARGV.first? == "--copy-data-control"
-      unless ARGV.size == 3
-        STDERR.puts "usage: compact_json_filter_scan_probe --copy-data-control <part-dir> <workers:1|4>"
+      unless ARGV.size == 4
+        STDERR.puts "usage: compact_json_filter_scan_probe --copy-data-control <part-dir> <workers:1|4> <mark_only|masked>"
         exit(2)
       end
-      run_copy_data_control(ARGV[1], ARGV[2].to_i32)
+      run_copy_data_control(ARGV[1], ARGV[2].to_i32, ARGV[3])
       return nil
     end
 

@@ -907,7 +907,7 @@ module CrystalClick
       if target = columnar
         shared = target[:shared]
         output = target[:output]
-        unless output.row_count.to_u64 == total_rows && shared.logical_row_count == total_rows
+        unless output.source_mark_row_count.to_u64 == total_rows && shared.logical_row_count == total_rows
           corrupt!("Compact JSON columnar destination differs from the selected mark grid")
         end
         budget.ensure_future_nodes(total_rows)

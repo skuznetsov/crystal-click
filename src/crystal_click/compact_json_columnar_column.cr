@@ -109,6 +109,31 @@ module CrystalClick
       nil
     end
 
+    # :nodoc:
+    # Compact a fully validated source Nullable(UInt32) lane into the selected
+    # callback rows without constructing BinaryValue instances.
+    def retain_nullable_uint32_rows!(destination_rows : Slice(Int32), source_rows : Int) : Nil
+      unless @nullable_uint32_active && @window_start == 0 && source_rows == @window_count && destination_rows.size >= source_rows
+        raise CorruptPartError.new("Compact JSON selected Nullable(UInt32) lane differs from its source mark")
+      end
+      values = @nullable_uint32_values || raise(CorruptPartError.new("active Nullable(UInt32) lane lost its values"))
+      nulls = @nullable_uint32_nulls || raise(CorruptPartError.new("active Nullable(UInt32) lane lost its null map"))
+      destination_count = 0
+      source_rows.times do |source_row|
+        destination_row = destination_rows[source_row]
+        if destination_row >= 0
+          unless destination_row == destination_count
+            raise CorruptPartError.new("Compact JSON selected Nullable(UInt32) rows are unordered or out of range")
+          end
+          values[destination_row] = values[source_row]
+          nulls[destination_row] = nulls[source_row]
+          destination_count += 1
+        end
+      end
+      @window_count = destination_count.to_i32
+      nil
+    end
+
     def row_count : Int32
       @window_count
     end

@@ -131,27 +131,59 @@ module CrystalClick
         yield name
       end
 
-      decoded_rows = copy.decode_into_columns_with_budget(
-        structures,
-        columns_by_index,
-        output,
-        row_offset,
-        budget,
-      )
+      decoded_rows = if output.selected_mark?
+                       copy.decode_selected_references_with_budget(
+                         structures,
+                         output,
+                         row_offset,
+                         budget,
+                       )
+                       values_lane = copy.selected_values_view
+                       values_context = BinaryCodecContext.new(
+                         budget.limits,
+                         values_lane,
+                         false,
+                         budget,
+                         false,
+                       )
+                       verify_selected_path_values_in_columns(
+                         bucket_chunks,
+                         columns_by_index,
+                         values_context,
+                         values_lane,
+                         output,
+                         row_offset,
+                         row_count.to_i,
+                         budget,
+                         profile,
+                         nested_context,
+                       )
+                       row_count
+                     else
+                       copy.decode_into_columns_with_budget(
+                         structures,
+                         columns_by_index,
+                         output,
+                         row_offset,
+                         budget,
+                       )
+                     end
       unless decoded_rows == row_count
         raise CorruptPartError.new("Object shared Copy row count disagrees with its per-path chunks")
       end
 
-      verify_path_values_in_columns(
-        bucket_chunks,
-        columns_by_index,
-        output,
-        row_offset,
-        row_count.to_i,
-        budget,
-        profile,
-        nested_context,
-      )
+      unless output.selected_mark?
+        verify_path_values_in_columns(
+          bucket_chunks,
+          columns_by_index,
+          output,
+          row_offset,
+          row_count.to_i,
+          budget,
+          profile,
+          nested_context,
+        )
+      end
       row_count
     end
 
@@ -678,16 +710,7 @@ module CrystalClick
               raise CorruptPartError.new("Object shared Copy column contains duplicate or out-of-range rows")
             end
             dynamic_value = decoded.row_at(row_index)
-            equal = case dynamic_value
-                    when BinaryValue
-                      !dynamic_value.is_null? && dynamic_value.child_count == 1 &&
-                        values_equal?(copy_cell, dynamic_value.child_at(0), budget, 1)
-                    when Bytes
-                      values_equal?(copy_cell, dynamic_value, budget, 1)
-                    else
-                      false
-                    end
-            unless equal
+            unless copy_value_matches_dynamic?(copy_cell, dynamic_value, budget)
               raise CorruptPartError.new("Object shared Copy value disagrees with its per-path Dynamic row")
             end
             row_index += 1
@@ -703,6 +726,101 @@ module CrystalClick
         raise CorruptPartError.new("Object shared path count disagrees with its Copy column bindings")
       end
       nil
+    end
+
+    private def self.verify_selected_path_values_in_columns(
+      bucket_chunks : Array(ObjectSharedPhysicalChunk),
+      columns_by_index : Array(CompactJsonColumnarColumn),
+      values_context : BinaryCodecContext,
+      values_lane : Bytes,
+      output : CompactJsonColumnarBatch,
+      row_offset : Int32,
+      row_count : Int32,
+      budget : BinaryCodecBudget,
+      profile : BinaryBulkProfile,
+      nested_context : ObjectSharedNestedSerializationContext? = nil,
+    ) : Nil
+      path_count = columns_by_index.size.to_u64
+      unless output.selected_copy_reference_path_count.to_u64 == path_count
+        raise CorruptPartError.new("Object shared Copy reference ledger disagrees with its chunk dictionary")
+      end
+      slots = checked_multiply(row_count.to_u64, path_count, false, "path value checks")
+      budget.preflight_children(slots)
+      slots.times { budget.charge_node }
+
+      binding_bytes = column_bindings_workspace_bytes(path_count)
+      decoded_rows_bytes = checked_workspace_add(
+        instance_sizeof(Array(ObjectSharedPathComparisonValue)).to_u64,
+        checked_multiply(
+          row_count.to_u64,
+          sizeof(ObjectSharedPathComparisonValue).to_u64,
+          false,
+          "path compare row slots",
+        ),
+        "path compare workspace",
+      )
+      compare_workspace_bytes = checked_workspace_add(binding_bytes, decoded_rows_bytes, "path compare workspace")
+
+      dictionary_index = 0
+      bucket_chunks.each do |bucket|
+        bucket.path_count.times do |path_index|
+          path = bucket.path_at(path_index)
+          column = columns_by_index[dictionary_index]
+          references = output.selected_copy_references_for_path(dictionary_index.to_i32)
+          output.validate_workspace!(compare_workspace_bytes)
+          decoded = decode_path_for_column_verification(path, row_count, budget, profile, nested_context)
+
+          reference_index = 0
+          row_index = 0
+          while row_index < row_count
+            reference = references[reference_index]?
+            if reference && reference.row_index < row_index
+              raise CorruptPartError.new("Object shared Copy reference rows are not in order")
+            end
+            if reference && reference.row_index == row_index
+              cell = ObjectSharedCopyCodec.decode_selected_reference_value(
+                values_context,
+                values_lane,
+                reference,
+                budget,
+              )
+              dynamic_value = decoded.row_at(row_index)
+              unless copy_value_matches_dynamic?(cell, dynamic_value, budget)
+                raise CorruptPartError.new("Object shared Copy value disagrees with its per-path Dynamic row")
+              end
+              output.append_column_cell!(column, row_offset + row_index, cell, compare_workspace_bytes)
+              reference_index += 1
+            else
+              ensure_absent_path_value!(decoded.row_at(row_index))
+            end
+            row_index += 1
+          end
+          unless reference_index == references.size
+            raise CorruptPartError.new("Object shared Copy reference has no corresponding per-path Dynamic row")
+          end
+          dictionary_index += 1
+        end
+      end
+      unless dictionary_index == columns_by_index.size
+        raise CorruptPartError.new("Object shared path count disagrees with its Copy column bindings")
+      end
+      nil
+    end
+
+    private def self.copy_value_matches_dynamic?(
+      copy_cell : CompactJsonColumnarCell,
+      dynamic_value : ObjectSharedPathComparisonValue,
+      budget : BinaryCodecBudget,
+    ) : Bool
+      case dynamic_value
+      when BinaryValue
+        !dynamic_value.is_null? && dynamic_value.child_count == 1 &&
+          values_equal?(copy_cell, dynamic_value.child_at(0), budget, 1)
+      when Bytes
+        values_equal?(copy_cell, dynamic_value, budget, 1)
+      else
+        false
+      end
     end
 
     private def self.decode_path_for_copy_verification(

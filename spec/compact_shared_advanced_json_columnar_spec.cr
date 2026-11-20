@@ -1,5 +1,6 @@
 require "./spec_helper"
 require "file_utils"
+require "digest/sha256"
 require "../scripts/support/compact_physical_context_w259_fixture"
 
 private module CompactJsonColumnarGuardFixture
@@ -482,6 +483,26 @@ private def cjcv_scan_rows(
     expect_raises(IndexError) { batch.column_for("id").not_nil!.value_at(batch.row_count) }
   end
   {keys, rowbinary, locations}
+end
+
+private def cjcv_scan_filtered(
+  table : CrystalClick::TypedPartTable,
+  packed_rows : Bool,
+  filter_column : String,
+  predicate : Proc(UInt64, Bool),
+  workers : Int,
+  & : CrystalClick::CompactJsonColumnarBatch, Slice(Int32) -> Nil
+) : Nil
+  if packed_rows
+    table.scan_compact_json_filtered_rows(filter_column, predicate, workers) do |batch, original_mark_rows|
+      yield batch, original_mark_rows
+    end
+  else
+    table.scan_compact_json_filtered(filter_column, predicate, workers) do |batch, matching_rows|
+      yield batch, matching_rows
+    end
+  end
+  nil
 end
 
 describe "Compact shared Advanced root JSON columnar batches" do
@@ -1053,6 +1074,188 @@ describe "Compact shared Advanced root JSON columnar batches" do
     end
   end
 
+  [2_u64, 3_u64].each do |shared_version|
+    it "packs only matching rows with physical offsets under SharedData v#{shared_version}" do
+      parent = File.tempname("compact-json-filtered-packed-rows-")
+      part = File.join(parent, "all_1_1_0")
+      begin
+        Dir.mkdir(parent)
+        CompactJsonColumnarGuardFixture.write_part(part, shared_version: shared_version)
+        table = CrystalClick::TypedPartTable.open_selected_typed(
+          [part],
+          [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+        )
+        documents = CompactJsonColumnarGuardFixture.documents
+        expected_json = documents.map { |document| CompactJsonColumnarGuardFixture.expected_rowbinary(document) }
+        expected_offsets = [
+          [0_i32, 1_i32],
+          [1_i32],
+          [0_i32],
+          [0_i32, 1_i32],
+        ]
+        expected_keys = [1_u64, 2_u64, 4_u64, 5_u64, 7_u64, 8_u64]
+        predicate = ->(key : UInt64) { expected_keys.includes?(key) }
+
+        [1, 4].each do |workers|
+          callback_marks = [] of Int32
+          packed_keys = [] of UInt64
+          packed_json = [] of Bytes
+          borrowed_batch = nil.as(CrystalClick::CompactJsonColumnarBatch?)
+          borrowed_id_column = nil.as(CrystalClick::CompactJsonColumnarColumn?)
+          owned_snapshot = nil.as(CrystalClick::CompactJsonColumnarBatch?)
+          first_borrowed_offsets = nil.as(Array(Int32)?)
+          table.scan_compact_json_filtered_rows(
+            CompactJsonColumnarGuardFixture::KEY,
+            predicate,
+            workers: workers,
+          ) do |batch, original_mark_rows|
+            mark = batch.mark_index
+            callback_marks << mark
+            mark_start = (mark * CompactJsonColumnarGuardFixture::ROWS_PER_MARK).to_u64
+            original_mark_rows.read_only?.should be_true
+            original_mark_rows.to_a.should eq(expected_offsets[mark])
+            batch.row_count.should eq(original_mark_rows.size)
+            batch.mark_row_offset.should eq(0_u64)
+            batch.part_row_offset.should eq(mark_start)
+            batch.source_row_offset.should eq(mark_start)
+            batch.part_index.should eq(0_i32)
+            batch.columns.each { |column| column.row_count.should eq(batch.row_count) }
+
+            if workers == 1
+              if prior = borrowed_batch
+                batch.same?(prior).should be_true
+                batch.column_for("id").not_nil!.same?(borrowed_id_column.not_nil!).should be_true
+              else
+                borrowed_batch = batch
+                borrowed_id_column = batch.column_for("id")
+                owned_snapshot = batch.snapshot
+                first_borrowed_offsets = original_mark_rows.to_a
+              end
+            end
+
+            keys = batch.uint64_column(CompactJsonColumnarGuardFixture::KEY)
+            keys.size.should eq(batch.row_count)
+            batch.row_count.times do |packed_row|
+              source_row = mark_start.to_i + original_mark_rows[packed_row]
+              key = keys[packed_row]
+              key.should eq(source_row.to_u64 + 1_u64)
+              predicate.call(key).should be_true
+              packed_keys << key
+
+              document = documents[source_row]
+              rank = batch.column_for("rank").not_nil!
+              rank.value_at(packed_row).not_nil!.is_null?.should eq(document.value_for("rank").is_null?)
+              payload = batch.column_for("payload").not_nil!
+              payload.present_at?(packed_row).should eq(document.has_path?(CompactJsonColumnarGuardFixture::DYNAMIC_PATH))
+
+              rowbinary = CompactJsonColumnarGuardFixture.rowbinary_from_batch(batch, packed_row)
+              rowbinary.should eq(expected_json[source_row])
+              packed_json << rowbinary
+            end
+          end
+
+          callback_marks.should eq([0_i32, 1_i32, 2_i32, 3_i32])
+          packed_keys.should eq(expected_keys)
+          packed_json.should eq(expected_keys.map { |key| expected_json[(key - 1_u64).to_i] })
+          if workers == 1
+            snapshot = owned_snapshot.not_nil!
+            snapshot.row_count.should eq(2)
+            CompactJsonColumnarGuardFixture.rowbinary_from_batch(snapshot, 0).should eq(expected_json[0])
+            snapshot.uint64_column("pk").should eq(Slice[1_u64, 2_u64])
+            first_borrowed_offsets.should eq([0_i32, 1_i32])
+          end
+        end
+        predicate_calls = 0
+        callbacks = 0
+        table.scan_compact_json_filtered_rows(
+          CompactJsonColumnarGuardFixture::KEY,
+          ->(_key : UInt64) do
+            predicate_calls += 1
+            false
+          end,
+          workers: 4,
+        ) { |_batch, _original_mark_rows| callbacks += 1 }
+        predicate_calls.should eq(CompactJsonColumnarGuardFixture::ROW_COUNT)
+        callbacks.should eq(0)
+      ensure
+        FileUtils.rm_rf(parent)
+      end
+    end
+  end
+
+  it "rejects malformed selected-row masks and accepts complete or nullable selections" do
+    parent = File.tempname("compact-json-filtered-mask-shape-")
+    part = File.join(parent, "all_1_1_0")
+    begin
+      Dir.mkdir(parent)
+      CompactJsonColumnarGuardFixture.write_part(part)
+      compact = CrystalClick::CompactPartTable.open_selected_typed(
+        [part],
+        [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+      )
+      plan = compact.prepare_shared_advanced_json_scan.not_nil!
+      plan.prepare_columnar_output!
+
+      invalid_masks = [
+        {Slice(Int32).new(0), "Compact JSON selected row mask is empty or exceeds its source mark"},
+        {Slice[1_i32, 0_i32], "Compact JSON selected row mask is unordered, duplicated, or out of range"},
+        {Slice[0_i32, 0_i32], "Compact JSON selected row mask is unordered, duplicated, or out of range"},
+        {Slice[2_i32], "Compact JSON selected row mask is unordered, duplicated, or out of range"},
+      ]
+      invalid_masks.each do |mask, message|
+        budget = plan.new_decode_budget
+        plan.prepare_decode_budget!(budget)
+        output = plan.new_columnar_output
+        error = expect_raises(CrystalClick::CorruptPartError) do
+          compact.scan_compact_json_columnar_mark_into(
+            0,
+            plan,
+            budget,
+            output,
+            part_row_offset: 0_u64,
+            matching_rows: mask,
+          )
+        end
+        error.message.should eq(message)
+      end
+
+      full_budget = plan.new_decode_budget
+      plan.prepare_decode_budget!(full_budget)
+      full_output = plan.new_columnar_output
+      compact.scan_compact_json_columnar_mark_into(
+        0,
+        plan,
+        full_budget,
+        full_output,
+        part_row_offset: 0_u64,
+        matching_rows: Slice[0_i32, 1_i32],
+      )
+      full_output.row_count.should eq(2)
+      full_output.uint64_column(CompactJsonColumnarGuardFixture::KEY).should eq(Slice[1_u64, 2_u64])
+
+      nullable_budget = plan.new_decode_budget
+      plan.prepare_decode_budget!(nullable_budget)
+      nullable_output = plan.new_columnar_output
+      compact.scan_compact_json_columnar_mark_into(
+        0,
+        plan,
+        nullable_budget,
+        nullable_output,
+        part_row_offset: 0_u64,
+        matching_rows: Slice[1_i32],
+      )
+      nullable_output.row_count.should eq(1)
+      nullable_output.uint64_column(CompactJsonColumnarGuardFixture::KEY).should eq(Slice[2_u64])
+      nullable_output.mark_row_offset.should eq(0_u64)
+      nullable_output.column_for("rank").not_nil!.value_at(0).not_nil!.is_null?.should be_true
+      snapshot = nullable_output.snapshot
+      snapshot.uint64_column(CompactJsonColumnarGuardFixture::KEY).should eq(Slice[2_u64])
+      snapshot.column_for("rank").not_nil!.value_at(0).not_nil!.is_null?.should be_true
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
   it "skips zero-match and skipped-only JSON frames while strict scans still detect corruption" do
     parent = File.tempname("compact-json-filtered-skipped-frame-")
     part = File.join(parent, "all_1_1_0")
@@ -1196,7 +1399,43 @@ describe "Compact shared Advanced root JSON columnar batches" do
     end
   end
 
-  it "revalidates selected JSON and predicate-key frames between ordered callbacks" do
+  it "checks rejected sibling Copy rows before emitting packed survivors" do
+    parent = File.tempname("compact-json-filtered-packed-rejected-copy-row-")
+    part = File.join(parent, "all_1_1_0")
+    begin
+      Dir.mkdir(parent)
+      CompactJsonColumnarGuardFixture.write_part(part)
+      # This value belongs to key 4, which the predicate rejects. It shares
+      # mark 1 with surviving key 3. The same-length rewrite refreshes both
+      # the compressed-frame and outer part checksums, isolating Copy/Data
+      # agreement in the rejected physical row.
+      cjcv_rewrite_copy_string_byte(part, 1_i32, "beta:2:3", 0x7a_u8)
+      table = CrystalClick::TypedPartTable.open_selected_typed(
+        [part],
+        [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+      )
+      predicate = ->(key : UInt64) { key == 3_u64 || key == 6_u64 || key == 8_u64 }
+
+      [1, 4].each do |workers|
+        callbacks = 0
+        error = expect_raises(CrystalClick::CorruptPartError) do
+          table.scan_compact_json_filtered_rows(
+            CompactJsonColumnarGuardFixture::KEY,
+            predicate,
+            workers: workers,
+          ) do |_batch, _original_mark_rows|
+            callbacks += 1
+          end
+        end
+        error.message.should eq("Object shared Copy value disagrees with its per-path Dynamic row")
+        callbacks.should eq(0)
+      end
+    ensure
+      FileUtils.rm_rf(parent)
+    end
+  end
+
+  it "revalidates selected JSON and predicate-key frames before later output and retry" do
     [:json, :key].each do |mutated_lane|
       parent = File.tempname("compact-json-filtered-between-callbacks-")
       part = File.join(parent, "all_1_1_0")
@@ -1227,30 +1466,62 @@ describe "Compact shared Advanced root JSON columnar batches" do
         frame_column = mutated_lane == :json ? CompactJsonColumnarGuardFixture::COLUMN : CompactJsonColumnarGuardFixture::KEY
         cjcv_touched_frames(physical, frame_column, frame_mark).includes?(frame).should be_true
         checksum_offset = physical.frame_index.frames[frame].compressed_offset
-        table = CrystalClick::TypedPartTable.open_selected_typed(
-          [part],
-          [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
-        )
-        callbacks = 0
-        error = expect_raises(CrystalClick::CorruptPartError) do
-          table.scan_compact_json_filtered(
-            CompactJsonColumnarGuardFixture::KEY,
-            ->(key : UInt64) { key == 3_u64 || key == 8_u64 },
-            workers: 4,
-          ) do |_batch, _indices|
-            callbacks += 1
-            if callbacks == 1
-              File.open(File.join(part, "data.bin"), "r+") do |data|
-                data.seek(checksum_offset)
-                byte = data.read_byte.not_nil!
-                data.seek(checksum_offset)
-                data.write_byte(byte ^ 1_u8)
+        original_frame_byte = File.open(File.join(part, "data.bin"), "r") do |data|
+          data.seek(checksum_offset)
+          data.read_byte.not_nil!
+        end
+
+        [false, true].each do |packed_rows|
+          table = CrystalClick::TypedPartTable.open_selected_typed(
+            [part],
+            [CompactJsonColumnarGuardFixture::KEY, CompactJsonColumnarGuardFixture::COLUMN],
+          )
+          predicate = ->(key : UInt64) { key == 3_u64 || key == 8_u64 }
+          callbacks = 0
+          error = expect_raises(CrystalClick::CorruptPartError) do
+            cjcv_scan_filtered(
+              table,
+              packed_rows,
+              CompactJsonColumnarGuardFixture::KEY,
+              predicate,
+              4,
+            ) do |_batch, _indices|
+              callbacks += 1
+              if callbacks == 1
+                File.open(File.join(part, "data.bin"), "r+") do |data|
+                  data.seek(checksum_offset)
+                  byte = data.read_byte.not_nil!
+                  data.seek(checksum_offset)
+                  data.write_byte(byte ^ 1_u8)
+                end
               end
             end
           end
+          error.message.should eq("Compact source frame checksum mismatch")
+          callbacks.should eq(1)
+
+          retry_callbacks = 0
+          retry_error = expect_raises(CrystalClick::CorruptPartError) do
+            cjcv_scan_filtered(
+              table,
+              packed_rows,
+              CompactJsonColumnarGuardFixture::KEY,
+              predicate,
+              4,
+            ) { |_batch, _indices| retry_callbacks += 1 }
+          end
+          # The original prepared scan detects a changed authenticated source
+          # frame. On retry, preparing the affected predicate or JSON lane
+          # decodes that now-corrupt compressed block and reports its frame
+          # checksum directly, before any callback can run.
+          retry_error.message.should eq("compressed frame checksum mismatch")
+          retry_callbacks.should eq(0)
+
+          File.open(File.join(part, "data.bin"), "r+") do |data|
+            data.seek(checksum_offset)
+            data.write_byte(original_frame_byte)
+          end
         end
-        error.message.should eq("Compact source frame checksum mismatch")
-        callbacks.should eq(1)
       ensure
         FileUtils.rm_rf(parent)
       end
@@ -1400,6 +1671,9 @@ if fixture_root = ENV["CRYSTAL_CLICK_COLUMNAR_JSON_FIXTURE_ROOT"]?
     it "matches the filtered ClickHouse RowBinary sequence on the overflow part" do
       part = File.join(fixture_root, "overflow-fixture", "0_1_1_0")
       oracle = File.read(File.join(fixture_root, "overflow-fixture", "0_1_1_0.rowbinary")).to_slice
+      checksums_before = File.read(File.join(part, "checksums.txt"))
+      data_path = File.join(part, "data.bin")
+      data_hash_before = Digest::SHA256.hexdigest(File.read(data_path))
       predicate = ->(id : UInt64) { id // 2048_u64 % 2_u64 == 1_u64 && id % 4_u64 == 0_u64 }
       cursor = CrystalClick::BinaryCodecContext.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS, input: oracle)
       expected = IO::Memory.new
@@ -1410,7 +1684,26 @@ if fixture_root = ENV["CRYSTAL_CLICK_COLUMNAR_JSON_FIXTURE_ROOT"]?
         expected.write(oracle[start, cursor.input_offset - start]) if predicate.call(id)
       end
 
+      mixed_predicate = ->(id : UInt64) do
+        id // 2048_u64 % 2_u64 == 1_u64 && (id % 4_u64 == 0_u64 || id % 4_u64 == 3_u64)
+      end
+      mixed_cursor = CrystalClick::BinaryCodecContext.new(CrystalClick::BinaryBulkCodec::DEFAULT_LIMITS, input: oracle)
+      expected_mixed = IO::Memory.new
+      until mixed_cursor.remaining_input_bytes == 0_u64
+        start = mixed_cursor.input_offset
+        id = IO::ByteFormat::LittleEndian.decode(UInt64, mixed_cursor.read_slice(8_u64))
+        mixed_cursor.read_slice(mixed_cursor.read_var_uint)
+        expected_mixed.write(oracle[start, mixed_cursor.input_offset - start]) if mixed_predicate.call(id)
+      end
+
       table = CrystalClick::TypedPartTable.open_selected_typed([part], ["id", "doc"])
+      physical = CrystalClick::CompactPartPhysicalContext.open(part)
+      mark_starts = [] of UInt64
+      part_row_offset = 0_u64
+      physical.mark_row_counts.each do |rows|
+        mark_starts << part_row_offset
+        part_row_offset += rows
+      end
       [1, 4].each do |workers|
         output = IO::Memory.new
         marks = [] of Int32
@@ -1424,7 +1717,65 @@ if fixture_root = ENV["CRYSTAL_CLICK_COLUMNAR_JSON_FIXTURE_ROOT"]?
         end
         marks.should eq([1_i32, 3_i32])
         output.to_slice.should eq(expected.to_slice)
+
+        packed_output = IO::Memory.new
+        packed_marks = [] of Int32
+        observed_flags = [] of Bool
+        table.scan_compact_json_filtered_rows("id", mixed_predicate, workers) do |batch, original_mark_rows|
+          packed_marks << batch.mark_index
+          original_mark_rows.read_only?.should be_true
+          original_mark_rows.size.should eq(batch.row_count)
+          batch.mark_row_offset.should eq(0_u64)
+          batch.columns.each { |column| column.row_count.should eq(batch.row_count) }
+          mark_start = mark_starts[batch.mark_index]
+          batch.part_row_offset.should eq(mark_start)
+          batch.source_row_offset.should eq(mark_start)
+          original_mark_rows.size.should be < physical.mark_row_counts[batch.mark_index].to_i
+          ids = batch.uint64_column("id")
+          ids.size.should eq(batch.row_count)
+          original_mark_rows.map { |row| mark_start + row.to_u64 }.to_a.should eq(ids.to_a)
+
+          flags = batch.column_for("dynamic_flag").not_nil!
+          ranks = batch.column_for("rank").not_nil!
+          ranks.has_nullable_uint32_lane?.should be_true
+          rank_values = ranks.nullable_uint32_values
+          rank_nulls = ranks.nullable_uint32_nulls
+          title = batch.column_for("title").not_nil!
+          dynamic_value = batch.column_for("dynamic_value").not_nil!
+          overflow_value = batch.column_for("overflow_0").not_nil!
+          batch.row_count.times do |row|
+            id = ids[row]
+            mixed_predicate.call(id).should be_true
+            flag = flags.value_at(row).not_nil!
+            flag.as_bool.should eq(id.even?)
+            observed_flags << flag.as_bool
+            rank_nulls[row].should eq(id % 7_u64 == 0_u64 ? 1_u8 : 0_u8)
+            unless id % 7_u64 == 0_u64
+              rank_values[row].should eq((id % 32_768_u64).to_u32)
+            end
+            title.value_at(row).not_nil!.as_string.should eq("title-#{id.to_s.rjust(6, '0')}")
+            spill = overflow_value.value_at(row).not_nil!.as_string
+            spill.should eq("spill-0-#{(id % 43_u64).to_s.rjust(2, '0')}")
+            dynamic = dynamic_value.value_at(row).not_nil!
+            if id.even?
+              dynamic.type.tag.should eq(CrystalClick::BinaryDataType::TAG_STRING)
+              dynamic.as_string.should eq("dv-#{(id % 19_u64).to_s.rjust(2, '0')}")
+            else
+              dynamic.type.tag.should eq(CrystalClick::BinaryDataType::TAG_INT64)
+              dynamic.as_int64.should eq((id % 4_096_u64).to_i64)
+            end
+            packed_output.write_bytes(id, IO::ByteFormat::LittleEndian)
+            packed_output.write(CompactJsonColumnarGuardFixture.rowbinary_from_batch(batch, row))
+          end
+        end
+        packed_marks.should eq([1_i32, 3_i32])
+        observed_flags.includes?(false).should be_true
+        observed_flags.includes?(true).should be_true
+        packed_output.to_slice.should eq(expected_mixed.to_slice)
+        packed_output.to_slice.should_not eq(output.to_slice)
       end
+      File.read(File.join(part, "checksums.txt")).should eq(checksums_before)
+      Digest::SHA256.hexdigest(File.read(data_path)).should eq(data_hash_before)
     end
   end
 end

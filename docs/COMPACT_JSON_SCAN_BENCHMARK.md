@@ -1187,6 +1187,7 @@ TMPDIR="$bench_work/tmp" CRYSTAL_CACHE_DIR="$bench_work/cache" \
 
 bench_part="$bench_work/overflow-fixture/0_1_1_0"
 python3 -B scripts/compact_json_filter_scan_benchmark.py \
+  --comparison eager-vs-mark \
   --part "$bench_part" --oracle "$bench_part.rowbinary" \
   --probe "$bench_work/filter-probe" \
   --diagnostic-probe "$bench_work/filter-diagnostic-probe" \
@@ -1207,9 +1208,94 @@ CRYSTAL_CLICK_COLUMNAR_JSON_FIXTURE_ROOT="$bench_work" \
     spec/compact_physical_context_w259_spec.cr \
     spec/compact_physical_context_w259_adversary_spec.cr \
     spec/object_shared_advanced_direct_columns_w263_spec.cr \
+    spec/object_shared_advanced_inline_preparation_w263_spec.cr \
+    spec/object_shared_advanced_chunk_w195_spec.cr \
+    spec/object_shared_advanced_chunk_w195_adversary_spec.cr \
+    spec/object_shared_copy_w192_spec.cr \
+    spec/object_shared_copy_w192_adversary_spec.cr \
     spec/binary_dynamic_bulk_values_w155_spec.cr \
     spec/binary_dynamic_bulk_shared_context_w155_spec.cr \
     spec/binary_bulk_w122_spec.cr
+```
+
+### Row selection inside Advanced root JSON marks
+
+The mark-only and masked routes evaluate the same UInt64 predicate and visit
+the same authenticated JSON marks. The mark-only route produces a full batch
+per visited mark. The masked route packs the matching rows before delivery.
+The `id % 4 == 0` predicate produces four batches of 512 rows on the masked
+route and four batches of 2,048 rows on the mark-only route. Both produce
+the same 2,048 ordered RowBinary rows. The empty, one-mark, and all-row
+predicates control for the effects of visiting no marks or fully selected
+marks.
+
+As in the filter-first comparison, the read interval includes authenticated
+preparation, predicate evaluation, worker dispatch, JSON decoding, and the
+source recheck before collecting each batch. The retained probe reuses its
+workers and output arenas. RowBinary serialization and exact comparison are
+outside the reported read interval. Timing is uninstrumented. A separate
+LZ4-only build measures completed calls and bytes across that same read.
+
+The final run used Crystal 1.22.3 with LLVM 23.1.5 in Release and Boehm
+enabled on an M2 Max running macOS 26.6.2. Each cell uses 48 pairs across
+eight processes and alternates route order. The shared host had background
+load throughout the run. Its one-minute load average fell from 15.73 to 14.78.
+
+| Predicate | JSON marks | Workers | Mark-only p50 / p95 (ms) | Masked p50 / p95 (ms) | LZ4 frames on either route |
+|---|---:|---:|---:|---:|---:|
+| Empty | 0 | 1 | 0.759 / 0.828 | 0.735 / 0.822 | 4 |
+| Empty | 0 | 4 | 0.702 / 0.843 | 0.711 / 0.799 | 4 |
+| One mark | 1 | 1 | 4.879 / 5.345 | 4.940 / 5.359 | 7 |
+| One mark | 1 | 4 | 4.484 / 6.171 | 4.553 / 5.823 | 7 |
+| Spread across marks | 4 | 1 | 15.226 / 17.958 | 16.202 / 17.654 | 16 |
+| Spread across marks | 4 | 4 | 16.423 / 24.241 | 17.524 / 22.251 | 16 |
+| All rows | 4 | 1 | 12.729 / 15.737 | 12.638 / 15.568 | 16 |
+| All rows | 4 | 4 | 15.841 / 22.709 | 15.709 / 18.583 | 16 |
+
+In the spread case, masked read p50 was 6.4% higher at one worker and 6.7%
+higher at four. Masked p95 was 1.7% and 8.2% lower in this run. The median
+paired read delta was +0.326 ms at one worker and +0.814 ms at four. The
+masked route won 21 of 48 and 17 of 48 pairs, respectively. Median read
+allocation stayed near 30.14 MiB on both routes. The masked route reuses its
+Copy reference slab and retains fewer output rows. The scan still decodes and
+compares Copy and Data across all rows in each selected mark.
+
+Both routes inflated the same 138,576 payload bytes into 1,557,142 bytes on
+the spread predicate at both worker counts. The one-shot instrumented LZ4
+totals were 189/189 µs at one worker and 200/190 µs at four, in mark-only and
+masked order. The empty and one-mark controls inflated 65,536 and 438,421
+bytes, respectively.
+
+Every timed scan matched the independently filtered ordered ClickHouse
+26.10.1.1201 RowBinary export and physical row offsets. The spread output
+was 482,839 bytes with SHA-256
+`527ac21142b66b1a4c51095218c19eab1061fdc365e978f79f9354386aa74dbb`.
+The grouped Release run passed 131 examples, including SharedData v2 and v3,
+and the rejected-row Copy/Data mismatch control with valid checksums. The
+benchmark also rejected checksum and Copy/Data corruption on both routes
+with one and four requested workers.
+
+| Evidence from this run | SHA-256 |
+|---|---|
+| Source snapshot before diagnostic instrumentation | `acae82dced6310f0086bf38317187477a8cfeca8121cd9a0396af26866c887a6` |
+| Stock timing probe | `c208e31da463c7be05efa7ebc1d257824d3cd085ded6161685a75bb75c66d9a4` |
+| LZ4 diagnostic probe | `9635aa90535c257ae912176f8f287a75ff0b7a07da3bc324ecbef45828a6ab0d` |
+| Raw report with 768 timed samples and 16 diagnostic entries | `3ece3f7e23d76bb423617a26e95c9ee5bd606f05fcb02a1d28a2e96ac0998af2` |
+| Grouped Release output | `c8a89c87c5f5d19ec3a71d7e9bb79dd7e76dbf46688e529c7190d616efab16e5` |
+
+Use the Release and separate LZ4 diagnostic build commands from the
+[filter-first comparison](#filter-first-advanced-root-json-scan), then run
+the paired matrix with the same overflow fixture.
+
+```sh
+mkdir "$bench_work/row-mask-run"
+bench_part="$bench_work/overflow-fixture/0_1_1_0"
+python3 -B scripts/compact_json_filter_scan_benchmark.py \
+  --comparison mark-vs-mask \
+  --part "$bench_part" --oracle "$bench_part.rowbinary" \
+  --probe "$bench_work/filter-probe" \
+  --diagnostic-probe "$bench_work/filter-diagnostic-probe" \
+  --scratch "$bench_work/row-mask-run" --output "$bench_work/row-mask-report.json"
 ```
 
 ### Previous shared-plan diagnostics

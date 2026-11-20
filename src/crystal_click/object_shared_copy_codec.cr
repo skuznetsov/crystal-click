@@ -217,6 +217,104 @@ module CrystalClick
       )
     end
 
+    # :nodoc:
+    # Retain only Copy frame coordinates for selected-output reconciliation.
+    # Every count/index/frame is still fully checked here; Dynamic payloads
+    # are decoded later in path order by the same bounded value decoder used
+    # by the full Copy column path.
+    def self.decode_selected_references_with_budget(
+      sizes : Bytes,
+      indexes : Bytes,
+      values : Bytes,
+      bucket_structures : Array(ObjectSharedChunkStructure),
+      output : CompactJsonColumnarBatch,
+      row_offset : Int32,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      dictionary, row_count, total_entries, width = preflight_decode_layout(
+        sizes, indexes, values, bucket_structures, budget,
+      )
+      source_rows = output.source_mark_row_count
+      if row_offset < 0 || row_offset > source_rows || row_count > source_rows - row_offset
+        raise CorruptPartError.new("Object shared Copy chunk rows exceed the Compact JSON source mark")
+      end
+
+      path_count = dictionary.path_count
+      binding_bytes = checked_add(
+        instance_sizeof(Array(CompactJsonColumnarColumn)).to_u64,
+        checked_multiply(
+          path_count.to_u64,
+          sizeof(Pointer(CompactJsonColumnarColumn)).to_u64,
+          false,
+          "column binding workspace",
+        ),
+        false,
+        "column binding workspace",
+      )
+      budget.preflight_children(total_entries)
+      total_entries.times { budget.charge_node }
+      # Per-path reference counts also prove dictionary use. The reusable
+      # output ledger owns those counts and the exact reference slab.
+      budget.charge_elements(path_count.to_u64)
+      if total_entries > Int32::MAX.to_u64
+        raise CorruptPartError.new("Object shared Copy total entry count exceeds the in-memory domain")
+      end
+      output.begin_selected_copy_reference_ledger!(path_count, total_entries.to_i, binding_bytes)
+      referenced_path_bytes = scan_indexes(
+        indexes,
+        sizes,
+        dictionary,
+        nil,
+        width,
+        selected_output: output,
+      )
+      output.finish_selected_copy_reference_plan!
+      dictionary.materialize!(budget, referenced_path_bytes)
+
+      values_context = BinaryCodecContext.new(budget.limits, values, false, budget, false)
+      index_offset = 0
+      row_index = 0
+      while row_index < row_count
+        entry_count = read_u64_le(sizes, row_index * 8).to_i
+        entry_index = 0
+        while entry_index < entry_count
+          dictionary_index = read_index(indexes, index_offset, width).to_i
+          index_offset += width
+
+          envelope_size = values_context.read_var_uint
+          payload_start = values.size - values_context.remaining_input_bytes.to_i
+          values_context.read_slice(envelope_size)
+          if payload_start < 0 || payload_start > Int32::MAX || envelope_size > Int32::MAX.to_u64
+            raise CorruptPartError.new("Object shared Copy Dynamic frame exceeds the in-memory domain")
+          end
+          output.append_selected_copy_reference!(
+            dictionary_index,
+            CompactJsonCopyReference.new(row_index.to_i32, payload_start.to_i32, envelope_size.to_i32),
+          )
+          entry_index += 1
+        end
+        row_index += 1
+      end
+      values_context.ensure_consumed
+      output.finish_selected_copy_reference_fill!
+      nil
+    end
+
+    # :nodoc:
+    # Reuse the exact column decoder on one already-framed borrowed span.
+    def self.decode_selected_reference_value(
+      values_context : BinaryCodecContext,
+      values_lane : Bytes,
+      reference : CompactJsonCopyReference,
+      budget : BinaryCodecBudget,
+    ) : CompactJsonColumnarCell
+      payload = values_lane[reference.payload_offset, reference.payload_size]
+      values_context.reset_prepaid_input_window!(payload)
+      value = read_dynamic_column_envelope(values_context, reference.payload_size.to_u64, budget, true)
+      values_context.ensure_consumed
+      value
+    end
+
     private def self.decode_into_columns_internal(
       sizes : Bytes,
       indexes : Bytes,
@@ -267,10 +365,6 @@ module CrystalClick
           index_offset += width
 
           value = read_dynamic_column_value(values_context, budget, borrow_string_slices)
-          if value.type.tag == BinaryDataType::TAG_NOTHING ||
-             value.type.tag == BinaryDataType::TAG_NULLABLE || value.is_null?
-            raise CorruptPartError.new("Object shared Copy contains a top-level Nothing or NULL value")
-          end
           column = columns_by_index[dictionary_index]
           output.append_column_cell!(column, row_offset + row_index, value, binding_workspace_bytes)
           entry_index += 1
@@ -287,14 +381,35 @@ module CrystalClick
       borrow_string_slices : Bool,
     ) : CompactJsonColumnarCell
       envelope_size = values_context.read_var_uint
+      read_dynamic_column_envelope(values_context, envelope_size, budget, borrow_string_slices)
+    end
+
+    private def self.read_dynamic_column_envelope(
+      values_context : BinaryCodecContext,
+      envelope_size : UInt64,
+      budget : BinaryCodecBudget,
+      borrow_string_slices : Bool,
+    ) : CompactJsonColumnarCell
       if borrow_string_slices
         if bytes = values_context.read_dynamic_string_slice_envelope(envelope_size)
-          return CompactJsonColumnarCell.borrowed_string(bytes)
+          value = CompactJsonColumnarCell.borrowed_string(bytes)
+          reject_top_level_null!(value)
+          return value
         end
       end
       envelope = values_context.read_slice(envelope_size)
       type, decoded_value = decode_dynamic_value(envelope, budget)
-      CompactJsonColumnarCell.owned(decoded_value || BinaryValue.null(type))
+      value = CompactJsonColumnarCell.owned(decoded_value || BinaryValue.null(type))
+      reject_top_level_null!(value)
+      value
+    end
+
+    private def self.reject_top_level_null!(value : CompactJsonColumnarCell) : Nil
+      if value.type.tag == BinaryDataType::TAG_NOTHING ||
+         value.type.tag == BinaryDataType::TAG_NULLABLE || value.is_null?
+        raise CorruptPartError.new("Object shared Copy contains a top-level Nothing or NULL value")
+      end
+      nil
     end
 
     private def self.preflight_decode_layout(
@@ -399,8 +514,9 @@ module CrystalClick
       indexes : Bytes,
       sizes : Bytes,
       dictionary : ObjectSharedCopyDictionary,
-      used : Array(Bool),
+      used : Array(Bool)?,
       width : Int32,
+      selected_output : CompactJsonColumnarBatch? = nil,
     ) : UInt64
       referenced_bytes = 0_u64
       index_offset = 0
@@ -425,7 +541,12 @@ module CrystalClick
             raise CorruptPartError.new("Object shared Copy repeated path work overflows UInt64")
           end
           referenced_bytes += path_size
-          used[dictionary_index] = true
+          if output = selected_output
+            output.count_selected_copy_reference_path!(dictionary_index)
+          else
+            bitmap = used || raise(CorruptPartError.new("Object shared Copy used-path bitmap is missing"))
+            bitmap[dictionary_index] = true
+          end
           previous_index = dictionary_index
           index_offset += width
           entry_index += 1

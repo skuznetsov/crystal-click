@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pair eager and filter-first Compact JSON scans on one retained probe process."""
+"""Pair Compact JSON filter routes on one retained probe process."""
 
 import argparse
 import hashlib
@@ -8,6 +8,7 @@ import math
 import os
 import shutil
 import statistics
+import struct
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
@@ -17,13 +18,28 @@ from read_rows_benchmark import Runner
 
 
 PREDICATES = ("zero", "cluster", "spread", "all")
-ROUTES = ("eager", "lazy")
+ROUTES_BY_COMPARISON = {
+    "mark-vs-mask": ("mark_only", "masked"),
+    "eager-vs-mark": ("eager", "mark_only"),
+}
+CONTROL_ROUTES = ("mark_only", "masked")
 EXPECTED_ROWS = {"zero": 0, "cluster": 2048, "spread": 2048, "all": 8192}
 EXPECTED_MARKS = {
     "zero": [],
     "cluster": [1],
     "spread": [0, 1, 2, 3],
     "all": [0, 1, 2, 3],
+}
+EXPECTED_JSON_MARK_ROWS = {
+    "mark_only": {
+        "zero": [], "cluster": [2048], "spread": [2048] * 4, "all": [2048] * 4,
+    },
+    "masked": {
+        "zero": [], "cluster": [2048], "spread": [512] * 4, "all": [2048] * 4,
+    },
+    "eager": {
+        "zero": [2048] * 4, "cluster": [2048] * 4, "spread": [2048] * 4, "all": [2048] * 4,
+    },
 }
 EXPECTED_FILTERED_SHA256 = {
     "cluster": "6707d36d408449f887bbe8b5eac50716f6589ff4550214bee7f2d5f64486d4e2",
@@ -33,7 +49,7 @@ EXPECTED_PART_FILE_SHA256 = {
     "data.bin": "d99ddd6d2144615388982b267b20f14e4f56e4689f26faea922c2ab3fb5c82d5",
     "data.mrk4": "b5c2c2f6072c7c8c727cc1e73f191a55c16e5cdf0b2a6e4acaf4f1edf07ca27b",
 }
-EXPECTED_LAZY_LZ4_FRAMES = {"zero": 4, "cluster": 7, "spread": 16, "all": 16}
+EXPECTED_FILTERED_LZ4_FRAMES = {"zero": 4, "cluster": 7, "spread": 16, "all": 16}
 
 
 def fail(message: str) -> None:
@@ -94,6 +110,17 @@ def matches(predicate: str, row_id: int) -> bool:
     if predicate == "all":
         return True
     raise ValueError(predicate)
+
+
+def source_offsets_sha256(predicate: str) -> str:
+    encoded = bytearray()
+    for mark in EXPECTED_MARKS[predicate]:
+        mark_start = mark * 2048
+        for local_row in range(2048):
+            row_id = mark_start + local_row
+            if matches(predicate, row_id):
+                encoded.extend(struct.pack("<IQ", mark, row_id))
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def write_filtered_oracles(oracle: Path, root: Path) -> dict[str, dict]:
@@ -163,6 +190,14 @@ def validate_sample(sample: dict, predicate: str, route: str, workers: int,
     expected_json_marks = [0, 1, 2, 3] if route == "eager" else EXPECTED_MARKS[predicate]
     if sample.get("json_mark_indices") != expected_json_marks:
         fail(f"{route} selected JSON marks differ from the expected schedule")
+    if sample.get("json_mark_row_counts") != EXPECTED_JSON_MARK_ROWS[route][predicate]:
+        fail(f"{route} decoded a different number of JSON rows in a selected mark")
+    if sample.get("selected_source_offset_count") != expected["rows"]:
+        fail("probe selected source-offset count differs from the filtered RowBinary oracle")
+    if sample.get("source_offsets_verified") is not True:
+        fail("probe did not verify dense output rows against their original part offsets")
+    if sample.get("selected_source_offsets_sha256") != source_offsets_sha256(predicate):
+        fail("probe source-offset sequence differs from the independently computed predicate mask")
     expected_active = min(workers, len(expected_json_marks))
     if sample.get("workers_active") != expected_active:
         fail("active JSON worker count differs from the mark schedule")
@@ -182,9 +217,9 @@ def validate_sample(sample: dict, predicate: str, route: str, workers: int,
             fail("probe worker thread or mark assignment changed")
     if sample.get("filter_evaluations") != 8192:
         fail("filter predicate was not evaluated once for every source id")
-    if route == "lazy" and predicate == "zero":
+    if route in ("lazy", "mark_only", "masked") and predicate == "zero":
         if sample.get("json_plan_present") is not False or sample.get("json_mark_decode_invocations") != 0:
-            fail("zero-match lazy route prepared or decoded a JSON mark")
+            fail("zero-match filtered route prepared or decoded a JSON mark")
     for field in ("read_wall_ns", "serialization_ns", "scan_and_serialize_ns"):
         if type(sample.get(field)) is not int or sample[field] <= 0:
             if field == "serialization_ns" and expected["rows"] == 0:
@@ -202,12 +237,12 @@ def percentiles(values: list[int]) -> dict[str, float | int]:
 
 
 def run_checksum_control(binary: Path, part: Path, oracle: Path, filtered_oracle: Path,
-                         root: Path, workers: int) -> dict:
+                         root: Path, workers: int, route: str) -> dict:
     root.mkdir(parents=True)
     trial_part = root / "0_1_1_0"
     shutil.copytree(part, trial_part)
     log_path = root / "stderr.log"
-    command = [str(binary), str(trial_part), str(oracle), str(filtered_oracle), str(workers), "cluster", "--stdin"]
+    command = [str(binary), str(trial_part), str(oracle), str(filtered_oracle), str(workers), "spread", "--stdin"]
     with log_path.open("wb") as log, subprocess.Popen(
         command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
         cwd=root, env={**os.environ, "TMPDIR": str(root)}, bufsize=0,
@@ -221,22 +256,22 @@ def run_checksum_control(binary: Path, part: Path, oracle: Path, filtered_oracle
                 fail("checksum control part has no frame checksum byte")
             data.seek(0)
             data.write(bytes([first[0] ^ 1]))
-        process.stdin.write(b"scan lazy\n")
+        process.stdin.write(f"scan {route}\n".encode())
         if runner.line() is not None:
-            fail("lazy scan returned rows for a checksum-corrupted frame")
+            fail(f"{route} scan returned rows for a checksum-corrupted frame")
         status = process.wait(timeout=runner.timeout)
         diagnostic = log_path.read_bytes().lower()
         if status == 0 or b"checksum mismatch" not in diagnostic:
-            fail("lazy scan did not reject the post-open checksum corruption")
-    return {"workers": workers, "route": "lazy", "predicate": "cluster", "rejected": True,
+            fail(f"{route} scan did not reject the post-open checksum corruption")
+    return {"workers": workers, "route": route, "predicate": "spread", "rejected": True,
             "diagnostic_sha256": hashlib.sha256(log_path.read_bytes()).hexdigest()}
 
 
-def run_copy_data_control(binary: Path, part: Path, root: Path, workers: int) -> dict:
+def run_copy_data_control(binary: Path, part: Path, root: Path, workers: int, route: str) -> dict:
     root.mkdir(parents=True)
     trial_part = root / "0_1_1_0"
     shutil.copytree(part, trial_part)
-    command = [str(binary), "--copy-data-control", str(trial_part), str(workers)]
+    command = [str(binary), "--copy-data-control", str(trial_part), str(workers), route]
     result = subprocess.run(command, cwd=root, capture_output=True, timeout=180,
                            env={**os.environ, "TMPDIR": str(root)})
     if result.returncode != 0:
@@ -246,32 +281,40 @@ def run_copy_data_control(binary: Path, part: Path, root: Path, workers: int) ->
     except json.JSONDecodeError as error:
         fail(f"Copy/Data control emitted invalid JSON: {error}")
     if (payload.get("rejected") is not True or payload.get("callbacks") != 0 or
+            payload.get("workers_requested") != workers or payload.get("predicate") != "cluster_spread" or
             payload.get("error") != "Object shared Copy value disagrees with its per-path Dynamic row"):
         fail("Copy/Data control did not report a valid-checksum lane disagreement")
+    if payload.get("route") != route or payload.get("callbacks") != 0:
+        fail(f"{route} Copy/Data control did not reject before callback delivery")
     return {"workers": workers, **payload}
 
 
 def run_diagnostic_matrix(binary: Path, part: Path, oracle: Path, expected: dict,
-                          scratch: Path, full_oracle_sha256: str) -> list[dict]:
+                          scratch: Path, full_oracle_sha256: str, routes: tuple[str, ...]) -> list[dict]:
     records = []
     for predicate in PREDICATES:
         for workers in (1, 4):
             root = scratch / f"diagnostic-{predicate}-w{workers}"
             with open_probe(binary, root, part, oracle, Path(expected[predicate]["path"]), workers, predicate) as reader:
-                for route in ROUTES:
+                for route in routes:
                     sample = sample_route(reader, route)
                     validate_sample(sample, predicate, route, workers, expected[predicate], full_oracle_sha256)
                     counters = sample.get("diagnostics")
                     if not isinstance(counters, dict):
                         fail("diagnostic probe did not return actual compressed-frame counters")
                     total_lz4 = counters.get("total_lz4_frames")
-                    expected_lz4 = 16 if route == "eager" else EXPECTED_LAZY_LZ4_FRAMES[predicate]
+                    expected_lz4 = 16 if route == "eager" else EXPECTED_FILTERED_LZ4_FRAMES[predicate]
                     if total_lz4 != expected_lz4:
                         fail(f"{route}/{predicate}/w{workers} decoded {total_lz4} LZ4 frames, expected {expected_lz4}")
-                    if route == "lazy" and predicate == "zero":
+                    if route != "eager" and predicate == "zero":
                         if (total_lz4 != 4 or sample.get("json_plan_present") is not False or
                                 sample.get("json_mark_decode_invocations") != 0):
-                            fail("zero-match lazy path decoded a JSON frame instead of only its four key frames")
+                            fail("zero-match filtered path decoded a JSON frame instead of only its four key frames")
+                    for field in ("total_lz4_payload_bytes", "total_lz4_output_bytes", "total_lz4_elapsed_ns"):
+                        if type(counters.get(field)) is not int or counters[field] < 0:
+                            fail(f"{route}/{predicate}/w{workers} has an invalid {field} LZ4 counter")
+                    if counters["total_lz4_output_bytes"] <= 0 or counters["total_lz4_elapsed_ns"] <= 0:
+                        fail(f"{route}/{predicate}/w{workers} recorded no LZ4 output bytes or decode time")
                     records.append({"predicate": predicate, "workers_requested": workers, "route": route,
                                     "expected_lz4_frames": expected_lz4, **sample})
                 reader.quit()
@@ -279,6 +322,9 @@ def run_diagnostic_matrix(binary: Path, part: Path, oracle: Path, expected: dict
 
 
 def benchmark(options: argparse.Namespace) -> dict:
+    routes = ROUTES_BY_COMPARISON[options.comparison]
+    if options.comparison == "mark-vs-mask" and not options.diagnostic_probe:
+        fail("the mark-vs-mask campaign requires an isolated --diagnostic-probe for LZ4 counters")
     part = options.part.resolve(strict=True)
     oracle = options.oracle.resolve(strict=True)
     binary = options.probe.resolve(strict=True)
@@ -298,17 +344,18 @@ def benchmark(options: argparse.Namespace) -> dict:
     if options.diagnostic_probe:
         diagnostic_binary = options.diagnostic_probe.resolve(strict=True)
         diagnostics = run_diagnostic_matrix(diagnostic_binary, part, oracle, expected,
-                                            scratch / "frame-diagnostics", original_oracle_sha256)
+                                            scratch / "frame-diagnostics", original_oracle_sha256, routes)
     checksum_controls = []
     copy_data_controls = []
     for workers in (1, 4):
-        checksum_controls.append(run_checksum_control(
-            binary, part, oracle, Path(expected["cluster"]["path"]),
-            scratch / f"checksum-control-w{workers}", workers,
-        ))
-        copy_data_controls.append(run_copy_data_control(
-            binary, part, scratch / f"copy-data-control-w{workers}", workers,
-        ))
+        for route in CONTROL_ROUTES:
+            checksum_controls.append(run_checksum_control(
+                binary, part, oracle, Path(expected["spread"]["path"]),
+                scratch / f"checksum-control-{route}-w{workers}", workers, route,
+            ))
+            copy_data_controls.append(run_copy_data_control(
+                binary, part, scratch / f"copy-data-control-{route}-w{workers}", workers, route,
+            ))
 
     for predicate in PREDICATES:
         for workers in (1, 4):
@@ -316,7 +363,7 @@ def benchmark(options: argparse.Namespace) -> dict:
                 process_root = scratch / f"paired-{predicate}-w{workers}-block{block:02d}"
                 with open_probe(binary, process_root, part, oracle, Path(expected[predicate]["path"]), workers, predicate) as reader:
                     for pair in range(options.warmups + options.repeats):
-                        order = ROUTES if (block + pair) % 2 == 0 else tuple(reversed(ROUTES))
+                        order = routes if (block + pair) % 2 == 0 else tuple(reversed(routes))
                         for route in order:
                             sample = sample_route(reader, route)
                             validate_sample(sample, predicate, route, workers, expected[predicate], original_oracle_sha256)
@@ -337,35 +384,39 @@ def benchmark(options: argparse.Namespace) -> dict:
     summary = []
     for predicate in PREDICATES:
         for workers in (1, 4):
-            eager = [sample for sample in samples if sample["predicate"] == predicate and
-                     sample["workers_requested"] == workers and sample["route"] == "eager"]
-            lazy = [sample for sample in samples if sample["predicate"] == predicate and
-                    sample["workers_requested"] == workers and sample["route"] == "lazy"]
-            for route, selected in (("eager", eager), ("lazy", lazy)):
+            route_samples = {}
+            for route in routes:
+                selected = [sample for sample in samples if sample["predicate"] == predicate and
+                            sample["workers_requested"] == workers and sample["route"] == route]
+                route_samples[route] = selected
                 stats = {field: percentiles([sample[field] for sample in selected]) for field in (
                     "read_wall_ns", "serialization_ns", "scan_and_serialize_ns",
                     "gc_read_allocated_bytes_delta", "gc_read_collections",
                 )}
                 summary.append({"predicate": predicate, "workers_requested": workers,
                                 "route": route, "sample_count": len(selected), **stats})
-            eager_by_pair = {(sample["block"], sample["pair"]): sample for sample in eager}
-            lazy_by_pair = {(sample["block"], sample["pair"]): sample for sample in lazy}
-            paired = sorted(set(eager_by_pair) & set(lazy_by_pair))
+            left_route, right_route = routes
+            left_by_pair = {(sample["block"], sample["pair"]): sample for sample in route_samples[left_route]}
+            right_by_pair = {(sample["block"], sample["pair"]): sample for sample in route_samples[right_route]}
+            paired = sorted(set(left_by_pair) & set(right_by_pair))
             summary.append({
                 "predicate": predicate,
                 "workers_requested": workers,
-                "route": "lazy_vs_eager_paired",
+                "route": f"{left_route}_vs_{right_route}_paired",
                 "paired_count": len(paired),
-                "lazy_read_faster_pairs": sum(lazy_by_pair[key]["read_wall_ns"] < eager_by_pair[key]["read_wall_ns"] for key in paired),
-                "read_delta_ns": percentiles([lazy_by_pair[key]["read_wall_ns"] - eager_by_pair[key]["read_wall_ns"] for key in paired]),
-                "combined_delta_ns": percentiles([lazy_by_pair[key]["scan_and_serialize_ns"] - eager_by_pair[key]["scan_and_serialize_ns"] for key in paired]),
+                "right_route_read_faster_pairs": sum(right_by_pair[key]["read_wall_ns"] < left_by_pair[key]["read_wall_ns"] for key in paired),
+                "read_delta_ns": percentiles([right_by_pair[key]["read_wall_ns"] - left_by_pair[key]["read_wall_ns"] for key in paired]),
+                "combined_delta_ns": percentiles([right_by_pair[key]["scan_and_serialize_ns"] - left_by_pair[key]["scan_and_serialize_ns"] for key in paired]),
             })
 
     hashes_after = part_hashes(part)
     if hashes_after != original_part_hashes:
         fail("measured part hashes changed during the campaign")
     report = {
-        "format": "compact_json_filter_scan_benchmark_v1",
+        "format": "compact_json_filter_scan_benchmark_v2",
+        "comparison": options.comparison,
+        "route_pair": list(routes),
+        "control_routes": list(CONTROL_ROUTES),
         "part_hashes": original_part_hashes,
         "part_file_bytes": {path.name: path.stat().st_size for path in sorted(part.iterdir()) if path.is_file()},
         "part_hashes_unchanged": hashes_after == original_part_hashes,
@@ -393,6 +444,8 @@ if __name__ == "__main__":
         parser.add_argument(f"--{name}", type=Path, required=True)
     parser.add_argument("--diagnostic-probe", type=Path,
                         help="separate -Dcompact_json_scan_diagnostic build with the --lz4-only hook")
+    parser.add_argument("--comparison", choices=tuple(ROUTES_BY_COMPARISON), default="eager-vs-mark",
+                        help="paired routes: legacy eager versus mark-only (default), or mark-only versus masked")
     parser.add_argument("--blocks", type=int, default=8)
     parser.add_argument("--warmups", type=int, default=2)
     parser.add_argument("--repeats", type=int, default=6)

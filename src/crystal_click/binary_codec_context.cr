@@ -152,6 +152,22 @@ module CrystalClick
       (source.size - @input_offset).to_u64
     end
 
+    # :nodoc:
+    # Reuse one prepaid read cursor for a bounded immutable child slice. The
+    # enclosing owner must bounds-check the slice and charge its complete lane
+    # before calling this trusted internal seam.
+    def reset_prepaid_input_window!(window : Bytes) : Nil
+      if @writing
+        raise ArgumentError.new("prepaid binary input windows require a read-direction context")
+      end
+      if window.size.to_i64 > @limits.max_bytes
+        raise CorruptPartError.new("binary codec input window exceeds byte limit")
+      end
+      @input = window
+      @input_offset = 0_i32
+      nil
+    end
+
     def ensure_remaining_input_bytes(count : UInt64) : Nil
       if count > remaining_input_bytes
         corrupt!("binary codec input is too short for declared metadata count")

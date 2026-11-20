@@ -60,5 +60,31 @@ module CrystalClick
         borrow_string_slices: true,
       )
     end
+
+    # :nodoc:
+    # Build bounded payload references without exposing mutable backing lanes.
+    def decode_selected_references_with_budget(
+      bucket_structures : Array(ObjectSharedChunkStructure),
+      output : CompactJsonColumnarBatch,
+      row_offset : Int32,
+      budget : BinaryCodecBudget,
+    ) : Nil
+      ObjectSharedCopyCodec.decode_selected_references_with_budget(
+        Bytes.new(@sizes.to_unsafe, @sizes.size, read_only: true),
+        Bytes.new(@indexes.to_unsafe, @indexes.size, read_only: true),
+        Bytes.new(@values.to_unsafe, @values.size, read_only: true),
+        bucket_structures,
+        output,
+        row_offset,
+        budget,
+      )
+    end
+
+    # :nodoc:
+    # Borrow one immutable values owner for a reusable cursor. The reference
+    # ledger guarantees every later window is inside this exact byte lane.
+    def selected_values_view : Bytes
+      Bytes.new(@values.to_unsafe, @values.size, read_only: true)
+    end
   end
 end

@@ -9,10 +9,26 @@ module CrystalClick
       workers : Int = 1,
       & : CompactJsonColumnarBatch, Slice(Int32) -> Nil
     ) : Nil
+      compact_filtered_json_reader.scan_compact_json_filtered(filter_column, predicate, workers) { |batch, rows| yield batch, rows }
+    end
+
+    # Filter one regular Compact part and yield packed matching rows. See
+    # CompactPartTable#scan_compact_json_filtered_rows for source offsets,
+    # borrowing and verification.
+    def scan_compact_json_filtered_rows(
+      filter_column : String,
+      predicate : Proc(UInt64, Bool),
+      workers : Int = 1,
+      & : CompactJsonColumnarBatch, Slice(Int32) -> Nil
+    ) : Nil
+      compact_filtered_json_reader.scan_compact_json_filtered_rows(filter_column, predicate, workers) { |batch, rows| yield batch, rows }
+    end
+
+    private def compact_filtered_json_reader : CompactPartTable
       unless @entries.size == 1 && !@projection_selected && (reader = @entries[0].reader.as?(CompactPartTable))
         raise UnsupportedFormatError.new("filtered JSON scan requires one regular Compact part")
       end
-      reader.scan_compact_json_filtered(filter_column, predicate, workers) { |batch, rows| yield batch, rows }
+      reader
     end
 
     # Decode Compact Advanced root JSON into worker-owned sparse columns. Each

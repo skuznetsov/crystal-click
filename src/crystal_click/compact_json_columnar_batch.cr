@@ -1,4 +1,15 @@
 module CrystalClick
+  # Payload coordinates for one Dynamic envelope in the retained Copy lane.
+  # Values are stored inline in a worker-local reusable reference slab.
+  struct CompactJsonCopyReference
+    getter row_index : Int32
+    getter payload_offset : Int32
+    getter payload_size : Int32
+
+    def initialize(@row_index : Int32, @payload_offset : Int32, @payload_size : Int32)
+    end
+  end
+
   # Reusable borrowed output arena for one Compact Advanced root JSON scan.
   # Column wrappers and value buffers survive mark resets. Most path cells are
   # sparse, while selected UInt64 and Nullable(UInt32) lanes use retained
@@ -21,6 +32,13 @@ module CrystalClick
     @companion_high_water_rows : Array(UInt64)
     @mark_row_count : Int32
     @window_start : Int32
+    @selected_output_rows : Slice(Int32)
+    @selected_source_row_count : Int32
+    @selected_source_rows_active : Bool
+    @copy_reference_slab : Slice(CompactJsonCopyReference)
+    @copy_reference_ranges : Slice(Int32)
+    @copy_reference_path_count : Int32
+    @copy_reference_count : Int32
     @cell_count : UInt64
     @cell_payload_bytes : UInt64
     @column_buffer_bytes : UInt64
@@ -101,6 +119,13 @@ module CrystalClick
       @column_count = @columns.size.to_i32
       @mark_row_count = 0_i32
       @window_start = 0_i32
+      @selected_output_rows = Slice(Int32).new(0)
+      @selected_source_row_count = 0_i32
+      @selected_source_rows_active = false
+      @copy_reference_slab = Slice(CompactJsonCopyReference).empty
+      @copy_reference_ranges = Slice(Int32).new(0)
+      @copy_reference_path_count = 0_i32
+      @copy_reference_count = 0_i32
       @cell_count = 0_u64
       @cell_payload_bytes = 0_u64
       @column_buffer_bytes = 0_u64
@@ -126,11 +151,19 @@ module CrystalClick
     # declared Nullable(UInt32) output column owns this representation.
     def begin_nullable_uint32_fill!(path : String, type : BinaryDataType) : Tuple(Slice(UInt32), Slice(UInt8))?
       column = @columns_by_path[path]? || return nil
-      rows = @mark_row_count.to_u64
-      if @cell_count > UInt64::MAX - rows || @cell_count + rows > @max_cells
+      return nil unless column.has_nullable_uint32_lane? && column.fallback_type == type
+      output_rows = @selected_source_rows_active ? @row_count.to_u64 : @mark_row_count.to_u64
+      if @cell_count > UInt64::MAX - output_rows || @cell_count + output_rows > @max_cells
         raise CorruptPartError.new("Compact JSON columnar output exceeds the codec element bound")
       end
-      column.begin_nullable_uint32_fill!(type, @mark_row_count)
+      if @selected_source_rows_active
+        column.set_window!(0_i32, @mark_row_count)
+      end
+      lane = column.begin_nullable_uint32_fill!(type, @mark_row_count)
+      if lane.nil? && @selected_source_rows_active
+        column.set_window!(0_i32, @row_count)
+      end
+      lane
     end
 
     # :nodoc:
@@ -139,11 +172,13 @@ module CrystalClick
         raise CorruptPartError.new("Compact JSON Nullable(UInt32) fill has a negative row count")
       end
       column = @columns_by_path[path]? || raise(CorruptPartError.new("Compact JSON Nullable(UInt32) column is outside its sealed roster"))
-      if @cell_count > UInt64::MAX - rows.to_u64 || @cell_count + rows.to_u64 > @max_cells
+      output_rows = @selected_source_rows_active ? @row_count : rows
+      if @cell_count > UInt64::MAX - output_rows.to_u64 || @cell_count + output_rows.to_u64 > @max_cells
         raise CorruptPartError.new("Compact JSON columnar output exceeds the codec element bound")
       end
       column.complete_nullable_uint32_fill!(rows)
-      @cell_count += rows.to_u64
+      compact_selected_nullable_uint32!(column) if @selected_source_rows_active
+      @cell_count += output_rows.to_u64
       validate_workspace!
       nil
     end
@@ -174,6 +209,10 @@ module CrystalClick
       @row_count = 0_i32
       @mark_row_count = 0_i32
       @window_start = 0_i32
+      @selected_source_row_count = 0_i32
+      @selected_source_rows_active = false
+      @copy_reference_path_count = 0_i32
+      @copy_reference_count = 0_i32
       @cell_count = 0_u64
       @cell_payload_bytes = 0_u64
       @companion_reserved_bytes = 0_u64
@@ -257,12 +296,245 @@ module CrystalClick
       @mark_row_count = mark_rows.to_i32
       @window_start = 0_i32
       @row_count = @mark_row_count
+      @selected_source_row_count = 0_i32
+      @selected_source_rows_active = false
+      @copy_reference_path_count = 0_i32
+      @copy_reference_count = 0_i32
       @cell_count = 0_u64
       @cell_payload_bytes = 0_u64
       @companion_reserved_bytes = projected_companion_buffer_bytes(mark_rows.to_i)
       @companion_columns_filled = 0_i32
       check_workspace!(retained_workspace_bytes)
       @columns.each { |column| column.set_window!(0_i32, @row_count) }
+      nil
+    end
+
+    # :nodoc:
+    # Begin a packed callback batch while retaining the full source extent for
+    # strict decoders. Decoder appends use source-row coordinates and are kept
+    # only for selected rows, at dense callback-row coordinates.
+    def begin_selected_mark!(
+      part_index : Int,
+      part_name : String,
+      part_path : String,
+      mark_index : Int,
+      mark_row_offset : UInt64,
+      part_row_offset : UInt64,
+      source_row_offset : UInt64,
+      source_rows : UInt64,
+      selected_rows : Slice(Int32),
+    ) : Nil
+      if mark_index < 0 || mark_index > Int32::MAX || source_rows == 0_u64 || source_rows > WidePartTable::MAX_MARK_ROWS
+        raise CorruptPartError.new("Compact JSON selected mark metadata is outside its bound")
+      end
+      if selected_rows.empty? || selected_rows.size.to_u64 > source_rows
+        raise CorruptPartError.new("Compact JSON selected row mask is empty or exceeds its source mark")
+      end
+
+      previous = -1_i32
+      all_rows_selected = selected_rows.size.to_u64 == source_rows
+      selected_rows.each_with_index do |row, index|
+        unless row > previous && row.to_u64 < source_rows
+          raise CorruptPartError.new("Compact JSON selected row mask is unordered, duplicated, or out of range")
+        end
+        all_rows_selected &&= row == index
+        previous = row
+      end
+
+      if all_rows_selected
+        begin_mark!(part_index, part_name, part_path, mark_index, mark_row_offset,
+          part_row_offset, source_row_offset, source_rows)
+        return nil
+      end
+
+      reset!
+      required_map_size = source_rows.to_i
+      if required_map_size > @selected_output_rows.size
+        new_map_bytes = checked_multiply(required_map_size.to_u64, sizeof(Int32).to_u64)
+        validate_workspace!(new_map_bytes)
+        selected_rows_map = Slice(Int32).new(required_map_size)
+        @selected_output_rows = selected_rows_map
+      end
+      required_map_size.times { |row| @selected_output_rows[row] = -1_i32 }
+      @part_index = part_index.to_i32
+      @part_name = String.new(part_name.to_slice)
+      @part_path = String.new(part_path.to_slice)
+      @mark_index = mark_index.to_i32
+      @mark_row_offset = mark_row_offset
+      @part_row_offset = part_row_offset
+      @source_row_offset = source_row_offset
+      @mark_row_count = source_rows.to_i32
+      @selected_source_row_count = source_rows.to_i32
+      @selected_source_rows_active = true
+      @window_start = 0_i32
+      @row_count = selected_rows.size.to_i32
+      selected_rows.each_with_index do |row, destination_row|
+        @selected_output_rows[row] = destination_row.to_i32
+      end
+      @cell_count = 0_u64
+      @cell_payload_bytes = 0_u64
+      @companion_reserved_bytes = projected_companion_buffer_bytes(selected_rows.size)
+      @companion_columns_filled = 0_i32
+      @columns.each { |column| column.set_window!(0_i32, @row_count) }
+      validate_workspace!
+      nil
+    end
+
+    # :nodoc:
+    # Return the packed callback row for a source row, or nil when rejected.
+    def selected_output_row(source_row : Int) : Int32?
+      return source_row.to_i32 unless @selected_source_rows_active
+      return nil if source_row < 0 || source_row >= @selected_source_row_count
+      destination = @selected_output_rows[source_row]
+      destination >= 0 ? destination : nil
+    end
+
+    # :nodoc:
+    def source_mark_row_count : Int32
+      @selected_source_rows_active ? @selected_source_row_count : @mark_row_count
+    end
+
+    # :nodoc:
+    def selected_mark? : Bool
+      @selected_source_rows_active
+    end
+
+    # :nodoc:
+    # Prepare one retained pointer-free Copy reference slab and a compact
+    # `[start, count, cursor]` record per dictionary path. Growth is bounded
+    # before allocation and accounts both old and replacement storage while
+    # the column-binding owner is live.
+    def begin_selected_copy_reference_ledger!(
+      path_count : Int,
+      total_entries : Int,
+      additional_workspace_bytes : UInt64 = 0_u64,
+    ) : Nil
+      unless @selected_source_rows_active && path_count >= 0 && path_count <= Int32::MAX &&
+             total_entries >= 0 && total_entries <= Int32::MAX
+        raise CorruptPartError.new("Compact JSON selected Copy ledger is outside its source mark")
+      end
+      required_ranges = checked_multiply(path_count.to_u64, 3_u64).to_i
+      new_slab_bytes = if total_entries > @copy_reference_slab.size
+                         checked_multiply(total_entries.to_u64, sizeof(CompactJsonCopyReference).to_u64)
+                       else
+                         0_u64
+                       end
+      new_range_bytes = if required_ranges > @copy_reference_ranges.size
+                          checked_multiply(required_ranges.to_u64, sizeof(Int32).to_u64)
+                        else
+                          0_u64
+                        end
+      growth_bytes = checked_add(new_slab_bytes, new_range_bytes)
+      validate_workspace!(checked_add(growth_bytes, additional_workspace_bytes))
+
+      if total_entries > @copy_reference_slab.size
+        @copy_reference_slab = Slice.new(Pointer(CompactJsonCopyReference).malloc(total_entries), total_entries)
+      end
+      if required_ranges > @copy_reference_ranges.size
+        @copy_reference_ranges = Slice(Int32).new(required_ranges)
+      end
+      @copy_reference_path_count = path_count.to_i32
+      @copy_reference_count = total_entries.to_i32
+      required_ranges.times { |index| @copy_reference_ranges[index] = 0_i32 }
+      nil
+    end
+
+    # :nodoc:
+    # Count an index after the shared Copy validator has checked its range and
+    # strict per-row byte-path ordering.
+    def count_selected_copy_reference_path!(path_index : Int32) : Nil
+      unless path_index >= 0 && path_index < @copy_reference_path_count
+        raise CorruptPartError.new("Compact JSON selected Copy path index is outside its ledger")
+      end
+      count_offset = path_index * 3 + 1
+      if @copy_reference_ranges[count_offset] == Int32::MAX
+        raise CorruptPartError.new("Compact JSON selected Copy path count exceeds Int32")
+      end
+      @copy_reference_ranges[count_offset] += 1
+      nil
+    end
+
+    # :nodoc:
+    # Convert path counts into contiguous reference ranges and preserve the
+    # existing rejection of dictionary entries not used by any Copy row.
+    def finish_selected_copy_reference_plan! : Nil
+      next_offset = 0
+      @copy_reference_path_count.times do |path_index|
+        base = path_index * 3
+        count = @copy_reference_ranges[base + 1]
+        if count == 0
+          raise CorruptPartError.new("Object shared Copy dictionary contains an unreferenced path")
+        end
+        if count > @copy_reference_count - next_offset
+          raise CorruptPartError.new("Compact JSON selected Copy path counts exceed their entry extent")
+        end
+        @copy_reference_ranges[base] = next_offset
+        @copy_reference_ranges[base + 2] = 0_i32
+        next_offset += count
+      end
+      unless next_offset == @copy_reference_count
+        raise CorruptPartError.new("Compact JSON selected Copy path counts differ from their entry extent")
+      end
+      nil
+    end
+
+    # :nodoc:
+    def append_selected_copy_reference!(path_index : Int32, reference : CompactJsonCopyReference) : Nil
+      unless path_index >= 0 && path_index < @copy_reference_path_count
+        raise CorruptPartError.new("Compact JSON selected Copy path index is outside its ledger")
+      end
+      base = path_index * 3
+      start = @copy_reference_ranges[base]
+      count = @copy_reference_ranges[base + 1]
+      cursor = @copy_reference_ranges[base + 2]
+      if cursor >= count
+        raise CorruptPartError.new("Compact JSON selected Copy path has too many references")
+      end
+      @copy_reference_slab[start + cursor] = reference
+      @copy_reference_ranges[base + 2] = cursor + 1
+      nil
+    end
+
+    # :nodoc:
+    def finish_selected_copy_reference_fill! : Nil
+      @copy_reference_path_count.times do |path_index|
+        base = path_index * 3
+        unless @copy_reference_ranges[base + 2] == @copy_reference_ranges[base + 1]
+          raise CorruptPartError.new("Compact JSON selected Copy reference count differs from its index lane")
+        end
+      end
+      nil
+    end
+
+    # :nodoc:
+    def selected_copy_reference_path_count : Int32
+      @copy_reference_path_count
+    end
+
+    # :nodoc:
+    def selected_copy_references_for_path(path_index : Int32) : Slice(CompactJsonCopyReference)
+      if path_index < 0 || path_index >= @copy_reference_path_count
+        raise CorruptPartError.new("Compact JSON selected Copy path index is outside its ledger")
+      end
+      base = path_index * 3
+      start = @copy_reference_ranges[base]
+      count = @copy_reference_ranges[base + 1]
+      if start < 0 || count < 0 || start > @copy_reference_slab.size || count > @copy_reference_slab.size - start
+        raise CorruptPartError.new("Compact JSON selected Copy path range exceeds its reference slab")
+      end
+      Slice.new(@copy_reference_slab.to_unsafe + start, count, read_only: true)
+    end
+
+    # :nodoc:
+    # End source-coordinate appending after every decoder validates the full
+    # mark. The callback retains the packed window only.
+    def finish_selected_mark! : Nil
+      return nil unless @selected_source_rows_active
+      @mark_row_count = @row_count
+      @selected_source_row_count = 0_i32
+      @selected_source_rows_active = false
+      @columns.each { |column| column.set_window!(0_i32, @row_count) }
+      validate_workspace!
       nil
     end
 
@@ -300,8 +572,9 @@ module CrystalClick
       if row < 0 || row >= @mark_row_count
         raise CorruptPartError.new("Compact JSON columnar value row is outside its mark")
       end
-      prior = column.last_cell_at(row.to_i32)
-      inserted = column.append_cell!(row.to_i32, value)
+      destination_row = selected_output_row(row) || return false
+      prior = column.last_cell_at(destination_row)
+      inserted = column.append_cell!(destination_row, value)
       @column_buffer_bytes = checked_add(@column_buffer_bytes, column.account_buffer_high_water_cells!)
       if inserted
         @cell_count += 1_u64
@@ -329,19 +602,25 @@ module CrystalClick
       values.clear
       companion_index = @companion_names.index(name) || raise(CorruptPartError.new("Compact JSON companion index is missing"))
       previous_high_water = @companion_high_water_rows[companion_index]
-      if expected_rows > previous_high_water
-        @companion_high_water_rows[companion_index] = expected_rows
-        delta_rows = expected_rows - previous_high_water
+      output_rows = @selected_source_rows_active ? @row_count.to_u64 : expected_rows
+      if output_rows > previous_high_water
+        @companion_high_water_rows[companion_index] = output_rows
+        delta_rows = output_rows - previous_high_water
         @companion_buffer_bytes = checked_add(@companion_buffer_bytes,
           checked_multiply(delta_rows, sizeof(UInt64).to_u64))
       end
       offset = 0
-      expected_rows.to_i.times do
-        decoded = 0_u64
-        8.times do |byte_index|
-          decoded |= encoded[offset + byte_index].to_u64 << (byte_index * 8)
+      expected_rows.to_i.times do |source_row|
+        if destination_row = selected_output_row(source_row)
+          unless destination_row == values.size
+            raise CorruptPartError.new("Compact JSON selected UInt64 companion rows are not dense")
+          end
+          decoded = 0_u64
+          8.times do |byte_index|
+            decoded |= encoded[offset + byte_index].to_u64 << (byte_index * 8)
+          end
+          values << decoded
         end
-        values << decoded
         offset += 8
       end
       @companion_columns_filled += 1_i32
@@ -387,8 +666,20 @@ module CrystalClick
     # :nodoc:
     def retained_workspace_bytes : UInt64
       companion_bytes = Math.max(@companion_buffer_bytes, @companion_reserved_bytes)
+      selection_bytes = checked_multiply(@selected_output_rows.size.to_u64, sizeof(Int32).to_u64)
+      copy_reference_bytes = checked_multiply(
+        @copy_reference_slab.size.to_u64,
+        sizeof(CompactJsonCopyReference).to_u64,
+      )
+      copy_reference_range_bytes = checked_multiply(
+        @copy_reference_ranges.size.to_u64,
+        sizeof(Int32).to_u64,
+      )
+      scratch_bytes = checked_add(selection_bytes,
+        checked_add(copy_reference_bytes, copy_reference_range_bytes))
       checked_add(@workspace_header_bytes,
-        checked_add(@column_buffer_bytes, checked_add(companion_bytes, @cell_payload_bytes)))
+        checked_add(scratch_bytes,
+          checked_add(@column_buffer_bytes, checked_add(companion_bytes, @cell_payload_bytes))))
     end
 
     # :nodoc:
@@ -472,6 +763,12 @@ module CrystalClick
         bytes = checked_add(bytes, instance_sizeof(Array(UInt64)).to_u64)
       end
       bytes
+    end
+
+    private def compact_selected_nullable_uint32!(column : CompactJsonColumnarColumn) : Nil
+      destination_rows = Slice.new(@selected_output_rows.to_unsafe, @selected_source_row_count, read_only: true)
+      column.retain_nullable_uint32_rows!(destination_rows, @selected_source_row_count)
+      nil
     end
 
     private def check_workspace!(bytes : UInt64) : Nil

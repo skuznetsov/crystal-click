@@ -122,6 +122,13 @@
   [filter-first comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#filter-first-advanced-root-json-scan)
   after changes to mark selection, frame boundaries, source receipts, worker
   delivery, or the ClickHouse fixture pin.
+- Compact Advanced JSON can pack a selected mark into matching rows with
+  `scan_compact_json_filtered_rows`. Its borrowed offsets still address the
+  physical mark. SharedData Copy and Data must agree for rejected rows before
+  publishing the batch. On the pinned overflow part, retaining one row in
+  four keeps all four marks and their 16 key and JSON LZ4 frames. Refresh the
+  [paired row-mask measurements](docs/COMPACT_JSON_SCAN_BENCHMARK.md#row-selection-inside-advanced-root-json-marks)
+  after changes to the selected decoder, workspace, validation, or fixture.
 
 ## Compressed Compact aggregate projection indexes — W301
 

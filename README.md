@@ -235,23 +235,27 @@ path columns aligned with the companion columns. See the
 
 For one Compact MRK4 part with an Advanced JSON root, select the root and
 one ordinary `UInt64` column. The filtered scan reads the key first and
-decodes JSON only for marks with matching rows.
+decodes JSON only for marks with matching rows. Use the packed-row API to
+work directly with the matches inside those marks.
 
 ```crystal
 reader = CrystalClick::TypedPartTable.open_selected_typed([part_path], ["id", "doc"])
-predicate = ->(id : UInt64) { id >= 2048_u64 && id < 4096_u64 }
-reader.scan_compact_json_filtered("id", predicate, workers: 4) do |mark, matching_rows|
-  ids = mark.uint64_column("id")
-  matching_rows.each do |row|
-    pp({ids[row], mark.column_for("rank").try(&.value_at(row))})
+predicate = ->(id : UInt64) { id % 4_u64 == 0 }
+reader.scan_compact_json_filtered_rows("id", predicate, workers: 4) do |batch, matching_rows|
+  ids = batch.uint64_column("id")
+  rank = batch.column_for("rank")
+  matching_rows.each_with_index do |mark_row, i|
+    source_row = batch.source_row_offset + mark_row.to_u64
+    pp({source_row, ids[i], rank.try(&.value_at(i))})
   end
 end
 ```
 
-The callback receives a borrowed full mark and the matching offsets within
-that mark. Checksums cover the frames read for the key and selected JSON
-marks. SharedData Copy and Data are compared before each mark is delivered.
-See the [filtered scan profile](docs/COMPACT_JSON_READER_FRONTIER.md#filter-first-advanced-root-json-scan).
+The callback borrows the packed batch and physical offsets until it returns.
+`scan_compact_json_filtered` yields the full mark with the same matching
+offsets. Both scans check the frames read for the key and selected JSON marks
+and compare SharedData Copy and Data across each selected mark before delivery.
+See the [packed-row scan profile](docs/COMPACT_JSON_READER_FRONTIER.md#row-selection-inside-advanced-root-json-marks).
 
 `workers: 1` scans serially. For repeated scans of ordinary Wide numeric parts
 with `.mrk2` marks, retain the

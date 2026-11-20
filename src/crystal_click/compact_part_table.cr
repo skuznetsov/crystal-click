@@ -433,7 +433,8 @@ module CrystalClick
     # :nodoc:
     # Caller-owned retained one-mark output seam for the Compact Advanced
     # columnar lane. `source_row_offset` is the selected-part's base in the
-    # parent table; `batch` remains borrowed until the caller resets it.
+    # parent table. With `matching_rows`, output row i maps to the supplied
+    # physical offset at i. The output remains borrowed until the next reset.
     def scan_compact_json_columnar_mark_into(
       mark_index : Int,
       plan : CompactStaticJsonAdvancedPartPlan,
@@ -442,6 +443,7 @@ module CrystalClick
       part_index : Int = 0,
       source_row_offset : UInt64 = 0_u64,
       part_row_offset : UInt64? = nil,
+      matching_rows : Slice(Int32)? = nil,
     ) : Nil
       validate_shared_advanced_json_scan_plan!(plan)
       unless mark_index >= 0 && mark_index < @mark_row_counts.size &&
@@ -449,7 +451,7 @@ module CrystalClick
              plan.mark_row_count_at(mark_index) == @mark_row_counts[mark_index]
         raise CorruptPartError.new("Compact Advanced columnar plan differs from its physical mark grid")
       end
-      plan.decode_mark_into(mark_index, budget, output)
+      plan.decode_mark_into(mark_index, budget, output, matching_rows: matching_rows)
 
       mark_start = part_row_offset || begin
         offset = 0_u64
