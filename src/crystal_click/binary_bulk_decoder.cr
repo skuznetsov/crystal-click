@@ -113,6 +113,49 @@ module CrystalClick
       )[0]
     end
 
+    # Compact JSON columnar String leaves borrow the exact immutable span from
+    # their prepared BinaryBulkStream. The caller supplies one destination slot
+    # per source row; the complete stream is still consumed through the common
+    # role cursors before this method returns.
+    def self.decode_compact_columnar_string_slices(
+      type : BinaryDataType,
+      streams : BinaryBulkStreams,
+      rows_per_mark : Array(UInt64),
+      budget : BinaryCodecBudget,
+      destination : Slice(Bytes),
+      first_mark : Int = 0,
+      mark_count : Int = 1,
+      profile : BinaryBulkProfile = BinaryBulkProfile.single_stream,
+    ) : Nil
+      unless type.tag == BinaryDataType::TAG_STRING && type.child_count == 0
+        raise ArgumentError.new("Compact columnar String borrowing requires an exact String leaf")
+      end
+      unless streams.mark_count == 1 && rows_per_mark.size == 1 && first_mark == 0 && mark_count == 1
+        raise ArgumentError.new("Compact columnar String borrowing requires exactly one complete mark")
+      end
+      unless destination.size.to_u64 == rows_per_mark[0]
+        raise ArgumentError.new("Compact columnar String destination must match the complete mark row count")
+      end
+
+      decode_internal(
+        type,
+        streams,
+        rows_per_mark,
+        budget,
+        first_mark,
+        mark_count,
+        profile,
+        nil,
+        nil,
+        1,
+        nil,
+        BinaryValue,
+        nil,
+        destination,
+      )
+      nil
+    end
+
     private def self.decode_internal(
       type : BinaryDataType,
       streams : BinaryBulkStreams,
@@ -127,6 +170,7 @@ module CrystalClick
       json_leaf_key : BinaryDynamicJsonLeafKey?,
       row_type : T.class,
       nullable_uint32_target : Tuple(Slice(UInt32), Slice(UInt8))? = nil,
+      string_slice_target : Slice(Bytes)? = nil,
     ) : Array(Array(T)) forall T
       if type.geometry_storage_variant?
         raise UnsupportedFormatError.new("Geometry's fixed-order storage Variant cannot be decoded independently")
@@ -311,6 +355,23 @@ module CrystalClick
             target[0],
             target[1],
           )
+          contexts.each_value(&.ensure_consumed)
+          result << ([] of T)
+          next
+        end
+        if target = string_slice_target
+          unless T == BinaryValue && type.tag == BinaryDataType::TAG_STRING && type.child_count == 0 &&
+                 nullable_uint32_target.nil? && dynamic_plan.nil? && json_object_reader.nil? && json_leaf_key.nil?
+            raise ArgumentError.new("Compact columnar String target does not match its exact leaf decoder")
+          end
+          unless target.size == root_count
+            raise ArgumentError.new("Compact columnar String target does not match its decoded row count")
+          end
+          root_count.times do |row_index|
+            traversal.visit_node(1)
+            bytes = read_string_lane_slice("root", contexts, profile, budget, nil, scalar_read_binding)
+            target[row_index] = bytes
+          end
           contexts.each_value(&.ensure_consumed)
           result << ([] of T)
           next

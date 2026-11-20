@@ -1,7 +1,7 @@
 module CrystalClick
-  # One sparse Compact JSON output cell. Top-level Strings from the trusted
-  # Object Copy lane retain an inline, read-only byte span; other values keep
-  # their existing owned BinaryValue representation.
+  # One sparse Compact JSON output cell. Top-level Strings from prepared Copy
+  # or ordinary String lanes retain an inline read-only span; other values
+  # keep their owned BinaryValue representation.
   struct CompactJsonColumnarCell
     STRING_TYPE = BinaryDataType.primitive("String")
 
@@ -14,6 +14,8 @@ module CrystalClick
       new(value)
     end
 
+    # Keep the exact span from its immutable prepared input owner. The batch
+    # consumer must finish reading it before that owner is released.
     def self.borrowed_string(bytes : Bytes) : CompactJsonColumnarCell
       readonly = Bytes.new(bytes.to_unsafe, bytes.size, read_only: true)
       new(readonly)
@@ -42,8 +44,8 @@ module CrystalClick
     end
 
     # Materialize an owned value for the established public row/value API.
-    # Borrowed Copy bytes are copied only when a caller explicitly requests
-    # this BinaryValue view or when a detached snapshot is made.
+    # Borrowed lane bytes are copied only when a caller requests this view or
+    # when a detached snapshot is made.
     def materialize : BinaryValue
       case value = @value
       when BinaryValue
@@ -55,9 +57,9 @@ module CrystalClick
       end
     end
 
-    # This read-only span borrows the Copy values lane. Consume it inside a
-    # `with_cell_at` callback before resetting the batch or releasing its
-    # prepared input owner.
+    # This read-only span borrows a prepared Copy or ordinary String lane.
+    # Consume it inside a `with_cell_at` callback before resetting the batch
+    # or releasing its prepared input owner.
     def borrowed_string_bytes? : Bytes?
       case value = @value
       when BinaryValue

@@ -232,6 +232,226 @@ private module CompactJsonColumnarGuardFixture
   end
 end
 
+private module CompactJsonOrdinaryStringBorrowFixture
+  extend self
+
+  COLUMN       = "root_json"
+  KEY          = "pk"
+  SITE         = "root"
+  DYNAMIC_PATH = "payload"
+  TITLE        = "title"
+  ROW_COUNT    = 3
+
+  def uint64 : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.primitive("UInt64")
+  end
+
+  def string : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.primitive("String")
+  end
+
+  def int64 : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.primitive("Int64")
+  end
+
+  def json_type : CrystalClick::BinaryDataType
+    CrystalClick::BinaryDataType.json(
+      max_dynamic_paths: 4,
+      max_dynamic_types: 2,
+      typed_paths: {
+        "id"  => uint64,
+        TITLE => string,
+      } of String => CrystalClick::BinaryDataType,
+    )
+  end
+
+  def schema : CrystalClick::StorageColumnSchema
+    CrystalClick::CompactJsonColumnAdapter.schema_for_json_declaration(json_type.name) ||
+      raise CrystalClick::UnsupportedFormatError.new("ordinary String borrow fixture JSON schema was not admitted")
+  end
+
+  def context(shared_version : UInt64) : CrystalClick::CompactJsonWriteContext
+    object = CrystalClick::ObjectStructure.new(
+      [DYNAMIC_PATH] of String,
+      version: 4_u64,
+      shared_data_version: shared_version,
+      bucket_count: 2_u64,
+      statistics: CrystalClick::StructureStatistics.new([2_u64] of UInt64, [] of CrystalClick::StructureStatistic),
+    )
+    dynamic = CrystalClick::DynamicStructure.new(
+      [string, int64] of CrystalClick::BinaryDataType,
+      CrystalClick::StructureStatistics.new(
+        [1_u64, 0_u64, 1_u64] of UInt64,
+        [] of CrystalClick::StructureStatistic,
+      ),
+    )
+    structures = CrystalClick::ObjectDynamicStructureSet.new(
+      object,
+      {DYNAMIC_PATH => dynamic} of String => CrystalClick::DynamicStructure,
+    )
+    plan = CrystalClick::ObjectDocumentPlan.new(structures, schema.object_schema.typed_paths)
+    CrystalClick::CompactJsonWriteContext.new({SITE => plan} of String => CrystalClick::ObjectDocumentPlan)
+  end
+
+  def title_bytes(row : Int32) : Bytes
+    case row
+    when 0
+      Bytes[0x41_u8, 0x00_u8, 0xff_u8, 0x42_u8]
+    when 1
+      Bytes.empty
+    else
+      Bytes[0x44_u8, 0xff_u8, 0x00_u8]
+    end
+  end
+
+  def payload_bytes : Bytes
+    Bytes[0x50_u8, 0x00_u8, 0xfe_u8, 0x51_u8]
+  end
+
+  def documents : Array(CrystalClick::ObjectDocument)
+    Array(CrystalClick::ObjectDocument).new(ROW_COUNT) do |row|
+      fields = {
+        "id"  => CrystalClick::BinaryValue.uint64((101 + row).to_u64),
+        TITLE => CrystalClick::BinaryValue.string(String.new(title_bytes(row.to_i32))),
+      } of String => CrystalClick::BinaryValue
+      if row == 1
+        fields[DYNAMIC_PATH] = CrystalClick::BinaryValue.int64(-7_i64)
+      elsif row == 0
+        fields[DYNAMIC_PATH] = CrystalClick::BinaryValue.string(String.new(payload_bytes))
+      end
+      CrystalClick::ObjectDocument.new(fields)
+    end
+  end
+
+  def write_part(path : String, shared_version : UInt64) : String
+    rows = documents.map { |document| CrystalClick::StorageColumnValue.object_document(document) }.to_a
+    json_column = CrystalClick::CompactPartColumn.json(
+      COLUMN,
+      schema,
+      [rows] of Array(CrystalClick::StorageColumnValue),
+      context(shared_version),
+    )
+    keys = Slice(UInt64).new(ROW_COUNT) { |index| 101_u64 + index.to_u64 }
+    CrystalClick::CompactPartWriter.write_uint64_columns(
+      path,
+      KEY,
+      keys,
+      [json_column] of CrystalClick::CompactPartColumn,
+      rows_per_mark: ROW_COUNT,
+      frame_bytes: 4096,
+      mark_format: CrystalClick::CompactMarkFormat::Mrk4,
+    )
+  end
+end
+
+private def cjcv_assert_borrowed_string_cell!(
+  column : CrystalClick::CompactJsonColumnarColumn,
+  row : Int,
+  expected : Bytes,
+) : Nil
+  observed = false
+  column.with_cell_at(row) do |cell|
+    bytes = cell.borrowed_string_bytes? || raise("expected a borrowed ordinary String cell")
+    bytes.read_only?.should be_true
+    bytes.to_a.should eq(expected.to_a)
+    cell.owned_value?.should be_nil
+    observed = true
+  end.should be_true
+  observed.should be_true
+  nil
+end
+
+private def cjcv_assert_owned_string_snapshot!(
+  batch : CrystalClick::CompactJsonColumnarBatch,
+  path : String,
+  row : Int,
+  expected : Bytes,
+) : Nil
+  column = batch.column_for(path).not_nil!
+  column.with_cell_at(row) do |cell|
+    cell.borrowed_string_bytes?.should be_nil
+    value = cell.owned_value?.not_nil!
+    value.type.tag.should eq(CrystalClick::BinaryDataType::TAG_STRING)
+    value.as_string.to_slice.to_a.should eq(expected.to_a)
+  end.should be_true
+  nil
+end
+
+private def cjcv_full_ordinary_string_snapshot(
+  part : String,
+) : CrystalClick::CompactJsonColumnarBatch
+  table = CrystalClick::TypedPartTable.open_selected_typed(
+    [part],
+    [CompactJsonOrdinaryStringBorrowFixture::KEY, CompactJsonOrdinaryStringBorrowFixture::COLUMN],
+  )
+  callbacks = 0
+  snapshot = nil.as(CrystalClick::CompactJsonColumnarBatch?)
+  table.scan_compact_json_columnar(workers: 1, batch_rows: 2) do |batch|
+    batch.row_count.should eq([2, 1][callbacks])
+    title = batch.column_for(CompactJsonOrdinaryStringBorrowFixture::TITLE).not_nil!
+    payload = batch.column_for(CompactJsonOrdinaryStringBorrowFixture::DYNAMIC_PATH).not_nil!
+    ids = batch.uint64_column(CompactJsonOrdinaryStringBorrowFixture::KEY)
+    batch.row_count.times do |row|
+      source_row = callbacks * 2 + row
+      ids[row].should eq((101 + source_row).to_u64)
+      cjcv_assert_borrowed_string_cell!(title, row, CompactJsonOrdinaryStringBorrowFixture.title_bytes(source_row.to_i32))
+      if source_row == 1
+        value = payload.value_at(row).not_nil!
+        value.type.tag.should eq(CrystalClick::BinaryDataType::TAG_INT64)
+        value.as_int64.should eq(-7_i64)
+      elsif source_row == 0
+        value = payload.value_at(row).not_nil!
+        value.type.tag.should eq(CrystalClick::BinaryDataType::TAG_STRING)
+        value.as_string.to_slice.to_a.should eq(CompactJsonOrdinaryStringBorrowFixture.payload_bytes.to_a)
+      else
+        payload.present_at?(row).should be_false
+        payload.value_at(row).should be_nil
+      end
+    end
+    snapshot = batch.snapshot if callbacks == 0
+    callbacks += 1
+  end
+  callbacks.should eq(2)
+  snapshot.not_nil!
+end
+
+private def cjcv_filtered_ordinary_string_snapshot(
+  part : String,
+) : CrystalClick::CompactJsonColumnarBatch
+  table = CrystalClick::TypedPartTable.open_selected_typed(
+    [part],
+    [CompactJsonOrdinaryStringBorrowFixture::KEY, CompactJsonOrdinaryStringBorrowFixture::COLUMN],
+  )
+  callbacks = 0
+  snapshot = nil.as(CrystalClick::CompactJsonColumnarBatch?)
+  predicate = ->(key : UInt64) { key != 102_u64 }
+  table.scan_compact_json_filtered_rows(CompactJsonOrdinaryStringBorrowFixture::KEY, predicate, 1) do |batch, original_rows|
+    callbacks += 1
+    batch.row_count.should eq(2)
+    batch.mark_row_offset.should eq(0_u64)
+    batch.part_row_offset.should eq(0_u64)
+    batch.source_row_offset.should eq(0_u64)
+    original_rows.read_only?.should be_true
+    original_rows.to_a.should eq([0_i32, 2_i32])
+    batch.uint64_column(CompactJsonOrdinaryStringBorrowFixture::KEY).to_a.should eq([101_u64, 103_u64])
+
+    title = batch.column_for(CompactJsonOrdinaryStringBorrowFixture::TITLE).not_nil!
+    [0, 2].each_with_index do |source_row, packed_row|
+      cjcv_assert_borrowed_string_cell!(title, packed_row, CompactJsonOrdinaryStringBorrowFixture.title_bytes(source_row.to_i32))
+    end
+
+    payload = batch.column_for(CompactJsonOrdinaryStringBorrowFixture::DYNAMIC_PATH).not_nil!
+    payload_value = payload.value_at(0).not_nil!
+    payload_value.type.tag.should eq(CrystalClick::BinaryDataType::TAG_STRING)
+    payload_value.as_string.to_slice.to_a.should eq(CompactJsonOrdinaryStringBorrowFixture.payload_bytes.to_a)
+    payload.present_at?(1).should be_false
+    payload.value_at(1).should be_nil
+    snapshot = batch.snapshot
+  end
+  callbacks.should eq(1)
+  snapshot.not_nil!
+end
+
 private def cjcv_copy_part_files(source : String, destination : String) : Nil
   Dir.children(source).reject { |name| name == "checksums.txt" }.sort.each do |name|
     target = File.join(destination, name)
@@ -626,6 +846,61 @@ describe "Compact shared Advanced root JSON columnar batches" do
         Slice(UInt32).new(2),
         Slice(UInt8).new(3),
       )
+    end
+  end
+
+  it "borrows ordinary String lanes through full and masked scans and detaches snapshots" do
+    parent = File.tempname("compact-json-ordinary-string-borrow-")
+    begin
+      Dir.mkdir(parent)
+      [2_u64, 3_u64].each do |shared_version|
+        version_parent = File.join(parent, "v#{shared_version}")
+        Dir.mkdir(version_parent)
+        part = File.join(version_parent, "all_1_1_0")
+        CompactJsonOrdinaryStringBorrowFixture.write_part(part, shared_version)
+
+        full_snapshot = cjcv_full_ordinary_string_snapshot(part)
+        GC.collect
+        full_snapshot.row_count.should eq(2)
+        cjcv_assert_owned_string_snapshot!(
+          full_snapshot,
+          CompactJsonOrdinaryStringBorrowFixture::TITLE,
+          0,
+          CompactJsonOrdinaryStringBorrowFixture.title_bytes(0_i32),
+        )
+        cjcv_assert_owned_string_snapshot!(
+          full_snapshot,
+          CompactJsonOrdinaryStringBorrowFixture::TITLE,
+          1,
+          CompactJsonOrdinaryStringBorrowFixture.title_bytes(1_i32),
+        )
+        full_snapshot.column_for(CompactJsonOrdinaryStringBorrowFixture::DYNAMIC_PATH).not_nil!.value_at(1).not_nil!.as_int64.should eq(-7_i64)
+        full_payload = full_snapshot.column_for(CompactJsonOrdinaryStringBorrowFixture::DYNAMIC_PATH).not_nil!.value_at(0).not_nil!
+        full_payload.type.tag.should eq(CrystalClick::BinaryDataType::TAG_STRING)
+        full_payload.as_string.to_slice.to_a.should eq(CompactJsonOrdinaryStringBorrowFixture.payload_bytes.to_a)
+
+        filtered_snapshot = cjcv_filtered_ordinary_string_snapshot(part)
+        GC.collect
+        filtered_snapshot.row_count.should eq(2)
+        cjcv_assert_owned_string_snapshot!(
+          filtered_snapshot,
+          CompactJsonOrdinaryStringBorrowFixture::TITLE,
+          0,
+          CompactJsonOrdinaryStringBorrowFixture.title_bytes(0_i32),
+        )
+        cjcv_assert_owned_string_snapshot!(
+          filtered_snapshot,
+          CompactJsonOrdinaryStringBorrowFixture::TITLE,
+          1,
+          CompactJsonOrdinaryStringBorrowFixture.title_bytes(2_i32),
+        )
+        filtered_payload = filtered_snapshot.column_for(CompactJsonOrdinaryStringBorrowFixture::DYNAMIC_PATH).not_nil!.value_at(0).not_nil!
+        filtered_payload.type.tag.should eq(CrystalClick::BinaryDataType::TAG_STRING)
+        filtered_payload.as_string.to_slice.to_a.should eq(CompactJsonOrdinaryStringBorrowFixture.payload_bytes.to_a)
+        filtered_snapshot.column_for(CompactJsonOrdinaryStringBorrowFixture::DYNAMIC_PATH).not_nil!.value_at(1).should be_nil
+      end
+    ensure
+      FileUtils.rm_rf(parent)
     end
   end
 

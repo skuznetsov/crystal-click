@@ -138,6 +138,13 @@
   blocks, with substantial trace overhead.
   Refresh the [GC and scheduler comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#gc-and-worker-scheduling-during-row-selection)
   after changes to row selection, worker scheduling, allocation, or Boehm.
+- Declared `String` paths in Compact Advanced root JSON borrow validated
+  read-only spans from the prepared mark through columnar delivery.
+  Snapshots materialize owned values. On the pinned overflow part, read
+  allocation fell by a paired median of 1.31 MiB in mark-only and masked
+  scans at both worker counts. Four-worker mark-only latency varied across
+  runs. Refresh the [declared String comparison](docs/COMPACT_JSON_SCAN_BENCHMARK.md#declared-string-slices-in-filtered-scans)
+  after changes to String ownership, workspace, scan scheduling, or Boehm.
 
 ## Compressed Compact aggregate projection indexes — W301
 

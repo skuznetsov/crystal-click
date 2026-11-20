@@ -940,6 +940,8 @@ module CrystalClick
       end
 
       typed_rows = Hash(String, Array(Array(BinaryValue))).new
+      columnar_typed_string_elements = 0_u64
+      dynamic_rows = Hash(String, Array(Array(BinaryValue))).new
       typed_schema.each do |path, type|
         if type.contains_dynamic?
           dynamic_streams = streams.typed_dynamic_for(path)
@@ -1063,6 +1065,46 @@ module CrystalClick
             target[:output].complete_nullable_uint32_fill!(path, rows_per_mark[selected_first].to_i)
             next
           end
+          if target = columnar
+            if type.tag == BinaryDataType::TAG_STRING && type.child_count == 0
+              output = target[:output]
+              column = output.column_for(path) ||
+                       raise CorruptPartError.new("typed Compact JSON String path is outside the sealed columnar roster")
+              string_count = rows_per_mark[selected_first]
+              if string_count > Int32::MAX.to_u64
+                corrupt!("typed Compact JSON String row count exceeds its supported destination domain")
+              end
+              lane_workspace = compact_string_lane_workspace_bytes(string_count)
+              live_rows_workspace = ordinary_columnar_shell_workspace_bytes(typed_rows, dynamic_rows)
+              live_string_workspace = checked_add(live_rows_workspace, lane_workspace, false)
+              output.validate_workspace!(live_string_workspace)
+              string_slices = Slice(Bytes).new(string_count.to_i) { Bytes.empty }
+              BinaryBulkDecoder.decode_compact_columnar_string_slices(
+                type,
+                streams.typed_for(path),
+                rows_per_mark,
+                budget,
+                string_slices,
+                first_mark: selected_first,
+                mark_count: selected_count,
+                profile: profile,
+              )
+              string_slices.each_with_index do |bytes, row_index|
+                output.append_column_cell!(
+                  column,
+                  row_index,
+                  CompactJsonColumnarCell.borrowed_string(bytes),
+                  live_string_workspace,
+                )
+              end
+              columnar_typed_string_elements = checked_add(
+                columnar_typed_string_elements,
+                rows_per_mark[selected_first],
+                false,
+              )
+              next
+            end
+          end
           typed_rows[path] = BinaryBulkCodec.decode_with_budget(
             type,
             streams.typed_for(path),
@@ -1075,7 +1117,6 @@ module CrystalClick
         end
       end
 
-      dynamic_rows = Hash(String, Array(Array(BinaryValue))).new
       object.dynamic_path_count.times do |dynamic_index|
         path = object.dynamic_path_at(dynamic_index)
         json_leaf_plans = root_dynamic_json_object_leaf_plans[path]? ||
@@ -1130,7 +1171,13 @@ module CrystalClick
       end
 
       if target = columnar
-        append_ordinary_columns(target[:output], typed_rows, dynamic_rows, budget)
+        append_ordinary_columns(
+          target[:output],
+          typed_rows,
+          dynamic_rows,
+          budget,
+          columnar_typed_string_elements,
+        )
         return [] of Array(ObjectDocument)
       end
 
@@ -1223,6 +1270,7 @@ module CrystalClick
       typed_rows : Hash(String, Array(Array(BinaryValue))),
       dynamic_rows : Hash(String, Array(Array(BinaryValue))),
       budget : BinaryCodecBudget,
+      borrowed_elements : UInt64,
     ) : Nil
       typed_rows.each do |path, marks|
         column = output.column_for(path) ||
@@ -1241,6 +1289,9 @@ module CrystalClick
           output.append_column_value!(column, row, value)
         end
       end
+      # Preserve the established assembly phase for typed String path counts,
+      # including rows omitted from a filtered output window.
+      budget.charge_elements(borrowed_elements) if borrowed_elements > 0_u64
       output.validate_workspace!(ordinary_columnar_shell_workspace_bytes(typed_rows, dynamic_rows))
     end
 
@@ -1262,6 +1313,10 @@ module CrystalClick
         end
       end
       bytes
+    end
+
+    private def self.compact_string_lane_workspace_bytes(row_count : UInt64) : UInt64
+      checked_multiply(row_count, sizeof(Bytes).to_u64, false)
     end
 
     private def self.assemble_row_document(

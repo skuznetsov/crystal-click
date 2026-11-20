@@ -560,9 +560,8 @@ module CrystalClick
     end
 
     # :nodoc:
-    # Retain a cell representation directly. The Copy String path uses this
-    # overload to keep its read-only lane span inline instead of copying it
-    # into a BinaryValue payload.
+    # Retain a cell representation directly, including a read-only String
+    # span from a prepared lane.
     def append_column_cell!(
       column : CompactJsonColumnarColumn,
       row : Int,
@@ -804,8 +803,8 @@ module CrystalClick
     end
 
     private def columnar_cell_workspace_bytes(value : CompactJsonColumnarCell) : UInt64
-      # Borrowed String payload bytes already belong to the prepared Copy lane
-      # and are charged there. The output retains only its inline slice slot.
+      # Borrowed String payload bytes are charged to their prepared input lane.
+      # The output retains only its inline slice slot.
       value.owned_value?.try { |owned| binary_value_workspace_bytes(owned) } || 0_u64
     end
 

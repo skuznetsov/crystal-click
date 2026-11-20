@@ -1644,6 +1644,85 @@ the recorded thread IDs to join native state and syscall intervals.
 For new `libgc` binaries, resolve the allocator mutex address from that
 binary and its own loaded image base.
 
+### Declared String slices in filtered scans
+
+The Compact Advanced root JSON columnar decoder reads each declared `String`
+path through Bulk's existing lane cursors into a `Slice(Bytes)`. It checks
+every source row of a selected mark and exact lane consumption before appending
+read-only spans to the batch. The prepared mark owns the bytes through delivery.
+Taking a snapshot materializes owned cell values. The decoder accounts for
+the slice slots in the mark workspace and charges assembly elements for every
+source row, including rows omitted from packed output.
+
+The pinned SharedData overflow part has 8,192 declared `title String` cells
+across four 2,048-row marks. Both routes select the same four marks with
+`id % 4 == 0` and emit the same 2,048 rows. Mark-only retains the full mark
+batches and applies the filter while serializing. Masked packs the selected
+rows during the read. Both routes verify SharedData Copy against Data for
+all rows of those marks.
+
+The comparison pairs stock `2408af5` with the declared String slice build.
+Both use Crystal 1.22.3, LLVM 23.1.5, `--release -Dpreview_mt
+-Dexecution_context`, and Boehm 8.2.12 on an Apple M2 Max with macOS 26.6.2.
+Each run uses eight blocks at each worker count. Each block opens both
+probes with retained workers and arenas, performs two warmup cycles, then
+measures six cycles. A cycle issues one scan per route and build, waiting
+for each reply. The four combinations of route order and build order each
+occur 12 times per worker count. The read interval includes authenticated
+preparation, predicate evaluation, worker dispatch, decoding, and the
+source recheck of each output mark. Serialization is timed separately.
+
+The table uses the second run, which started after the Release test build
+exited. Other jobs were active on the host. Its one-minute load average
+went from 9.75 to 11.57. There are 48 samples per build, route, and worker
+count. Allocation is the median process-wide Boehm byte delta in the
+read interval. The p95 is the nearest-rank sample.
+
+| Workers | Route | Read p50 / p95, ms before → after | Read + serialize p50 / p95, ms before → after | Boehm read allocation p50, MiB before → after |
+|---:|---|---:|---:|---:|
+| 1 | Mark-only | 15.514 / 18.074 → 13.898 / 16.859 | 19.909 / 22.882 → 18.392 / 21.228 | 30.135 → 28.821 |
+| 1 | Masked | 16.431 / 17.972 → 14.316 / 16.600 | 20.017 / 22.001 → 18.043 / 20.669 | 30.133 → 28.820 |
+| 4 | Mark-only | 15.843 / 18.134 → 15.912 / 18.932 | 20.175 / 23.639 → 19.593 / 22.015 | 30.138 → 28.829 |
+| 4 | Masked | 17.345 / 21.280 → 16.459 / 20.567 | 21.553 / 27.858 → 19.830 / 23.701 | 30.135 → 28.825 |
+
+Read allocations fell in every matched pair across both runs. The median
+paired reduction was 1.31 MiB per scan in each cell, about 4.4%. Masked
+read p50 and p95 fell at both worker counts in both runs. In the second
+run the median paired read delta for the masked route was −1.103 ms at
+one worker and −1.005 ms at four. Mark-only latency at four workers
+varied across runs. Its read p95 fell from 21.333 to 19.537 ms in the
+first run and rose from 18.134 to 18.932 ms in the second. The four-worker
+masked median remains above the one-worker median on this part. Boehm
+collection counts varied between runs. The allocator-wait breakdown
+remains open.
+
+All 768 timed outputs matched the independently filtered ClickHouse
+26.10.1.1201 RowBinary export and the original row offsets. For each build,
+route, and worker count, the probe rejected post-open checksum mutations
+at `data.bin[0]` and `data.bin[30030]`, plus a valid-checksum Copy/Data
+mismatch in a rejected row before any callback. Each run exercised 24
+rejection controls. The six-file [Release fixture suite](#reproduction)
+passed 72 examples, including both native fixture directories and the new
+SharedData v2/v3 regression for exact String bytes, filtered row positions,
+and snapshot ownership after batch reuse.
+
+To repeat, build the filter probe at `2408af5` and at the slice revision
+using the [filter-first build flags](#filter-first-advanced-root-json-scan).
+Open both with the same overflow part and filtered `spread` oracle as in
+the [callback probe commands](#reproduce-the-gc-and-scheduling-measurements).
+Run the block schedule above with `scan mark_only` and `scan masked`. Use
+`read_wall_ns`, `scan_and_serialize_ns`, and
+`gc_read_allocated_bytes_delta` from each reply.
+
+| Evidence from the paired runs | SHA-256 |
+|---|---|
+| Stock source archive | `b21b5cc83af8bd8e58e91a7202109c8b242c60ed54d5b2b5e5c428895cf93e6b` |
+| Slice source archive | `88cd9832a9759e7224352137888ac9113a5d78e6071965bf28fad54474a707ea` |
+| Stock probe | `b9f245290c58cb6a7d6adc0964654c1d2b141cfa20ef484c3100eced3d603419` |
+| Slice probe | `b7aabbd8be5861b75da65c6ef3f609dcb7c13d3a989e3d9e00730eeef10340d8` |
+| First timing and controls report | `f0d1941e56d90a9662cbcdbc91a87cee349791c965d7587bea7a9bead7270ec6` |
+| Repeat timing and controls report | `627b8d215af8b0febd05827f6616f555dfc78dcde07583e87956ba9cdf145b7c` |
+
 ### Previous shared-plan diagnostics
 
 Every selection prepared one complete plan and read the shared physical
